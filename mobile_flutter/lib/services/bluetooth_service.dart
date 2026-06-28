@@ -49,6 +49,7 @@ class BLEService with ChangeNotifier {
   bool get isConnected => _isConnected;
   bool get isScanning => _isScanning;
   List<ScanResult> get scanResults => _scanResults;
+  String? get pairedDeviceId => _pairedDeviceId;
   int get uptimeSeconds => _uptimeSeconds;
   int get touchCount => _touchCount;
   double get batteryVoltage => _batteryVoltage;

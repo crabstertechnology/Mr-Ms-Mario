@@ -26,6 +26,7 @@ class MainDashboard extends StatefulWidget {
 
 class _MainDashboardState extends State<MainDashboard> {
   int _activeTabIdx = 0;
+  String _currentSettingsSection = 'categories';
   final AudioSynthService _audioSynth = AudioSynthService();
 
   late bool _isMissMario;
@@ -103,7 +104,7 @@ class _MainDashboardState extends State<MainDashboard> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F0E1A),
+        backgroundColor: Colors.white,
         title: Text(title, style: GoogleFonts.outfit(color: Colors.redAccent, fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Text(message, style: GoogleFonts.firaCode(color: textColor70, fontSize: 12)),
@@ -111,7 +112,7 @@ class _MainDashboardState extends State<MainDashboard> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text("OK", style: GoogleFonts.outfit(color: const Color(0xFF8B5CF6))),
+            child: Text("OK", style: GoogleFonts.outfit(color: _accentColor)),
           ),
         ],
       ),
@@ -288,7 +289,7 @@ class _MainDashboardState extends State<MainDashboard> {
     ble.startScan();
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F0E1A),
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -316,12 +317,12 @@ class _MainDashboardState extends State<MainDashboard> {
                             ),
                           ),
                           if (bleState.isScanning)
-                            const SizedBox(
+                            SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
+                                valueColor: AlwaysStoppedAnimation<Color>(_accentColor),
                               ),
                             )
                           else
@@ -330,10 +331,10 @@ class _MainDashboardState extends State<MainDashboard> {
                                 bleState.startScan();
                                 setModalState(() {});
                               },
-                              icon: const Icon(Icons.refresh, size: 16, color: Color(0xFF8B5CF6)),
+                              icon: Icon(Icons.refresh, size: 16, color: _accentColor),
                               label: Text(
                                 "Rescan",
-                                style: GoogleFonts.outfit(color: const Color(0xFF8B5CF6)),
+                                style: GoogleFonts.outfit(color: _accentColor),
                               ),
                             ),
                         ],
@@ -359,10 +360,10 @@ class _MainDashboardState extends State<MainDashboard> {
                             itemBuilder: (context, index) {
                               final result = bleState.scanResults[index];
                               return Card(
-                                color: Colors.white.withOpacity(0.03),
+                                color: const Color(0xFFF1F5F9),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  side: BorderSide(color: Colors.white.withOpacity(0.05)),
+                                  side: BorderSide(color: Colors.black.withOpacity(0.06)),
                                 ),
                                 margin: const EdgeInsets.only(bottom: 8),
                                 child: ListTile(
@@ -396,7 +397,7 @@ class _MainDashboardState extends State<MainDashboard> {
                                       await db.addRobot(newRobot);
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF8B5CF6),
+                                      backgroundColor: _accentColor,
                                       foregroundColor: Colors.white,
                                     ),
                                     child: const Text("PAIR"),
@@ -413,8 +414,8 @@ class _MainDashboardState extends State<MainDashboard> {
                           Navigator.pop(context);
                         },
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white54,
-                          side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                          foregroundColor: textColor60,
+                          side: BorderSide(color: Colors.black.withOpacity(0.1)),
                         ),
                         child: const Text("CANCEL"),
                       ),
@@ -434,9 +435,8 @@ class _MainDashboardState extends State<MainDashboard> {
     final db = Provider.of<DatabaseService>(context);
     final ble = Provider.of<BLEService>(context);
 
-    _isMissMario = db.primaryRobot?.variant == 'miss_mario';
-    _accentColor = _isMissMario ? const Color(0xFFEC4899) : const Color(0xFF0074D9);
-    _accentColorLight = _isMissMario ? const Color(0x22EC4899) : const Color(0x220074D9);
+    _accentColor = const Color(0xFF0284C7); // Premium blue
+    _accentColorLight = const Color(0x1F0284C7); // Light blue
 
     // Resolve current active expression details from BLE or local simulation
     String activeGifId = _localActiveGifId;
@@ -555,10 +555,7 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildBottomNavigationBar() {
     final List<Map<String, dynamic>> items = [
       {'icon': Icons.home, 'label': 'Home'},
-      {'icon': Icons.face, 'label': 'Expressions'},
-      {'icon': Icons.audiotrack, 'label': 'Sounds'},
       {'icon': Icons.calendar_month, 'label': 'Calendar'},
-      {'icon': Icons.people, 'label': 'Companions'},
       {'icon': Icons.settings, 'label': 'Settings'},
     ];
 
@@ -585,6 +582,9 @@ class _MainDashboardState extends State<MainDashboard> {
             onTap: () {
               setState(() {
                 _activeTabIdx = idx;
+                if (idx == 2) {
+                  _currentSettingsSection = 'categories';
+                }
               });
             },
             borderRadius: BorderRadius.circular(12),
@@ -626,6 +626,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
   // Top header navbar
   Widget _buildTopNavigation(BLEService ble) {
+    _isMissMario = Provider.of<DatabaseService>(context, listen: false).primaryRobot?.variant == 'miss_mario';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
@@ -655,11 +656,11 @@ class _MainDashboardState extends State<MainDashboard> {
                 ),
               ),
               const SizedBox(width: 10),
-               Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _isMissMario ? "Miss. Mario" : "Mr. Mario",
+                    _isMissMario ? "Ms. Mario" : "Mr. Mario",
                     style: GoogleFonts.outfit(
                       color: textColor,
                       fontSize: 16,
@@ -667,41 +668,57 @@ class _MainDashboardState extends State<MainDashboard> {
                       letterSpacing: 0.5,
                     ),
                   ),
+                  if (ble.pairedDeviceId != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      "ID: ${ble.pairedDeviceId}",
+                      style: GoogleFonts.outfit(
+                        color: textColor54,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
           ),
           
-          // Connection Status indicator
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: ble.isConnected ? const Color(0xFF2ECC40) : const Color(0xFFFF4136),
-                  boxShadow: [
-                    BoxShadow(
-                      color: ble.isConnected
-                          ? const Color(0xFF2ECC40).withOpacity(0.5)
-                          : const Color(0xFFFF4136).withOpacity(0.5),
-                      blurRadius: 6,
-                      spreadRadius: 1,
-                    ),
-                  ],
+          // Connection Status button with icon and no wording
+          GestureDetector(
+            onTap: () {
+              final db = Provider.of<DatabaseService>(context, listen: false);
+              if (ble.isConnected) {
+                ble.disconnect();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Disconnected from robot."),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              } else {
+                _showBleScanner(db, ble);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: ble.isConnected
+                    ? Colors.green.shade50
+                    : Colors.red.shade50,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: ble.isConnected
+                      ? const Color(0xFF2ECC40).withOpacity(0.3)
+                      : const Color(0xFFFF4136).withOpacity(0.3),
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                ble.isConnected ? "Connected" : "Disconnected",
-                style: GoogleFonts.outfit(
-                  color: textColor70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Icon(
+                ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                color: ble.isConnected ? const Color(0xFF2ECC40) : const Color(0xFFFF4136),
+                size: 18,
               ),
-            ],
+            ),
           ),
         ],
       ),
@@ -714,14 +731,8 @@ class _MainDashboardState extends State<MainDashboard> {
       case 0:
         return _buildHomeDashboardPanel(db, ble);
       case 1:
-        return _buildExpressionsPanel(db, ble, activeGifId, activeLabel);
-      case 2:
-        return _buildSoundBoardPanel(db, ble);
-      case 3:
         return _buildCalendarPanel(db, ble);
-      case 4:
-        return _buildCompanionsPanel(db, ble);
-      case 5:
+      case 2:
         return _buildSettingsPanel(db, ble);
       default:
         return const SizedBox();
@@ -877,24 +888,37 @@ class _MainDashboardState extends State<MainDashboard> {
 
   Widget _buildBLEConnectBar(BLEService ble) {
     final db = Provider.of<DatabaseService>(context, listen: false);
+    String statusWording = "Connection Required";
+    if (ble.isConnected) {
+      statusWording = "Connected: ${ble.pairedDeviceId ?? 'Robot'}";
+    } else if (ble.pairedDeviceId != null) {
+      statusWording = "Paired ID: ${ble.pairedDeviceId}";
+    }
+
     return GlassCard(
       padding: const EdgeInsets.all(12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Icon(
-                ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                color: ble.isConnected ? const Color(0xFF2ECC40) : const Color(0xFFFF4136),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                ble.isConnected ? "Paring Connected" : "Connection Required",
-                style: GoogleFonts.outfit(color: textColor70, fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-            ],
+          Expanded(
+            child: Row(
+              children: [
+                Icon(
+                  ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                  color: ble.isConnected ? const Color(0xFF2ECC40) : const Color(0xFFFF4136),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    statusWording,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(color: textColor70, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           ElevatedButton.icon(
             onPressed: () {
               if (ble.isConnected) {
@@ -906,7 +930,7 @@ class _MainDashboardState extends State<MainDashboard> {
             icon: Icon(ble.isConnected ? Icons.close : Icons.link, size: 14),
             label: Text(ble.isConnected ? "DISCONNECT" : "CONNECT"),
             style: ElevatedButton.styleFrom(
-              backgroundColor: ble.isConnected ? Colors.red.shade900 : const Color(0xFF8B5CF6),
+              backgroundColor: ble.isConnected ? Colors.red.shade900 : _accentColor,
               foregroundColor: Colors.white,
               textStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 11),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1252,14 +1276,14 @@ class _MainDashboardState extends State<MainDashboard> {
             hintStyle: GoogleFonts.outfit(color: textColor30),
             prefixIcon: const Icon(Icons.search, color: textColor38, size: 18),
             filled: true,
-            fillColor: const Color(0xFF0F0E1A),
+            fillColor: const Color(0xFFF1F5F9),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.07)),
+              borderSide: BorderSide(color: Colors.black.withOpacity(0.06)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.07)),
+              borderSide: BorderSide(color: Colors.black.withOpacity(0.06)),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12),
           ),
@@ -1273,14 +1297,14 @@ class _MainDashboardState extends State<MainDashboard> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F0E1A),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withOpacity(0.07)),
+                  border: Border.all(color: Colors.black.withOpacity(0.06)),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _selectedCategory,
-                    dropdownColor: const Color(0xFF0F0E1A),
+                    dropdownColor: Colors.white,
                     style: GoogleFonts.outfit(color: textColor, fontSize: 13),
                     items: cats.map((cat) {
                       return DropdownMenuItem<String>(
@@ -1304,14 +1328,14 @@ class _MainDashboardState extends State<MainDashboard> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F0E1A),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withOpacity(0.07)),
+                  border: Border.all(color: Colors.black.withOpacity(0.06)),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _selectedSort,
-                    dropdownColor: const Color(0xFF0F0E1A),
+                    dropdownColor: Colors.white,
                     style: GoogleFonts.outfit(color: textColor, fontSize: 13),
                     items: const [
                       DropdownMenuItem(value: 'name', child: Text("Sort by Name")),
@@ -1909,12 +1933,13 @@ class _MainDashboardState extends State<MainDashboard> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
-                      color: Colors.black38,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.black.withOpacity(0.06)),
                     ),
                     child: DropdownButton<double>(
                       value: db.oledRotation,
-                      dropdownColor: const Color(0xFF0F0E1A),
+                      dropdownColor: Colors.white,
                       style: GoogleFonts.outfit(color: textColor, fontSize: 13),
                       underline: const SizedBox(),
                       items: const [
@@ -2016,13 +2041,14 @@ class _MainDashboardState extends State<MainDashboard> {
           width: 140,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: Colors.black38,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.black.withOpacity(0.06)),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: value,
-              dropdownColor: const Color(0xFF0F0E1A),
+              dropdownColor: Colors.white,
               style: GoogleFonts.outfit(color: textColor, fontSize: 12),
               isExpanded: true,
               items: options.map((opt) {
@@ -2160,7 +2186,8 @@ class _MainDashboardState extends State<MainDashboard> {
           GestureDetector(
             onTap: () {
               setState(() {
-                _activeTabIdx = 4; // jump to Companions tab
+                _activeTabIdx = 2; // Settings tab
+                _currentSettingsSection = 'companions';
               });
             },
             child: GlassCard(
@@ -2463,13 +2490,19 @@ class _MainDashboardState extends State<MainDashboard> {
         'icon': Icons.face,
         'label': 'Expression',
         'color': const Color(0xFF8B5CF6),
-        'onTap': () => setState(() => _activeTabIdx = 1),
+        'onTap': () => setState(() {
+          _activeTabIdx = 2;
+          _currentSettingsSection = 'expressions';
+        }),
       },
       {
         'icon': Icons.audiotrack,
         'label': 'Play Sound',
         'color': const Color(0xFF10B981),
-        'onTap': () => setState(() => _activeTabIdx = 2),
+        'onTap': () => setState(() {
+          _activeTabIdx = 2;
+          _currentSettingsSection = 'sounds';
+        }),
       },
       {
         'icon': Icons.watch_later,
@@ -2481,7 +2514,7 @@ class _MainDashboardState extends State<MainDashboard> {
         'icon': Icons.calendar_month,
         'label': 'Calendar',
         'color': const Color(0xFF0074D9),
-        'onTap': () => setState(() => _activeTabIdx = 3),
+        'onTap': () => setState(() => _activeTabIdx = 1),
       },
       {
         'icon': Icons.message,
@@ -2505,7 +2538,10 @@ class _MainDashboardState extends State<MainDashboard> {
         'icon': Icons.link,
         'label': 'Pair Comp',
         'color': const Color(0xFFEC4899),
-        'onTap': () => setState(() => _activeTabIdx = 4),
+        'onTap': () => setState(() {
+          _activeTabIdx = 2;
+          _currentSettingsSection = 'companions';
+        }),
       },
     ];
 
@@ -2569,20 +2605,22 @@ class _MainDashboardState extends State<MainDashboard> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF0F0E1A),
+          backgroundColor: Colors.white,
           title: Text("Send Message Banner", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold)),
           content: TextField(
             controller: _marqueeController,
-            style: GoogleFonts.outfit(color: Colors.white),
+            style: GoogleFonts.outfit(color: textColor),
             decoration: InputDecoration(
               hintText: "Enter scrolling message text...",
               hintStyle: GoogleFonts.outfit(color: textColor38),
+              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black.withOpacity(0.1))),
+              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentColor)),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("CANCEL"),
+              child: Text("CANCEL", style: TextStyle(color: textColor60)),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -2592,6 +2630,10 @@ class _MainDashboardState extends State<MainDashboard> {
                   await ble.transmitMarqueeText(_marqueeController.text);
                 }
               },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accentColor,
+                foregroundColor: Colors.white,
+              ),
               child: const Text("SEND"),
             ),
           ],
@@ -2608,7 +2650,7 @@ class _MainDashboardState extends State<MainDashboard> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF0F0E1A),
+              backgroundColor: Colors.white,
               title: Text("AI Companion Chat", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2617,7 +2659,11 @@ class _MainDashboardState extends State<MainDashboard> {
                     height: 120,
                     width: 300,
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.black.withOpacity(0.06)),
+                    ),
                     child: SingleChildScrollView(
                       child: Text(
                         "Mr. Mario: Hello! How is your day going? Let's write some code together!",
@@ -2628,10 +2674,12 @@ class _MainDashboardState extends State<MainDashboard> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: chatInputController,
-                    style: GoogleFonts.outfit(color: Colors.white),
+                    style: GoogleFonts.outfit(color: textColor),
                     decoration: InputDecoration(
                       hintText: "Chat with your AI Companion...",
                       hintStyle: GoogleFonts.outfit(color: textColor24),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black.withOpacity(0.1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentColor)),
                     ),
                   ),
                 ],
@@ -2639,18 +2687,22 @@ class _MainDashboardState extends State<MainDashboard> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("CLOSE"),
+                  child: Text("CLOSE", style: TextStyle(color: textColor60)),
                 ),
                 ElevatedButton(
                   onPressed: () {
                     if (chatInputController.text.isNotEmpty) {
                       ble.transmitMarqueeText("AI CHAT...");
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Transmitting AI Prompt..."), backgroundColor: Color(0xFF8B5CF6)),
+                        SnackBar(content: const Text("Transmitting AI Prompt..."), backgroundColor: _accentColor),
                       );
                       Navigator.pop(context);
                     }
                   },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accentColor,
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text("SEND"),
                 ),
               ],
@@ -2904,7 +2956,7 @@ class _MainDashboardState extends State<MainDashboard> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF0F0E1A),
+              backgroundColor: Colors.white,
               title: Text("Edit Robot Profile", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2912,10 +2964,12 @@ class _MainDashboardState extends State<MainDashboard> {
                 children: [
                   TextField(
                     controller: nameController,
-                    style: GoogleFonts.outfit(color: Colors.white),
+                    style: GoogleFonts.outfit(color: textColor),
                     decoration: InputDecoration(
                       labelText: "Robot Name",
                       labelStyle: GoogleFonts.outfit(color: textColor60),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black.withOpacity(0.1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentColor)),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -2930,6 +2984,8 @@ class _MainDashboardState extends State<MainDashboard> {
                           onSelected: (val) {
                             if (val) setModalState(() => selectedVariant = 'mr_mario');
                           },
+                          selectedColor: _accentColor.withOpacity(0.2),
+                          checkmarkColor: _accentColor,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -2940,6 +2996,8 @@ class _MainDashboardState extends State<MainDashboard> {
                           onSelected: (val) {
                             if (val) setModalState(() => selectedVariant = 'miss_mario');
                           },
+                          selectedColor: _accentColor.withOpacity(0.2),
+                          checkmarkColor: _accentColor,
                         ),
                       ),
                     ],
@@ -2949,7 +3007,7 @@ class _MainDashboardState extends State<MainDashboard> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("CANCEL"),
+                  child: Text("CANCEL", style: TextStyle(color: textColor60)),
                 ),
                 ElevatedButton(
                   onPressed: () async {
@@ -2962,6 +3020,10 @@ class _MainDashboardState extends State<MainDashboard> {
                       Navigator.pop(context);
                     }
                   },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accentColor,
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text("SAVE"),
                 ),
               ],
@@ -2983,7 +3045,7 @@ class _MainDashboardState extends State<MainDashboard> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF0F0E1A),
+          backgroundColor: Colors.white,
           title: Text("Configure Wi-Fi", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2991,20 +3053,24 @@ class _MainDashboardState extends State<MainDashboard> {
             children: [
               TextField(
                 controller: ssidController,
-                style: GoogleFonts.outfit(color: Colors.white),
+                style: GoogleFonts.outfit(color: textColor),
                 decoration: InputDecoration(
                   labelText: "Wi-Fi SSID (Network Name)",
                   labelStyle: GoogleFonts.outfit(color: textColor60),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black.withOpacity(0.1))),
+                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentColor)),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: passController,
-                style: GoogleFonts.outfit(color: Colors.white),
+                style: GoogleFonts.outfit(color: textColor),
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: "Password",
                   labelStyle: GoogleFonts.outfit(color: textColor60),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black.withOpacity(0.1))),
+                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentColor)),
                 ),
               ),
             ],
@@ -3012,7 +3078,7 @@ class _MainDashboardState extends State<MainDashboard> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("CANCEL"),
+              child: Text("CANCEL", style: TextStyle(color: textColor60)),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -3028,6 +3094,10 @@ class _MainDashboardState extends State<MainDashboard> {
                   );
                 }
               },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accentColor,
+                foregroundColor: Colors.white,
+              ),
               child: const Text("CONNECT"),
             ),
           ],
@@ -3050,7 +3120,7 @@ class _MainDashboardState extends State<MainDashboard> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF0F0E1A),
+              backgroundColor: Colors.white,
               title: Text("Manage Relationship", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -3063,10 +3133,10 @@ class _MainDashboardState extends State<MainDashboard> {
                   const SizedBox(height: 16),
                   
                   Card(
-                    color: selectedRel == 'friends' ? const Color(0x3310B981) : Colors.black26,
+                    color: selectedRel == 'friends' ? Colors.green.shade50 : const Color(0xFFF1F5F9),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: selectedRel == 'friends' ? const Color(0xFF10B981) : Colors.white.withOpacity(0.05)),
+                      side: BorderSide(color: selectedRel == 'friends' ? const Color(0xFF10B981) : Colors.black.withOpacity(0.06)),
                     ),
                     child: ListTile(
                       title: Text("🤝 Friends Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
@@ -3077,10 +3147,10 @@ class _MainDashboardState extends State<MainDashboard> {
                   const SizedBox(height: 10),
 
                   Card(
-                    color: selectedRel == 'couple' ? const Color(0x33EC4899) : Colors.black26,
+                    color: selectedRel == 'couple' ? Colors.pink.shade50 : const Color(0xFFF1F5F9),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: selectedRel == 'couple' ? const Color(0xFFEC4899) : Colors.white.withOpacity(0.05)),
+                      side: BorderSide(color: selectedRel == 'couple' ? const Color(0xFFEC4899) : Colors.black.withOpacity(0.06)),
                     ),
                     child: ListTile(
                       title: Text("❤️ Couple Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
@@ -3093,7 +3163,7 @@ class _MainDashboardState extends State<MainDashboard> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("CANCEL"),
+                  child: Text("CANCEL", style: TextStyle(color: textColor60)),
                 ),
                 ElevatedButton(
                   onPressed: () async {
@@ -3110,6 +3180,10 @@ class _MainDashboardState extends State<MainDashboard> {
                       ),
                     );
                   },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accentColor,
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text("SAVE"),
                 ),
               ],
@@ -3583,18 +3657,236 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   // ================= NEW TAB 4: ADVANCED SETTINGS PANEL =================
-  Widget _buildSettingsPanel(DatabaseService db, BLEService ble) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildChronosPanel(ble),
-          const SizedBox(height: 20),
-          _buildPixelArtPanel(),
-          const SizedBox(height: 20),
-          _buildHardwarePanel(db, ble),
-        ],
+  // ================= NEW TAB 4: ADVANCED SETTINGS PANEL =================
+  Widget _buildSettingsCategories(DatabaseService db, BLEService ble) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          "Settings",
+          style: GoogleFonts.outfit(
+            color: textColor,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Select a category below to configure your companion robot.",
+          style: GoogleFonts.outfit(
+            color: textColor60,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 20),
+        _buildCategoryCard(
+          icon: Icons.people,
+          iconColor: Colors.blue.shade600,
+          title: "Companion Profiles",
+          subtitle: "Manage and pair blue (Mr. Mario) and pink (Ms. Mario) variants.",
+          onTap: () {
+            setState(() {
+              _currentSettingsSection = 'companions';
+            });
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildCategoryCard(
+          icon: Icons.face,
+          iconColor: Colors.teal.shade600,
+          title: "Face Expressions",
+          subtitle: "Trigger animations, RLE bitmaps, and custom face expressions.",
+          onTap: () {
+            setState(() {
+              _currentSettingsSection = 'expressions';
+            });
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildCategoryCard(
+          icon: Icons.audiotrack,
+          iconColor: Colors.pink.shade600,
+          title: "Sound & Melody Board",
+          subtitle: "Play preloaded melodies or compose custom 8-bit sound effects.",
+          onTap: () {
+            setState(() {
+              _currentSettingsSection = 'sounds';
+            });
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildCategoryCard(
+          icon: Icons.settings,
+          iconColor: Colors.purple.shade600,
+          title: "Device Configuration",
+          subtitle: "Configure clock sync, pixel art editor, orientation, and NVS preferences.",
+          onTap: () {
+            setState(() {
+              _currentSettingsSection = 'device';
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      color: textColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.outfit(
+                      color: textColor54,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: textColor38,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildSettingsSubHeader(String title) {
+    return Row(
+      children: [
+        IconButton(
+          onPressed: () {
+            setState(() {
+              _currentSettingsSection = 'categories';
+            });
+          },
+          icon: const Icon(Icons.arrow_back),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: GoogleFonts.outfit(
+            color: textColor,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingsCompanions(DatabaseService db, BLEService ble) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSettingsSubHeader("Companion Profiles"),
+        const SizedBox(height: 16),
+        _buildCompanionsPanel(db, ble),
+      ],
+    );
+  }
+
+  Widget _buildSettingsExpressions(DatabaseService db, BLEService ble, String activeGifId, String activeLabel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSettingsSubHeader("Face Expressions"),
+        const SizedBox(height: 16),
+        _buildExpressionsPanel(db, ble, activeGifId, activeLabel),
+      ],
+    );
+  }
+
+  Widget _buildSettingsSounds(DatabaseService db, BLEService ble) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSettingsSubHeader("Sound Board"),
+        const SizedBox(height: 16),
+        _buildSoundBoardPanel(db, ble),
+      ],
+    );
+  }
+
+  Widget _buildSettingsDevice(DatabaseService db, BLEService ble) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSettingsSubHeader("Device Configuration"),
+        const SizedBox(height: 16),
+        _buildChronosPanel(ble),
+        const SizedBox(height: 20),
+        _buildPixelArtPanel(),
+        const SizedBox(height: 20),
+        _buildHardwarePanel(db, ble),
+      ],
+    );
+  }
+
+  Widget _buildSettingsPanel(DatabaseService db, BLEService ble) {
+    final activeGifId = _localActiveGifId;
+    final activeLabel = _localActiveLabel;
+    
+    switch (_currentSettingsSection) {
+      case 'companions':
+        return _buildSettingsCompanions(db, ble);
+      case 'expressions':
+        return _buildSettingsExpressions(db, ble, activeGifId, activeLabel);
+      case 'sounds':
+        return _buildSettingsSounds(db, ble);
+      case 'device':
+        return _buildSettingsDevice(db, ble);
+      case 'categories':
+      default:
+        return _buildSettingsCategories(db, ble);
+    }
   }
 }

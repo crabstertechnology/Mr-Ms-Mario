@@ -431,18 +431,7 @@ class DatabaseService with ChangeNotifier {
   }
 
   void _seedDefaultRobots() {
-    _robots = [
-      RobotProfile(
-        id: 'mr_mario',
-        name: 'Mr. Mario',
-        variant: 'mr_mario',
-        remoteId: '',
-        wifiSSID: '',
-        cloudStatus: 'offline',
-        isPrimary: true,
-        lastConnected: DateTime.now(),
-      ),
-    ];
+    _robots = [];
     _saveRobotsToDisk();
   }
 

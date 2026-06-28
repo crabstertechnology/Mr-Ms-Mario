@@ -18,17 +18,17 @@
   
   <style>
     :root {
-      --bg-dark: #07060f;
-      --bg-card: rgba(18, 17, 32, 0.65);
-      --border-color: rgba(255, 255, 255, 0.08);
-      --mario-blue: #0074D9;
-      --mario-blue-glow: rgba(0, 116, 217, 0.4);
-      --ms-mario-pink: #ec4899;
-      --ms-mario-pink-glow: rgba(236, 72, 153, 0.4);
-      --mario-purple: #a855f7;
-      --mario-purple-glow: rgba(168, 85, 247, 0.4);
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
+      --bg-dark: #f8fafc;
+      --bg-card: #ffffff;
+      --border-color: rgba(15, 23, 42, 0.08);
+      --mario-blue: #0284c7;
+      --mario-blue-glow: rgba(2, 132, 199, 0.15);
+      --ms-mario-pink: #db2777;
+      --ms-mario-pink-glow: rgba(219, 39, 119, 0.15);
+      --mario-purple: #0f62fe;
+      --mario-purple-glow: rgba(15, 98, 254, 0.15);
+      --text-main: #0f172a;
+      --text-muted: #475569;
       --transition-fast: 0.2s;
     }
 
@@ -42,8 +42,8 @@
     body {
       background-color: var(--bg-dark);
       background-image: 
-        radial-gradient(at 0% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(0, 116, 217, 0.15) 0px, transparent 50%);
+        radial-gradient(at 0% 0%, rgba(15, 98, 254, 0.05) 0px, transparent 40%),
+        radial-gradient(at 100% 100%, rgba(2, 132, 199, 0.05) 0px, transparent 40%);
       background-attachment: fixed;
       color: var(--text-main);
       min-height: 100vh;
@@ -83,14 +83,14 @@
       height: 54px;
       border-radius: 12px;
       object-fit: cover;
-      box-shadow: 0 0 20px var(--mario-purple-glow);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 12px rgba(15, 98, 254, 0.15);
+      border: 1px solid rgba(15, 98, 254, 0.1);
     }
 
     .brand-info h1 {
       font-size: 1.8rem;
       font-weight: 800;
-      background: linear-gradient(135deg, #ffffff, #d8b4fe);
+      background: linear-gradient(135deg, #0f172a, #0f62fe);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       letter-spacing: -0.5px;
@@ -103,9 +103,9 @@
     }
 
     .badge-firmware {
-      background: rgba(168, 85, 247, 0.12);
-      border: 1px solid rgba(168, 85, 247, 0.25);
-      color: #e9d5ff;
+      background: rgba(15, 98, 254, 0.08);
+      border: 1px solid rgba(15, 98, 254, 0.18);
+      color: #0f62fe;
       padding: 6px 14px;
       border-radius: 20px;
       font-size: 0.8rem;
@@ -126,28 +126,28 @@
       }
     }
 
-    /* Glass Cards */
+    /* Cards */
     .card {
       background: var(--bg-card);
       border: 1px solid var(--border-color);
       border-radius: 20px;
       padding: 30px;
-      backdrop-filter: blur(20px);
-      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
       display: flex;
       flex-direction: column;
       gap: 24px;
-      transition: border-color var(--transition-fast) ease;
+      transition: all var(--transition-fast) ease;
     }
 
     .card:hover {
-      border-color: rgba(168, 85, 247, 0.2);
+      border-color: rgba(15, 98, 254, 0.25);
+      box-shadow: 0 15px 35px rgba(15, 23, 42, 0.06);
     }
 
     .card-heading {
       font-size: 1.3rem;
       font-weight: 700;
-      color: #ffffff;
+      color: var(--text-main);
       border-left: 4px solid var(--mario-purple);
       padding-left: 12px;
       margin-bottom: 4px;
@@ -163,8 +163,8 @@
     .char-profile {
       display: flex;
       gap: 20px;
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.04);
+      background: rgba(15, 98, 254, 0.02);
+      border: 1px solid rgba(15, 98, 254, 0.05);
       border-radius: 16px;
       padding: 20px;
       align-items: center;
@@ -187,8 +187,8 @@
       width: 70px;
       height: 70px;
       border-radius: 50%;
-      background: #000;
-      border: 3px solid rgba(255, 255, 255, 0.15);
+      background: #f8fafc;
+      border: 3px solid rgba(15, 98, 254, 0.1);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -209,11 +209,11 @@
     }
 
     .char-desc.mario h3 {
-      color: #3b82f6;
+      color: #0284c7;
     }
 
     .char-desc.ms-mario h3 {
-      color: #f43f5e;
+      color: #db2777;
     }
 
     .char-desc p {
@@ -236,10 +236,10 @@
       gap: 10px;
       font-size: 0.88rem;
       color: var(--text-muted);
-      background: rgba(255, 255, 255, 0.02);
+      background: rgba(15, 98, 254, 0.03);
       padding: 10px 14px;
       border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(15, 98, 254, 0.06);
     }
 
     .feature-item svg {
@@ -270,26 +270,26 @@
       gap: 12px;
       transition: all var(--transition-fast) ease;
       color: #ffffff;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
     }
 
     .btn-compile {
-      background: linear-gradient(135deg, #6366f1, #4f46e5);
-      border: 1px solid rgba(99, 102, 241, 0.3);
+      background: linear-gradient(135deg, #0074d9, #0f62fe);
+      border: 1px solid rgba(15, 98, 254, 0.2);
     }
 
     .btn-compile:hover:not(:disabled) {
-      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+      box-shadow: 0 0 20px rgba(15, 98, 254, 0.35);
       transform: translateY(-2px);
     }
 
     .btn-upload {
       background: linear-gradient(135deg, #ef4444, #dc2626);
-      border: 1px solid rgba(239, 68, 68, 0.3);
+      border: 1px solid rgba(239, 68, 68, 0.2);
     }
 
     .btn-upload:hover:not(:disabled) {
-      box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.35);
       transform: translateY(-2px);
     }
 
@@ -322,7 +322,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: #121020;
+      background: #0f172a;
       border: 1px solid var(--border-color);
       border-bottom: none;
       border-top-left-radius: 12px;
@@ -330,7 +330,7 @@
       padding: 10px 16px;
       font-size: 0.75rem;
       font-weight: 700;
-      color: var(--text-muted);
+      color: #f8fafc;
       letter-spacing: 0.5px;
     }
 
@@ -350,8 +350,8 @@
     .dot.green { background: #22c55e; }
 
     .terminal-body {
-      background: #040308;
-      border: 1px solid var(--border-color);
+      background: #090d16;
+      border: 1px solid rgba(15, 23, 42, 0.1);
       border-bottom-left-radius: 12px;
       border-bottom-right-radius: 12px;
       padding: 16px;
@@ -360,7 +360,7 @@
       line-height: 1.5;
       height: 250px;
       overflow-y: auto;
-      color: #22c55e;
+      color: #38bdf8;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -384,8 +384,8 @@
       font-size: 0.65rem;
     }
 
-    .log-entry.info .log-badge { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-    .log-entry.system .log-badge { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+    .log-entry.info .log-badge { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+    .log-entry.system .log-badge { background: rgba(15, 98, 254, 0.15); color: #0f62fe; }
     .log-entry.error .log-badge { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
     
     .log-text {
@@ -406,14 +406,14 @@
     }
 
     .toast {
-      background: rgba(20, 18, 38, 0.95);
-      border: 1px solid rgba(168, 85, 247, 0.3);
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(15, 98, 254, 0.2);
       padding: 14px 20px;
       border-radius: 10px;
-      color: #ffffff;
+      color: #0f172a;
       font-size: 0.88rem;
       font-weight: 500;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.1);
       transform: translateY(100px);
       opacity: 0;
       transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -441,12 +441,12 @@
     .tech-group h4 {
       font-size: 1rem;
       font-weight: 700;
-      color: #ffffff;
+      color: var(--text-main);
       margin-bottom: 12px;
       display: flex;
       align-items: center;
       gap: 8px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(15, 98, 254, 0.1);
       padding-bottom: 8px;
     }
 
@@ -469,7 +469,7 @@
 
     .tech-group li::before {
       content: "✦";
-      color: var(--mario-purple);
+      color: var(--mario-blue);
       font-size: 0.8rem;
       margin-top: 2px;
       flex-shrink: 0;
@@ -478,11 +478,11 @@
     .tech-group code {
       font-family: 'Fira Code', monospace;
       font-size: 0.78rem;
-      background: rgba(0, 0, 0, 0.4);
+      background: rgba(15, 98, 254, 0.05);
       padding: 2px 6px;
       border-radius: 4px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      color: #e9d5ff;
+      border: 1px solid rgba(15, 98, 254, 0.1);
+      color: #0f62fe;
     }
   </style>
 </head>
