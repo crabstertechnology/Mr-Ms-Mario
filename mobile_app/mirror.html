@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mr. Mario Live Screen Share</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #0E0D1A;
+            color: #FFFFFF;
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-y: auto;
+            padding: 20px 20px 80px 20px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+        }
+
+        p.desc {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+        }
+
+        .phone-frame {
+            position: relative;
+            width: 360px;
+            height: 740px;
+            background: #161526;
+            border: 12px solid #2B2943;
+            border-radius: 40px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8),
+                        0 0 40px rgba(0, 240, 255, 0.1);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .phone-frame::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            width: 120px;
+            height: 25px;
+            background: #2B2943;
+            border-radius: 15px;
+            z-index: 10;
+        }
+
+        #screen {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background-color: #000000;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .controls {
+            margin-top: 25px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #00F0FF, #0074D9);
+            color: #0E0D1A;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 240, 255, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 240, 255, 0.5);
+        }
+
+        .btn.paused {
+            background: rgba(255, 255, 255, 0.1);
+            color: #FFFFFF;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: none;
+        }
+
+        .stats-badge {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: #00F0FF;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Mr. Mario Live Share</h1>
+    <p class="desc">Interactive Remote Device Control</p>
+
+    <div class="phone-frame">
+        <img id="screen" src="" alt="Live viewport offline" draggable="false">
+    </div>
+
+    <div class="controls">
+        <button id="toggleBtn" class="btn">Pause Mirror</button>
+        <div id="fps" class="stats-badge">FPS: 0.0</div>
+    </div>
+
+    <script>
+        let active = true;
+        const img = document.getElementById('screen');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const fpsText = document.getElementById('fps');
+        let lastFrame = Date.now();
+
+        function updateImage() {
+            if (!active) return;
+
+            const newImg = new Image();
+            newImg.onload = function() {
+                img.src = newImg.src;
+                const endTime = Date.now();
+                const fps = 1000 / (endTime - lastFrame);
+                lastFrame = endTime;
+                fpsText.textContent = `FPS: ${fps.toFixed(1)}`;
+                
+                // Fetch next frame
+                setTimeout(updateImage, 60);
+            };
+            newImg.onerror = function() {
+                // Retry soon
+                setTimeout(updateImage, 500);
+            };
+            newImg.src = "/api/screenshot?t=" + Date.now();
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            active = !active;
+            if (active) {
+                toggleBtn.textContent = "Pause Mirror";
+                toggleBtn.classList.remove('paused');
+                lastFrame = Date.now();
+                updateImage();
+            } else {
+                toggleBtn.textContent = "Resume Mirror";
+                toggleBtn.classList.add('paused');
+                fpsText.textContent = "PAUSED";
+            }
+        });
+
+        // Interaction Tracking
+        let isMouseDown = false;
+        let startX = 0, startY = 0;
+        let startTime = 0;
+
+        function handlePointerDown(e) {
+            e.preventDefault();
+            isMouseDown = true;
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            
+            startX = clientX;
+            startY = clientY;
+            startTime = Date.now();
+        }
+
+        function handlePointerUp(e) {
+            if (!isMouseDown) return;
+            isMouseDown = false;
+            
+            const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
+            const clientY = e.clientY || (e.changedTouches && e.changedTouches[0].clientY);
+            
+            if (clientX === undefined || clientY === undefined) return;
+            
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+            const dt = Date.now() - startTime;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            const rect = img.getBoundingClientRect();
+            
+            if (dist < 10) {
+                // Tap
+                const x_pct = (startX - rect.left) / rect.width;
+                const y_pct = (startY - rect.top) / rect.height;
+                sendControlAction({
+                    action: "tap",
+                    x_pct: x_pct,
+                    y_pct: y_pct
+                });
+            } else {
+                // Swipe / Scroll
+                const x1_pct = (startX - rect.left) / rect.width;
+                const y1_pct = (startY - rect.top) / rect.height;
+                const x2_pct = (clientX - rect.left) / rect.width;
+                const y2_pct = (clientY - rect.top) / rect.height;
+                sendControlAction({
+                    action: "swipe",
+                    x1_pct: x1_pct,
+                    y1_pct: y1_pct,
+                    x2_pct: x2_pct,
+                    y2_pct: y2_pct,
+                    duration: dt
+                });
+            }
+        }
+
+        function sendControlAction(data) {
+            fetch('/api/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(res => {
+                if (!res.success) {
+                    console.error("Control action failed:", res.error);
+                }
+            })
+            .catch(err => console.error("Error sending control action:", err));
+        }
+
+        img.addEventListener('mousedown', handlePointerDown);
+        img.addEventListener('mouseup', handlePointerUp);
+        img.addEventListener('touchstart', handlePointerDown, { passive: false });
+        img.addEventListener('touchend', handlePointerUp);
+
+        // Start stream
+        updateImage();
+    </script>
+</body>
+</html>
