@@ -33,6 +33,10 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
   int _gifResetCounter = 0;
   Timer? _refreshTimer;
 
+  // GIF cycling support
+  int _cycleIndex = 0;
+  Timer? _cycleTimer;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +58,8 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
       _startMarquee();
     }
 
+    _checkCycleTimer();
+
     // 1-second general refresh timer for clock and GIF stability
     _refreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
@@ -69,6 +75,24 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
     });
   }
 
+  void _checkCycleTimer() {
+    final isCycling = widget.activeLabel.toUpperCase() == "CYCLING ALL GIFS";
+    if (isCycling) {
+      if (_cycleTimer == null) {
+        _cycleTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+          if (mounted) {
+            setState(() {
+              _cycleIndex++;
+            });
+          }
+        });
+      }
+    } else {
+      _cycleTimer?.cancel();
+      _cycleTimer = null;
+    }
+  }
+
   @override
   void didUpdateWidget(covariant OLEDSimulator oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -77,25 +101,12 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
         widget.marqueeText!.isNotEmpty) {
       _startMarquee();
     }
-  }
-
-  void _startMarquee() {
-    setState(() {
-      _isMarqueeActive = true;
-      // Estimate text width: ~8 pixels per character on standard scale
-      _textWidth = widget.marqueeText!.length * 8.0;
-    });
-    
-    // Duration proportional to text length to keep velocity constant
-    final charCount = widget.marqueeText!.length;
-    final durationSecs = max(3.0, charCount * 0.15);
-    
-    _marqueeController?.duration = Duration(milliseconds: (durationSecs * 1000).toInt());
-    _marqueeController?.forward(from: 0.0);
+    _checkCycleTimer();
   }
 
   @override
   void dispose() {
+    _cycleTimer?.cancel();
     _refreshTimer?.cancel();
     _marqueeController?.dispose();
     super.dispose();
@@ -196,7 +207,19 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
     } else {
       // Normal Eye expression GIF
       Widget imageWidget;
-      final currentGif = db.gifs.firstWhere((g) => g.id == widget.activeGifId, orElse: () => db.gifs.first);
+      final isCycling = widget.activeLabel.toUpperCase() == "CYCLING ALL GIFS";
+      final GifModel currentGif;
+
+      if (isCycling && db.gifs.isNotEmpty) {
+        final cycleGifs = db.gifs.where((g) => g.category.toUpperCase() != "BLANK" && g.id != "blank" && g.id != "clock").toList();
+        if (cycleGifs.isNotEmpty) {
+          currentGif = cycleGifs[_cycleIndex % cycleGifs.length];
+        } else {
+          currentGif = db.gifs[_cycleIndex % db.gifs.length];
+        }
+      } else {
+        currentGif = db.gifs.firstWhere((g) => g.id == widget.activeGifId, orElse: () => db.gifs.first);
+      }
       
       if (currentGif.customData != null && currentGif.customData!.isNotEmpty) {
         // Base64 user uploaded image
@@ -205,7 +228,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
           final bytes = base64Decode(base64Str);
           imageWidget = Image.memory(
             bytes,
-            key: ValueKey('${widget.activeGifId}_$_gifResetCounter'),
+            key: ValueKey('${currentGif.id}_$_gifResetCounter'),
             fit: BoxFit.contain,
             gaplessPlayback: true,
           );
@@ -215,8 +238,8 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
       } else {
         // Built-in assets GIF
         imageWidget = Image.asset(
-          'assets/animations/${widget.activeGifId}.gif',
-          key: ValueKey('${widget.activeGifId}_$_gifResetCounter'),
+          'assets/animations/${currentGif.id}.gif',
+          key: ValueKey('${currentGif.id}_$_gifResetCounter'),
           fit: BoxFit.contain,
           gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) => Image.asset(

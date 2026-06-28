@@ -523,49 +523,54 @@ class _MainDashboardState extends State<MainDashboard> {
     String activeLabel = _localActiveLabel;
 
     if (ble.isConnected) {
-      final exprId = ble.activeExpressionId;
-      switch (exprId) {
-        case 0:
-          activeGifId = 'relaxed';
-          activeLabel = 'Idle';
-          break;
-        case 1:
-          activeGifId = 'happy';
-          activeLabel = 'Happy';
-          break;
-        case 2:
-          activeGifId = 'crying';
-          activeLabel = 'Sad';
-          break;
-        case 3:
-          activeGifId = 'angry';
-          activeLabel = 'Angry';
-          break;
-        case 4:
-          activeGifId = 'surprised';
-          activeLabel = 'Surprised';
-          break;
-        case 5:
-          activeGifId = 'sleepy';
-          activeLabel = 'Sleeping';
-          break;
-        case 6:
-          activeGifId = 'wink';
-          activeLabel = 'Wink';
-          break;
-        case 7:
-          activeGifId = 'clock';
-          activeLabel = 'Clock';
-          break;
-        case 8:
-          activeGifId = _localActiveGifId;
-          activeLabel = _localActiveLabel;
-          break;
-        default:
-          if (exprId == 9) {
-            activeLabel = 'Cycling All GIFs';
+      final bleLabel = ble.activeExpressionLabel.trim().toUpperCase();
+      if (bleLabel.isNotEmpty && bleLabel != "IDLE") {
+        activeLabel = ble.activeExpressionLabel;
+        
+        final match = db.gifs.firstWhere(
+          (g) => g.name.toUpperCase() == bleLabel || g.id.toUpperCase() == bleLabel,
+          orElse: () => db.gifs.firstWhere(
+            (g) => g.category.toUpperCase() == bleLabel,
+            orElse: () => GifModel(id: '', name: '', category: '', favorite: false, selected: false, hidden: false)
+          )
+        );
+        if (match.id.isNotEmpty) {
+          activeGifId = match.id;
+        } else {
+          final exprId = ble.activeExpressionId;
+          switch (exprId) {
+            case 0: activeGifId = 'relaxed'; activeLabel = 'Idle'; break;
+            case 1: activeGifId = 'happy'; activeLabel = 'Happy'; break;
+            case 2: activeGifId = 'crying'; activeLabel = 'Sad'; break;
+            case 3: activeGifId = 'angry'; activeLabel = 'Angry'; break;
+            case 4: activeGifId = 'surprised'; activeLabel = 'Surprised'; break;
+            case 5: activeGifId = 'sleepy'; activeLabel = 'Sleeping'; break;
+            case 6: activeGifId = 'wink'; activeLabel = 'Wink'; break;
+            case 7: activeGifId = 'clock'; activeLabel = 'Clock'; break;
+            case 9: activeLabel = 'Cycling All GIFs'; break;
+            default:
+              activeGifId = _localActiveGifId;
+              activeLabel = _localActiveLabel;
+              break;
           }
-          break;
+        }
+      } else {
+        final exprId = ble.activeExpressionId;
+        switch (exprId) {
+          case 0: activeGifId = 'relaxed'; activeLabel = 'Idle'; break;
+          case 1: activeGifId = 'happy'; activeLabel = 'Happy'; break;
+          case 2: activeGifId = 'crying'; activeLabel = 'Sad'; break;
+          case 3: activeGifId = 'angry'; activeLabel = 'Angry'; break;
+          case 4: activeGifId = 'surprised'; activeLabel = 'Surprised'; break;
+          case 5: activeGifId = 'sleepy'; activeLabel = 'Sleeping'; break;
+          case 6: activeGifId = 'wink'; activeLabel = 'Wink'; break;
+          case 7: activeGifId = 'clock'; activeLabel = 'Clock'; break;
+          case 9: activeLabel = 'Cycling All GIFs'; break;
+          default:
+            activeGifId = _localActiveGifId;
+            activeLabel = _localActiveLabel;
+            break;
+        }
       }
     }
 
@@ -1010,105 +1015,15 @@ class _MainDashboardState extends State<MainDashboard> {
 
     return Column(
       children: [
-        // Top section: OLED Simulator & Diagnostics
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final isWide = constraints.maxWidth > 600;
-            return Flex(
-              direction: isWide ? Axis.horizontal : Axis.vertical,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  flex: isWide ? 1 : 0,
-                  child: Center(
-                    child: OLEDSimulator(
-                      activeGifId: activeGifId,
-                      activeLabel: activeLabel,
-                      marqueeText: _marqueeController.text,
-                    ),
-                  ),
-                ),
-                if (!isWide) const SizedBox(height: 20),
-                Expanded(
-                  flex: isWide ? 1 : 0,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // BLE Connect indicator card
-                      _buildBLEConnectBar(ble),
-                      const SizedBox(height: 12),
-                      // Diagnostics Panel Card
-                      _buildDiagnosticsCard(ble),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-
-        // Live Notification Marquee Center
-        GlassCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                "NOTIFICATION CENTER",
-                style: GoogleFonts.outfit(
-                  color: const Color(0xFFD8B4FE),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  letterSpacing: 1,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _marqueeController,
-                      style: GoogleFonts.outfit(color: textColor, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: "Type marquee banner text...",
-                        hintStyle: GoogleFonts.outfit(color: textColor30),
-                        filled: true,
-                        fillColor: Colors.black38,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.white.withOpacity(0.07)),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (_marqueeController.text.isNotEmpty) {
-                        setState(() {}); // refresh OLED Simulator marquee
-                        await ble.transmitMarqueeText(_marqueeController.text);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8B5CF6),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text("SEND"),
-                  ),
-                ],
-              ),
-            ],
+        // Top section: OLED Simulator (Simulation display)
+        Center(
+          child: OLEDSimulator(
+            activeGifId: activeGifId,
+            activeLabel: activeLabel,
+            marqueeText: _marqueeController.text,
           ),
         ),
-        const SizedBox(height: 20),
-
-        // Custom GIF conversion uploader
-        _buildUploadZoneCard(db),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
 
         // GIF Library Header (filters/sorting)
         _buildLibraryControlsHeader(db),
