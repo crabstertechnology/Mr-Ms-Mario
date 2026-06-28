@@ -86,7 +86,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
     _alarmSoundTimer?.cancel();
     _alarmSoundTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _audioSynth.playTone(880, 200);
+      _audioSynth.playMelody("A5 200 0");
     });
 
     showDialog(
@@ -1144,9 +1144,9 @@ class _MainDashboardState extends State<MainDashboard> {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
             maxCrossAxisExtent: 160,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.95,
           ),
           itemCount: filteredGifs.length,
           itemBuilder: (context, index) {
@@ -3948,6 +3948,97 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
+  Widget _buildNotificationSyncPanel(DatabaseService db, BLEService ble) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionHeader("Notification Sync Settings", Icons.notifications_active, Colors.indigo.shade600),
+        const SizedBox(height: 12),
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Forward Phone Notifications",
+                          style: GoogleFonts.outfit(
+                            color: textColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Forward incoming notifications from all apps to the robot OLED screen.",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: db.notificationSyncEnabled,
+                    activeColor: Colors.indigo.shade400,
+                    onChanged: (val) async {
+                      if (val && !_isNotificationPermissionGranted) {
+                        _requestNotificationPermission();
+                      } else {
+                        await db.updateNotificationSyncEnabled(val);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
+                    _isNotificationPermissionGranted ? Icons.check_circle : Icons.warning,
+                    color: _isNotificationPermissionGranted ? Colors.green : Colors.amber,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _isNotificationPermissionGranted
+                        ? "Notification access is GRANTED"
+                        : "Notification access is REQUIRED",
+                    style: GoogleFonts.outfit(
+                      color: _isNotificationPermissionGranted ? Colors.green : Colors.amber.shade700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (!_isNotificationPermissionGranted)
+                    TextButton(
+                      onPressed: _requestNotificationPermission,
+                      child: Text(
+                        "GRANT ACCESS",
+                        style: GoogleFonts.outfit(
+                          color: _accentColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSettingsPanel(DatabaseService db, BLEService ble) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3990,6 +4081,8 @@ class _MainDashboardState extends State<MainDashboard> {
         _buildChronosPanel(db, ble),
         const SizedBox(height: 28),
         _buildAlarmsSection(db, ble),
+        const SizedBox(height: 28),
+        _buildNotificationSyncPanel(db, ble),
         const SizedBox(height: 28),
         _buildPixelArtPanel(),
         const SizedBox(height: 16),
@@ -4057,7 +4150,7 @@ class _GifCardWidgetState extends State<_GifCardWidget>
           image: MemoryImage(rawBytes),
           controller: _controller,
           autostart: Autostart.loop,
-          fit: BoxFit.contain,
+          fit: BoxFit.cover,
         );
       } catch (_) {
         imageWidget = const Icon(Icons.broken_image, color: Colors.red);
@@ -4067,7 +4160,7 @@ class _GifCardWidgetState extends State<_GifCardWidget>
         image: AssetImage('assets/animations/${gif.id}.gif'),
         controller: _controller,
         autostart: Autostart.loop,
-        fit: BoxFit.contain,
+        fit: BoxFit.cover,
       );
     }
 
@@ -4088,16 +4181,19 @@ class _GifCardWidgetState extends State<_GifCardWidget>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  AspectRatio(
-                    aspectRatio: 2.0,
+                  Expanded(
                     child: Container(
-                      color: Colors.black, // background of the gif area
-                      child: ColorFiltered(
-                        colorFilter:
-                            ColorFilter.mode(previewColor, BlendMode.modulate),
-                        child: Opacity(
-                          opacity: isHidden ? 0.3 : 1.0,
-                          child: imageWidget,
+                      color: Colors.black,
+                      child: ClipRect(
+                        child: ColorFiltered(
+                          colorFilter:
+                              ColorFilter.mode(previewColor, BlendMode.modulate),
+                          child: Opacity(
+                            opacity: isHidden ? 0.3 : 1.0,
+                            child: SizedBox.expand(
+                              child: imageWidget,
+                            ),
+                          ),
                         ),
                       ),
                     ),
