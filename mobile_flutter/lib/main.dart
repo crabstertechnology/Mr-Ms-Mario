@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'services/bluetooth_service.dart';
 import 'services/database_service.dart';
 import 'screens/main_dashboard.dart';
+import 'screens/splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +34,7 @@ class MrMarioControllerApp extends StatelessWidget {
     final Color accentTextColor = isMissMario ? const Color(0xFFDB2777) : const Color(0xFF1D4ED8);
 
     return MaterialApp(
-      title: 'Mr&Ms Mario',
+      title: 'Mr. Mario',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.light,
@@ -96,7 +97,7 @@ class MrMarioControllerApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const MainDashboard(),
+      home: const SplashScreen(),
     );
   }
 }

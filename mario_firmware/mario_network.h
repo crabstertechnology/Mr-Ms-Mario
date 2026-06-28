@@ -5,6 +5,7 @@
 #include <WiFiUdp.h>
 #include <ArduinoWebsockets.h>
 #include <Preferences.h>
+#include <esp_wifi.h>
 #include "config.h"
 
 // Extern references from main sketch to process commands
@@ -84,6 +85,7 @@ public:
     
     WiFi.disconnect(true);
     WiFi.mode(WIFI_STA);
+    esp_wifi_set_ps(WIFI_PS_NONE); // Disable Wi-Fi power save to prevent connection dropouts
     WiFi.begin(ssid, pass);
     
     wifiConnected = false;

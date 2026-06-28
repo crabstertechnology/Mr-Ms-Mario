@@ -444,20 +444,48 @@ class _MainDashboardState extends State<MainDashboard> {
 
     if (ble.isConnected) {
       final exprId = ble.activeExpressionId;
-      if (exprId != 9) {
-        switch (exprId) {
-          case 0: activeGifId = 'relaxed'; activeLabel = 'Idle'; break;
-          case 1: activeGifId = 'happy'; activeLabel = 'Happy'; break;
-          case 2: activeGifId = 'crying'; activeLabel = 'Sad'; break;
-          case 3: activeGifId = 'angry'; activeLabel = 'Angry'; break;
-          case 4: activeGifId = 'surprised'; activeLabel = 'Surprised'; break;
-          case 5: activeGifId = 'sleepy'; activeLabel = 'Sleeping'; break;
-          case 6: activeGifId = 'wink'; activeLabel = 'Wink'; break;
-        }
-      } else {
-        if (activeLabel == 'Idle') {
-          activeLabel = 'Cycling All GIFs';
-        }
+      switch (exprId) {
+        case 0:
+          activeGifId = 'relaxed';
+          activeLabel = 'Idle';
+          break;
+        case 1:
+          activeGifId = 'happy';
+          activeLabel = 'Happy';
+          break;
+        case 2:
+          activeGifId = 'crying';
+          activeLabel = 'Sad';
+          break;
+        case 3:
+          activeGifId = 'angry';
+          activeLabel = 'Angry';
+          break;
+        case 4:
+          activeGifId = 'surprised';
+          activeLabel = 'Surprised';
+          break;
+        case 5:
+          activeGifId = 'sleepy';
+          activeLabel = 'Sleeping';
+          break;
+        case 6:
+          activeGifId = 'wink';
+          activeLabel = 'Wink';
+          break;
+        case 7:
+          activeGifId = 'clock';
+          activeLabel = 'Clock';
+          break;
+        case 8:
+          activeGifId = _localActiveGifId;
+          activeLabel = _localActiveLabel;
+          break;
+        default:
+          if (exprId == 9) {
+            activeLabel = 'Cycling All GIFs';
+          }
+          break;
       }
     }
 
@@ -613,14 +641,6 @@ class _MainDashboardState extends State<MainDashboard> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      _accentColor,
-                      _accentColor.withOpacity(0.7),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(
@@ -628,11 +648,14 @@ class _MainDashboardState extends State<MainDashboard> {
                       blurRadius: 8,
                     ),
                   ],
+                  image: const DecorationImage(
+                    image: AssetImage('assets/logo.png'),
+                    fit: BoxFit.cover,
+                  ),
                 ),
-                child: const Icon(Icons.smart_toy, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 10),
-              Column(
+               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -643,35 +666,6 @@ class _MainDashboardState extends State<MainDashboard> {
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.5,
                     ),
-                  ),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.05),
-                          border: Border.all(color: Colors.black.withOpacity(0.08)),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: Text(
-                          "PRO",
-                          style: GoogleFonts.outfit(color: textColor38, fontSize: 8, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: _accentColorLight,
-                          border: Border.all(color: _accentColor.withOpacity(0.3)),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: Text(
-                          "FLUTTER",
-                          style: GoogleFonts.outfit(color: _accentColor, fontSize: 8, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -2065,7 +2059,7 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildHomeDashboardPanel(DatabaseService db, BLEService ble) {
     final primary = db.primaryRobot ?? RobotProfile(
       id: 'mr_mario',
-      name: 'Mr&Ms Mario',
+      name: 'Mr. Mario',
       variant: 'mr_mario',
       remoteId: '',
       lastConnected: DateTime.now(),
@@ -2747,10 +2741,12 @@ class _MainDashboardState extends State<MainDashboard> {
                     height: 36,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: accent.withOpacity(0.1),
                       border: Border.all(color: accent.withOpacity(0.3)),
+                      image: const DecorationImage(
+                        image: AssetImage('assets/logo.png'),
+                        fit: BoxFit.cover,
+                      ),
                     ),
-                    child: Icon(Icons.smart_toy, color: accent, size: 20),
                   ),
                   title: Row(
                     children: [
@@ -2929,7 +2925,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     children: [
                       Expanded(
                         child: ChoiceChip(
-                          label: const Text("Mr&Ms Mario"),
+                          label: const Text("Mr. Mario"),
                           selected: selectedVariant == 'mr_mario',
                           onSelected: (val) {
                             if (val) setModalState(() => selectedVariant = 'mr_mario');
@@ -2939,7 +2935,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: ChoiceChip(
-                          label: const Text("Miss Mario"),
+                          label: const Text("Ms. Mario"),
                           selected: selectedVariant == 'miss_mario',
                           onSelected: (val) {
                             if (val) setModalState(() => selectedVariant = 'miss_mario');

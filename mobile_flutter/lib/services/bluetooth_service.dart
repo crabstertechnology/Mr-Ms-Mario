@@ -82,7 +82,7 @@ class BLEService with ChangeNotifier {
 
   void _startReconnectTimer() {
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+    _reconnectTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (_pairedDeviceId != null && !_isConnected && !_isConnecting && !_isScanning) {
         if (await FlutterBluePlus.adapterState.first == BluetoothAdapterState.on) {
           final now = DateTime.now().millisecondsSinceEpoch;

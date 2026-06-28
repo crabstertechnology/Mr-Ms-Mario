@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -29,6 +30,9 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
   double _textWidth = 0.0;
   bool _isMarqueeActive = false;
 
+  int _gifResetCounter = 0;
+  Timer? _refreshTimer;
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +53,20 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
     if (widget.marqueeText != null && widget.marqueeText!.isNotEmpty) {
       _startMarquee();
     }
+
+    // 1-second general refresh timer for clock and GIF stability
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          // Increment cache reset counter every 30 seconds
+          if (timer.tick % 30 == 0) {
+            _gifResetCounter++;
+            PaintingBinding.instance.imageCache.clear();
+            PaintingBinding.instance.imageCache.clearLiveImages();
+          }
+        });
+      }
+    });
   }
 
   @override
@@ -78,6 +96,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _marqueeController?.dispose();
     super.dispose();
   }
@@ -99,7 +118,46 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
     int quarterTurns = (rotationVal / 90.0).round() % 4;
 
     Widget screenContent;
-    if (_isMarqueeActive && widget.marqueeText != null) {
+    if (widget.activeGifId == 'clock') {
+      final now = DateTime.now();
+      final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
+      screenContent = Center(
+        child: Container(
+          width: 128,
+          height: 64,
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                "- CLOCK -",
+                style: GoogleFonts.pressStart2p(
+                  color: oledColor,
+                  fontSize: 7,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                timeStr,
+                style: GoogleFonts.pressStart2p(
+                  color: oledColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "[Tap to close clock]",
+                style: GoogleFonts.pressStart2p(
+                  color: oledColor,
+                  fontSize: 5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (_isMarqueeActive && widget.marqueeText != null) {
       screenContent = LayoutBuilder(
         builder: (context, constraints) {
           final screenWidth = constraints.maxWidth;
@@ -146,6 +204,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
           final bytes = base64Decode(base64Str);
           imageWidget = Image.memory(
             bytes,
+            key: ValueKey('${widget.activeGifId}_$_gifResetCounter'),
             fit: BoxFit.contain,
             gaplessPlayback: true,
           );
@@ -156,10 +215,12 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
         // Built-in assets GIF
         imageWidget = Image.asset(
           'assets/animations/${widget.activeGifId}.gif',
+          key: ValueKey('${widget.activeGifId}_$_gifResetCounter'),
           fit: BoxFit.contain,
           gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) => Image.asset(
             'assets/animations/blank.gif',
+            key: ValueKey('blank_$_gifResetCounter'),
             fit: BoxFit.contain,
             gaplessPlayback: true,
           ),

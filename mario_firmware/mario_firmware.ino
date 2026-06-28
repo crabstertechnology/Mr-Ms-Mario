@@ -131,7 +131,7 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
       audio.playSound(SOUND_CHIRP);
       break;
     case EXPR_SLEEPING:
-      isAsleep = true;
+      // isAsleep = true; // Sleep mode disabled
       audio.playSound(SOUND_POWERDOWN);
       break;
     default:
@@ -157,19 +157,15 @@ void handleRobotCommand(String text) {
   lastExpressionCycleTime = millis(); // Reset cycle timer on interaction
   
   if (text == "WAKE") {
-    if (isAsleep) {
-      isAsleep = false;
-      face.setExpression(EXPR_IDLE);
-      audio.playSound(SOUND_CHIRP);
-      Serial.println("Robot woke up from remote command!");
-    }
+    isAsleep = false;
+    face.setExpression(EXPR_IDLE);
+    audio.playSound(SOUND_CHIRP);
+    Serial.println("Robot woke up from remote command!");
   } else if (text == "SLEEP") {
-    if (!isAsleep) {
-      isAsleep = true;
-      face.setExpression(EXPR_SLEEPING);
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println("Robot went to sleep from remote command!");
-    }
+    // isAsleep = true; // Sleep mode disabled
+    face.setExpression(EXPR_SLEEPING);
+    audio.playSound(SOUND_POWERDOWN);
+    Serial.println("Robot went to sleep from remote command!");
   } else if (text == "RESET") {
     // Factory reset: clear NVS and reboot
     audio.playSound(SOUND_GAMEOVER);
@@ -481,10 +477,10 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
       face.setExpression(EXPR_HAPPY);
       audio.playSound(SOUND_COIN);
     } else if (eventType == TOUCH_LONG_PRESS) {
-      isAsleep = true;
+      // isAsleep = true; // Sleep mode disabled
       face.setExpression(EXPR_SLEEPING);
       audio.playSound(SOUND_POWERDOWN);
-      Serial.println("Mr. Mario entered Sleep Mode!");
+      Serial.println("Mr. Mario entered Sleep Mode (animation only, stays awake)!");
     }
   } else {
     // Custom actions
