@@ -343,7 +343,8 @@ void applySettings(String payload) {
 void setup() {
   Serial.begin(115200);
   delay(100); // Faster boot!
-  Serial.println("Mr. Mario Robot Booting Up...");
+  Serial.print("Mr. Mario Robot Booting Up... Version: ");
+  Serial.println(FIRMWARE_VERSION);
 
   // Load persistence settings from NVS Preferences
   preferences.begin("mario", false);

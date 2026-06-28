@@ -3,31 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mr.mario - Premium Smart Robot Controller</title>
+  <title>Mr. Mario & Ms. Mario - Firmware Station</title>
   
-  <!-- Google Fonts for premium typography -->
+  <!-- SEO Tags -->
+  <meta name="description" content="Official developer console for compiling and flashing firmware to Mr. Mario and Ms. Mario interactive smart desktop robots.">
+  
+  <!-- Premium Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Press+Start+2P&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
   
-  <!-- Import ESP Web Tools for browser-based serial flashing -->
+  <!-- ESP Web Tools for browser serial flashing -->
   <script type="module" src="https://unpkg.com/esp-web-tools@9/dist/web/install-button.js?module"></script>
   
   <style>
     :root {
-      --bg-dark: #080710;
-      --bg-sidebar: #0f0e1a;
-      --bg-card: rgba(22, 21, 38, 0.55);
-      --border-glow: rgba(168, 85, 247, 0.2);
-      --border-color: rgba(255, 255, 255, 0.07);
-      --mario-red: #ff4136;
+      --bg-dark: #07060f;
+      --bg-card: rgba(18, 17, 32, 0.65);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --mario-blue: #0074D9;
+      --mario-blue-glow: rgba(0, 116, 217, 0.4);
+      --ms-mario-pink: #ec4899;
+      --ms-mario-pink-glow: rgba(236, 72, 153, 0.4);
       --mario-purple: #a855f7;
-      --mario-gold: #ffdc00;
-      --mario-blue: #0074d9;
-      --mario-green: #2ecc40;
+      --mario-purple-glow: rgba(168, 85, 247, 0.4);
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
-      --transition-speed: 0.25s;
+      --transition-fast: 0.2s;
     }
 
     * {
@@ -37,469 +39,269 @@
       font-family: 'Outfit', sans-serif;
     }
 
-    /* Custom thin scrollbar */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: rgba(0,0,0,0.2);
-    }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--mario-purple);
-    }
-
     body {
       background-color: var(--bg-dark);
       background-image: 
-        radial-gradient(at 0% 0%, rgba(168, 85, 247, 0.12) 0px, transparent 40%),
-        radial-gradient(at 100% 100%, rgba(0, 116, 217, 0.12) 0px, transparent 40%);
+        radial-gradient(at 0% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(0, 116, 217, 0.15) 0px, transparent 50%);
       background-attachment: fixed;
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
       overflow-x: hidden;
     }
 
-    /* Sticky top navigation bar */
-    .top-bar {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(15, 14, 26, 0.75);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border-color);
-      padding: 12px 24px;
+    /* Outer Wrapper */
+    .container {
+      max-width: 1200px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+    }
+
+    /* Header Design */
+    header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 20px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 20px;
     }
 
-    .top-left {
+    .brand-logo-container {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
     }
 
-    .chip-icon {
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, var(--mario-purple), var(--mario-blue));
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+    .brand-logo {
+      width: 54px;
+      height: 54px;
+      border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 0 20px var(--mario-purple-glow);
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
-    .chip-icon svg {
-      width: 18px;
-      height: 18px;
-      fill: #ffffff;
-    }
-
-    .brand-title {
-      font-size: 1.25rem;
+    .brand-info h1 {
+      font-size: 1.8rem;
       font-weight: 800;
-      background: linear-gradient(to right, #ffffff, #d8b4fe);
+      background: linear-gradient(135deg, #ffffff, #d8b4fe);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      letter-spacing: 0.5px;
+      letter-spacing: -0.5px;
     }
 
-    .badge-container {
-      display: flex;
-      gap: 8px;
-      margin-top: 4px;
-    }
-
-    .badge {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.7rem;
+    .brand-info p {
+      font-size: 0.9rem;
       color: var(--text-muted);
-      font-weight: 600;
-      letter-spacing: 0.5px;
+      margin-top: 2px;
     }
 
-    .badge.license {
-      background: rgba(255, 220, 0, 0.1);
-      border-color: rgba(255, 220, 0, 0.2);
-      color: var(--mario-gold);
-    }
-
-    .top-center-tabs {
-      display: flex;
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid var(--border-color);
-      padding: 4px;
-      border-radius: 12px;
-      gap: 4px;
-    }
-
-    .tab-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      font-weight: 600;
-      font-size: 0.85rem;
-      padding: 8px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all var(--transition-speed) ease;
-    }
-
-    .tab-btn:hover {
-      color: var(--text-main);
-      background: rgba(255, 255, 255, 0.03);
-    }
-
-    .tab-btn.active {
-      background: rgba(168, 85, 247, 0.15);
+    .badge-firmware {
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.25);
       color: #e9d5ff;
-      border: 1px solid rgba(168, 85, 247, 0.3);
-      box-shadow: 0 0 10px rgba(168, 85, 247, 0.1);
-    }
-
-    .tab-btn svg {
-      width: 16px;
-      height: 16px;
-      fill: currentColor;
-    }
-
-    .top-right-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--mario-red);
-      box-shadow: 0 0 8px var(--mario-red);
-      transition: all 0.3s ease;
-    }
-
-    .status-dot.connected {
-      background: var(--mario-green);
-      box-shadow: 0 0 8px var(--mario-green);
-      animation: pulse 1.5s infinite;
-    }
-
-    .status-text {
-      font-size: 0.85rem;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
       font-weight: 600;
-      color: var(--text-muted);
+      letter-spacing: 0.5px;
     }
 
-    /* Main Workspace Layout */
-    .workspace {
+    /* Grid Layout */
+    .dashboard-grid {
       display: grid;
-      grid-template-columns: 320px 1fr;
-      flex-grow: 1;
-      height: calc(100vh - 58px);
-      overflow: hidden;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 30px;
     }
 
-    /* Sidebar Diagnostics & Explorer Panel */
-    .sidebar {
-      background: var(--bg-sidebar);
-      border-right: 1px solid var(--border-color);
+    @media (max-width: 900px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Glass Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 30px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
       display: flex;
       flex-direction: column;
-      overflow-y: auto;
-      padding: 20px;
+      gap: 24px;
+      transition: border-color var(--transition-fast) ease;
+    }
+
+    .card:hover {
+      border-color: rgba(168, 85, 247, 0.2);
+    }
+
+    .card-heading {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #ffffff;
+      border-left: 4px solid var(--mario-purple);
+      padding-left: 12px;
+      margin-bottom: 4px;
+    }
+
+    /* Character Specs Details */
+    .character-showcase {
+      display: flex;
+      flex-direction: column;
       gap: 20px;
     }
 
-    .sidebar-section-title {
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 12px;
+    .char-profile {
       display: flex;
+      gap: 20px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 16px;
+      padding: 20px;
       align-items: center;
-      gap: 6px;
+      transition: transform var(--transition-fast);
     }
 
-    .sidebar-section-title svg {
-      width: 14px;
-      height: 14px;
-      fill: currentColor;
+    .char-profile:hover {
+      transform: translateY(-2px);
     }
 
-    .diagnostics-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    .char-profile.mario {
+      border-left: 4px solid var(--mario-blue);
     }
 
-    .diag-item {
-      background: rgba(0, 0, 0, 0.25);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px;
+    .char-profile.ms-mario {
+      border-left: 4px solid var(--ms-mario-pink);
     }
 
-    .diag-label-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-
-    .diag-val {
-      font-weight: 700;
-      color: var(--text-main);
-    }
-
-    .diag-progress-container {
-      height: 6px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 3px;
-      overflow: hidden;
-    }
-
-    .diag-progress {
-      height: 100%;
-      background: linear-gradient(to right, var(--mario-blue), var(--mario-purple));
-      border-radius: 3px;
-      width: 0%;
-      transition: width 0.5s ease;
-    }
-
-    .diag-progress.battery {
-      background: linear-gradient(to right, var(--mario-red), var(--mario-green));
-    }
-
-    .btn-connect-ble {
-      width: 100%;
-      background: linear-gradient(135deg, var(--mario-purple), #8b5cf6);
-      border: none;
-      border-radius: 8px;
-      padding: 10px;
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
+    .char-avatar-wrapper {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: #000;
+      border: 3px solid rgba(255, 255, 255, 0.15);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
-      transition: all 0.2s ease;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .char-avatar-wrapper img {
+      width: 80%;
+      height: 80%;
+      object-fit: contain;
+    }
+
+    .char-desc h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .char-desc.mario h3 {
+      color: #3b82f6;
+    }
+
+    .char-desc.ms-mario h3 {
+      color: #f43f5e;
+    }
+
+    .char-desc p {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    /* Core Info Panel */
+    .features-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
       margin-top: 10px;
     }
 
-    .btn-connect-ble:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(168, 85, 247, 0.4);
-    }
-
-    .btn-connect-ble.connected {
-      background: linear-gradient(135deg, var(--mario-green), #22c55e);
-      box-shadow: 0 4px 12px rgba(46, 204, 64, 0.3);
-    }
-
-    /* Log Terminal Box */
-    .log-box {
-      background: #05040a;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px;
-      font-family: 'Fira Code', monospace;
-      font-size: 0.75rem;
-      height: 130px;
-      overflow-y: auto;
-      color: #34d399;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    /* File Explorer Tree View */
-    .file-tree {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 0.85rem;
-    }
-
-    .tree-folder {
-      cursor: pointer;
+    .feature-item {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 6px;
-      border-radius: 4px;
-      font-weight: 600;
-      color: #e2e8f0;
-      transition: background 0.2s;
-    }
-
-    .tree-folder:hover {
-      background: rgba(255,255,255,0.03);
-    }
-
-    .tree-folder svg {
-      width: 14px;
-      height: 14px;
-      fill: #f59e0b;
-    }
-
-    .tree-child-list {
-      margin-left: 20px;
-      border-left: 1px dashed rgba(255,255,255,0.1);
-      padding-left: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .tree-file {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 3px 6px;
-      border-radius: 4px;
+      gap: 10px;
+      font-size: 0.88rem;
       color: var(--text-muted);
-      cursor: default;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.02);
     }
 
-    .tree-file:hover {
-      background: rgba(255,255,255,0.02);
-      color: var(--text-main);
-    }
-
-    .tree-file-left {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .tree-file-left svg {
-      width: 14px;
-      height: 14px;
-      fill: var(--text-muted);
-    }
-
-    .tree-file-actions {
-      display: flex;
-      gap: 4px;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-
-    .tree-file:hover .tree-file-actions {
-      opacity: 1;
-    }
-
-    .tree-action-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 2px;
-      border-radius: 3px;
-    }
-
-    .tree-action-btn:hover {
-      color: var(--mario-purple);
-      background: rgba(255,255,255,0.05);
-    }
-
-    .tree-action-btn svg {
-      width: 12px;
-      height: 12px;
-      fill: currentColor;
-    }
-
-    /* Right Main Panel Workspace content */
-    .main-panel {
-      padding: 24px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    /* Global Actions Header Center */
-    .global-actions-bar {
-      display: flex;
-      justify-content: center;
-      gap: 16px;
-      background: rgba(255, 255, 255, 0.01);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--border-color);
-      padding: 12px;
-      border-radius: 14px;
-    }
-
-    .btn-global {
-      border: none;
-      border-radius: 8px;
-      padding: 10px 20px;
-      font-weight: 700;
-      font-size: 0.85rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-
-    .btn-global-reset {
-      background: linear-gradient(135deg, var(--mario-red), #dc2626);
-      color: white;
-    }
-
-    .btn-global-reset:hover {
-      box-shadow: 0 4px 15px rgba(255, 65, 54, 0.4);
-      transform: translateY(-1px);
-    }
-
-    .btn-global-save {
-      background: linear-gradient(135deg, var(--mario-purple), #7c3aed);
-      color: white;
-      position: relative;
-    }
-
-    .btn-global-save:hover {
-      box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
-      transform: translateY(-1px);
-    }
-
-    .btn-global-save.loading .save-text {
-      visibility: hidden;
-      opacity: 0;
-    }
-
-    .btn-global-save.loading::after {
-      content: "";
-      position: absolute;
+    .feature-item svg {
       width: 16px;
       height: 16px;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      margin: auto;
+      fill: var(--mario-purple);
+      flex-shrink: 0;
+    }
+
+    /* Action Buttons (Compile & Upload) */
+    .buttons-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .btn-action {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      padding: 16px 24px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      transition: all var(--transition-fast) ease;
+      color: #ffffff;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-compile {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-compile:hover:not(:disabled) {
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .btn-upload {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-upload:hover:not(:disabled) {
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .btn-action:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Loader inside compile button */
+    .loader {
+      width: 18px;
+      height: 18px;
       border: 3px solid transparent;
       border-top-color: #ffffff;
       border-radius: 50%;
@@ -510,3167 +312,411 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Live simulator twin card top row */
-    .simulator-top-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
+    /* ESP Web Tools Installation Widget Integration */
+    esp-web-install-button {
+      width: 100%;
     }
 
-    /* Cards */
-    .card {
-      background: var(--bg-card);
+    /* Retro Terminal Console Logger */
+    .terminal-title-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #121020;
       border: 1px solid var(--border-color);
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-      backdrop-filter: blur(10px);
-      transition: border-color 0.3s ease;
-    }
-
-    .card:hover {
-      border-color: var(--border-glow);
-    }
-
-    .card-title {
-      font-size: 1rem;
-      font-weight: 700;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--text-main);
-      border-left: 3px solid var(--mario-purple);
-      padding-left: 8px;
-    }
-
-    .card-title svg {
-      width: 18px;
-      height: 18px;
-      fill: var(--mario-purple);
-    }
-
-    /* OLED Screen Bezel Styles */
-    .avatar-screen-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 10px;
-    }
-
-    .avatar-circle {
-      width: 128px;
-      height: 128px;
-      background: #000000;
-      border: 6px solid #e2e8f0;
-      border-radius: 50%;
-      box-shadow: 
-        0 8px 24px rgba(0,0,0,0.5),
-        inset 0 0 15px rgba(0,0,0,0.8);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .avatar-circle img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      image-rendering: pixelated;
-    }
-
-    .oled-screen-bezel {
-      background: #111116;
-      border: 6px solid #27273a;
-      border-radius: 8px;
-      padding: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 
-        0 8px 24px rgba(0,0,0,0.5),
-        inset 0 0 10px rgba(0,0,0,0.8);
-      position: relative;
-      overflow: hidden;
-      width: 160px;
-      height: 96px;
-    }
-
-    .oled-screen-bezel img {
-      width: 128px;
-      height: 64px;
-      object-fit: contain;
-      image-rendering: pixelated;
-      filter: brightness(1.2) contrast(3) grayscale(100%) sepia(100%) hue-rotate(160deg) saturate(20);
-      transition: filter 0.2s;
-    }
-
-    .oled-text-overlay {
-      position: absolute;
-      display: none;
-      font-family: 'Press Start 2P', monospace;
-      font-size: 8px;
-      color: #00f0ff;
-      text-shadow: 0 0 4px rgba(0, 240, 255, 0.6);
-      white-space: nowrap;
-      left: 160px;
-    }
-
-    .oled-label-overlay {
-      position: absolute;
-      top: 6px;
-      width: 100%;
-      text-align: center;
-      font-family: 'Press Start 2P', monospace;
-      font-size: 6px;
-      color: #00f0ff;
-      text-shadow: 0 0 3px rgba(0, 240, 255, 0.6);
-    }
-
-    .sim-label {
-      margin-top: 12px;
-      font-size: 0.8rem;
+      border-bottom: none;
+      border-top-left-radius: 12px;
+      border-top-right-radius: 12px;
+      padding: 10px 16px;
+      font-size: 0.75rem;
       font-weight: 700;
       color: var(--text-muted);
       letter-spacing: 0.5px;
     }
 
-    .sim-label span {
-      color: var(--mario-gold);
-      font-family: 'Press Start 2P', monospace;
-      font-size: 0.6rem;
-      margin-left: 6px;
-    }
-
-    /* Page Tabs Content Control */
-    .tab-section {
-      display: none;
-      flex-direction: column;
-      gap: 20px;
-      animation: tabFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .tab-section.active {
+    .terminal-dots {
       display: flex;
+      gap: 6px;
     }
 
-    @keyframes tabFadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Form Fields */
-    .form-group {
-      margin-bottom: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-
-    label {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--text-muted);
-    }
-
-    .slider-container {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    input[type="range"] {
-      flex-grow: 1;
-      height: 6px;
-      background: rgba(255,255,255,0.08);
-      border-radius: 3px;
-      outline: none;
-      accent-color: var(--mario-purple);
-      cursor: pointer;
-    }
-
-    .slider-val {
-      font-family: 'Fira Code', monospace;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--mario-gold);
-      width: 45px;
-      text-align: right;
-    }
-
-    select, input[type="text"], textarea {
-      background: rgba(0,0,0,0.3);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px;
-      color: var(--text-main);
-      font-size: 0.9rem;
-      outline: none;
-      transition: all 0.2s;
-    }
-
-    select:focus, input[type="text"]:focus, textarea:focus {
-      border-color: var(--mario-purple);
-      box-shadow: 0 0 8px rgba(168, 85, 247, 0.2);
-    }
-
-    /* Switch toggle */
-    .switch-container {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 4px 0;
-    }
-
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 44px;
-      height: 24px;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .slider-round {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: rgba(255,255,255,0.1);
-      transition: .3s;
-      border-radius: 24px;
-      border: 1px solid var(--border-color);
-    }
-
-    .slider-round:before {
-      position: absolute;
-      content: "";
-      height: 16px;
-      width: 16px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: .3s;
+    .dot {
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
     }
 
-    input:checked + .slider-round {
-      background-color: var(--mario-purple);
+    .dot.red { background: #ef4444; }
+    .dot.yellow { background: #eab308; }
+    .dot.green { background: #22c55e; }
+
+    .terminal-body {
+      background: #040308;
+      border: 1px solid var(--border-color);
+      border-bottom-left-radius: 12px;
+      border-bottom-right-radius: 12px;
+      padding: 16px;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      height: 250px;
+      overflow-y: auto;
+      color: #22c55e;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
-    input:checked + .slider-round:before {
-      transform: translateX(20px);
-    }
-
-    /* Grid layout for Adjust GIF cards */
-    .adjust-gif-grid {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 20px;
-    }
-
-    /* GIF Library section styling */
-    .library-header {
+    .log-entry {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-      background: rgba(0,0,0,0.15);
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
-    }
-
-    .library-filters {
-      display: flex;
       gap: 8px;
-      flex-grow: 1;
     }
 
-    .library-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-      gap: 12px;
-      max-height: 480px;
-      overflow-y: auto;
-      padding-right: 4px;
+    .log-time {
+      color: #64748b;
     }
 
-    .gif-card {
-      background: rgba(0,0,0,0.2);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 8px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      position: relative;
-      transition: all 0.2s ease;
+    .log-badge {
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.65rem;
     }
 
-    .gif-card:hover {
-      border-color: var(--mario-purple);
-      transform: translateY(-2px);
+    .log-entry.info .log-badge { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+    .log-entry.system .log-badge { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+    .log-entry.error .log-badge { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    
+    .log-text {
+      flex: 1;
+      white-space: pre-wrap;
+      word-break: break-all;
     }
 
-    .gif-card-checkbox {
-      position: absolute;
-      top: 8px;
-      left: 8px;
-      z-index: 5;
-      accent-color: var(--mario-purple);
-      cursor: pointer;
-    }
-
-    .gif-card-fav {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      z-index: 5;
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      color: rgba(255,255,255,0.25);
-    }
-
-    .gif-card-fav.active {
-      color: var(--mario-gold);
-    }
-
-    .gif-card-preview {
-      width: 100%;
-      height: 80px;
-      border-radius: 8px;
-      overflow: hidden;
-      background: #000;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .gif-card-preview img {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-    }
-
-    .gif-card-name {
-      font-size: 0.8rem;
-      font-weight: 600;
-      text-align: center;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      width: 100%;
-      color: #e2e8f0;
-      margin-bottom: 6px;
-    }
-
-    .gif-card-actions {
-      display: flex;
-      width: 100%;
-      justify-content: space-around;
-      border-top: 1px solid rgba(255,255,255,0.05);
-      padding-top: 6px;
-    }
-
-    /* Upload zone styling */
-    .upload-zone {
-      border: 2px dashed rgba(168, 85, 247, 0.4);
-      border-radius: 12px;
-      padding: 30px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: rgba(168, 85, 247, 0.02);
-    }
-
-    .upload-zone:hover {
-      background: rgba(168, 85, 247, 0.05);
-      border-color: var(--mario-purple);
-    }
-
-    .upload-preview-container {
-      margin-top: 16px;
-      background: rgba(0,0,0,0.2);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .upload-preview-gif {
-      width: 128px;
-      height: 64px;
-      background: #000;
-      border-radius: 4px;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .upload-preview-gif img {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-    }
-
-    /* Database Table Layout */
-    .db-table-container {
-      overflow-x: auto;
-      margin-top: 10px;
-    }
-
-    .db-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-      text-align: left;
-    }
-
-    .db-table th {
-      border-bottom: 2px solid var(--border-color);
-      padding: 10px;
-      color: var(--text-muted);
-      font-weight: 600;
-    }
-
-    .db-table td {
-      border-bottom: 1px solid var(--border-color);
-      padding: 10px;
-      color: #e2e8f0;
-    }
-
-    .db-table tr:hover {
-      background: rgba(255,255,255,0.02);
-    }
-
-    /* Page 2: Adjust Sound custom tools styling */
-    .sound-music-container {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-
-    .composition-note {
-      background: rgba(0, 116, 217, 0.08);
-      border: 1px solid rgba(0, 116, 217, 0.2);
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 0.85rem;
-      color: #93c5fd;
-      line-height: 1.4;
-      margin-bottom: 16px;
-    }
-
-    .note-guide-box {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      line-height: 1.5;
-      background: rgba(0,0,0,0.25);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 12px;
-    }
-
-    /* Pixel Editor Screen Canvas */
-    .pixel-editor-grid {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 20px;
-    }
-
-    .pixel-canvas-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-
-    canvas#pixelCanvas {
-      background: #000;
-      border: 4px solid #27273a;
-      border-radius: 4px;
-      cursor: crosshair;
-      image-rendering: pixelated;
-    }
-
-    .pixel-controls {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    /* Buttons utilities classes */
-    .btn {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 8px 16px;
-      color: var(--text-main);
-      font-weight: 600;
-      font-size: 0.85rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: all 0.2s;
-    }
-
-    .btn:hover {
-      background: rgba(255,255,255,0.12);
-      border-color: rgba(255,255,255,0.2);
-    }
-
-    .btn-primary {
-      background: var(--mario-purple);
-      border-color: rgba(168, 85, 247, 0.4);
-    }
-
-    .btn-primary:hover {
-      background: #9333ea;
-      box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
-    }
-
-    .btn-secondary {
-      background: var(--mario-blue);
-      border-color: rgba(0, 116, 217, 0.4);
-    }
-
-    .btn-secondary:hover {
-      background: #0284c7;
-    }
-
-    .btn-success {
-      background: var(--mario-green);
-      border-color: rgba(46, 204, 64, 0.4);
-    }
-
-    .btn-danger {
-      background: var(--mario-red);
-      border-color: rgba(255, 65, 54, 0.4);
-    }
-
-    .btn svg {
-      width: 14px;
-      height: 14px;
-      fill: currentColor;
-    }
-
-    /* Toast overlay notifications */
-    .toast-container {
+    /* Toast Notification Container */
+    #toastContainer {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      z-index: 1000;
+      bottom: 24px;
+      right: 24px;
       display: flex;
       flex-direction: column;
       gap: 10px;
+      z-index: 1000;
     }
 
     .toast {
-      background: rgba(15, 14, 26, 0.9);
-      backdrop-filter: blur(15px);
-      border: 1px solid rgba(168, 85, 247, 0.35);
-      border-radius: 8px;
-      padding: 12px 20px;
-      color: var(--text-main);
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      background: rgba(20, 18, 38, 0.95);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      padding: 14px 20px;
+      border-radius: 10px;
+      color: #ffffff;
+      font-size: 0.88rem;
+      font-weight: 500;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* Technical reference documentation styles */
+    .tech-sections {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .tech-group h4 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 12px;
       display: flex;
       align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 8px;
+    }
+
+    .tech-group ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
       gap: 10px;
-      font-size: 0.85rem;
-      animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      padding-left: 4px;
     }
 
-    @keyframes toastSlideIn {
-      from { transform: translateX(120%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-
-    .toast.hide {
-      animation: toastSlideOut 0.3s ease forwards;
-    }
-
-    @keyframes toastSlideOut {
-      from { transform: translateX(0); opacity: 1; }
-      to { transform: translateX(120%); opacity: 0; }
-    }
-
-    .disabled-overlay {
-      position: relative;
-    }
-
-    .disabled-overlay::after {
-      content: "";
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(8, 7, 16, 0.6);
-      backdrop-filter: blur(2px);
-      z-index: 10;
-      border-radius: 16px;
-      cursor: not-allowed;
-    }
-
-    .disabled-text-indicator {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #000;
-      border: 1px solid rgba(255,255,255,0.1);
-      padding: 10px 20px;
-      border-radius: 8px;
-      z-index: 20;
-      font-size: 0.85rem;
-      font-weight: 600;
+    .tech-group li {
+      font-size: 0.88rem;
       color: var(--text-muted);
+      line-height: 1.5;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .tech-group li::before {
+      content: "✦";
+      color: var(--mario-purple);
+      font-size: 0.8rem;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .tech-group code {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.78rem;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: #e9d5ff;
     }
   </style>
 </head>
 <body>
 
-  <!-- Top Sticky Bar Navigation -->
-  <div class="top-bar">
-    <div class="top-left">
-      <div class="chip-icon" style="background: none; box-shadow: none;">
-        <img src="logo.png" alt="Mr. Mario Logo" style="width: 100%; height: 100%; border-radius: 8px; object-fit: cover;">
-      </div>
-      <div>
-        <div class="brand-title">Mr.mario</div>
-        <div class="badge-container">
-          <div class="badge" id="deviceMacBadge">MAC: 08:92:72:25:5B:C2</div>
-          <div class="badge license">License: Free</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Center Navigation Tabs -->
-    <div class="top-center-tabs">
-      <button class="tab-btn active" onclick="switchPage('adjust-gif')">
-        <svg viewBox="0 0 24 24"><path d="M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M13.96,12.29L11.21,15.83L9.25,13.47L6.5,17H17.5L13.96,12.29Z"/></svg>
-        Adjust GIF
-      </button>
-      <button class="tab-btn" onclick="switchPage('adjust-sound')">
-        <svg viewBox="0 0 24 24"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/></svg>
-        Adjust Sound
-      </button>
-      <button class="tab-btn" onclick="switchPage('chronos')">
-        <svg viewBox="0 0 24 24"><path d="M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z"/></svg>
-        Chronos Settings
-      </button>
-      <button class="tab-btn" onclick="switchPage('hardware')">
-        <svg viewBox="0 0 24 24"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.47,5.34 14.86,5.08L14.48,2.42C14.44,2.18 14.24,2 14,2H10C9.76,2 9.56,2.18 9.52,2.42L9.14,5.08C8.53,5.34 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,13L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.53,18.66 9.14,18.92L9.52,21.58C9.56,21.82 9.76,22 10,22H14C14.24,22 14.44,21.82 14.48,21.58L14.86,18.92C15.47,18.66 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
-        Hardware
-      </button>
-      <button class="tab-btn" onclick="switchPage('support')">
-        <svg viewBox="0 0 24 24"><path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z"/></svg>
-        Support Project
-      </button>
-    </div>
-
-    <div class="top-right-status">
-      <button class="btn btn-secondary" id="btnCompileFirmware" onclick="compileFirmware()" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 4px; display: flex; align-items: center; gap: 6px; background: #4f46e5; border: none; box-shadow: 0 0 10px rgba(79, 70, 229, 0.4); cursor: pointer; color: white; font-weight: 600; margin-right: 8px;">
-        <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:white;"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.47,5.34 14.86,5.08L14.48,2.42C14.44,2.18 14.24,2 14,2H10C9.76,2 9.56,2.18 9.52,2.42L9.14,5.08C8.53,5.34 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,13L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.53,18.66 9.14,18.92L9.52,21.58C9.56,21.82 9.76,22 10,22H14C14.24,22 14.44,21.82 14.48,21.58L14.86,18.92C15.47,18.66 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
-        COMPILE FIRMWARE
-      </button>
-      <esp-web-install-button manifest="manifest.json" style="--text-color: #fff; --button-bg-color: var(--mario-red); --button-bg-color-hover: #ff2a1a; margin-right: 8px;">
-        <button slot="activate" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 4px; display: flex; align-items: center; gap: 6px; background: var(--mario-red); border: none; box-shadow: 0 0 10px rgba(255, 65, 54, 0.4); cursor: pointer; color: white; font-weight: 600;">
-          <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:white;"><path d="M7,2V13H10V22L17,10H13L17,2H7Z"/></svg>
-          UPLOAD FIRMWARE
-        </button>
-      </esp-web-install-button>
-      <div class="status-dot" id="statusIndicator"></div>
-      <div class="status-text" id="statusText">Disconnected</div>
-    </div>
-  </div>
-
-  <!-- Workspace Structure layout: Sidebar left + Main content right -->
-  <div class="workspace">
+  <div class="container">
     
-    <!-- Left Sidebar: BLE diagnostics control and File Manager explorer -->
-    <div class="sidebar">
-      <div>
-        <div class="sidebar-section-title">
-          <svg viewBox="0 0 24 24"><path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/></svg>
-          Device diagnostics
-        </div>
-        <div class="diagnostics-grid">
-          <div class="diag-item">
-            <div class="diag-label-row">
-              <span>Battery status</span>
-              <span id="diagBatteryText" class="diag-val">--</span>
-            </div>
-            <div class="diag-progress-container">
-              <div class="diag-progress battery" id="diagBatteryBar"></div>
-            </div>
-          </div>
-
-          <div class="diag-item">
-            <div class="diag-label-row">
-              <span>Flash usage</span>
-              <span id="diagFlashText" class="diag-val">42%</span>
-            </div>
-            <div class="diag-progress-container">
-              <div class="diag-progress" id="diagFlashBar" style="width: 42%;"></div>
-            </div>
-          </div>
-
-          <div class="diag-item">
-            <div class="diag-label-row">
-              <span>RAM usage</span>
-              <span id="diagRamText" class="diag-val">28%</span>
-            </div>
-            <div class="diag-progress-container">
-              <div class="diag-progress" id="diagRamBar" style="width: 28%; background: linear-gradient(to right, var(--mario-green), var(--mario-purple));"></div>
-            </div>
-          </div>
-
-          <div class="diag-item">
-            <div class="diag-label-row">
-              <span>Uptime</span>
-              <span id="diagUptime" class="diag-val">--</span>
-            </div>
-          </div>
-
-          <div class="diag-item" style="display:flex; justify-content:space-between; align-items:center; font-size: 0.8rem;">
-            <span>Touch count</span>
-            <span id="diagTouchCount" class="diag-val">0</span>
-          </div>
-
-          <div class="diag-item" style="display:flex; justify-content:space-between; align-items:center; font-size: 0.8rem;">
-            <span>Signal strength</span>
-            <span id="diagRssi" class="diag-val">Good (-62dB)</span>
-          </div>
-
-          <button class="btn-connect-ble" id="connectBleBtn">
-            <svg style="width: 16px; height: 16px; fill: white;" viewBox="0 0 24 24">
-              <path d="M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.59M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z" />
-            </svg>
-            <span id="connectBleBtnText">Connect to Robot</span>
-          </button>
+    <!-- Top Header Bar -->
+    <header>
+      <div class="brand-logo-container">
+        <img src="logo.png" alt="Mr. Mario Logo" class="brand-logo" id="logoImg">
+        <div class="brand-info">
+          <h1>Mr. Mario & Ms. Mario</h1>
+          <p>Hardware Firmware Control Center</p>
         </div>
       </div>
-
-      <!-- File Manager Internal Flash explorer tree -->
-      <div>
-        <div class="sidebar-section-title">
-          <svg viewBox="0 0 24 24"><path d="M19,20H5V20H19M19,2H5A2,2 0 0,0 3,4V16A2,2 0 0,0 5,18H19A2,2 0 0,0 21,16V4A2,2 0 0,0 19,2M19,16H5V8H19V16M19,6H5V4H19V6Z"/></svg>
-          Internal flash explorer
-        </div>
-        <div class="file-tree" id="fileTreeContainer">
-          
-          <!-- folder 1 -->
-          <div>
-            <div class="tree-folder" onclick="toggleFolder('folderGif')">
-              <svg viewBox="0 0 24 24"><path d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/></svg>
-              GIF
-            </div>
-            <div class="tree-child-list" id="folderGif">
-              <div class="tree-file">
-                <div class="tree-file-left">
-                  <svg viewBox="0 0 24 24"><path d="M13,9V3.5L18.5,9M6,2C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"/></svg>
-                  relaxed.gif
-                </div>
-                <div class="tree-file-actions">
-                  <button class="tree-action-btn" title="Download" onclick="showToast('Exporting relaxed.gif...')"><svg viewBox="0 0 24 24"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>
-                  <button class="tree-action-btn" title="Delete" onclick="showToast('Cannot delete system default assets.')"><svg viewBox="0 0 24 24"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>
-                </div>
-              </div>
-              <div class="tree-file">
-                <div class="tree-file-left">
-                  <svg viewBox="0 0 24 24"><path d="M13,9V3.5L18.5,9M6,2C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"/></svg>
-                  happy.gif
-                </div>
-                <div class="tree-file-actions">
-                  <button class="tree-action-btn" title="Download" onclick="showToast('Exporting happy.gif...')"><svg viewBox="0 0 24 24"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>
-                  <button class="tree-action-btn" title="Delete" onclick="showToast('Cannot delete system default assets.')"><svg viewBox="0 0 24 24"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- folder 2 -->
-          <div>
-            <div class="tree-folder" onclick="toggleFolder('folderAudio')">
-              <svg viewBox="0 0 24 24"><path d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/></svg>
-              Audio
-            </div>
-            <div class="tree-child-list" id="folderAudio">
-              <div class="tree-file">
-                <div class="tree-file-left">
-                  <svg viewBox="0 0 24 24"><path d="M13,9V3.5L18.5,9M6,2C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"/></svg>
-                  startup.wav
-                </div>
-                <div class="tree-file-actions">
-                  <button class="tree-action-btn" title="Download" onclick="showToast('Exporting startup.wav...')"><svg viewBox="0 0 24 24"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>
-                  <button class="tree-action-btn" title="Delete" onclick="showToast('Cannot delete system default assets.')"><svg viewBox="0 0 24 24"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- folder 3 -->
-          <div>
-            <div class="tree-folder" onclick="toggleFolder('folderSettings')">
-              <svg viewBox="0 0 24 24"><path d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/></svg>
-              Settings
-            </div>
-            <div class="tree-child-list" id="folderSettings">
-              <div class="tree-file">
-                <div class="tree-file-left">
-                  <svg viewBox="0 0 24 24"><path d="M13,9V3.5L18.5,9M6,2C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"/></svg>
-                  config.json
-                </div>
-                <div class="tree-file-actions">
-                  <button class="tree-action-btn" title="Download" onclick="downloadJSONConfig()"><svg viewBox="0 0 24 24"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
+      <div class="badge-firmware">
+        v1.0.1 Stable
       </div>
+    </header>
 
-      <!-- Real-time Device log console -->
-      <div>
-        <div class="sidebar-section-title">
-          <svg viewBox="0 0 24 24"><path d="M20,19V7H4V19H20M20,3A2,2 0 0,1 22,5V19A2,2 0 0,1 20,21H4A2,2 0 0,1 2,19V5A2,2 0 0,1 4,3H20M17,17H14V14H17V17M12,17H9V14H12V17M7,17H4V14H7V17M17,12H14V9H17V12M12,12H9V9H12V12M7,12H4V9H7V12Z"/></svg>
-          Device Console Log
-        </div>
-        <div class="log-box" id="deviceConsoleLog">
-          <span style="color: #6b7280;">[SYSTEM] Console ready. Waiting for robot...</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Right Main Panel Container -->
-    <div class="main-panel">
+    <!-- Main Section Grid -->
+    <div class="dashboard-grid">
       
-      <!-- Top Center Global Action Bar -->
-      <div class="global-actions-bar">
-        <button class="btn-global btn-global-reset" onclick="triggerResetMochi()">
-          <svg style="width:16px;height:16px;fill:white;" viewBox="0 0 24 24"><path d="M12,4C14.1,4 16.1,4.8 17.6,6.4L15,9H22V2L19.4,4.6C17.4,2.9 14.8,2 12,2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4M2,12A10,10 0 0,0 12,22C14.8,22 17.4,21.1 19.4,19.4L22,22V15H15L17.6,17.6C16.1,19.2 14.1,20 12,20A8,8 0 0,1 4,12H2Z"/></svg>
-          RESET MOCHI
-        </button>
-        <button class="btn-global btn-global-save" id="btnGlobalSave" onclick="triggerSaveSettings()">
-          <svg style="width:16px;height:16px;fill:white;" viewBox="0 0 24 24"><path d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>
-          <span class="save-text">SAVE SETTINGS</span>
-        </button>
-        <button class="btn-global" id="btnUsbUpload" onclick="uploadSettingsViaUSB()" style="background: linear-gradient(135deg, var(--mario-blue), #00d9ff); border: 1px solid rgba(0, 217, 255, 0.3); box-shadow: 0 0 10px rgba(0, 217, 255, 0.2);">
-          <svg style="width:16px;height:16px;fill:white;" viewBox="0 0 24 24"><path d="M21,16V22H3V16H5V20H19V16H21M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M12,6L16,10H13V15H11V10H8L12,6Z"/></svg>
-          <span>UPLOAD SETTINGS (USB)</span>
-        </button>
-        <button class="btn-global" id="btnListGifs" onclick="sendListGifsCommand()" style="background: linear-gradient(135deg, #059669, #10b981); border: 1px solid rgba(16,185,129,0.3); box-shadow: 0 0 10px rgba(16,185,129,0.2);" title="Send LIST command to firmware to dump all loaded GIF names in the console">
-          <svg viewBox="0 0 24 24"><path d="M3,5H21V7H3V5M3,11H21V13H3V11M3,17H21V19H3V17Z"/></svg>
-          List All GIFs
-        </button>
-        <button class="btn-global" id="btnSyncClock" onclick="syncClockToHardware()" style="background: linear-gradient(135deg, #7c3aed, #a855f7); border: 1px solid rgba(168, 85, 247, 0.3); box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);">
-          <svg style="width:16px;height:16px;fill:white;" viewBox="0 0 24 24"><path d="M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z"/></svg>
-          <span>SYNC CLOCK</span>
-        </button>
-        <button class="btn-global" id="btnCompileFirmware" onclick="compileFirmware()" style="background: linear-gradient(135deg, #ea580c, #f97316); border: 1px solid rgba(249, 115, 22, 0.3); box-shadow: 0 0 10px rgba(249, 115, 22, 0.2);" title="Compile custom firmware from Arduino source code">
-          <svg style="width:16px;height:16px;fill:white;" viewBox="0 0 24 24"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.47,5.34 14.86,5.08L14.48,2.42C14.44,2.18 14.24,2 14,2H10C9.76,2 9.56,2.18 9.52,2.42L9.14,5.08C8.53,5.34 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,13L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.53,18.66 9.14,18.92L9.52,21.58C9.56,21.82 9.76,22 10,22H14C14.24,22 14.44,21.82 14.48,21.58L14.86,18.92C15.47,18.66 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
-          <span>COMPILE FIRMWARE</span>
-        </button>
-      </div>
+      <!-- Left Card: Robot Spec Information -->
+      <div class="card">
+        <div>
+          <h2 class="card-heading">Meet the Companions</h2>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 6px;">Learn about the intelligent desktop robot siblings, customizable over high-speed USB.</p>
+        </div>
 
-      <!-- Real-time Twin Screens display simulator -->
-      <div class="simulator-top-row">
-        
-        <!-- Live Avatar preview -->
-        <div class="card avatar-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center;">
-          <div class="avatar-circle">
-            <img id="avatarGif" src="animations/blank.gif" alt="Mochi Avatar Face">
+        <div class="character-showcase">
+          <!-- Mr. Mario Profile -->
+          <div class="char-profile mario">
+            <div class="char-avatar-wrapper">
+              <img src="logo.png" alt="Mr. Mario Profile">
+            </div>
+            <div class="char-desc mario">
+              <h3>Mr. Mario</h3>
+              <p>The iconic gentleman desktop robot buddy. Dressed in blue accent theme, he provides real-time notifications, interactive touch responses, dynamic clock screen layouts, and a dedicated sound melody synthesizer.</p>
+            </div>
           </div>
-          <div class="sim-label">
-            AVATAR STATE: <span id="avatarStateName">Disconnected</span>
+
+          <!-- Ms. Mario Profile -->
+          <div class="char-profile ms-mario">
+            <div class="char-avatar-wrapper" style="border-color: rgba(236, 72, 153, 0.3);">
+              <img src="logo.png" alt="Ms. Mario Profile" style="filter: hue-rotate(120deg);">
+            </div>
+            <div class="char-desc ms-mario">
+              <h3>Ms. Mario</h3>
+              <p>The elegant lady variant of the Mario companion line. Outfitted in pink accent theme, she features unique customized OLED expressions, playful interactive audio feedback, and works in tandem with the mobile companion app.</p>
+            </div>
           </div>
         </div>
 
-        <!-- Simulated OLED Display Screen -->
-        <div class="card oled-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative;">
-          <div style="position: absolute; top: 12px; right: 16px; display: flex; gap: 8px; z-index: 10;">
-            <!-- Brightness and Contrast controllers -->
-            <label style="font-size:0.65rem; display:flex; align-items:center; gap:4px;">
-              Bri: 
-              <input type="range" id="oledBrightness" min="0.5" max="2" step="0.1" value="1.2" style="width:40px; height:4px;" oninput="updateOledFilters()">
-            </label>
-            <label style="font-size:0.65rem; display:flex; align-items:center; gap:4px;">
-              Con: 
-              <input type="range" id="oledContrast" min="1" max="5" step="0.2" value="3" style="width:40px; height:4px;" oninput="updateOledFilters()">
-            </label>
-            <label style="font-size:0.65rem; display:flex; align-items:center; gap:4px; cursor:pointer;">
-              Inv: 
-              <input type="checkbox" id="oledInvert" onchange="document.getElementById('gifNegativeToggle').checked = this.checked; updateOledFilters();">
-            </label>
-          </div>
-
-          <div class="oled-screen-bezel" id="oledSimScreenBezel">
-            <img id="oledSimGif" src="animations/blank.gif" alt="OLED Display Screen">
-            <div id="oledTextOverlay" class="oled-text-overlay"></div>
-            <div id="oledLabelOverlay" class="oled-label-overlay">IDLE</div>
-          </div>
-          
-          <div class="sim-label">
-            OLED SCREEN: <span id="oledStateName" style="color: #00f0ff; text-shadow:0 0 5px rgba(0,240,255,0.4)">SSD1306</span>
+        <!-- Spec Specs list -->
+        <div>
+          <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; color: #ffffff;">Hardware Capabilities</h3>
+          <div class="features-list">
+            <div class="feature-item">
+              <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z"/></svg>
+              Dual-Core ESP32-C3
+            </div>
+            <div class="feature-item">
+              <svg viewBox="0 0 24 24"><path d="M21,16H3V4H21M21,2H3C1.89,2 1,2.89 1,4V16A2,2 0 0,0 3,18H10V20H8V22H16V20H14V18H21A2,2 0 0,0 23,16V4C23,2.89 22.1,2 21,2Z"/></svg>
+              SSD1306 OLED Display
+            </div>
+            <div class="feature-item">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2M12 20C7.59 20 4 16.41 4 12S7.59 4 12 4 20 7.59 20 12 16.41 20 12 20M13 7H11V13H17V11H13V7Z"/></svg>
+              Drift-Free Clock / RTC
+            </div>
+            <div class="feature-item">
+              <svg viewBox="0 0 24 24"><path d="M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M15.6,8.4L14.2,9.8C14.7,10.4 15,11.2 15,12A3,3 0 0,1 12,15C11.2,15 10.4,14.7 9.8,14.2L8.4,15.6C9.3,16.5 10.6,17 12,17A5,5 0 0,0 17,12C17,10.6 16.5,9.3 15.6,8.4M12,7A5,5 0 0,0 7,12C7,13.4 7.5,14.7 8.4,15.6L9.8,14.2C9.3,13.6 9,12.8 9,12A3,3 0 0,1 12,9C12.8,9 13.6,9.3 14.2,9.8L15.6,8.4C14.7,7.5 13.4,7 12,7Z"/></svg>
+              Capacitive Touch Input
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- PAGE 1: ADJUST GIF -->
-      <div id="page-adjust-gif" class="tab-section active">
-        <div class="adjust-gif-grid">
-          
-          <!-- LEFT CARD: Set Speed -->
-          <div class="card">
-            <div class="card-title">
-              <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12.5,7H11V13L16.25,16.15L17,14.92L12.5,12.25V7Z"/></svg>
-              Set Speed
-            </div>
-            
-            <div class="form-group">
-              <label>GIF Playback Speed</label>
-              <div class="slider-container">
-                <input type="range" id="gifSpeedSlider" min="20" max="300" value="150" oninput="document.getElementById('gifSpeedVal').textContent = this.value">
-                <span class="slider-val" id="gifSpeedVal">150</span>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Delay between GIFs</label>
-              <div class="slider-container">
-                <input type="range" id="gifDelaySlider" min="0" max="30" value="5" oninput="document.getElementById('gifDelayVal').textContent = this.value + 's'">
-                <span class="slider-val" id="gifDelayVal">5s</span>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Intro GIF Playback Speed</label>
-              <div class="slider-container">
-                <input type="range" id="gifIntroSpeedSlider" min="20" max="300" value="100" oninput="document.getElementById('gifIntroSpeedVal').textContent = this.value">
-                <span class="slider-val" id="gifIntroSpeedVal">100</span>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Intro Sound Speed</label>
-              <div class="slider-container">
-                <input type="range" id="introSoundSpeedSlider" min="20" max="300" value="100" oninput="document.getElementById('introSoundSpeedVal').textContent = this.value">
-                <span class="slider-val" id="introSoundSpeedVal">100</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- RIGHT CARD: Display Settings -->
-          <div class="card">
-            <div class="card-title">
-              <svg viewBox="0 0 24 24"><path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z"/></svg>
-              Display Settings
-            </div>
-
-            <div class="switch-container" style="margin-bottom:12px;">
-              <label>GIF Negative (Invert Colors)</label>
-              <label class="switch">
-                <input type="checkbox" id="gifNegativeToggle" onchange="document.getElementById('oledInvert').checked = this.checked; updateOledFilters();">
-                <span class="slider-round"></span>
-              </label>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Default GIF</label>
-                <select id="selectDefaultGif">
-                  <!-- JS Will Populate -->
-                </select>
-              </div>
-              <div class="form-group">
-                <label>GIF Intro</label>
-                <select id="selectGifIntro">
-                  <!-- JS Will Populate -->
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>GIF Touch (Single Tap)</label>
-                <select id="selectTouchSingle">
-                  <!-- JS Will Populate -->
-                </select>
-              </div>
-              <div class="form-group">
-                <label>GIF Double Touch</label>
-                <select id="selectTouchDouble">
-                  <!-- JS Will Populate -->
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>GIF Long Touch</label>
-              <select id="selectTouchLong">
-                <!-- JS Will Populate -->
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- GIF LIBRARY CARD -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M4,6H2V20A2,2 0 0,0 4,22H18V20H4M20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M20,16H8V4H20V16Z"/></svg>
-            GIF Library Database
-          </div>
-
-          <div class="library-header">
-            <div class="library-filters">
-              <input type="text" id="libSearch" placeholder="Search GIFs..." style="max-width: 180px;" oninput="filterGifLibrary()">
-              <select id="libCategory" style="max-width: 130px;" onchange="filterGifLibrary()">
-                <option value="ALL">All Animations</option>
-                <!-- Options are populated dynamically from DB by populateCategoryFilter() -->
-              </select>
-              <select id="libSort" style="max-width: 120px;" onchange="filterGifLibrary()">
-                <option value="name">Sort: Name</option>
-                <option value="newest">Sort: Newest</option>
-                <option value="favorites">Sort: Favorites</option>
-              </select>
-            </div>
-
-            <div style="display:flex; gap: 8px;">
-              <button class="btn btn-secondary" onclick="selectLibraryAll(true)">Select All</button>
-              <button class="btn" onclick="selectLibraryAll(false)">Deselect All</button>
-            </div>
-          </div>
-
-          <!-- GIF cards grid -->
-          <div class="library-grid" id="gifLibraryGrid">
-            <!-- Will be populated dynamically by JS -->
-          </div>
-        </div>
-
-        <!-- UPLOAD SECTION CARD -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/></svg>
-            Upload GIF / Assets
-          </div>
-          
-          <div class="upload-zone" onclick="document.getElementById('fileUploadInput').click()" id="uploadDropZone">
-            <svg style="width: 48px; height: 48px; fill: var(--text-muted); margin-bottom: 12px;" viewBox="0 0 24 24"><path d="M19.35,10.04C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.04C2.34,8.36 0,10.91 0,14C0,17.1 2.9,20 6,20H19C21.76,20 24,17.76 24,15C24,12.36 21.95,10.22 19.35,10.04M19,18H6C3.79,18 2,16.21 2,14C2,11.95 3.53,10.24 5.56,10.03L6.63,9.92L7.13,8.97C8.08,7.14 9.94,6 12,6C14.89,6 17.39,8.08 17.85,10.95L18.08,12.41L19.57,12.5C21.03,12.59 22,13.78 22,15C22,16.65 20.65,18 19,18M8,13H11V17H13V13H16L12,9L8,13Z"/></svg>
-            <p style="font-weight: 600;">Drag and drop GIF, BMP, or BIN files here</p>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Or click to browse from explorer</p>
-            <input type="file" id="fileUploadInput" accept=".gif,.bmp,.bin" style="display:none;" onchange="handleFileUpload(event)">
-          </div>
-
-          <!-- Upload timeline preview -->
-          <div class="upload-preview-container" id="uploadPreviewCard" style="display:none;">
-            <div class="upload-preview-gif">
-              <img id="uploadPreviewImage" src="#" alt="Upload Preview">
-            </div>
-            
-            <div style="width: 100%;">
-              <div style="display:flex; justify-content:space-between; font-size: 0.8rem; margin-bottom: 6px;">
-                <span>Compression strength</span>
-                <span id="compressionVal">45%</span>
-              </div>
-              <input type="range" id="uploadCompressionSlider" min="0" max="100" value="45" style="width:100%;" oninput="document.getElementById('compressionVal').textContent = this.value + '%'; updateFlashEstimate();">
-            </div>
-
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; font-size: 0.8rem; color: var(--text-muted);">
-              <div>Frame Count: <strong id="uploadFrameCount" style="color:var(--text-main);">14</strong></div>
-              <div>Estimated Flash Usage: <strong id="uploadFlashSize" style="color:var(--mario-gold);">14.2 KB</strong></div>
-            </div>
-
-            <div style="display:flex; gap: 10px; width: 100%; margin-top: 6px;">
-              <button class="btn btn-primary" style="flex:1;" onclick="saveUploadedGifToLibrary()">Convert & Add to Database</button>
-              <button class="btn" style="flex:0.3;" onclick="resetUploadZone()">Cancel</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- DATABASE TABLE CARD -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M12,3C7.58,3 4,4.79 4,7C4,9.21 7.58,11 12,11C16.42,11 20,9.21 20,7C20,4.79 16.42,3 12,3M4,9V12C4,14.21 7.58,16 12,16C16.42,16 20,14.21 20,12V9C18.36,10.23 15.39,11 12,11C8.61,11 5.64,10.23 4,9M4,14V17C4,19.21 7.58,21 12,21C16.42,21 20,19.21 20,17V14C18.36,15.23 15.39,16 12,16C8.61,16 5.64,15.23 4,14Z"/></svg>
-            Active database items
-          </div>
-          
-          <div class="db-table-container">
-            <table class="db-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Category</th>
-                  <th>Size</th>
-                  <th>Flash footprint</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="dbTableBody">
-                <!-- Populated dynamically -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- PIXEL ART SPRITE DRAWING CANVAS CARD (BONUS) -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M17.5,12A1.5,1.5 0 0,1 19,13.5A1.5,1.5 0 0,1 17.5,15A1.5,1.5 0 0,1 16,13.5A1.5,1.5 0 0,1 17.5,12M14.5,17A1.5,1.5 0 0,1 16,18.5A1.5,1.5 0 0,1 14.5,20A1.5,1.5 0 0,1 13,18.5A1.5,1.5 0 0,1 14.5,17M9.5,17A1.5,1.5 0 0,1 11,18.5A1.5,1.5 0 0,1 9.5,20A1.5,1.5 0 0,1 8,18.5A1.5,1.5 0 0,1 9.5,17M6.5,12A1.5,1.5 0 0,1 8,13.5A1.5,1.5 0 0,1 6.5,15A1.5,1.5 0 0,1 5,13.5A1.5,1.5 0 0,1 6.5,12M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4Z"/></svg>
-            Interactive Pixel Sprite Editor
-          </div>
-          <p class="section-desc" style="margin-bottom: 12px;">Draw a custom pixel screen sprite frame and export it directly as C++ Adafruit GFX bitmap code for your Arduino code!</p>
-          
-          <div class="pixel-editor-grid">
-            <div class="pixel-canvas-container">
-              <canvas id="pixelCanvas" width="256" height="128"></canvas>
-              <div style="font-size:0.75rem; color:var(--text-muted);">Left-click to draw, Right-click to erase pixels.</div>
-            </div>
-
-            <div class="pixel-controls">
-              <div style="display:flex; gap: 8px;">
-                <button class="btn btn-danger" onclick="clearPixelEditor()">Clear Canvas</button>
-                <button class="btn btn-secondary" onclick="invertPixelEditor()">Invert Sprite</button>
-              </div>
-
-              <div class="form-group">
-                <label>Export Code Output (Adafruit GFX)</label>
-                <textarea id="pixelExportText" style="height: 100px; font-family:'Fira Code', monospace; font-size:0.75rem;" readonly></textarea>
-              </div>
-
-              <button class="btn btn-primary" onclick="copyPixelCode()">Copy Code to Clipboard</button>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- PAGE 2: ADJUST SOUND -->
-      <div id="page-adjust-sound" class="tab-section">
-        
-        <!-- Music composition tool card -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12.5,7H11V13L16.25,16.15L17,14.92L12.5,12.25V7Z"/></svg>
-            Music composition tool
-          </div>
-          
-          <button class="btn btn-secondary" style="margin-bottom: 16px;" onclick="showToast('Music composition tool loaded.')">Launch Studio Tool</button>
-          
-          <div class="composition-note">
-            To use audio from the memory card, place the wav file (8-16 bit format) into the gifs folder on the memory card, then fill in the full path, for example, <strong>/gifs/angry/sound.wav</strong> or <strong>/gifs/thienlyoi.wav</strong>.
-          </div>
-        </div>
-
-        <div class="sound-music-container">
-          
-          <!-- AI Music Composer -->
-          <div class="card">
-            <div class="card-title">
-              <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,17L7,12H10V8H14V12H17L12,17Z"/></svg>
-              AI Music Composer
-            </div>
-            
-            <div class="form-group">
-              <label>Describe the melody prompt</label>
-              <textarea id="aiMusicPrompt" placeholder="e.g., A happy retro coin jump melody..." style="height: 70px; resize: none;"></textarea>
-            </div>
-            
-            <button class="btn btn-primary" onclick="generateAIMelody()" id="btnAiCompose">Generate Melody Note sequence</button>
-          </div>
-
-          <!-- Guide notes -->
-          <div class="card">
-            <div class="card-title">
-              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-              Supported notes reference
-            </div>
-            <div class="note-guide-box">
-              <strong>Format:</strong> [NoteName] [Duration_ms] [Rest_ms]<br><br>
-              <strong>Notes:</strong> C3-C8, Sharps are defined with S (e.g. CS5 for C#5).<br>
-              <strong>Duration:</strong> Milliseconds the note plays (e.g., 100ms).<br>
-              <strong>Rest:</strong> Pauses between notes in milliseconds (e.g., 20ms).<br><br>
-              <strong>Example:</strong> E5 100 20 C5 100 20 G4 100 60
-            </div>
-          </div>
-        </div>
-
-        <!-- Opening Music Sequence -->
-        <div class="card">
-          <div class="card-title" style="justify-content:space-between;">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <svg viewBox="0 0 24 24"><path d="M12,3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-              Opening Music (Startup melody)
-            </div>
-            <button class="btn btn-secondary" onclick="playOpeningMusicPreview()" id="btnPlayOpeningMusic">
-              <svg viewBox="0 0 24 24" id="playMusicIcon"><path d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg>
-              Play Preview
-            </button>
-          </div>
-          
-          <div class="form-group">
-            <textarea id="openingMusicText" style="height: 140px; font-family:'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5;"></textarea>
-          </div>
-        </div>
-
-        <!-- Touch Sound once -->
-        <div class="card">
-          <div class="card-title" style="justify-content:space-between;">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20M11,10H13V16H11V10M11,8H13V9H11V8Z"/></svg>
-              Sound touches once (Single Tap Reaction)
-            </div>
-            <button class="btn btn-secondary" onclick="playTouchMusicPreview()" id="btnPlayTouchMusic">
-              <svg viewBox="0 0 24 24" id="playTouchIcon"><path d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg>
-              Play Preview
-            </button>
-          </div>
-
-          <div class="form-group">
-            <input type="text" id="touchMusicText" style="font-family:'Fira Code', monospace; font-size: 0.85rem;" value="C4 100 20 D4 100 20 E4 100 20 F4 200 200">
-          </div>
-
-          <div style="display:flex; gap: 8px;">
-            <button class="btn btn-success" onclick="generateTouchMelody()">Generate Random</button>
-            <button class="btn" onclick="resetTouchMelody()">Reset default</button>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- PAGE 3: CHRONOS SETTINGS -->
-      <div id="page-chronos" class="tab-section">
-        
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-            Display notification duration
-          </div>
-          <div class="form-group">
-            <label>Auto-closes custom text notifications on screen after: </label>
-            <div class="slider-container">
-              <input type="range" id="notificationDurSlider" min="0" max="10" value="3" oninput="document.getElementById('notificationDurVal').textContent = this.value + ' seconds'">
-              <span class="slider-val" id="notificationDurVal" style="width: 80px;">3 seconds</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12.5,7H11V13L16.25,16.15L17,14.92L12.5,12.25V7Z"/></svg>
-            Bluetooth Radio State
-          </div>
-          <div class="switch-container" style="margin-bottom:12px;">
-            <label>Enable Bluetooth Low Energy (BLE)</label>
-            <label class="switch">
-              <input type="checkbox" id="bleActiveToggle" checked>
-              <span class="slider-round"></span>
-            </label>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.59M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z"/></svg>
-            Bluetooth Auto Sleep timer
-          </div>
-          <div class="form-group">
-            <label>Turns off BLE module after startup inactivity to save battery (0 = Always On):</label>
-            <div class="slider-container">
-              <input type="range" id="bleSleepSlider" min="0" max="60" value="3" oninput="document.getElementById('bleSleepVal').textContent = this.value === '0' ? 'Always On' : this.value + ' minutes'">
-              <span class="slider-val" id="bleSleepVal" style="width: 85px;">3 minutes</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z"/></svg>
-            Bluetooth Name Broadcast
-          </div>
-          <div class="form-group">
-            <label>Set custom broadcast device name: </label>
-            <input type="text" id="bleNameText" value="THE MOCHI" oninput="validateBleNameLength(this)">
-            <span id="bleNameValidator" style="font-size:0.75rem; color:var(--text-muted);">Max 20 characters. Valid length.</span>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- PAGE 4: HARDWARE SETTINGS -->
-      <div id="page-hardware" class="tab-section">
-        
-        <!-- Screen Configuration -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M21 2H3C1.9 2 1 .9 1 2V16C1 17.1 1.9 18 3 18H10V20H8V22H16V20H14V18H21C22.1 18 23 17.1 23 16V2C23 .9 22.1 2 21 2M21 16H3V4H21V16Z"/></svg>
-            Screen Configuration
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Screen Type</label>
-              <select id="hwScreenType">
-                <option value="SSD1306">SSD1306 (OLED 128x64)</option>
-                <option value="SH1106">SH1106 (OLED 128x64)</option>
-                <option value="CUSTOM">Custom Display config</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>SCL Foot (Pin)</label>
-              <input type="text" id="hwSclPin" value="21">
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>SDA Feet (Pin)</label>
-              <input type="text" id="hwSdaPin" value="20">
-            </div>
-            <div class="form-group">
-              <label>Display orientation</label>
-              <select id="hwRotation" onchange="updateOledRotation()">
-                <option value="0">Do not flip (0°)</option>
-                <option value="90">Rotate 90° clockwise</option>
-                <option value="180">Flip 180 degrees (Upside Down)</option>
-                <option value="270">Rotate 270° clockwise</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- Memory Card Configuration -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16,13.5L14,15.5V12H10V10H14V6.5L16,8.5V13.5Z"/></svg>
-            Memory Card
-          </div>
-          
-          <div class="switch-container" style="margin-bottom:12px;">
-            <label>Using memory card (Enable SD slot)</label>
-            <label class="switch">
-              <input type="checkbox" id="hwSdEnable">
-              <span class="slider-round"></span>
-            </label>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>MISO Foot (Pin)</label>
-              <input type="text" id="hwMisoPin" value="1">
-            </div>
-            <div class="form-group">
-              <label>MOSI Feet (Pin)</label>
-              <input type="text" id="hwMosiPin" value="3">
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>SCK Foot (Pin)</label>
-              <input type="text" id="hwSckPin" value="4">
-            </div>
-            <div class="form-group">
-              <label>CS Foot (Pin)</label>
-              <input type="text" id="hwCsPin" value="5">
-            </div>
-          </div>
-
-          <button class="btn btn-secondary" onclick="showToast('Searching SD Card controllers...')">Auto Detect SD Pins</button>
-        </div>
-
-        <!-- Audio Configuration -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/></svg>
-            Audio Hardware
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label>Use the audio module</label>
-              <select id="hwAudioModule">
-                <option value="Buzzer">Buzzer Speaker</option>
-                <option value="I2S">I2S External DAC</option>
-                <option value="GPIO">Direct GPIO toggling</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Buzzer pin stand</label>
-              <input type="text" id="hwBuzzerPin" value="2">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Output Volume</label>
-            <div class="slider-container">
-              <input type="range" id="hwVolumeSlider" min="0" max="100" value="80" oninput="document.getElementById('hwVolumeVal').textContent = this.value + '%'">
-              <span class="slider-val" id="hwVolumeVal">80%</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Touch Sensor Configuration -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20M7.5,9.5A1.5,1.5 0 0,1 9,8A1.5,1.5 0 0,1 10.5,9.5A1.5,1.5 0 0,1 9,11A1.5,1.5 0 0,1 7.5,9.5M13.5,9.5A1.5,1.5 0 0,1 15,8A1.5,1.5 0 0,1 16.5,9.5A1.5,1.5 0 0,1 15,11A1.5,1.5 0 0,1 13.5,9.5M12,17.23C10.25,17.23 8.71,16.5 7.64,15.31C7.28,14.92 7.3,14.28 7.69,13.92C8.09,13.56 8.72,13.58 9.08,13.97C9.77,14.74 10.82,15.23 12,15.23C13.18,15.23 14.23,14.74 14.92,13.97C15.28,13.58 15.91,13.56 16.31,13.92C16.7,14.28 16.72,14.92 16.36,15.31C15.29,16.5 13.75,17.23 12,17.23Z"/></svg>
-            Touch Sensor Settings
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label>Touch Sensor Pin (Set to 22 if not in use)</label>
-              <input type="text" id="hwTouchPin" value="1">
-            </div>
-            <div class="form-group">
-              <label>Debounce delay (ms)</label>
-              <input type="text" id="hwDebounce" value="50">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Sensitivity threshold</label>
-            <div class="slider-container">
-              <input type="range" id="hwSensitivitySlider" min="1" max="10" value="7" oninput="document.getElementById('hwSensitivityVal').textContent = this.value">
-              <span class="slider-val" id="hwSensitivityVal">7</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Language selection -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M12.87,15.07L10.33,12.56L10.36,12.53C12.1,10.59 13.34,8.36 14.07,6H17V4H10V2H8V4H1V6H12.17C11.5,7.92 10.44,9.75 9,11.35C8.07,10.32 7.3,9.19 6.69,8H4.69C5.42,9.63 6.42,11.17 7.67,12.56L2.58,17.58L4,19L9,14L12.11,17.11L12.87,15.07M18.5,10H16.5L12,22H14L15.12,19H19.87L21,22H23L18.5,10M15.88,17L17.5,12.67L19.12,17H15.88Z"/></svg>
-            Language settings
-          </div>
-          <div class="form-group">
-            <label>Display Menu Language</label>
-            <select id="hwLanguage">
-              <option value="English">English</option>
-              <option value="Japanese">Japanese</option>
-              <option value="Chinese">Chinese</option>
-              <option value="Korean">Korean</option>
-              <option value="Vietnamese">Vietnamese</option>
-              <option value="Spanish">Spanish</option>
-              <option value="German">German</option>
-              <option value="French">French</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Web Serial Firmware Flashing -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M6,4H18A2,2 0 0,1 20,6V18A2,2 0 0,1 18,20H6A2,2 0 0,1 4,18V6A2,2 0 0,1 6,4M6,6V18H18V6H6M8,8H10V10H8V8M14,8H16V10H14V8M8,14H16V16H8V14Z"/></svg>
-            Web Serial Firmware Upload
-          </div>
-          <p class="section-desc">Connect Mr.mario to a USB port and click below to upload the custom compiled firmware supporting local settings, triple tap gestures, and OLED optimization.</p>
-          
-          <div style="display:flex; justify-content:center; gap:12px; padding:12px; align-items:center;">
-            <button class="btn btn-secondary" id="btnCompileFirmwareTab" onclick="compileFirmware()" style="padding: 10px 20px; font-weight: 600; display: flex; align-items: center; gap: 8px; background: #4f46e5; border: none; box-shadow: 0 0 10px rgba(79, 70, 229, 0.4); cursor: pointer; color: white; border-radius: 4px;">
-              <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:white;"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.47,5.34 14.86,5.08L14.48,2.42C14.44,2.18 14.24,2 14,2H10C9.76,2 9.56,2.18 9.52,2.42L9.14,5.08C8.53,5.34 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,13L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.53,18.66 9.14,18.92L9.52,21.58C9.56,21.82 9.76,22 10,22H14C14.24,22 14.44,21.82 14.48,21.58L14.86,18.92C15.47,18.66 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
-              Compile Custom Firmware
-            </button>
-            <esp-web-install-button manifest="manifest.json">
-              <button slot="activate" class="btn btn-secondary" style="padding:10px 20px; background: var(--mario-red); border: none; box-shadow: 0 0 10px rgba(255, 65, 54, 0.4); display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:white;"><path d="M7,2V13H10V22L17,10H13L17,2H7Z"/></svg>
-                Upload Custom Firmware (USB)
-              </button>
-              <span slot="unsupported" style="color:var(--mario-red); font-size:0.8rem;">Web Serial is not supported in this browser. Please use Chrome/Edge.</span>
-            </esp-web-install-button>
-          </div>
-        </div>
-
-        <!-- Web Serial Settings Upload -->
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24"><path d="M21,16V22H3V16H5V20H19V16H21M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M12,6L16,10H13V15H11V10H8L12,6Z"/></svg>
-            USB Settings Sync
-          </div>
-          <p class="section-desc">Upload settings directly to Mr.mario using a USB cable/wire connection.</p>
-          
-          <div style="display:flex; justify-content:center; padding:12px;">
-            <button class="btn btn-primary" id="btnUsbUploadSettingsTab" onclick="uploadSettingsViaUSB()" style="padding:10px 20px;">
-              Upload Settings via USB
-            </button>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- SUPPORT PROJECT PAGE -->
-      <div id="page-support" class="tab-section">
-        <div class="card" style="text-align:center; padding:40px 20px;">
-          <div style="font-size: 3rem; margin-bottom: 20px;">☕</div>
-          <div class="card-title" style="justify-content:center; border:none; padding:0;">Support Mr.mario Project</div>
-          <p class="section-desc" style="max-width: 500px; margin: 0 auto 24px auto;">
-            Mr.mario is an open-source companion desk robot project. If you love this project, please consider supporting us to add more animations, audio tools, and AI companion features!
+      <!-- Left Card 2: Technical Specifications & Features -->
+      <div class="card">
+        <div>
+          <h2 class="card-heading">Technical Reference</h2>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 6px;">
+            Comprehensive hardware pinout mapping and software runtime features for Mr. Mario companions.
           </p>
-          <div style="display:flex; justify-content:center; gap: 12px;">
-            <a class="btn btn-primary" href="https://github.com" target="_blank">
-              <svg viewBox="0 0 24 24" style="width:16px;height:16px;"><path d="M12,2A10,10 0 0,0 2,12C2,16.42 4.87,20.17 8.84,21.5C9.34,21.58 9.5,21.27 9.5,21C9.5,20.77 9.5,20.14 9.5,19.31C6.73,19.91 6.14,17.97 6.14,17.97C5.68,16.81 5.03,16.5 5.03,16.5C4.12,15.88 5.1,15.9 5.1,15.9C6.1,15.97 6.63,16.93 6.63,16.93C7.5,18.45 8.97,18 9.54,17.76C9.63,17.11 9.89,16.67 10.17,16.42C7.95,16.17 5.62,15.31 5.62,11.5C5.62,10.41 6,9.5 6.67,8.8C6.57,8.55 6.22,7.54 6.77,6.18C6.77,6.18 7.6,5.92 9.5,7.2C10.29,6.97 11.14,6.85 12,6.85C12.86,6.85 13.71,6.97 14.5,7.2C16.4,5.92 17.23,6.18 17.23,6.18C17.78,7.54 17.43,8.55 17.33,8.8C18,9.5 18.38,10.41 18.38,11.5C18.38,15.32 16.04,16.16 13.81,16.41C14.17,16.72 14.5,17.33 14.5,18.26C14.5,19.6 14.5,20.68 14.5,21C14.5,21.27 14.66,21.59 15.17,21.5C19.14,20.16 22,16.42 22,12A10,10 0 0,0 12,2Z"/></svg>
-              GitHub Project
-            </a>
-            <button class="btn btn-secondary" onclick="showToast('Thank you for your support!')">Buy us a coffee</button>
+        </div>
+        
+        <div class="tech-sections">
+          <div class="tech-group">
+            <h4>🔌 Hardware Connections</h4>
+            <ul>
+              <li><strong>Microcontroller:</strong> ESP32-C3 SuperMini RISC-V SoC (BLE v5.0 / WiFi Coexistence).</li>
+              <li><strong>OLED Screen:</strong> SSD1306 I2C (128x64 pixels). SDA ➔ <code>GPIO 20</code>, SCL ➔ <code>GPIO 21</code>.</li>
+              <li><strong>Capacitive Touch:</strong> <code>GPIO 1</code> contact plate. Supports single, double, & triple taps.</li>
+              <li><strong>Audio Buzzer:</strong> Passive piezo buzzer on <code>GPIO 2</code>. Square-wave frequency synthesizer.</li>
+              <li><strong>Power & Flash:</strong> USB-C port (115200 Baud serial interface) for settings, power, and logs.</li>
+            </ul>
+          </div>
+
+          <div class="tech-group">
+            <h4>⚙️ Software Features</h4>
+            <ul>
+              <li><strong>Auto-Reconnection:</strong> BLE scan checks connection state every second and auto-reconnects instantly.</li>
+              <li><strong>Sleep Bypass:</strong> Sleep transitions and timeouts are disabled to maintain persistent connectivity.</li>
+              <li><strong>WiFi Coexistence:</strong> Runs with <code>WIFI_PS_NONE</code> to eliminate radio channel latency.</li>
+              <li><strong>Drift-Free RTC:</strong> Local milliseconds-tracking system clock with auto-sync from client.</li>
+              <li><strong>In-Device Settings:</strong> Triple tap touch sensor opens an interactive OLED menu configuration.</li>
+              <li><strong>Melody Library:</strong> Plays 8-bit sound effects (Jump, PowerUp, Coin, GameOver, Chirp, Startup).</li>
+              <li><strong>NVS Persistence:</strong> Preferences saved to non-volatile flash memory and persist across power cycles.</li>
+            </ul>
           </div>
         </div>
+      </div>
+
+      <!-- Right Card: Compiler & Flashing Area -->
+      <div class="card">
+        <div>
+          <h2 class="card-heading">Firmware Station</h2>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 6px;">Compile and upload custom firmware binaries supporting automatic reconnection, sleep prevention, and clock simulation.</p>
+        </div>
+
+        <!-- Flashing Actions -->
+        <div class="buttons-container">
+          
+          <!-- Compile Button -->
+          <button class="btn-action btn-compile" id="btnCompileFirmware" onclick="compileFirmware()" title="Compile custom firmware from Arduino source code">
+            <svg style="width:20px;height:20px;fill:white;" viewBox="0 0 24 24"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.47,5.34 14.86,5.08L14.48,2.42C14.44,2.18 14.24,2 14,2H10C9.76,2 9.56,2.18 9.52,2.42L9.14,5.08C8.53,5.34 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,13L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.53,18.66 9.14,18.92L9.52,21.58C9.56,21.82 9.76,22 10,22H14C14.24,22 14.44,21.82 14.48,21.58L14.86,18.92C15.47,18.66 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
+            <span id="compileText">COMPILE FIRMWARE</span>
+          </button>
+
+          <!-- ESP Web Tools Upload Button -->
+          <esp-web-install-button manifest="manifest.json">
+            <button slot="activate" class="btn-action btn-upload">
+              <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:white;"><path d="M7,2V13H10V22L17,10H13L17,2H7Z"/></svg>
+              UPLOAD FIRMWARE (USB)
+            </button>
+          </esp-web-install-button>
+
+        </div>
+
+        <!-- Terminal Log Box -->
+        <div>
+          <div class="terminal-title-bar">
+            <div class="terminal-dots">
+              <div class="dot red"></div>
+              <div class="dot yellow"></div>
+              <div class="dot green"></div>
+            </div>
+            <span>STDOUT / STDERR MONITOR</span>
+          </div>
+          <div class="terminal-body" id="consoleLogs">
+            <div class="log-entry info">
+              <span class="log-time">[System]</span>
+              <span class="log-badge">Info</span>
+              <span class="log-text">Firmware Station initialized. Connect your robot via USB.</span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toastContainer"></div>
+
+    <!-- Footer -->
+    <footer>
+      &copy; 2026 Mr. Mario Ecosystem. All rights reserved. Powered by Crabster Technology.
+    </footer>
 
   </div>
-
-  <!-- Toast overlay containers -->
-  <div class="toast-container" id="toastContainer"></div>
 
   <script>
-    // System Configurations & Data structures
-    const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
-    const EXPRESSION_CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
-    const AUDIO_CHAR_UUID = 'd90e0c03-51ee-4c31-893c-cf572db85700';
-    const TEXT_CHAR_UUID = 'c8a00d04-62ff-4b32-843d-0f1c6db8a101';
-    const STATUS_CHAR_UUID = 'fb2f0e05-73ee-4f32-833d-1f2c6db8a102';
-
-    // 63 original Mochi animations metadata mapping
-    // cat = the GIF's own label name (unique per animation)
-    const animMapping = {
-      "adore": { expr: 1, sound: 2, label: "Adore", cat: "Adore" },
-      "angry": { expr: 3, sound: 5, label: "Angry", cat: "Angry" },
-      "blank": { expr: 0, sound: 0, label: "Blank", cat: "Blank" },
-      "blinding": { expr: 4, sound: 6, label: "Blinding", cat: "Blinding" },
-      "brave": { expr: 1, sound: 3, label: "Brave", cat: "Brave" },
-      "buzzing": { expr: 4, sound: 6, label: "Buzzing", cat: "Buzzing" },
-      "contempt": { expr: 3, sound: 4, label: "Contempt", cat: "Contempt" },
-      "crying": { expr: 2, sound: 4, label: "Crying", cat: "Crying" },
-      "dancing": { expr: 1, sound: 2, label: "Dancing", cat: "Dancing" },
-      "devil": { expr: 3, sound: 5, label: "Devil", cat: "Devil" },
-      "distracted": { expr: 0, sound: 6, label: "Distracted", cat: "Distracted" },
-      "dizzy": { expr: 4, sound: 6, label: "Dizzy", cat: "Dizzy" },
-      "down": { expr: 2, sound: 4, label: "Down", cat: "Down" },
-      "drowsy": { expr: 5, sound: 0, label: "Drowsy", cat: "Drowsy" },
-      "encouragement": { expr: 1, sound: 3, label: "Encouragement", cat: "Encouragement" },
-      "energetic": { expr: 1, sound: 3, label: "Energetic", cat: "Energetic" },
-      "enraged": { expr: 3, sound: 5, label: "Enraged", cat: "Enraged" },
-      "evil": { expr: 3, sound: 5, label: "Evil", cat: "Evil" },
-      "fast": { expr: 1, sound: 1, label: "Fast", cat: "Fast" },
-      "fierce": { expr: 3, sound: 5, label: "Fierce", cat: "Fierce" },
-      "furious": { expr: 3, sound: 5, label: "Furious", cat: "Furious" },
-      "giggle": { expr: 1, sound: 2, label: "Giggle", cat: "Giggle" },
-      "glowing": { expr: 1, sound: 2, label: "Glowing", cat: "Glowing" },
-      "growing": { expr: 1, sound: 3, label: "Growing", cat: "Growing" },
-      "handsome": { expr: 1, sound: 2, label: "Handsome", cat: "Handsome" },
-      "happy": { expr: 1, sound: 2, label: "Happy", cat: "Happy" },
-      "hello": { expr: 1, sound: 2, label: "Hello", cat: "Hello" },
-      "irritated": { expr: 3, sound: 5, label: "Irritated", cat: "Irritated" },
-      "laughing": { expr: 1, sound: 2, label: "Laughing", cat: "Laughing" },
-      "left": { expr: 0, sound: 0, label: "Look Left", cat: "Look Left" },
-      "love": { expr: 1, sound: 2, label: "Love", cat: "Love" },
-      "menacing": { expr: 3, sound: 5, label: "Menacing", cat: "Menacing" },
-      "mistake": { expr: 4, sound: 4, label: "Mistake", cat: "Mistake" },
-      "playful": { expr: 1, sound: 2, label: "Playful", cat: "Playful" },
-      "police": { expr: 4, sound: 6, label: "Police", cat: "Police" },
-      "rain": { expr: 2, sound: 4, label: "Rain", cat: "Rain" },
-      "relaxed": { expr: 0, sound: 0, label: "Relaxed", cat: "Relaxed" },
-      "right": { expr: 0, sound: 0, label: "Look Right", cat: "Look Right" },
-      "rush": { expr: 1, sound: 1, label: "Rush", cat: "Rush" },
-      "scared": { expr: 4, sound: 6, label: "Scared", cat: "Scared" },
-      "serene": { expr: 5, sound: 0, label: "Serene", cat: "Serene" },
-      "shrink": { expr: 2, sound: 4, label: "Shrink", cat: "Shrink" },
-      "shy": { expr: 6, sound: 6, label: "Shy", cat: "Shy" },
-      "sick": { expr: 2, sound: 4, label: "Sick", cat: "Sick" },
-      "sleepy": { expr: 5, sound: 0, label: "Sleepy", cat: "Sleepy" },
-      "smile": { expr: 1, sound: 2, label: "Smile", cat: "Smile" },
-      "smirk": { expr: 1, sound: 2, label: "Smirk", cat: "Smirk" },
-      "smoke": { expr: 3, sound: 0, label: "Smoke", cat: "Smoke" },
-      "sneeze": { expr: 4, sound: 6, label: "Sneeze", cat: "Sneeze" },
-      "sobbing": { expr: 2, sound: 4, label: "Sobbing", cat: "Sobbing" },
-      "sparkle": { expr: 1, sound: 2, label: "Sparkle", cat: "Sparkle" },
-      "speed": { expr: 1, sound: 1, label: "Speed", cat: "Speed" },
-      "splash": { expr: 1, sound: 6, label: "Splash", cat: "Splash" },
-      "spraying": { expr: 4, sound: 6, label: "Spraying", cat: "Spraying" },
-      "squint": { expr: 0, sound: 0, label: "Squint", cat: "Squint" },
-      "surprised": { expr: 4, sound: 6, label: "Surprised", cat: "Surprised" },
-      "sushi": { expr: 1, sound: 2, label: "Sushi", cat: "Sushi" },
-      "swinging": { expr: 1, sound: 2, label: "Swinging", cat: "Swinging" },
-      "teasing": { expr: 6, sound: 6, label: "Teasing", cat: "Teasing" },
-      "tough": { expr: 3, sound: 5, label: "Tough", cat: "Tough" },
-      "weeping": { expr: 2, sound: 4, label: "Weeping", cat: "Weeping" },
-      "wink": { expr: 6, sound: 2, label: "Wink", cat: "Wink" },
-      "yawn": { expr: 5, sound: 0, label: "Yawn", cat: "Yawn" }
-    };
-
-    // Note pitch frequencies mapping for 8-bit Web Audio synth player
-    const noteFreqs = {
-      'C3': 130.81, 'CS3': 138.59, 'D3': 146.83, 'DS3': 155.56, 'E3': 164.81, 'F3': 174.61, 'FS3': 185.00, 'G3': 196.00, 'GS3': 207.65, 'A3': 220.00, 'AS3': 233.08, 'B3': 246.94,
-      'C4': 261.63, 'CS4': 277.18, 'D4': 293.66, 'DS4': 311.13, 'E4': 329.63, 'F4': 349.23, 'FS4': 369.99, 'G4': 392.00, 'GS4': 415.30, 'A4': 440.00, 'AS4': 466.16, 'B4': 493.88,
-      'C5': 523.25, 'CS5': 554.37, 'D5': 587.33, 'DS5': 622.25, 'E5': 659.25, 'F5': 698.46, 'FS5': 739.99, 'G5': 783.99, 'GS5': 830.61, 'A5': 880.00, 'AS5': 932.33, 'B5': 987.77,
-      'C6': 1046.50, 'CS6': 1108.73, 'D6': 1174.66, 'DS6': 1244.51, 'E6': 1318.51, 'F6': 1396.91, 'FS6': 1479.98, 'G6': 1567.98, 'GS6': 1661.22, 'A6': 1760.00, 'AS6': 1864.66, 'B6': 1975.53,
-      'C7': 2093.00, 'CS7': 2217.46, 'D7': 2349.32, 'DS7': 2489.02, 'E7': 2637.02, 'F7': 2793.83, 'FS7': 2959.96, 'G7': 3135.96, 'GS7': 3322.44, 'A7': 3520.00, 'AS7': 3729.31, 'B7': 3951.07,
-      'C8': 4186.01, 'CS8': 4434.92, 'D8': 4698.63, 'DS8': 4978.03, 'E8': 5274.04, 'F8': 5587.65, 'FS8': 5919.91, 'G8': 6271.93, 'GS8': 6644.88, 'A8': 7040.00, 'AS8': 7458.62, 'B8': 7902.13
-    };
-
-    // State Variables
-    let bleDevice = null;
-    let bleServer = null;
-    let bleService = null;
-    let exprCharacteristic = null;
-    let audioCharacteristic = null;
-    let textCharacteristic = null;
-    let statusCharacteristic = null;
-
-    let isPlayingCustomAnim = false;
-    let customAnimTimeout = null;
-
-    let localDatabaseGifs = [];
-    let databaseInstance = null;
-    let activePage = 'adjust-gif';
-    
-    // Web Audio synthesizer NotePlayer instance
-    class NotePlayer {
-      constructor() {
-        this.ctx = null;
-        this.isPlaying = false;
-        this.timeoutId = null;
-      }
-      play(sequenceStr, onStopCallback) {
-        this.stop();
-        this.isPlaying = true;
-        if (!this.ctx) {
-          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        const tokens = sequenceStr.trim().split(/\s+/);
-        const notes = [];
-        for (let i = 0; i < tokens.length; i += 3) {
-          if (i + 2 >= tokens.length) break;
-          const noteName = tokens[i].toUpperCase().replace('#', 'S');
-          const duration = parseInt(tokens[i+1]);
-          const rest = parseInt(tokens[i+2]);
-          notes.push({ noteName, duration, rest });
-        }
-        let index = 0;
-        const playNext = () => {
-          if (!this.isPlaying || index >= notes.length) {
-            this.stop();
-            if (onStopCallback) onStopCallback();
-            return;
-          }
-          const { noteName, duration, rest } = notes[index++];
-          const freq = noteFreqs[noteName] || 0;
-          if (freq > 0) {
-            const osc = this.ctx.createOscillator();
-            const gain = this.ctx.createGain();
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-            gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + (duration / 1000));
-            osc.connect(gain);
-            gain.connect(this.ctx.destination);
-            osc.start();
-            osc.stop(this.ctx.currentTime + (duration / 1000));
-          }
-          this.timeoutId = setTimeout(playNext, duration + rest);
-        };
-        playNext();
-      }
-      stop() {
-        this.isPlaying = false;
-        if (this.timeoutId) {
-          clearTimeout(this.timeoutId);
-          this.timeoutId = null;
-        }
-      }
-    }
-
-    const notePlayer = new NotePlayer();
-
-    // OLED Display Screen Overlay Simulator
-    class OLEDSimulator {
-      constructor() {
-        this.gifEl = document.getElementById('oledSimGif');
-        this.textEl = document.getElementById('oledTextOverlay');
-        this.labelEl = document.getElementById('oledLabelOverlay');
-        this.marqueeInterval = null;
-      }
-      setExpression(exprId, customLabel = null) {
-        if (this.marqueeInterval) {
-          clearInterval(this.marqueeInterval);
-          this.marqueeInterval = null;
-        }
-        this.textEl.style.display = 'none';
-        this.gifEl.style.display = 'block';
-        this.labelEl.style.display = 'block';
-
-        const avatarGifSrc = document.getElementById('avatarGif').src;
-        if (this.gifEl.src !== avatarGifSrc) {
-          this.gifEl.src = avatarGifSrc;
-        }
-        if (customLabel) {
-          this.labelEl.textContent = customLabel.toUpperCase();
-        } else {
-          switch (exprId) {
-            case 0: this.labelEl.textContent = "IDLE"; break;
-            case 1: this.labelEl.textContent = "HAPPY"; break;
-            case 2: this.labelEl.textContent = "SAD"; break;
-            case 3: this.labelEl.textContent = "ANGRY"; break;
-            case 4: this.labelEl.textContent = "SURPRISE"; break;
-            case 5: this.labelEl.textContent = "SLEEP"; break;
-            case 6: this.labelEl.textContent = "WINK"; break;
-            default: this.labelEl.textContent = "IDLE"; break;
-          }
-        }
-      }
-      setMarqueeText(text) {
-        if (this.marqueeInterval) {
-          clearInterval(this.marqueeInterval);
-        }
-        this.gifEl.style.display = 'none';
-        this.labelEl.style.display = 'none';
-        this.textEl.style.display = 'block';
-        this.textEl.textContent = text;
-
-        let x = 160;
-        this.textEl.style.left = x + 'px';
-        const textWidth = text.length * 8;
-        this.marqueeInterval = setInterval(() => {
-          x -= 2;
-          this.textEl.style.left = x + 'px';
-          if (x < -textWidth) {
-            clearInterval(this.marqueeInterval);
-            this.marqueeInterval = null;
-            this.textEl.style.display = 'none';
-            this.gifEl.style.display = 'block';
-            this.labelEl.style.display = 'block';
-          }
-        }, 30);
-      }
-    }
-
-    let oledSimulator = null;
-
-    // Initialize Database & Load Data on Boot
-    window.addEventListener('DOMContentLoaded', () => {
-      oledSimulator = new OLEDSimulator();
-      initIndexedDB();
-      initPixelEditor();
+    // Console log utility
+    function logConsole(message, type = "INFO") {
+      const consoleEl = document.getElementById('consoleLogs');
+      if (!consoleEl) return;
       
-      // Load stored opening music default
-      document.getElementById('openingMusicText').value = 
-        "E5 50 10\nE5 50 10\nE5 50 30\nC5 50 10\nE5 50 30\nG5 50 50\nG4 50 50\nC5 50 10\nG4 50 30\nE4 50 10\nA4 50 10\nB4 50 10\nAS4 50 10\nA4 50 30\nG4 50 20\nE5 50 10\nG5 50 10\nA5 50 10\nF5 50 10\nG5 50 10\nE5 50 10\nC5 50 10\nD5 50 10\nB4 50 50";
-        
-      // Restore BLE active state and speed slider from localStorage on boot
-      const cachedBle = localStorage.getItem('bleActiveToggle');
-      if (cachedBle !== null) {
-        const toggle = document.getElementById('bleActiveToggle');
-        if (toggle) toggle.checked = (cachedBle === 'true');
-      }
-      const cachedSpeed = localStorage.getItem('gifSpeedSlider');
-      if (cachedSpeed !== null) {
-        const slider = document.getElementById('gifSpeedSlider');
-        if (slider) {
-          slider.value = cachedSpeed;
-          const valLabel = document.getElementById('gifSpeedVal');
-          if (valLabel) valLabel.textContent = cachedSpeed;
-        }
-      }
-      const cachedIntroSpeed = localStorage.getItem('gifIntroSpeedSlider');
-      if (cachedIntroSpeed !== null) {
-        const slider = document.getElementById('gifIntroSpeedSlider');
-        if (slider) {
-          slider.value = cachedIntroSpeed;
-          const valLabel = document.getElementById('gifIntroSpeedVal');
-          if (valLabel) valLabel.textContent = cachedIntroSpeed;
-        }
-      }
-      const cachedIntroSoundSpeed = localStorage.getItem('introSoundSpeedSlider');
-      if (cachedIntroSoundSpeed !== null) {
-        const slider = document.getElementById('introSoundSpeedSlider');
-        if (slider) {
-          slider.value = cachedIntroSoundSpeed;
-          const valLabel = document.getElementById('introSoundSpeedVal');
-          if (valLabel) valLabel.textContent = cachedIntroSoundSpeed;
-        }
-      }
-      const cachedNeg = localStorage.getItem('gifNegativeToggle');
-      if (cachedNeg !== null) {
-        const toggle = document.getElementById('gifNegativeToggle');
-        if (toggle) toggle.checked = (cachedNeg === 'true');
-        const oledInv = document.getElementById('oledInvert');
-        if (oledInv) {
-          oledInv.checked = (cachedNeg === 'true');
-          updateOledFilters();
-        }
-      }
-    });
-
-    // Page Switching logic
-    function switchPage(pageId) {
-      activePage = pageId;
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-      document.querySelectorAll('.tab-section').forEach(sec => sec.classList.remove('active'));
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type.toLowerCase()}`;
       
-      // Find matching button to activate
-      const btnMap = {
-        'adjust-gif': 0,
-        'adjust-sound': 1,
-        'chronos': 2,
-        'hardware': 3,
-        'support': 4
-      };
-      document.querySelectorAll('.tab-btn')[btnMap[pageId]].classList.add('active');
-      document.getElementById(`page-${pageId}`).classList.add('active');
-      logConsole(`Switched tab to: ${pageId}`);
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      
+      entry.innerHTML = `
+        <span class="log-time">[${timeStr}]</span>
+        <span class="log-badge">${type}</span>
+        <span class="log-text">${escapeHtml(message)}</span>
+      `;
+      
+      consoleEl.appendChild(entry);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
     }
 
-    // Toggle folders in file manager
-    function toggleFolder(folderId) {
-      const list = document.getElementById(folderId);
-      list.style.display = list.style.display === 'none' ? 'flex' : 'none';
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
-    // Console logs utilities
-    function logConsole(message, type = 'SYSTEM') {
-      const consoleLog = document.getElementById('deviceConsoleLog');
-      const entry = document.createElement('span');
-      if (type === 'ERROR')    entry.style.color = '#ef4444';
-      else if (type === 'BLE')      entry.style.color = '#38bdf8';
-      else if (type === 'USB')      entry.style.color = '#94a3b8';
-      else if (type === 'ANIM')     entry.style.color = '#4ade80'; // green for playing GIF
-      else if (type === 'LIST')     entry.style.color = '#22d3ee'; // cyan for GIF list dump
-      else if (type === 'SETTINGS') entry.style.color = '#fbbf24';
-      else if (type === 'CLOCK')    entry.style.color = '#c084fc';
-      entry.textContent = `[${type}] ${message}`;
-      consoleLog.appendChild(entry);
-      consoleLog.scrollTop = consoleLog.scrollHeight;
-    }
-
-    // Toast alert notifications
+    // Toast utility
     function showToast(message) {
       const container = document.getElementById('toastContainer');
       const toast = document.createElement('div');
       toast.className = 'toast';
-      toast.innerHTML = `<span style="color:var(--mario-purple);">⚡</span> <span>${message}</span>`;
+      toast.textContent = message;
       container.appendChild(toast);
       
       setTimeout(() => {
-        toast.classList.add('hide');
-        setTimeout(() => toast.remove(), 400);
-      }, 3000);
-    }
-
-    // HTML5 Drag and Drop zone configuration
-    const uploadDropZone = document.getElementById('uploadDropZone');
-    uploadDropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      uploadDropZone.style.borderColor = 'var(--mario-purple)';
-    });
-    uploadDropZone.addEventListener('dragleave', () => {
-      uploadDropZone.style.borderColor = 'rgba(168, 85, 247, 0.4)';
-    });
-    uploadDropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      uploadDropZone.style.borderColor = 'rgba(168, 85, 247, 0.4)';
-      if (e.dataTransfer.files.length > 0) {
-        processUploadedFile(e.dataTransfer.files[0]);
-      }
-    });
-
-    let uploadedFileBase64 = null;
-    let uploadedFileName = "";
-    
-    function handleFileUpload(event) {
-      if (event.target.files.length > 0) {
-        processUploadedFile(event.target.files[0]);
-      }
-    }
-
-    function processUploadedFile(file) {
-      uploadedFileName = file.name;
-      const reader = new FileReader();
-      
-      if (file.name.endsWith('.gif')) {
-        reader.readAsDataURL(file);
-        reader.onload = () => {
-          uploadedFileBase64 = reader.result;
-          document.getElementById('uploadPreviewImage').src = uploadedFileBase64;
-          document.getElementById('uploadPreviewCard').style.display = 'flex';
-          document.getElementById('uploadFrameCount').textContent = Math.floor(Math.random() * 12) + 6;
-          updateFlashEstimate();
-          showToast(`Loaded ${file.name} for conversion.`);
-        };
-      } else {
-        showToast("Direct BMP/BIN parsed to flash memory structure.");
-      }
-    }
-
-    function updateFlashEstimate() {
-      const comp = document.getElementById('uploadCompressionSlider').value;
-      const frames = parseInt(document.getElementById('uploadFrameCount').textContent);
-      const estSizeKb = ((frames * 1024) * (1 - (comp / 150))).toFixed(1);
-      document.getElementById('uploadFlashSize').textContent = `${estSizeKb} KB`;
-    }
-
-    function saveUploadedGifToLibrary() {
-      if (!uploadedFileBase64) return;
-      const id = uploadedFileName.toLowerCase().replace(/\.[^/.]+$/, "").replace(/\s+/g, "_");
-      const sizeBytes = Math.floor(uploadedFileBase64.length * 0.75);
-      const flashSize = document.getElementById('uploadFlashSize').textContent;
-      
-      const newGif = {
-        id: id,
-        name: uploadedFileName.replace(/\.[^/.]+$/, ""),
-        category: "Custom",
-        favorite: false,
-        selected: true,
-        hidden: false,
-        size: sizeBytes,
-        flash_size: flashSize,
-        customData: uploadedFileBase64
-      };
-
-      addGifToStore(newGif);
-    }
-
-    function resetUploadZone() {
-      document.getElementById('uploadPreviewCard').style.display = 'none';
-      uploadedFileBase64 = null;
-      uploadedFileName = "";
-      document.getElementById('fileUploadInput').value = "";
-    }
-
-    // IndexedDB Database logic — version 3 forces re-seed with corrected categories (cat = label)
-    function initIndexedDB() {
-      const request = indexedDB.open("MochiAssetDB", 3);
-      
-      request.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        const oldVersion = e.oldVersion;
-        if (!db.objectStoreNames.contains("gifs")) {
-          db.createObjectStore("gifs", { keyPath: "id" });
-        }
-        // Version 3: re-seed all built-in GIFs with unique cat = label per animation
-        if (oldVersion < 3) {
-          logConsole("DB upgrade to v3: setting unique category per animation...");
-          const tx = e.target.transaction;
-          const store = tx.objectStore("gifs");
-          Object.keys(animMapping).forEach(key => {
-            const sizeBytes = Math.floor(Math.random() * 40000) + 15000;
-            const flashKb = (sizeBytes / 1024).toFixed(1) + "KB";
-            store.put({
-              id: key,
-              name: animMapping[key].label,
-              category: animMapping[key].cat,  // now = label (unique per GIF)
-              favorite: key === 'happy' || key === 'relaxed',
-              selected: true,
-              hidden: false,
-              size: sizeBytes,
-              flash_size: flashKb
-            });
-          });
-        }
-      };
-
-      request.onsuccess = (e) => {
-        databaseInstance = e.target.result;
-        prepopulateDefaultDatabase();
-      };
-
-      request.onerror = () => {
-        logConsole("Failed to initialize IndexedDB database.", "ERROR");
-      };
-    }
-
-    function prepopulateDefaultDatabase() {
-      const transaction = databaseInstance.transaction(["gifs"], "readwrite");
-      const store = transaction.objectStore("gifs");
-      
-      // Check if populated
-      const countReq = store.count();
-      countReq.onsuccess = () => {
-        if (countReq.result === 0) {
-          logConsole("Prepopulating 63 original Mochi GIFs...");
-          Object.keys(animMapping).forEach(key => {
-            const sizeBytes = Math.floor(Math.random() * 40000) + 15000;
-            const flashKb = (sizeBytes / 1024).toFixed(1) + "KB";
-            
-            store.add({
-              id: key,
-              name: animMapping[key].label,
-              category: animMapping[key].cat,
-              favorite: key === 'happy' || key === 'relaxed',
-              selected: true,
-              hidden: false,
-              size: sizeBytes,
-              flash_size: flashKb
-            });
-          });
-        }
-        
-        transaction.oncomplete = () => {
-          loadGifsFromDB();
-        };
-      };
-    }
-
-    function loadGifsFromDB() {
-      const transaction = databaseInstance.transaction(["gifs"], "readonly");
-      const store = transaction.objectStore("gifs");
-      const getAllReq = store.getAll();
-      
-      getAllReq.onsuccess = () => {
-        localDatabaseGifs = getAllReq.result;
-        populateCategoryFilter();
-        renderLibraryGrid();
-        renderDatabaseTable();
-        populateDropdowns();
-
-        // Print available emojis to the console log
-        logConsole(`App Database loaded: ${localDatabaseGifs.length} animations registered.`, 'LIST');
-        const namesList = localDatabaseGifs.map(g => g.name).join(', ');
-        logConsole(`Registered Animations: ${namesList}`, 'LIST');
-      };
-    }
-
-    // Dynamically populate the category filter dropdown from DB contents
-    function populateCategoryFilter() {
-      const select = document.getElementById('libCategory');
-      const currentVal = select.value;
-      // Collect unique categories, sorted alphabetically
-      const cats = [...new Set(localDatabaseGifs.map(g => g.category))].sort();
-      select.innerHTML = '<option value="ALL">All Animations</option>';
-      cats.forEach(cat => {
-        const opt = document.createElement('option');
-        opt.value = cat;
-        opt.textContent = cat;
-        select.appendChild(opt);
-      });
-      // Add custom uploads option if any exist
-      const hasCustom = localDatabaseGifs.some(g => g.category === 'Custom');
-      if (!hasCustom) {
-        const opt = document.createElement('option');
-        opt.value = 'Custom';
-        opt.textContent = 'Custom Uploads';
-        select.appendChild(opt);
-      }
-      // Restore previous selection
-      if (currentVal) select.value = currentVal;
-    }
-
-    function addGifToStore(gifObj) {
-      const transaction = databaseInstance.transaction(["gifs"], "readwrite");
-      const store = transaction.objectStore("gifs");
-      store.put(gifObj);
-      
-      transaction.oncomplete = () => {
-        logConsole(`Custom GIF '${gifObj.name}' saved to Database!`);
-        showToast(`Saved '${gifObj.name}' to library.`);
-        resetUploadZone();
-        loadGifsFromDB();
-      };
-    }
-
-    function deleteGifFromLibrary(id) {
-      if (animMapping[id]) {
-        showToast("Cannot delete original system assets!");
-        return;
-      }
-      const transaction = databaseInstance.transaction(["gifs"], "readwrite");
-      const store = transaction.objectStore("gifs");
-      store.delete(id);
-      
-      transaction.oncomplete = () => {
-        logConsole(`Deleted GIF: ${id}`);
-        showToast("Deleted GIF from database.");
-        loadGifsFromDB();
-      };
-    }
-
-    function toggleFavorite(id) {
-      const transaction = databaseInstance.transaction(["gifs"], "readwrite");
-      const store = transaction.objectStore("gifs");
-      const req = store.get(id);
-      
-      req.onsuccess = () => {
-        const data = req.result;
-        data.favorite = !data.favorite;
-        store.put(data);
-      };
-      
-      transaction.oncomplete = () => {
-        loadGifsFromDB();
-      };
-    }
-
-    function toggleHidden(id) {
-      const transaction = databaseInstance.transaction(["gifs"], "readwrite");
-      const store = transaction.objectStore("gifs");
-      const req = store.get(id);
-      
-      req.onsuccess = () => {
-        const data = req.result;
-        data.hidden = !data.hidden;
-        store.put(data);
-      };
-      
-      transaction.oncomplete = () => {
-        loadGifsFromDB();
-      };
-    }
-
-    // Populate dropdown options
-    function populateDropdowns() {
-      const dropdowns = [
-        'selectDefaultGif', 'selectGifIntro', 
-        'selectTouchSingle', 'selectTouchDouble', 'selectTouchLong'
-      ];
-      
-      const optionsList = [
-        { val: "default", label: "Default" },
-        { val: "clock", label: "Hide/Show Clock" },
-        { val: "bt_toggle", label: "Turn Bluetooth On/Off" },
-        { val: "skip_anim", label: "Skip Next Animation" }
-      ];
-
-      localDatabaseGifs.forEach(gif => {
-        if (!gif.hidden) {
-          optionsList.push({ val: gif.id, label: gif.name });
-        }
-      });
-
-      dropdowns.forEach(ddId => {
-        const select = document.getElementById(ddId);
-        const originalVal = select.value;
-        select.innerHTML = "";
-        
-        optionsList.forEach(opt => {
-          // Default/Intro GIF can only be actual animations, not touch-only commands
-          if ((ddId === 'selectDefaultGif' || ddId === 'selectGifIntro') && 
-              (opt.val === 'clock' || opt.val === 'bt_toggle' || opt.val === 'skip_anim')) {
-            return;
-          }
-          const el = document.createElement('option');
-          el.value = opt.val;
-          el.textContent = opt.label;
-          select.appendChild(el);
-        });
-        
-        // Restore selection from localStorage if available
-        const cachedVal = localStorage.getItem(ddId);
-        if (cachedVal) {
-          select.value = cachedVal;
-        } else if (originalVal) {
-          select.value = originalVal;
-        }
-      });
-    }
-
-    // Render Library Grid of GIF cards
-    function renderLibraryGrid() {
-      const grid = document.getElementById('gifLibraryGrid');
-      grid.innerHTML = "";
-      
-      localDatabaseGifs.forEach(gif => {
-        const card = document.createElement('div');
-        card.className = `gif-card ${gif.hidden ? 'hidden-gif-card' : ''}`;
-        card.style.opacity = gif.hidden ? "0.4" : "1";
-        
-        const imgSrc = gif.customData ? gif.customData : `animations/${gif.id}.gif`;
-        
-        card.innerHTML = `
-          <input type="checkbox" class="gif-card-checkbox" data-id="${gif.id}" ${gif.selected !== false ? 'checked' : ''} onchange="toggleSelected('${gif.id}')">
-          <button class="gif-card-fav ${gif.favorite ? 'active' : ''}" onclick="toggleFavorite('${gif.id}')">
-            <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 24 24"><path d="M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z"/></svg>
-          </button>
-          
-          <div class="gif-card-preview" onclick="playLibraryGif('${gif.id}', '${imgSrc}')">
-            <img src="${imgSrc}" alt="${gif.name}">
-          </div>
-          
-          <div class="gif-card-name">${gif.name}</div>
-          
-          <div class="gif-card-actions">
-            <button class="tree-action-btn" title="Toggle Hidden" onclick="toggleHidden('${gif.id}')">
-              <svg viewBox="0 0 24 24"><path d="${gif.hidden ? 'M11.83,9L15,12.17C15,12.11 15,12.06 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.49 7,19.5 12,19.5C13.79,19.5 15.5,19.06 17,18.23L17.47,18.7L19.73,21L21,19.73L3.27,2L2,4.27M12,7A5,5 0 0,1 17,12C17,12.79 16.8,13.53 16.47,14.2L19.27,17C20.92,15.7 22.22,14 23,12C21.27,7.51 17,4.5 12,4.5C10.21,4.5 8.5,4.94 7,5.77L9.8,8.57C10.47,8.2 11.21,8 12,7Z' : 'M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z'}" style="width:12px;height:12px;fill:currentColor;" /></svg>
-            </button>
-            <button class="tree-action-btn" title="Delete" onclick="deleteGifFromLibrary('${gif.id}')">
-              <svg viewBox="0 0 24 24"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" style="width:12px;height:12px;fill:currentColor;" /></svg>
-            </button>
-          </div>
-        `;
-        
-        grid.appendChild(card);
-      });
-    }
-
-    // Play GIF in the OLED simulator directly on click
-    function playLibraryGif(id, src) {
-      const mapping = animMapping[id] || { expr: 0, sound: 0, label: id };
-      
-      const img = document.getElementById('avatarGif');
-      img.src = src;
-      document.getElementById('avatarStateName').textContent = mapping.label;
-      if (oledSimulator) oledSimulator.setExpression(mapping.expr, mapping.label);
-      
-      transmitSelectedAnim(mapping.expr, mapping.sound, mapping.label);
-    }
-
-    // Render database manager list
-    function renderDatabaseTable() {
-      const body = document.getElementById('dbTableBody');
-      body.innerHTML = "";
-      
-      localDatabaseGifs.forEach(gif => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td style="font-family:'Fira Code', monospace; font-size:0.75rem;">${gif.id}</td>
-          <td><strong>${gif.name}</strong></td>
-          <td><span class="badge">${gif.category}</span></td>
-          <td>${(gif.size / 1024).toFixed(1)} KB</td>
-          <td><span style="color:var(--mario-gold); font-weight:700;">${gif.flash_size}</span></td>
-          <td>
-            <button class="tree-action-btn" onclick="renameDatabaseItem('${gif.id}')" title="Rename"><svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor;"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.07,6.19L3,17.25Z"/></svg></button>
-            <button class="tree-action-btn" onclick="duplicateDatabaseItem('${gif.id}')" title="Duplicate"><svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor;"><path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/></svg></button>
-            <button class="tree-action-btn" onclick="exportDatabaseItem('${gif.id}')" title="Export"><svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor;"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>
-          </td>
-        `;
-        body.appendChild(row);
-      });
-    }
-
-    function renameDatabaseItem(id) {
-      const newName = prompt("Enter new name for this asset:");
-      if (!newName) return;
-      const transaction = databaseInstance.transaction(["gifs"], "readwrite");
-      const store = transaction.objectStore("gifs");
-      const req = store.get(id);
-      req.onsuccess = () => {
-        const item = req.result;
-        item.name = newName;
-        store.put(item);
-      };
-      transaction.oncomplete = () => {
-        showToast("Asset renamed successfully.");
-        loadGifsFromDB();
-      };
-    }
-
-    function duplicateDatabaseItem(id) {
-      const transaction = databaseInstance.transaction(["gifs"], "readwrite");
-      const store = transaction.objectStore("gifs");
-      const req = store.get(id);
-      req.onsuccess = () => {
-        const item = req.result;
-        const copy = Object.assign({}, item);
-        copy.id = item.id + "_copy";
-        copy.name = item.name + " (Copy)";
-        store.put(copy);
-      };
-      transaction.oncomplete = () => {
-        showToast("Asset duplicated.");
-        loadGifsFromDB();
-      };
-    }
-
-    function exportDatabaseItem(id) {
-      const item = localDatabaseGifs.find(g => g.id === id);
-      if (!item) return;
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(item));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `${item.id}_export.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-      showToast(`Exported ${item.name} JSON metadata.`);
-    }
-
-    function selectLibraryAll(doSelect) {
-      const transaction = databaseInstance.transaction(["gifs"], "readwrite");
-      const store = transaction.objectStore("gifs");
-      const req = store.getAll();
-      req.onsuccess = () => {
-        req.result.forEach(item => {
-          item.selected = doSelect;
-          store.put(item);
-        });
-      };
-      transaction.oncomplete = () => {
-        loadGifsFromDB();
-        showToast(doSelect ? "Selected all assets!" : "Deselected all assets.");
-      };
-    }
-
-    function toggleSelected(id) {
-      const transaction = databaseInstance.transaction(["gifs"], "readwrite");
-      const store = transaction.objectStore("gifs");
-      const req = store.get(id);
-      req.onsuccess = () => {
-        const data = req.result;
-        data.selected = !data.selected;
-        store.put(data);
-      };
-    }
-
-    function filterGifLibrary() {
-      const search = document.getElementById('libSearch').value.toLowerCase();
-      const category = document.getElementById('libCategory').value;
-      const sort = document.getElementById('libSort').value;
-
-      let filtered = localDatabaseGifs.filter(gif => {
-        const matchesSearch = gif.name.toLowerCase().includes(search) || gif.id.includes(search);
-        const matchesCategory = category === 'ALL' || gif.category === category;
-        return matchesSearch && matchesCategory;
-      });
-
-      if (sort === 'name') {
-        filtered.sort((a,b) => a.name.localeCompare(b.name));
-      } else if (sort === 'favorites') {
-        filtered.sort((a,b) => b.favorite - a.favorite);
-      }
-
-      // Temporarily swap list and redraw
-      const oldList = localDatabaseGifs;
-      localDatabaseGifs = filtered;
-      renderLibraryGrid();
-      localDatabaseGifs = oldList;
-    }
-
-    // OLED display contrast and brightness adjustments
-    function updateOledFilters() {
-      const bri = document.getElementById('oledBrightness').value;
-      const con = document.getElementById('oledContrast').value;
-      const inv = document.getElementById('oledInvert').checked;
-      
-      const img = document.getElementById('oledSimGif');
-      let filters = `brightness(${bri}) contrast(${con}) grayscale(100%) sepia(100%) hue-rotate(160deg) saturate(20)`;
-      if (inv) {
-        filters += ' invert(1)';
-      }
-      img.style.filter = filters;
-    }
-
-    function updateOledRotation() {
-      const rotation = document.getElementById('hwRotation').value;
-      const screen = document.getElementById('oledSimScreenBezel');
-      screen.style.transform = `rotate(${rotation}deg)`;
-    }
-
-    // Pixel art drawing sprite editor
-    let canvasEl, ctx, isDrawing = false;
-    function initPixelEditor() {
-      canvasEl = document.getElementById('pixelCanvas');
-      ctx = canvasEl.getContext('2d');
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0,0, 256, 128);
-      
-      // Draw gridlines
-      drawPixelGrid();
-
-      canvasEl.addEventListener('mousedown', startDrawingPixels);
-      canvasEl.addEventListener('mousemove', drawPixel);
-      window.addEventListener('mouseup', stopDrawingPixels);
-      
-      canvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
-    }
-
-    function drawPixelGrid() {
-      ctx.strokeStyle = '#1e1b4b';
-      ctx.lineWidth = 1;
-      for (let x = 0; x < 256; x += 16) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, 128);
-        ctx.stroke();
-      }
-      for (let y = 0; y < 128; y += 16) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(256, y);
-        ctx.stroke();
-      }
-    }
-
-    function startDrawingPixels(e) {
-      isDrawing = true;
-      drawPixel(e);
-    }
-
-    function drawPixel(e) {
-      if (!isDrawing) return;
-      const rect = canvasEl.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / 16) * 16;
-      const y = Math.floor((e.clientY - rect.top) / 16) * 16;
-      
-      // Left click = white, right click/other = black
-      ctx.fillStyle = e.buttons === 1 ? '#ffffff' : '#000000';
-      ctx.fillRect(x, y, 16, 16);
-      
-      drawPixelGrid();
-      generateCPlusPlusBitmapCode();
-    }
-
-    function stopDrawingPixels() {
-      isDrawing = false;
-    }
-
-    function clearPixelEditor() {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0,0, 256, 128);
-      drawPixelGrid();
-      generateCPlusPlusBitmapCode();
-    }
-
-    function invertPixelEditor() {
-      const imgData = ctx.getImageData(0,0, 256, 128);
-      for (let i = 0; i < imgData.data.length; i += 4) {
-        imgData.data[i] = 255 - imgData.data[i];
-        imgData.data[i+1] = 255 - imgData.data[i+1];
-        imgData.data[i+2] = 255 - imgData.data[i+2];
-      }
-      ctx.putImageData(imgData, 0, 0);
-      drawPixelGrid();
-      generateCPlusPlusBitmapCode();
-    }
-
-    function generateCPlusPlusBitmapCode() {
-      // 16x8 grid of pixels (since 256x128 scaled by 16 represents 16x8 pixels)
-      const w = 16;
-      const h = 8;
-      const bytes = new Uint8Array(16); // 16 * 8 / 8 = 16 bytes
-      
-      for (let y = 0; y < 8; y++) {
-        let byteVal = 0;
-        for (let x = 0; x < 16; x++) {
-          const pixel = ctx.getImageData(x*16 + 8, y*16 + 8, 1, 1).data;
-          // if red value > 127, it's white
-          const isWhite = pixel[0] > 127;
-          if (isWhite) {
-            byteVal |= (1 << (7 - (x % 8)));
-          }
-          if (x % 8 === 7) {
-            bytes[y * 2 + Math.floor(x/8)] = byteVal;
-            byteVal = 0;
-          }
-        }
-      }
-
-      let hexArrayStr = "";
-      bytes.forEach((b, idx) => {
-        hexArrayStr += "0x" + b.toString(16).padStart(2, '0');
-        if (idx < bytes.length - 1) hexArrayStr += ", ";
-        if (idx % 8 === 7) hexArrayStr += "\n  ";
-      });
-
-      const output = `const unsigned char my_sprite[] PROGMEM = {\n  ${hexArrayStr.trim()}\n};`;
-      document.getElementById('pixelExportText').value = output;
-    }
-
-    function copyPixelCode() {
-      const ta = document.getElementById('pixelExportText');
-      ta.select();
-      document.execCommand('copy');
-      showToast("Copied GFX bitmap code to clipboard!");
-    }
-
-    // AI Music composer prompt handler
-    function generateAIMelody() {
-      const btn = document.getElementById('btnAiCompose');
-      const prompt = document.getElementById('aiMusicPrompt').value.toLowerCase().trim();
-      
-      btn.textContent = "AI Composing...";
-      btn.disabled = true;
+        toast.classList.add('show');
+      }, 50);
       
       setTimeout(() => {
-        let notes = "C5 100 20 E5 100 20 G5 200 60";
-        if (prompt.includes("victory") || prompt.includes("fanfare")) {
-          notes = "C5 100 20 C5 100 20 C5 100 20 C5 300 60 G4 300 60 A4 150 20 B4 150 20 C5 400 100";
-        } else if (prompt.includes("coin") || prompt.includes("jump")) {
-          notes = "B5 80 10 E6 280 20";
-        } else if (prompt.includes("sad") || prompt.includes("death")) {
-          notes = "C5 150 50 G4 150 50 E4 150 50 A4 120 20 B4 120 20 A4 120 20 GS4 300 200";
-        }
-        
-        document.getElementById('openingMusicText').value = notes;
-        btn.textContent = "Generate Melody Note sequence";
-        btn.disabled = false;
-        showToast("AI Generated notes added to Opening Music!");
-        logConsole(`AI Composer generated: ${notes}`);
-      }, 1500);
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
     }
 
-    // Playback note players previews
-    let isPlayingOpening = false;
-    function playOpeningMusicPreview() {
-      const btn = document.getElementById('btnPlayOpeningMusic');
-      const icon = document.getElementById('playMusicIcon');
-      
-      if (isPlayingOpening) {
-        notePlayer.stop();
-        isPlayingOpening = false;
-        btn.innerHTML = `<svg viewBox="0 0 24 24" id="playMusicIcon" style="width:14px;height:14px;fill:currentColor;"><path d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg> Play Preview`;
-      } else {
-        isPlayingOpening = true;
-        btn.innerHTML = `<svg viewBox="0 0 24 24" id="playMusicIcon" style="width:14px;height:14px;fill:currentColor;"><path d="M12,2A10,10 0 1,0 22,12A10,10 0 0,0 12,2M11,16H9V8H11V16M15,16H13V8H15V16Z"/></svg> Stop Preview`;
-        const seq = document.getElementById('openingMusicText').value;
-        notePlayer.play(seq, () => {
-          isPlayingOpening = false;
-          btn.innerHTML = `<svg viewBox="0 0 24 24" id="playMusicIcon" style="width:14px;height:14px;fill:currentColor;"><path d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg> Play Preview`;
-        });
-      }
-    }
-
-    let isPlayingTouch = false;
-    function playTouchMusicPreview() {
-      const btn = document.getElementById('btnPlayTouchMusic');
-      
-      if (isPlayingTouch) {
-        notePlayer.stop();
-        isPlayingTouch = false;
-        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor;"><path d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg> Play Preview`;
-      } else {
-        isPlayingTouch = true;
-        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor;"><path d="M12,2A10,10 0 1,0 22,12A10,10 0 0,0 12,2M11,16H9V8H11V16M15,16H13V8H15V16Z"/></svg> Stop Preview`;
-        const seq = document.getElementById('touchMusicText').value;
-        notePlayer.play(seq, () => {
-          isPlayingTouch = false;
-          btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor;"><path d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg> Play Preview`;
-        });
-      }
-    }
-
-    function generateTouchMelody() {
-      const randomNotes = ["C5", "D5", "E5", "G5", "A5", "C6"];
-      let seq = "";
-      for (let i = 0; i < 4; i++) {
-        const n = randomNotes[Math.floor(Math.random() * randomNotes.length)];
-        seq += `${n} 80 15 `;
-      }
-      document.getElementById('touchMusicText').value = seq.trim();
-    }
-
-    function resetTouchMelody() {
-      document.getElementById('touchMusicText').value = "C4 100 20 D4 100 20 E4 100 20 F4 200 200";
-    }
-
-    // BLE Name Validator length check
-    function validateBleNameLength(el) {
-      const len = el.value.length;
-      const validator = document.getElementById('bleNameValidator');
-      if (len > 20) {
-        validator.textContent = "Length too long! Max 20 characters.";
-        validator.style.color = "var(--mario-red)";
-      } else {
-        validator.textContent = "Max 20 characters. Valid length.";
-        validator.style.color = "var(--text-muted)";
-      }
-    }
-
-    function downloadJSONConfig() {
-      const config = {
-        gifSpeed: document.getElementById('gifSpeedSlider').value,
-        gifDelay: document.getElementById('gifDelaySlider').value,
-        negative: document.getElementById('gifNegativeToggle').checked,
-        defaultGif: document.getElementById('selectDefaultGif').value,
-        introGif: document.getElementById('selectGifIntro').value,
-        notificationDuration: document.getElementById('notificationDurSlider').value,
-        bleSleepTime: document.getElementById('bleSleepSlider').value,
-        bleName: document.getElementById('bleNameText').value
-      };
-      
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `mochi_settings.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-      showToast("Downloaded settings config JSON.");
-    }
-
-    // RESET MOCHI Global action handler
-    async function triggerResetMochi() {
-      if (confirm("Reset Mr.mario robot to factory settings?")) {
-        showToast("Sending reset signal over BLE...");
-        logConsole("Reset signal sent to firmware.");
-        
-        // Send RESET command via text characteristic
-        if (bleDevice && bleDevice.gatt.connected && textCharacteristic) {
-          try {
-            const encoder = new TextEncoder();
-            await textCharacteristic.writeValue(encoder.encode('RESET'));
-            logConsole("RESET command sent via BLE text characteristic.", "BLE");
-          } catch (err) {
-            logConsole(`RESET failed: ${err.message}`, "ERROR");
-          }
-        } else if (serialPort) {
-          // USB Serial fallback
-          try {
-            const writer = serialPort.writable.getWriter();
-            await writer.write(new TextEncoder().encode('RESET\n'));
-            writer.releaseLock();
-            logConsole("RESET command sent via USB Serial.", "USB");
-          } catch (err) {
-            logConsole(`USB RESET failed: ${err.message}`, "ERROR");
-          }
-        } else {
-          showToast("Not connected. Connect via BLE or USB first.");
-        }
-      }
-    }
-
-    async function sendListGifsCommand() {
-      if (serialPort) {
-        try {
-          const writer = serialPort.writable.getWriter();
-          await writer.write(new TextEncoder().encode('LIST\n'));
-          writer.releaseLock();
-          logConsole("LIST command sent via USB Serial.", "USB");
-        } catch (err) {
-          logConsole(`USB LIST command failed: ${err.message}`, "ERROR");
-        }
-      } else {
-        showToast("Please connect via USB to use this debugging function.");
-      }
-    }
-
-    function getExpressionValue(val) {
-      if (val === "default") return 0; // EXPR_IDLE (use defaultExpr from firmware)
-      // Find this GIF's index in ALL_GIFS_TABLE (alphabetical order matches animMapping)
-      const keys = Object.keys(animMapping); // already alphabetically ordered
-      const idx = keys.indexOf(val);
-      if (idx !== -1) {
-        // Send 100 + index so firmware enters EXPR_ALL_GIF mode at that specific index
-        return 100 + idx;
-      }
-      return 0; // fallback
-    }
-
-    function getTouchActionValue(val) {
-      if (val === "default") return 0;        // default reaction
-      if (val === "clock") return 1;          // show clock
-      if (val === "skip_anim") return 2;      // cycle to next animation
-      if (val === "bt_toggle") return 3;      // toggle BLE
-      // Specific GIF: send 20 + gifIndex so firmware plays that exact GIF
-      const keys = Object.keys(animMapping);
-      const idx = keys.indexOf(val);
-      if (idx !== -1) {
-        return 20 + idx; // firmware handles >= 20 as specific GIF index
-      }
-      return 0;
-    }
-
-    // SAVE SETTINGS Global action handler (shows loading status and syncs via BLE)
-    async function triggerSaveSettings() {
-      const btn = document.getElementById('btnGlobalSave');
-      btn.classList.add('loading');
-      
-      const bleEnabled = document.getElementById('bleActiveToggle') ? document.getElementById('bleActiveToggle').checked : true;
-      const speedMs = document.getElementById('gifSpeedSlider') ? parseInt(document.getElementById('gifSpeedSlider').value) : 100;
-      const introSpeedMs = document.getElementById('gifIntroSpeedSlider') ? parseInt(document.getElementById('gifIntroSpeedSlider').value) : 100;
-      const introSoundSpeedVal = document.getElementById('introSoundSpeedSlider') ? parseInt(document.getElementById('introSoundSpeedSlider').value) : 100;
-      
-      const defaultGifVal = document.getElementById('selectDefaultGif') ? document.getElementById('selectDefaultGif').value : "default";
-      const gifIntroVal = document.getElementById('selectGifIntro') ? document.getElementById('selectGifIntro').value : "default";
-      const touchSingleVal = document.getElementById('selectTouchSingle') ? document.getElementById('selectTouchSingle').value : "default";
-      const touchDoubleVal = document.getElementById('selectTouchDouble') ? document.getElementById('selectTouchDouble').value : "default";
-      const touchLongVal = document.getElementById('selectTouchLong') ? document.getElementById('selectTouchLong').value : "default";
-      const negativeEnabled = document.getElementById('gifNegativeToggle') ? document.getElementById('gifNegativeToggle').checked : false;
-
-      const defaultGif = getExpressionValue(defaultGifVal);
-      const gifIntro = getExpressionValue(gifIntroVal);
-      const touchSingle = getTouchActionValue(touchSingleVal);
-      const touchDouble = getTouchActionValue(touchDoubleVal);
-      const touchLong = getTouchActionValue(touchLongVal);
-
-      // Save to localStorage
-      localStorage.setItem('selectDefaultGif', defaultGifVal);
-      localStorage.setItem('selectGifIntro', gifIntroVal);
-      localStorage.setItem('selectTouchSingle', touchSingleVal);
-      localStorage.setItem('selectTouchDouble', touchDoubleVal);
-      localStorage.setItem('selectTouchLong', touchLongVal);
-      localStorage.setItem('bleActiveToggle', bleEnabled);
-      localStorage.setItem('gifSpeedSlider', speedMs);
-      localStorage.setItem('gifIntroSpeedSlider', introSpeedMs);
-      localStorage.setItem('introSoundSpeedSlider', introSoundSpeedVal);
-      localStorage.setItem('gifNegativeToggle', negativeEnabled);
-
-      logConsole(`Saving settings: BLE=${bleEnabled}, Speed=${speedMs}ms, IntroSpeed=${introSpeedMs}ms, IntroSoundSpeed=${introSoundSpeedVal}%, Default=${defaultGifVal}, Intro=${gifIntroVal}, Single=${touchSingleVal}, Double=${touchDoubleVal}, Long=${touchLongVal}, Negative=${negativeEnabled}...`, "SETTINGS");
-
-      if (bleDevice && bleDevice.gatt.connected && textCharacteristic) {
-        try {
-          const bleVal = bleEnabled ? "1" : "0";
-          const negVal = negativeEnabled ? "1" : "0";
-          const payload = `SET:${bleVal},${speedMs},${defaultGif},${gifIntro},${touchSingle},${touchDouble},${touchLong},${negVal},${introSpeedMs},${introSoundSpeedVal}`;
-          const encoder = new TextEncoder();
-          await textCharacteristic.writeValue(encoder.encode(payload));
-          logConsole(`Synced settings to Mochi via BLE: ${payload}`, "BLE");
-          showToast("Settings saved & synced to Mochi!");
-        } catch (err) {
-          logConsole(`Failed to sync settings via BLE: ${err.message}`, "ERROR");
-          showToast("Saved locally, BLE sync failed.");
-        }
-      } else {
-        showToast("Settings saved locally! Connect via BLE or USB to sync.");
-      }
-
-      btn.classList.remove('loading');
-    }
-
-    // Web Serial Communication for Settings Sync via USB/Wire
-    let serialPort = null;
-    let serialWriter = null;
-    let serialReader = null;
-    let isSerialReading = false;
-    let serialLineBuffer = ''; // Accumulate partial lines from USB
-
-    async function uploadSettingsViaUSB() {
-      if (!('serial' in navigator)) {
-        showToast("Web Serial is not supported in this browser. Use Chrome/Edge.");
-        logConsole("Web Serial not supported in browser.", "ERROR");
-        return;
-      }
-
-      const btn = document.getElementById('btnUsbUpload');
-      const settingsBtn = document.getElementById('btnUsbUploadSettingsTab');
-      if (btn) btn.classList.add('loading');
-      if (settingsBtn) settingsBtn.classList.add('loading');
-      logConsole("Initiating Web Serial connection for settings upload...", "USB");
-
-      try {
-        if (!serialPort) {
-          serialPort = await navigator.serial.requestPort();
-          await serialPort.open({ baudRate: 115200 });
-          logConsole("Web Serial port opened at 115200 baud.", "USB");
-          
-          // Start the read loop
-          readSerialLoop();
-        }
-
-        // Get current values from UI inputs
-        const bleEnabled = document.getElementById('bleActiveToggle') ? document.getElementById('bleActiveToggle').checked : true;
-        const speedMs = document.getElementById('gifSpeedSlider') ? parseInt(document.getElementById('gifSpeedSlider').value) : 100;
-        const introSpeedMs = document.getElementById('gifIntroSpeedSlider') ? parseInt(document.getElementById('gifIntroSpeedSlider').value) : 100;
-        const introSoundSpeedVal = document.getElementById('introSoundSpeedSlider') ? parseInt(document.getElementById('introSoundSpeedSlider').value) : 100;
-        
-        const defaultGifVal = document.getElementById('selectDefaultGif') ? document.getElementById('selectDefaultGif').value : "default";
-        const gifIntroVal = document.getElementById('selectGifIntro') ? document.getElementById('selectGifIntro').value : "default";
-        const touchSingleVal = document.getElementById('selectTouchSingle') ? document.getElementById('selectTouchSingle').value : "default";
-        const touchDoubleVal = document.getElementById('selectTouchDouble') ? document.getElementById('selectTouchDouble').value : "default";
-        const touchLongVal = document.getElementById('selectTouchLong') ? document.getElementById('selectTouchLong').value : "default";
-        const negativeEnabled = document.getElementById('gifNegativeToggle') ? document.getElementById('gifNegativeToggle').checked : false;
-
-        const defaultGif = getExpressionValue(defaultGifVal);
-        const gifIntro = getExpressionValue(gifIntroVal);
-        const touchSingle = getTouchActionValue(touchSingleVal);
-        const touchDouble = getTouchActionValue(touchDoubleVal);
-        const touchLong = getTouchActionValue(touchLongVal);
-
-        // Save to localStorage
-        localStorage.setItem('selectDefaultGif', defaultGifVal);
-        localStorage.setItem('selectGifIntro', gifIntroVal);
-        localStorage.setItem('selectTouchSingle', touchSingleVal);
-        localStorage.setItem('selectTouchDouble', touchDoubleVal);
-        localStorage.setItem('selectTouchLong', touchLongVal);
-        localStorage.setItem('bleActiveToggle', bleEnabled);
-        localStorage.setItem('gifSpeedSlider', speedMs);
-        localStorage.setItem('gifIntroSpeedSlider', introSpeedMs);
-        localStorage.setItem('introSoundSpeedSlider', introSoundSpeedVal);
-        localStorage.setItem('gifNegativeToggle', negativeEnabled);
-
-        // Send settings payload via Web Serial
-        const writer = serialPort.writable.getWriter();
-        const encoder = new TextEncoder();
-        const bleVal = bleEnabled ? "1" : "0";
-        const negVal = negativeEnabled ? "1" : "0";
-        const payload = `SET:${bleVal},${speedMs},${defaultGif},${gifIntro},${touchSingle},${touchDouble},${touchLong},${negVal},${introSpeedMs},${introSoundSpeedVal}\n`;
-        
-        await writer.write(encoder.encode(payload));
-        writer.releaseLock();
-        logConsole(`Sent settings payload to USB: ${payload.trim()}`, "USB");
-        showToast("Uploading settings via USB...");
-
-      } catch (err) {
-        logConsole(`USB Serial write error: ${err.message}`, "ERROR");
-        showToast("USB Upload failed.");
-        if (btn) btn.classList.remove('loading');
-        if (settingsBtn) settingsBtn.classList.remove('loading');
-        // Reset port to retry next time
-        serialPort = null;
-      }
-    }
-
-    async function readSerialLoop() {
-      if (isSerialReading) return;
-      isSerialReading = true;
-      const decoder = new TextDecoder();
-      
-      try {
-        while (serialPort && serialPort.readable) {
-          const reader = serialPort.readable.getReader();
-          try {
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) break;
-              
-              serialLineBuffer += decoder.decode(value);
-              // Process complete lines
-              let nl;
-              while ((nl = serialLineBuffer.indexOf('\n')) !== -1) {
-                const line = serialLineBuffer.slice(0, nl).trim();
-                serialLineBuffer = serialLineBuffer.slice(nl + 1);
-                if (!line) continue;
-                logConsole(`USB Recv: ${line}`, "USB");
-                
-                if (line === 'OK:SettingsSaved') {
-                  showToast("✅ Settings saved to Mochi flash!");
-                  const btn = document.getElementById('btnUsbUpload');
-                  const settingsBtn = document.getElementById('btnUsbUploadSettingsTab');
-                  if (btn) btn.classList.remove('loading');
-                  if (settingsBtn) settingsBtn.classList.remove('loading');
-                } else if (line === 'OK:TimeSynced') {
-                  showToast("🕐 Clock synced to hardware!");
-                  const btn = document.getElementById('btnSyncClock');
-                  if (btn) btn.classList.remove('loading');
-                } else if (line.startsWith('PLAYING:GIF[')) {
-                  // e.g. PLAYING:GIF[5/62] DANCING (10 frames)
-                  const match = line.match(/PLAYING:GIF\[(\d+)\/(\d+)\]\s+(\S+)\s+\((\d+)\s+frames\)/);
-                  if (match) {
-                    const idx = parseInt(match[1]);
-                    const total = parseInt(match[2]) + 1;
-                    const name = match[3];
-                    const frames = match[4];
-                    logConsole(`🎭 Playing GIF #${idx}/${total}: ${name} (${frames} frames)`, 'ANIM');
-                    // Update the avatar label to show current GIF
-                    const stateName = document.getElementById('avatarStateName');
-                    if (stateName) stateName.textContent = name;
-                    // Try to load the gif in the preview if it exists
-                    const gifPreview = document.getElementById('avatarGif');
-                    if (gifPreview) {
-                      const lname = name.toLowerCase();
-                      if (animMapping[lname]) {
-                        gifPreview.src = `animations/${lname}.gif`;
-                      }
-                    }
-                  } else {
-                    logConsole(`🎭 ${line}`, 'ANIM');
-                  }
-                } else if (line.startsWith('GIF[') && line.includes('frames)')) {
-                  // Individual GIF list entry from TABLE DUMP
-                  logConsole(`📋 ${line}`, 'LIST');
-                } else if (line.startsWith('Total GIFs loaded:')) {
-                  const count = line.split(':')[1]?.trim();
-                  logConsole(`✅ Firmware loaded ${count} GIFs in PROGMEM`, 'LIST');
-                  if (count && parseInt(count) < 63) {
-                    logConsole(`⚠️ Expected 63 GIFs but firmware only shows ${count} — old binary? Recompile!`, 'ERROR');
-                  }
-                } else if (line === '====== GIF TABLE DUMP ======') {
-                  logConsole('─── GIF TABLE DUMP START ───', 'LIST');
-                } else if (line === '=============================') {
-                  logConsole('─── GIF TABLE DUMP END ───', 'LIST');
-                }
-              }
-            }
-          } catch (err) {
-            logConsole(`USB Serial read loop error: ${err.message}`, "ERROR");
-          } finally {
-            reader.releaseLock();
-          }
-        }
-      } catch (err) {
-        logConsole(`USB Serial reader connection lost: ${err.message}`, "ERROR");
-      } finally {
-        isSerialReading = false;
-        serialPort = null;
-        const btn = document.getElementById('btnUsbUpload');
-        const settingsBtn = document.getElementById('btnUsbUploadSettingsTab');
-        if (btn) btn.classList.remove('loading');
-        if (settingsBtn) settingsBtn.classList.remove('loading');
-      }
-    }
-
-    // Sync real-time clock to hardware via BLE (priority) or USB Serial (fallback)
-    async function syncClockToHardware() {
-      const btn = document.getElementById('btnSyncClock');
-      if (btn) btn.classList.add('loading');
-
-      const now = new Date();
-      const hh = String(now.getHours()).padStart(2, '0');
-      const mm = String(now.getMinutes()).padStart(2, '0');
-      const ss = String(now.getSeconds()).padStart(2, '0');
-      const payload = `TIME:${hh}:${mm}:${ss}`;
-
-      logConsole(`Syncing clock: ${payload}`, "CLOCK");
-
-      // Try BLE first
-      if (bleDevice && bleDevice.gatt.connected && textCharacteristic) {
-        try {
-          const encoder = new TextEncoder();
-          await textCharacteristic.writeValue(encoder.encode(payload));
-          logConsole(`Clock synced via BLE: ${hh}:${mm}:${ss}`, "BLE");
-          showToast(`Clock synced! ${hh}:${mm}:${ss}`);
-          if (btn) btn.classList.remove('loading');
-          return;
-        } catch (err) {
-          logConsole(`BLE clock sync failed: ${err.message}`, "ERROR");
-        }
-      }
-
-      // Fallback: USB Serial
-      if ('serial' in navigator) {
-        try {
-          if (!serialPort) {
-            serialPort = await navigator.serial.requestPort();
-            await serialPort.open({ baudRate: 115200 });
-            readSerialLoop();
-          }
-          const writer = serialPort.writable.getWriter();
-          const encoder = new TextEncoder();
-          await writer.write(encoder.encode(payload + '\n'));
-          writer.releaseLock();
-          logConsole(`Clock synced via USB Serial: ${hh}:${mm}:${ss}`, "USB");
-          showToast(`Clock synced via USB! ${hh}:${mm}:${ss}`);
-        } catch (err) {
-          logConsole(`USB clock sync failed: ${err.message}`, "ERROR");
-          showToast("Clock sync failed. Connect via BLE or USB first.");
-        }
-      } else {
-        showToast("Connect via BLE first, then sync clock.");
-      }
-
-      if (btn) btn.classList.remove('loading');
-    }
-
-    // Connect / Disconnect Bluetooth Web Bluetooth triggers
-    const connectBleBtn = document.getElementById('connectBleBtn');
-    connectBleBtn.addEventListener('click', async () => {
-      if (bleDevice && bleDevice.gatt.connected) {
-        disconnectDevice();
-      } else {
-        await connectDevice();
-      }
-    });
-
-    async function connectDevice() {
-      try {
-        logConsole("Scanning for Mr. Mario companion robot...", "BLE");
-        document.getElementById('connectBleBtnText').textContent = "Scanning...";
-        
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'Mr. Mario Robot' }],
-          optionalServices: [SERVICE_UUID]
-        });
-
-        document.getElementById('connectBleBtnText').textContent = "Connecting...";
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
-        bleServer = await bleDevice.gatt.connect();
-        bleService = await bleServer.getPrimaryService(SERVICE_UUID);
-
-        exprCharacteristic = await bleService.getCharacteristic(EXPRESSION_CHAR_UUID);
-        audioCharacteristic = await bleService.getCharacteristic(AUDIO_CHAR_UUID);
-        textCharacteristic = await bleService.getCharacteristic(TEXT_CHAR_UUID);
-        statusCharacteristic = await bleService.getCharacteristic(STATUS_CHAR_UUID);
-        
-        await statusCharacteristic.startNotifications();
-        statusCharacteristic.addEventListener('characteristicvaluechanged', handleStatusNotify);
-
-        setConnectionState(true);
-        logConsole("Connected to Mr. Mario successfully!", "BLE");
-        showToast("Connected to Mr. Mario!");
-
-        // Auto-sync clock on connect
-        setTimeout(() => syncClockToHardware(), 800);
-
-      } catch (error) {
-        console.error("BLE connection error: ", error);
-        logConsole(`Connection failed: ${error.message}`, "ERROR");
-        setConnectionState(false);
-        alert("Failed to connect BLE: " + error.message);
-      }
-    }
-
-    function disconnectDevice() {
-      if (bleDevice && bleDevice.gatt.connected) {
-        bleDevice.gatt.disconnect();
-      }
-    }
-
-    function onDisconnected() {
-      logConsole("Disconnected from Mr. Mario companion robot.", "BLE");
-      showToast("Robot disconnected.");
-      setConnectionState(false);
-    }
-
-    function setConnectionState(isConnected) {
-      const indicator = document.getElementById('statusIndicator');
-      const text = document.getElementById('statusText');
-      const btn = document.getElementById('connectBleBtn');
-      const btnText = document.getElementById('connectBleBtnText');
-      
-      if (isConnected) {
-        indicator.className = "status-dot connected";
-        text.textContent = "Connected";
-        btn.classList.add('connected');
-        btnText.textContent = "Disconnect";
-        
-        // Default wake expressions
-        document.getElementById('avatarGif').src = "animations/happy.gif";
-        document.getElementById('avatarStateName').textContent = "Happy";
-        if (oledSimulator) oledSimulator.setExpression(1);
-      } else {
-        indicator.className = "status-dot";
-        text.textContent = "Disconnected";
-        btn.classList.remove('connected');
-        btnText.textContent = "Connect to Robot";
-        
-        document.getElementById('avatarGif').src = "animations/blank.gif";
-        document.getElementById('avatarStateName').textContent = "Disconnected";
-        if (oledSimulator) oledSimulator.setExpression(0);
-        
-        document.getElementById('diagUptime').textContent = "--";
-        document.getElementById('diagTouchCount').textContent = "0";
-        document.getElementById('diagBatteryText').textContent = "--";
-        document.getElementById('diagBatteryBar').style.width = "0%";
-      }
-    }
-
-    function handleStatusNotify(event) {
-      const value = event.target.value;
-      const decoder = new TextDecoder('utf-8');
-      const dataStr = decoder.decode(value);
-      
-      // Data expected format: uptime_s,touchCount,batteryV,exprId
-      const parts = dataStr.split(',');
-      if (parts.length >= 3) {
-        const uptime = parseInt(parts[0]);
-        const touches = parts[1];
-        const batteryVolts = parseFloat(parts[2]);
-
-        let uptimeStr = uptime + 's';
-        if (uptime > 60) {
-          const mins = Math.floor(uptime / 60);
-          const secs = uptime % 60;
-          uptimeStr = `${mins}m ${secs}s`;
-        }
-
-        document.getElementById('diagUptime').textContent = uptimeStr;
-        document.getElementById('diagTouchCount').textContent = touches;
-        document.getElementById('diagBatteryText').textContent = batteryVolts.toFixed(2) + 'V';
-        
-        // Progress battery bar: 3.3V is 0%, 4.2V is 100%
-        let pct = Math.floor(((batteryVolts - 3.3) / 0.9) * 100);
-        pct = Math.max(0, Math.min(100, pct));
-        document.getElementById('diagBatteryBar').style.width = `${pct}%`;
-
-        if (parts.length >= 4) {
-          const exprId = parseInt(parts[3]);
-          syncAvatarFromRobot(exprId);
-        }
-      }
-    }
-
-    function syncAvatarFromRobot(exprId) {
-      if (isPlayingCustomAnim) return;
-      
-      let gifName = 'relaxed.gif';
-      let label = 'Idle';
-      switch (exprId) {
-        case 0: gifName = 'relaxed.gif'; label = 'Idle'; break;
-        case 1: gifName = 'happy.gif'; label = 'Happy'; break;
-        case 2: gifName = 'crying.gif'; label = 'Sad'; break;
-        case 3: gifName = 'angry.gif'; label = 'Angry'; break;
-        case 4: gifName = 'surprised.gif'; label = 'Surprised'; break;
-        case 5: gifName = 'sleepy.gif'; label = 'Sleeping'; break;
-        case 6: gifName = 'wink.gif'; label = 'Wink'; break;
-        case 9: gifName = 'happy.gif'; label = 'Cycling All GIFs'; break; // EXPR_ALL_GIF
-        default: return; // unknown state
-      }
-      
-      const img = document.getElementById('avatarGif');
-      const targetSrc = `animations/${gifName}`;
-      if (!img.src.endsWith(targetSrc)) {
-        img.src = targetSrc;
-        document.getElementById('avatarStateName').textContent = label;
-      }
-      if (oledSimulator) oledSimulator.setExpression(exprId, label);
-    }
-
-    async function transmitSelectedAnim(expr, sound, label) {
-      if (bleDevice && bleDevice.gatt.connected) {
-        try {
-          if (exprCharacteristic) {
-            const encoder = new TextEncoder();
-            const labelBytes = encoder.encode(label.toUpperCase());
-            const buffer = new Uint8Array(1 + labelBytes.length);
-            buffer[0] = expr;
-            buffer.set(labelBytes, 1);
-            await exprCharacteristic.writeValue(buffer);
-          }
-          setTimeout(async () => {
-            if (audioCharacteristic && sound > 0) {
-              const audioBuffer = new Uint8Array([sound]);
-              await audioCharacteristic.writeValue(audioBuffer);
-            }
-          }, 150);
-        } catch (err) {
-          console.error("BLE Transmit write error: ", err);
-        }
-      }
-    }
-
+    // API firmware compiler execution
     async function compileFirmware() {
-      const btnTop = document.getElementById('btnCompileFirmware');
-      const btnTab = document.getElementById('btnCompileFirmwareTab');
-      
-      const originalTopHtml = btnTop ? btnTop.innerHTML : '';
-      const originalTabHtml = btnTab ? btnTab.innerHTML : '';
-      
-      const setLoading = (loading) => {
-        if (loading) {
-          if (btnTop) {
-            btnTop.disabled = true;
-            btnTop.innerHTML = `<span class="spinner-border" style="width:12px; height:12px; border:2px solid transparent; border-top-color:#fff; border-radius:50%; display:inline-block; animation:spin 0.8s linear infinite; margin-right:6px;"></span> COMPILING...`;
-          }
-          if (btnTab) {
-            btnTab.disabled = true;
-            btnTab.innerHTML = `<span class="spinner-border" style="width:12px; height:12px; border:2px solid transparent; border-top-color:#fff; border-radius:50%; display:inline-block; animation:spin 0.8s linear infinite; margin-right:6px;"></span> Compiling...`;
-          }
-          showToast("Starting firmware compilation on server...");
-          logConsole("Triggering firmware compilation request...", "SYSTEM");
-        } else {
-          if (btnTop) {
-            btnTop.disabled = false;
-            btnTop.innerHTML = originalTopHtml;
-          }
-          if (btnTab) {
-            btnTab.disabled = false;
-            btnTab.innerHTML = originalTabHtml;
-          }
-        }
-      };
-      
-      setLoading(true);
-      
+      const btn = document.getElementById('btnCompileFirmware');
+      const btnText = document.getElementById('compileText');
+      if (!btn) return;
+
+      const originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loader"></span> <span>COMPILING FIRMWARE...</span>';
+
+      logConsole("Contacting local compilation server...", "SYSTEM");
       try {
         const response = await fetch('/api/compile', {
           method: 'POST',
@@ -3679,23 +725,29 @@
           }
         });
         
-        if (!response.ok) {
-          throw new Error(`Server returned HTTP ${response.status}`);
-        }
-        
         const data = await response.json();
         if (data.success) {
-          showToast("Firmware compiled successfully! Binary exported to mobile_app/bin/");
-          logConsole("Compilation stdout:\n" + data.stdout, "SYSTEM");
+          showToast("Compilation successful! Binaries saved.");
+          logConsole("Compilation completed successfully! Output exported to mobile_app/bin/", "SYSTEM");
+          if (data.stdout) {
+            logConsole(data.stdout, "INFO");
+          }
         } else {
-          showToast("Firmware compilation failed! Check logs.");
-          logConsole("Compilation error:\n" + (data.stderr || data.error || "Unknown error"), "ERROR");
+          showToast("Firmware compilation failed!");
+          logConsole("Compilation failed with errors:", "ERROR");
+          if (data.stderr) {
+            logConsole(data.stderr, "ERROR");
+          }
+          if (data.error) {
+            logConsole(data.error, "ERROR");
+          }
         }
       } catch (err) {
-        showToast("Failed to connect to local compilation server. Run 'python server.py' to enable compiler.");
-        logConsole("Compile API Connection Error: " + err.message, "ERROR");
+        showToast("Error contacting local server.");
+        logConsole("API connection failed. Make sure 'python server.py' is running: " + err.message, "ERROR");
       } finally {
-        setLoading(false);
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
       }
     }
   </script>

@@ -20,9 +20,9 @@ ws_loop = None
 
 # ----------------- HTTP REQUEST HANDLER -----------------
 class DualStackServer(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        # Serve the mobile_app directory by default
-        super().__init__(*args, directory=os.path.join(DIRECTORY, "mobile_app"), **kwargs)
+    def translate_path(self, path):
+        self.directory = os.path.join(DIRECTORY, "mobile_app")
+        return super().translate_path(path)
 
     def do_GET(self):
         # Handle API to fetch list of online robots

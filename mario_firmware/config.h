@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#define FIRMWARE_VERSION "1.0.1"
+
 // Pin Configurations for ESP32-C3 SuperMini
 #define SDA_PIN 20
 #define SCL_PIN 21
