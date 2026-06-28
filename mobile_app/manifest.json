@@ -1,0 +1,15 @@
+{
+  "name": "Mr. Mario Custom Firmware",
+  "version": "1.0.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-C3",
+      "parts": [
+        { "path": "bin/mario_firmware.ino.bootloader.bin", "offset": 0 },
+        { "path": "bin/mario_firmware.ino.partitions.bin", "offset": 32768 },
+        { "path": "bin/mario_firmware.ino.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

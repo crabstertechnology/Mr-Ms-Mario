@@ -1,0 +1,8 @@
+# Ignore JDK environment folder
+jdk17/
+
+# Ignore compiled Android package
+app-release.apk
+
+# Ignore local VS Code settings
+.vscode/
