@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 
 class BLEService with ChangeNotifier {
   static const String serviceUuid = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
@@ -44,6 +45,9 @@ class BLEService with ChangeNotifier {
   // Console log entries
   final List<String> _consoleLogs = [];
 
+  // Server IP & Wi-Fi control helper variables
+  String _serverIp = 'localhost';
+
   // Getters
   BluetoothDevice? get connectedDevice => _connectedDevice;
   bool get isConnected => _isConnected;
@@ -55,6 +59,41 @@ class BLEService with ChangeNotifier {
   double get batteryVoltage => _batteryVoltage;
   int get activeExpressionId => _activeExpressionId;
   List<String> get consoleLogs => _consoleLogs;
+  String get serverIp => _serverIp;
+
+  void setServerIp(String ip) {
+    if (_serverIp != ip) {
+      _serverIp = ip;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> _transmitWifiCommand(String command) async {
+    if (_pairedDeviceId == null) return false;
+    final cleanMac = _pairedDeviceId!.replaceAll(':', '').toUpperCase();
+    try {
+      final url = Uri.parse('http://$_serverIp:8000/api/trigger');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'mac': cleanMac,
+          'command': command,
+        }),
+      ).timeout(const Duration(seconds: 3));
+      
+      if (response.statusCode == 200) {
+        addLog("Transmitted via Wi-Fi: '$command'", "WIFI_CTRL");
+        return true;
+      } else {
+        addLog("Wi-Fi transmit returned status ${response.statusCode}", "ERROR");
+        return false;
+      }
+    } catch (e) {
+      addLog("Wi-Fi transmission failed: $e", "ERROR");
+      return false;
+    }
+  }
 
   BLEService() {
     _initBLE();
@@ -253,6 +292,19 @@ class BLEService with ChangeNotifier {
     }
   }
 
+  Future<void> connectById(String deviceId) async {
+    if (_isConnecting) return;
+    try {
+      addLog("Connecting directly to paired ID: $deviceId...", "BLE");
+      final device = BluetoothDevice.fromId(deviceId);
+      await connect(device);
+    } catch (e) {
+      addLog("Direct connection failed: $e", "ERROR");
+      _isConnecting = false;
+      _handleDisconnect();
+    }
+  }
+
   void _handleConnected(BluetoothDevice device) {
     if (_isConnected) return;
     _isConnected = true;
@@ -301,6 +353,14 @@ class BLEService with ChangeNotifier {
     if (value.isEmpty) return;
     try {
       final dataStr = utf8.decode(value);
+      
+      // Parse direct log notifications from the robot
+      if (dataStr.startsWith("LOG:")) {
+        final logMsg = dataStr.substring(4);
+        addLog(logMsg, "ROBOT");
+        return;
+      }
+      
       // Expected format: uptime_s,touchCount,batteryV,exprId
       final parts = dataStr.split(',');
       if (parts.length >= 3) {
@@ -358,7 +418,10 @@ class BLEService with ChangeNotifier {
   // Characteristics Write Helpers
   Future<void> transmitExpression(int expr, String label) async {
     if (!_isConnected || _exprChar == null) {
-      addLog("Cannot transmit: Not connected via BLE.", "ERROR");
+      final success = await _transmitWifiCommand("EXPR:$expr,$label");
+      if (!success) {
+        addLog("Cannot transmit expression: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
       return;
     }
     try {
@@ -375,7 +438,13 @@ class BLEService with ChangeNotifier {
   }
 
   Future<void> transmitAudio(int soundId) async {
-    if (!_isConnected || _audioChar == null) return;
+    if (!_isConnected || _audioChar == null) {
+      final success = await _transmitWifiCommand("AUDIO:$soundId");
+      if (!success) {
+        addLog("Cannot transmit audio: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
+      return;
+    }
     try {
       await _audioChar!.write([soundId], withoutResponse: false);
       addLog("Sent audio trigger: SFX $soundId", "BLE");
@@ -386,7 +455,10 @@ class BLEService with ChangeNotifier {
 
   Future<void> transmitMarqueeText(String text) async {
     if (!_isConnected || _textChar == null) {
-      addLog("Cannot transmit marquee text: Not connected.", "ERROR");
+      final success = await _transmitWifiCommand(text);
+      if (!success) {
+        addLog("Cannot transmit marquee text: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
       return;
     }
     try {
@@ -399,13 +471,21 @@ class BLEService with ChangeNotifier {
   }
 
   Future<void> syncClockToHardware() async {
-    if (!_isConnected || _textChar == null) return;
-    
     final now = DateTime.now();
     final hh = now.hour.toString().padLeft(2, '0');
     final mm = now.minute.toString().padLeft(2, '0');
     final ss = now.second.toString().padLeft(2, '0');
     final payloadStr = 'TIME:$hh:$mm:$ss';
+
+    if (!_isConnected || _textChar == null) {
+      final success = await _transmitWifiCommand(payloadStr);
+      if (success) {
+        addLog("Clock synced via Wi-Fi: $hh:$mm:$ss", "CLOCK");
+      } else {
+        addLog("Clock sync failed: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
+      return;
+    }
     
     try {
       await _textChar!.write(utf8.encode(payloadStr), withoutResponse: false);
@@ -416,11 +496,16 @@ class BLEService with ChangeNotifier {
   }
 
   Future<void> transmitCalendarEvent(String type, String time, String title) async {
+    final payloadStr = 'CAL:$type,$time,$title';
     if (!_isConnected || _textChar == null) {
-      addLog("Cannot transmit calendar event: Not connected.", "ERROR");
+      final success = await _transmitWifiCommand(payloadStr);
+      if (success) {
+        addLog("Transmitted calendar event via Wi-Fi: $type, $time, $title", "CALENDAR");
+      } else {
+        addLog("Cannot transmit calendar event: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
       return;
     }
-    final payloadStr = 'CAL:$type,$time,$title';
     try {
       await _textChar!.write(utf8.encode(payloadStr), withoutResponse: false);
       addLog("Transmitted calendar event: $type, $time, $title", "CALENDAR");
@@ -441,14 +526,19 @@ class BLEService with ChangeNotifier {
     required int introSpeedMs,
     required int introSoundSpeed,
   }) async {
-    if (!_isConnected || _textChar == null) {
-      addLog("Settings saved locally! Connect to Mr. Mario via BLE to sync.", "SETTINGS");
-      return;
-    }
-
     final bleVal = bleEnabled ? "1" : "0";
     final negVal = negativeEnabled ? "1" : "0";
     final payloadStr = 'SET:$bleVal,$speedMs,$defaultGif,$introGif,$touchSingle,$touchDouble,$touchLong,$negVal,$introSpeedMs,$introSoundSpeed';
+
+    if (!_isConnected || _textChar == null) {
+      final success = await _transmitWifiCommand(payloadStr);
+      if (success) {
+        addLog("Synced settings to robot via Wi-Fi: $payloadStr", "SETTINGS");
+      } else {
+        addLog("Settings saved locally! Connect to Mr. Mario via BLE or Wi-Fi to sync.", "SETTINGS");
+      }
+      return;
+    }
 
     try {
       await _textChar!.write(utf8.encode(payloadStr), withoutResponse: false);
@@ -459,7 +549,13 @@ class BLEService with ChangeNotifier {
   }
 
   Future<void> transmitResetDevice() async {
-    if (!_isConnected || _textChar == null) return;
+    if (!_isConnected || _textChar == null) {
+      final success = await _transmitWifiCommand('RESET');
+      if (success) {
+        addLog("RESET command sent to Mr. Mario via Wi-Fi.", "BLE");
+      }
+      return;
+    }
     try {
       await _textChar!.write(utf8.encode('RESET'), withoutResponse: false);
       addLog("RESET command sent to Mr. Mario.", "BLE");
@@ -469,12 +565,17 @@ class BLEService with ChangeNotifier {
   }
 
   Future<void> transmitWifiConfig(String ssid, String password) async {
+    final payloadStr = 'WIFI:$ssid,$password';
     if (!_isConnected || _textChar == null) {
-      addLog("Cannot configure Wi-Fi: Not connected via BLE.", "ERROR");
+      final success = await _transmitWifiCommand(payloadStr);
+      if (success) {
+        addLog("Sent Wi-Fi credentials via Wi-Fi link: SSID: $ssid", "BLE");
+      } else {
+        addLog("Cannot configure Wi-Fi: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
       return;
     }
     try {
-      final payloadStr = 'WIFI:$ssid,$password';
       await _textChar!.write(utf8.encode(payloadStr), withoutResponse: false);
       addLog("Sent Wi-Fi credentials for SSID: $ssid", "BLE");
     } catch (e) {
@@ -483,8 +584,14 @@ class BLEService with ChangeNotifier {
   }
 
   Future<void> transmitCompanionPairing(String macAddress, String relationship) async {
+    final payloadStr = 'PAIR:$macAddress,$relationship';
     if (!_isConnected || _textChar == null) {
-      addLog("Cannot pair companion: Not connected via BLE.", "ERROR");
+      final success = await _transmitWifiCommand(payloadStr);
+      if (success) {
+        addLog("Sent companion pairing via Wi-Fi: MAC=$macAddress, Type=$relationship", "BLE");
+      } else {
+        addLog("Cannot pair companion: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
       return;
     }
     try {
@@ -497,12 +604,17 @@ class BLEService with ChangeNotifier {
   }
 
   Future<void> transmitRelationship(String relationship) async {
+    final payloadStr = 'RELATION:$relationship';
     if (!_isConnected || _textChar == null) {
-      addLog("Cannot set relationship: Not connected via BLE.", "ERROR");
+      final success = await _transmitWifiCommand(payloadStr);
+      if (success) {
+        addLog("Sent relationship update via Wi-Fi: $relationship", "BLE");
+      } else {
+        addLog("Cannot set relationship: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
       return;
     }
     try {
-      final payloadStr = 'RELATION:$relationship';
       await _textChar!.write(utf8.encode(payloadStr), withoutResponse: false);
       addLog("Sent relationship update: $relationship", "BLE");
     } catch (e) {
@@ -512,7 +624,12 @@ class BLEService with ChangeNotifier {
 
   Future<void> transmitWake() async {
     if (!_isConnected || _textChar == null) {
-      addLog("Cannot send wake action: Not connected via BLE.", "ERROR");
+      final success = await _transmitWifiCommand('WAKE');
+      if (success) {
+        addLog("Sent WAKE command to robot via Wi-Fi", "BLE");
+      } else {
+        addLog("Cannot send wake action: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
       return;
     }
     try {
@@ -525,7 +642,12 @@ class BLEService with ChangeNotifier {
 
   Future<void> transmitSleep() async {
     if (!_isConnected || _textChar == null) {
-      addLog("Cannot send sleep action: Not connected via BLE.", "ERROR");
+      final success = await _transmitWifiCommand('SLEEP');
+      if (success) {
+        addLog("Sent SLEEP command to robot via Wi-Fi", "BLE");
+      } else {
+        addLog("Cannot send sleep action: Not connected via BLE or Wi-Fi.", "ERROR");
+      }
       return;
     }
     try {

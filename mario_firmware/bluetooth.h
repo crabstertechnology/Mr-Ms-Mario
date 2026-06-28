@@ -72,8 +72,14 @@ private:
 
   class TextCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pChar) override {
-      String val = String(pChar->getValue().c_str());
-      if (val.length() > 0) {
+      uint8_t* data = pChar->getData();
+      size_t len = pChar->getLength();
+      if (len > 0) {
+        String val = "";
+        val.reserve(len);
+        for (size_t i = 0; i < len; i++) {
+          val += (char)data[i];
+        }
         handleBLEText(val);
       }
     }
@@ -156,7 +162,7 @@ public:
   }
 
   void updateStatus(unsigned long uptimeSeconds, unsigned int touchCount, float batteryEst, Expression currentExpr) {
-    if (!deviceConnected) return;
+    if (!isConnected()) return;
 
     // Create comma-separated status payload: uptime_sec,touch_cnt,battery_val,expr_val
     String payload = String(uptimeSeconds) + "," + String(touchCount) + "," + String(batteryEst, 2) + "," + String((int)currentExpr);
@@ -164,21 +170,34 @@ public:
     pStatusChar->notify();
   }
 
+  void sendLog(String logMsg) {
+    if (!isConnected()) return;
+    String payload = "LOG:" + logMsg;
+    pStatusChar->setValue(payload.c_str());
+    pStatusChar->notify();
+  }
+
   void handleConnectionState() {
+    bool currentConnected = isConnected();
     // Disconnecting
-    if (!deviceConnected && oldDeviceConnected) {
+    if (!currentConnected && oldDeviceConnected) {
       delay(500); // give the bluetooth stack the chance to get things ready
-      pServer->startAdvertising(); // restart advertising
-      oldDeviceConnected = deviceConnected;
+      if (pServer && advertising) {
+        pServer->startAdvertising(); // restart advertising
+      }
+      oldDeviceConnected = currentConnected;
     }
     // Connecting
-    if (deviceConnected && !oldDeviceConnected) {
+    if (currentConnected && !oldDeviceConnected) {
       // do stuff when connecting
-      oldDeviceConnected = deviceConnected;
+      oldDeviceConnected = currentConnected;
     }
   }
 
   bool isConnected() const {
+    if (pServer) {
+      return pServer->getConnectedCount() > 0;
+    }
     return deviceConnected;
   }
 };

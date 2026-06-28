@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
@@ -64,9 +65,10 @@ class _MainDashboardState extends State<MainDashboard> {
     setState(() {
       _isCompiling = true;
     });
+    final ble = Provider.of<BLEService>(context, listen: false);
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:8000/api/compile'),
+        Uri.parse('http://${ble.serverIp}:8000/api/compile'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 120));
 
@@ -89,7 +91,7 @@ class _MainDashboardState extends State<MainDashboard> {
     } catch (e) {
       _showErrorDialog(
         "Connection Failed",
-        "Could not connect to local compilation server at http://localhost:8000.\n\n"
+        "Could not connect to local compilation server at http://${ble.serverIp}:8000.\n\n"
         "Make sure 'python server.py' is running on your machine.\n\n"
         "Error details: $e"
       );
@@ -123,6 +125,7 @@ class _MainDashboardState extends State<MainDashboard> {
   String? _uploadedFileName;
   Timer? _cloudPollTimer;
   Timer? _calendarSchedulerTimer;
+  Timer? _udpDiscoveryTimer;
   final Set<String> _notifiedEventIds = {};
   String? _uploadedFileBase64;
   int _uploadedFrameCount = 8;
@@ -148,12 +151,23 @@ class _MainDashboardState extends State<MainDashboard> {
         _checkCalendarScheduledEvents();
       }
     });
+
+    // Discover the server IP immediately
+    _discoverServer();
+
+    // Periodically run UDP discovery every 10 seconds to detect server IP changes
+    _udpDiscoveryTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (mounted) {
+        _discoverServer();
+      }
+    });
   }
 
   @override
   void dispose() {
     _cloudPollTimer?.cancel();
     _calendarSchedulerTimer?.cancel();
+    _udpDiscoveryTimer?.cancel();
     _marqueeController.dispose();
     _customMelodyController.dispose();
     _aiPromptController.dispose();
@@ -165,7 +179,8 @@ class _MainDashboardState extends State<MainDashboard> {
   Future<void> _pollCloudStatus() async {
     try {
       final db = Provider.of<DatabaseService>(context, listen: false);
-      final response = await http.get(Uri.parse('http://localhost:8000/api/robots'))
+      final ble = Provider.of<BLEService>(context, listen: false);
+      final response = await http.get(Uri.parse('http://${ble.serverIp}:8000/api/robots'))
           .timeout(const Duration(seconds: 2));
       if (response.statusCode == 200) {
         final List<dynamic> list = jsonDecode(response.body);
@@ -219,6 +234,32 @@ class _MainDashboardState extends State<MainDashboard> {
           }
         }
       }
+    }
+  }
+
+  void _discoverServer() async {
+    try {
+      final ble = Provider.of<BLEService>(context, listen: false);
+      final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      socket.broadcastEnabled = true;
+      socket.send(utf8.encode("MR_MARIO_DISCOVER"), InternetAddress("255.255.255.255"), 8002);
+      
+      await for (final event in socket.timeout(const Duration(seconds: 2), onTimeout: (sink) => sink.close())) {
+        if (event == RawSocketEvent.read) {
+          final datagram = socket.receive();
+          if (datagram != null) {
+            final response = utf8.decode(datagram.data);
+            if (response == "MR_MARIO_SERVER_HERE") {
+              final ip = datagram.address.address;
+              ble.setServerIp(ip);
+              break;
+            }
+          }
+        }
+      }
+      socket.close();
+    } catch (e) {
+      // Quietly ignore UDP binding/network errors
     }
   }
 
@@ -725,7 +766,7 @@ class _MainDashboardState extends State<MainDashboard> {
           
           // Connection Status button with icon and no wording
           GestureDetector(
-            onTap: () {
+            onTap: () async {
               final db = Provider.of<DatabaseService>(context, listen: false);
               if (ble.isConnected) {
                 ble.disconnect();
@@ -736,25 +777,35 @@ class _MainDashboardState extends State<MainDashboard> {
                   ),
                 );
               } else {
-                _showBleScanner(db, ble);
+                if (ble.pairedDeviceId != null && ble.pairedDeviceId!.isNotEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Reconnecting to ${ble.pairedDeviceId}..."),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                  await ble.connectById(ble.pairedDeviceId!);
+                } else {
+                  _showBleScanner(db, ble);
+                }
               }
             },
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: ble.isConnected
-                    ? Colors.green.shade50
-                    : Colors.red.shade50,
+                    ? const Color(0xFFE0F2FE) // Light Sky Blue
+                    : const Color(0xFFF1F5F9), // Light slate gray
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: ble.isConnected
-                      ? const Color(0xFF2ECC40).withOpacity(0.3)
-                      : const Color(0xFFFF4136).withOpacity(0.3),
+                      ? const Color(0xFF0284C7).withOpacity(0.3) // Sky Blue
+                      : const Color(0xFF94A3B8).withOpacity(0.3), // Slate gray
                 ),
               ),
               child: Icon(
                 ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                color: ble.isConnected ? const Color(0xFF2ECC40) : const Color(0xFFFF4136),
+                color: ble.isConnected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
                 size: 18,
               ),
             ),
@@ -944,7 +995,7 @@ class _MainDashboardState extends State<MainDashboard> {
               children: [
                 Icon(
                   ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                  color: ble.isConnected ? const Color(0xFF2ECC40) : const Color(0xFFFF4136),
+                  color: ble.isConnected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -959,17 +1010,27 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
           const SizedBox(width: 8),
           ElevatedButton.icon(
-            onPressed: () {
+            onPressed: () async {
               if (ble.isConnected) {
                 ble.disconnect();
               } else {
-                _showBleScanner(db, ble);
+                if (ble.pairedDeviceId != null && ble.pairedDeviceId!.isNotEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Reconnecting to ${ble.pairedDeviceId}..."),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                  await ble.connectById(ble.pairedDeviceId!);
+                } else {
+                  _showBleScanner(db, ble);
+                }
               }
             },
             icon: Icon(ble.isConnected ? Icons.close : Icons.link, size: 14),
             label: Text(ble.isConnected ? "DISCONNECT" : "CONNECT"),
             style: ElevatedButton.styleFrom(
-              backgroundColor: ble.isConnected ? Colors.red.shade900 : _accentColor,
+              backgroundColor: ble.isConnected ? const Color(0xFF64748B) : _accentColor,
               foregroundColor: Colors.white,
               textStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 11),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1142,6 +1203,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 if (logLine.contains('[BLE]')) textColor = Colors.lightBlue;
                 if (logLine.contains('[SETTINGS]')) textColor = Colors.amber;
                 if (logLine.contains('[CLOCK]')) textColor = Colors.purpleAccent;
+                if (logLine.contains('[ROBOT]')) textColor = Colors.pinkAccent;
 
                 return Text(
                   logLine,

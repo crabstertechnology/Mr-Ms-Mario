@@ -175,6 +175,22 @@ void handleRobotCommand(String text) {
     preferences.end();
     Serial.println("OK:FactoryReset");
     ESP.restart();
+  } else if (text.startsWith("EXPR:")) {
+    String payload = text.substring(5);
+    int comma = payload.indexOf(',');
+    if (comma > 0) {
+      int exprVal = payload.substring(0, comma).toInt();
+      String label = payload.substring(comma + 1);
+      handleBLEExpressionWithLabel((Expression)exprVal, label);
+    } else {
+      int exprVal = payload.toInt();
+      handleBLEExpressionWithLabel((Expression)exprVal, "");
+    }
+    Serial.println("OK:ExprUpdated");
+  } else if (text.startsWith("AUDIO:")) {
+    int soundVal = text.substring(6).toInt();
+    handleBLEAudio((SoundEffect)soundVal);
+    Serial.println("OK:AudioPlayed");
   } else if (text.startsWith("TIME:")) {
     String timeStr = text.substring(5);
     int firstColon = timeStr.indexOf(':');
@@ -196,6 +212,8 @@ void handleRobotCommand(String text) {
     if (comma > 0) {
       String ssid = payload.substring(0, comma);
       String pass = payload.substring(comma + 1);
+      ssid.trim();
+      pass.trim();
       
       // Save credentials persistently in NVS Preferences
       preferences.begin("mario", false);
