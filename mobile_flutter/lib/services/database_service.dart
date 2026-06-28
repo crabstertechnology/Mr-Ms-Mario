@@ -15,6 +15,7 @@ class DatabaseService with ChangeNotifier {
 
   // Settings cached values
   bool _is12HourFormat = false;
+  bool _notificationSyncEnabled = false;
   double _gifSpeed = 100.0;
   double _gifDelay = 0.0;
   double _gifIntroSpeed = 100.0;
@@ -38,6 +39,7 @@ class DatabaseService with ChangeNotifier {
   List<CalendarEvent> get events => _events;
   List<AlarmModel> get alarms => _alarms;
   bool get is12HourFormat => _is12HourFormat;
+  bool get notificationSyncEnabled => _notificationSyncEnabled;
 
   RobotProfile? get primaryRobot {
     if (_robots.isEmpty) return null;
@@ -148,6 +150,7 @@ class DatabaseService with ChangeNotifier {
   void _loadSettings() {
     if (_prefs == null) return;
     _is12HourFormat = _prefs!.getBool('is12HourFormat') ?? false;
+    _notificationSyncEnabled = _prefs!.getBool('notificationSyncEnabled') ?? false;
     _gifSpeed = _prefs!.getDouble('gifSpeed') ?? 100.0;
     _gifDelay = _prefs!.getDouble('gifDelay') ?? 0.0;
     _gifIntroSpeed = _prefs!.getDouble('gifIntroSpeed') ?? 100.0;
@@ -663,6 +666,12 @@ class DatabaseService with ChangeNotifier {
   Future<void> updateIs12HourFormat(bool val) async {
     _is12HourFormat = val;
     await _prefs?.setBool('is12HourFormat', val);
+    notifyListeners();
+  }
+
+  Future<void> updateNotificationSyncEnabled(bool val) async {
+    _notificationSyncEnabled = val;
+    await _prefs?.setBool('notificationSyncEnabled', val);
     notifyListeners();
   }
 }

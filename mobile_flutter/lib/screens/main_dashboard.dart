@@ -14,6 +14,8 @@ import '../services/audio_synth_service.dart';
 import '../models/gif_model.dart';
 import '../models/robot_profile.dart';
 import '../models/calendar_event.dart';
+import '../models/alarm_model.dart';
+import '../services/notification_service.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/oled_simulator.dart';
 import '../widgets/pixel_editor.dart';
@@ -61,6 +63,88 @@ class _MainDashboardState extends State<MainDashboard> {
   bool _isCompiling = false;
   String _localActiveGifId = 'relaxed';
   String _localActiveLabel = 'Idle';
+
+  void _checkAlarms(DatabaseService db, BLEService ble) {
+    final now = DateTime.now();
+    if (now.second == 0) {
+      for (final alarm in db.alarms) {
+        if (alarm.isEnabled && alarm.hour == now.hour && alarm.minute == now.minute) {
+          _triggerAlarm(alarm, ble);
+          break;
+        }
+      }
+    }
+  }
+
+  void _triggerAlarm(AlarmModel alarm, BLEService ble) {
+    if (_ringingAlarm != null) return;
+    setState(() {
+      _ringingAlarm = alarm;
+    });
+
+    ble.transmitMarqueeText("ALARM!");
+
+    _alarmSoundTimer?.cancel();
+    _alarmSoundTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _audioSynth.playTone(880, 200);
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: const Color(0xFF1E293B),
+          title: Row(
+            children: const [
+              Icon(Icons.alarm, color: Colors.redAccent),
+              SizedBox(width: 8),
+              Text("Alarm Ringing!", style: TextStyle(color: Colors.white)),
+            ],
+          ),
+          content: Text(
+            "Time: ${alarm.formatTime(Provider.of<DatabaseService>(context, listen: false).is12HourFormat)}",
+            style: const TextStyle(color: Colors.white70, fontSize: 16),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              onPressed: () {
+                _dismissAlarm();
+                Navigator.of(ctx).pop();
+              },
+              child: const Text("Dismiss"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _dismissAlarm() {
+    _alarmSoundTimer?.cancel();
+    _alarmSoundTimer = null;
+    setState(() {
+      _ringingAlarm = null;
+    });
+  }
+
+  Future<void> _checkNotificationPermission() async {
+    final service = Provider.of<PhoneNotificationService>(context, listen: false);
+    final granted = await service.isPermissionGranted();
+    if (mounted && _isNotificationPermissionGranted != granted) {
+      setState(() {
+        _isNotificationPermissionGranted = granted;
+      });
+    }
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    final service = Provider.of<PhoneNotificationService>(context, listen: false);
+    await service.openSettings();
+  }
 
   Future<void> _compileFirmware() async {
     setState(() {
@@ -127,14 +211,28 @@ class _MainDashboardState extends State<MainDashboard> {
   Timer? _cloudPollTimer;
   Timer? _calendarSchedulerTimer;
   Timer? _udpDiscoveryTimer;
+  Timer? _clockTickerTimer;
   final Set<String> _notifiedEventIds = {};
   String? _uploadedFileBase64;
   int _uploadedFrameCount = 8;
   double _uploadCompression = 30.0;
+  AlarmModel? _ringingAlarm;
+  Timer? _alarmSoundTimer;
+  bool _isNotificationPermissionGranted = false;
 
   @override
   void initState() {
     super.initState();
+    
+    _clockTickerTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        final db = Provider.of<DatabaseService>(context, listen: false);
+        final ble = Provider.of<BLEService>(context, listen: false);
+        _checkAlarms(db, ble);
+        _checkNotificationPermission();
+        setState(() {});
+      }
+    });
     // Default melody notation (Mario Power-up)
     _customMelodyController.text =
         "E5 50 10\nE5 50 10\nE5 50 30\nC5 50 10\nE5 50 30\nG5 50 50\nG4 50 50\nC5 50 10\nG4 50 30\nE4 50 10\nA4 50 10\nB4 50 10\nAS4 50 10\nA4 50 30\nG4 50 20\nE5 50 10\nG5 50 10\nA5 50 10\nF5 50 10\nG5 50 10\nE5 50 10\nC5 50 10\nD5 50 10\nB4 50 50";
@@ -169,6 +267,7 @@ class _MainDashboardState extends State<MainDashboard> {
     _cloudPollTimer?.cancel();
     _calendarSchedulerTimer?.cancel();
     _udpDiscoveryTimer?.cancel();
+    _clockTickerTimer?.cancel();
     _marqueeController.dispose();
     _customMelodyController.dispose();
     _aiPromptController.dispose();
@@ -1806,12 +1905,23 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   // ================= TAB 2: CHRONOS TIME SYNC =================
-  Widget _buildChronosPanel(BLEService ble) {
+  Widget _buildChronosPanel(DatabaseService db, BLEService ble) {
     final now = DateTime.now();
-    final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
+    final is12H = db.is12HourFormat;
+
+    String timeStr;
+    if (is12H) {
+      final dispHour = now.hour % 12 == 0 ? 12 : now.hour % 12;
+      final ampm = now.hour >= 12 ? 'PM' : 'AM';
+      final minStr = now.minute.toString().padLeft(2, '0');
+      final secStr = now.second.toString().padLeft(2, '0');
+      timeStr = "$dispHour:$minStr:$secStr $ampm";
+    } else {
+      timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
+    }
 
     return Container(
-      height: 300,
+      height: 340,
       alignment: Alignment.center,
       child: GlassCard(
         padding: const EdgeInsets.all(24),
@@ -1825,7 +1935,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 const Icon(Icons.watch_later, color: Color(0xFFC084FC)),
                 const SizedBox(width: 8),
                 Text(
-                  "CHRONOS SOFTWARE RTC",
+                  "CLOCK SETTINGS",
                   style: GoogleFonts.outfit(
                     color: const Color(0xFFC084FC),
                     fontWeight: FontWeight.bold,
@@ -1841,7 +1951,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 timeStr,
                 style: GoogleFonts.firaCode(
                   color: textColor,
-                  fontSize: 36,
+                  fontSize: 32,
                   fontWeight: FontWeight.bold,
                   shadows: [
                     Shadow(color: Colors.purple.withOpacity(0.5), blurRadius: 10),
@@ -1857,7 +1967,25 @@ class _MainDashboardState extends State<MainDashboard> {
                 style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text("24-Hour", style: GoogleFonts.outfit(color: textColor60, fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                Switch(
+                  value: is12H,
+                  activeColor: const Color(0xFF8B5CF6),
+                  onChanged: (val) async {
+                    await db.updateIs12HourFormat(val);
+                    await ble.updateTimeFormat(val);
+                  },
+                ),
+                const SizedBox(width: 8),
+                Text("12-Hour", style: GoogleFonts.outfit(color: textColor60, fontSize: 13, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () => ble.syncClockToHardware(),
               icon: const Icon(Icons.sync),
@@ -3712,6 +3840,114 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
+  Widget _buildAlarmsSection(DatabaseService db, BLEService ble) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionHeader("Alarms & Reminders", Icons.alarm, Colors.teal.shade600),
+        const SizedBox(height: 12),
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (db.alarms.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      "No active alarms. Tap below to create one.",
+                      style: GoogleFonts.outfit(color: textColor60, fontSize: 13),
+                    ),
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: db.alarms.length,
+                  separatorBuilder: (context, index) => Divider(color: textColor12, height: 16),
+                  itemBuilder: (context, index) {
+                    final alarm = db.alarms[index];
+                    return Row(
+                      children: [
+                        Icon(Icons.alarm, color: Colors.teal.shade400, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                alarm.formatTime(db.is12HourFormat),
+                                style: GoogleFonts.outfit(
+                                  color: textColor,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (alarm.label.isNotEmpty)
+                                Text(
+                                  alarm.label,
+                                  style: GoogleFonts.outfit(
+                                    color: textColor60,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: alarm.isEnabled,
+                          activeColor: Colors.teal.shade400,
+                          onChanged: (val) {
+                            db.toggleAlarm(alarm.id);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                          onPressed: () {
+                            db.deleteAlarm(alarm.id);
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => _addAlarmFlow(db),
+                icon: const Icon(Icons.add_alarm),
+                label: const Text("ADD NEW ALARM"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _addAlarmFlow(DatabaseService db) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (picked != null) {
+      final alarm = AlarmModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        hour: picked.hour,
+        minute: picked.minute,
+        label: "Alarm",
+        isEnabled: true,
+      );
+      await db.addAlarm(alarm);
+    }
+  }
+
   Widget _buildSettingsPanel(DatabaseService db, BLEService ble) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3751,8 +3987,10 @@ class _MainDashboardState extends State<MainDashboard> {
         // 4. Device Configuration
         _buildSectionHeader("Device Configuration", Icons.settings, Colors.purple.shade600),
         const SizedBox(height: 12),
-        _buildChronosPanel(ble),
-        const SizedBox(height: 16),
+        _buildChronosPanel(db, ble),
+        const SizedBox(height: 28),
+        _buildAlarmsSection(db, ble),
+        const SizedBox(height: 28),
         _buildPixelArtPanel(),
         const SizedBox(height: 16),
         _buildHardwarePanel(db, ble),

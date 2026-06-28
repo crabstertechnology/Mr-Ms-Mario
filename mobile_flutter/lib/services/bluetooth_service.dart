@@ -508,6 +508,23 @@ class BLEService with ChangeNotifier {
     }
   }
 
+  Future<void> updateTimeFormat(bool is12H) async {
+    final payloadStr = '12HR:${is12H ? 1 : 0}';
+    if (!_isConnected || _textChar == null) {
+      final success = await _transmitWifiCommand(payloadStr);
+      if (success) {
+        addLog("Time format updated via Wi-Fi: ${is12H ? '12H' : '24H'}", "CLOCK");
+      }
+      return;
+    }
+    try {
+      await _textChar!.write(utf8.encode(payloadStr), withoutResponse: false);
+      addLog("Time format updated via BLE: ${is12H ? '12H' : '24H'}", "CLOCK");
+    } catch (e) {
+      addLog("Time format update failed: $e", "ERROR");
+    }
+  }
+
   Future<void> transmitCalendarEvent(String type, String time, String title) async {
     final payloadStr = 'CAL:$type,$time,$title';
     if (!_isConnected || _textChar == null) {

@@ -1,17 +1,20 @@
 import 'package:flutter/services.dart';
 import 'bluetooth_service.dart';
+import 'database_service.dart';
 
 class PhoneNotificationService {
   static const MethodChannel _channel = MethodChannel('com.mrmario/notifications');
   final BLEService _bleService;
+  final DatabaseService _dbService;
 
-  PhoneNotificationService(this._bleService) {
+  PhoneNotificationService(this._bleService, this._dbService) {
     _channel.setMethodCallHandler(_handleMethodCall);
   }
 
   Future<dynamic> _handleMethodCall(MethodCall call) async {
     switch (call.method) {
       case 'onNotification':
+        if (!_dbService.notificationSyncEnabled) return;
         final Map<dynamic, dynamic> data = call.arguments as Map<dynamic, dynamic>;
         final String title = data['title'] ?? '';
         final String text = data['text'] ?? '';
@@ -32,16 +35,15 @@ class PhoneNotificationService {
     final safeMessage = message.length > 100 ? message.substring(0, 97) + '...' : message;
     
     if (_bleService.isConnected) {
-      // Send raw notification text to robot over BLE (it plays SOUND_CHIRP and scrolls text)
       try {
-        await _bleService.writeTextCharacteristic(safeMessage);
+        await _bleService.transmitMarqueeText(safeMessage);
       } catch (e) {
         print("Failed to forward notification via BLE: $e");
       }
     } else {
       // Attempt to transmit via Wi-Fi if connected
       try {
-        await _bleService.transmitWifiCommand(safeMessage);
+        await _bleService.transmitMarqueeText(safeMessage);
       } catch (e) {
         print("Failed to forward notification via Wi-Fi: $e");
       }

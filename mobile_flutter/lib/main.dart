@@ -15,9 +15,12 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => DatabaseService()),
         ChangeNotifierProvider(create: (_) => BLEService()),
-        ProxyProvider<BLEService, PhoneNotificationService>(
-          create: (context) => PhoneNotificationService(Provider.of<BLEService>(context, listen: false)),
-          update: (_, ble, previous) => previous ?? PhoneNotificationService(ble),
+        ProxyProvider2<BLEService, DatabaseService, PhoneNotificationService>(
+          create: (context) => PhoneNotificationService(
+            Provider.of<BLEService>(context, listen: false),
+            Provider.of<DatabaseService>(context, listen: false),
+          ),
+          update: (_, ble, db, previous) => previous ?? PhoneNotificationService(ble, db),
           lazy: false,
         ),
       ],
