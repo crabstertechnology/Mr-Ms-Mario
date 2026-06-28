@@ -122,6 +122,8 @@ class _MainDashboardState extends State<MainDashboard> {
   // File upload fields
   String? _uploadedFileName;
   Timer? _cloudPollTimer;
+  Timer? _calendarSchedulerTimer;
+  final Set<String> _notifiedEventIds = {};
   String? _uploadedFileBase64;
   int _uploadedFrameCount = 8;
   double _uploadCompression = 30.0;
@@ -139,11 +141,19 @@ class _MainDashboardState extends State<MainDashboard> {
         _pollCloudStatus();
       }
     });
+
+    // Check calendar scheduled meetings/birthdays every 5 seconds
+    _calendarSchedulerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (mounted) {
+        _checkCalendarScheduledEvents();
+      }
+    });
   }
 
   @override
   void dispose() {
     _cloudPollTimer?.cancel();
+    _calendarSchedulerTimer?.cancel();
     _marqueeController.dispose();
     _customMelodyController.dispose();
     _aiPromptController.dispose();
@@ -180,6 +190,35 @@ class _MainDashboardState extends State<MainDashboard> {
       }
     } catch (e) {
       // Quietly ignore connection errors if local server is down
+    }
+  }
+
+  void _checkCalendarScheduledEvents() {
+    final db = Provider.of<DatabaseService>(context, listen: false);
+    final ble = Provider.of<BLEService>(context, listen: false);
+    final now = DateTime.now();
+
+    for (final event in db.events) {
+      if (!_notifiedEventIds.contains(event.id)) {
+        final diff = now.difference(event.dateTime);
+        // Trigger if scheduled time is in the past, but not more than 5 minutes old
+        if (diff.inSeconds >= 0 && diff.inMinutes < 5) {
+          _notifiedEventIds.add(event.id);
+          if (ble.isConnected) {
+            final hh = event.dateTime.hour.toString().padLeft(2, '0');
+            final mm = event.dateTime.minute.toString().padLeft(2, '0');
+            final timeStr = "$hh:$mm";
+            ble.transmitCalendarEvent(event.type, timeStr, event.title);
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Event '${event.title}' automatically pushed to robot!"),
+                backgroundColor: _accentColor,
+              ),
+            );
+          }
+        }
+      }
     }
   }
 
