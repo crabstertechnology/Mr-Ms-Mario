@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../services/database_service.dart';
+import '../models/gif_model.dart';
+import 'package:gif/gif.dart';
 
 class OLEDSimulator extends StatefulWidget {
   final String activeGifId;
@@ -24,7 +26,7 @@ class OLEDSimulator extends StatefulWidget {
   State<OLEDSimulator> createState() => _OLEDSimulatorState();
 }
 
-class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProviderStateMixin {
+class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateMixin {
   AnimationController? _marqueeController;
   late Animation<double> _marqueeAnimation;
   double _textWidth = 0.0;
@@ -37,9 +39,12 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
   int _cycleIndex = 0;
   Timer? _cycleTimer;
 
+  late GifController _gifController;
+
   @override
   void initState() {
     super.initState();
+    _gifController = GifController(vsync: this);
     _marqueeController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
@@ -65,7 +70,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
       if (mounted) {
         setState(() {
           // Increment cache reset counter every 30 seconds
-          if (timer.tick % 30 == 0) {
+          if (timer.tick % 30 == 0 && widget.activeLabel.toUpperCase() == "CYCLING ALL GIFS") {
             _gifResetCounter++;
             PaintingBinding.instance.imageCache.clear();
             PaintingBinding.instance.imageCache.clearLiveImages();
@@ -93,6 +98,21 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
     }
   }
 
+  void _startMarquee() {
+    setState(() {
+      _isMarqueeActive = true;
+      // Estimate text width: ~8 pixels per character on standard scale
+      _textWidth = widget.marqueeText!.length * 8.0;
+    });
+    
+    // Duration proportional to text length to keep velocity constant
+    final charCount = widget.marqueeText!.length;
+    final durationSecs = max(3.0, charCount * 0.15);
+    
+    _marqueeController?.duration = Duration(milliseconds: (durationSecs * 1000).toInt());
+    _marqueeController?.forward(from: 0.0);
+  }
+
   @override
   void didUpdateWidget(covariant OLEDSimulator oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -109,6 +129,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
     _cycleTimer?.cancel();
     _refreshTimer?.cancel();
     _marqueeController?.dispose();
+    _gifController.dispose();
     super.dispose();
   }
 
@@ -226,28 +247,26 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
         try {
           final base64Str = currentGif.customData!.split(',').last;
           final bytes = base64Decode(base64Str);
-          imageWidget = Image.memory(
-            bytes,
+          imageWidget = Gif(
             key: ValueKey('${currentGif.id}_$_gifResetCounter'),
+            image: MemoryImage(bytes),
+            controller: _gifController,
+            autostart: Autostart.loop,
             fit: BoxFit.contain,
-            gaplessPlayback: true,
+            placeholder: (context) => const Center(child: CircularProgressIndicator()),
           );
         } catch (e) {
           imageWidget = const Icon(Icons.broken_image, color: Colors.red);
         }
       } else {
         // Built-in assets GIF
-        imageWidget = Image.asset(
-          'assets/animations/${currentGif.id}.gif',
+        imageWidget = Gif(
           key: ValueKey('${currentGif.id}_$_gifResetCounter'),
+          image: AssetImage('assets/animations/${currentGif.id}.gif'),
+          controller: _gifController,
+          autostart: Autostart.loop,
           fit: BoxFit.contain,
-          gaplessPlayback: true,
-          errorBuilder: (context, error, stackTrace) => Image.asset(
-            'assets/animations/blank.gif',
-            key: ValueKey('blank_$_gifResetCounter'),
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-          ),
+          placeholder: (context) => const Center(child: CircularProgressIndicator()),
         );
       }
 

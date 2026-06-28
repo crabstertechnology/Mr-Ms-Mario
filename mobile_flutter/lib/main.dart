@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'services/bluetooth_service.dart';
 import 'services/database_service.dart';
+import 'services/notification_service.dart';
 import 'screens/main_dashboard.dart';
 import 'screens/splash_screen.dart';
 
@@ -14,6 +15,11 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => DatabaseService()),
         ChangeNotifierProvider(create: (_) => BLEService()),
+        ProxyProvider<BLEService, PhoneNotificationService>(
+          create: (context) => PhoneNotificationService(Provider.of<BLEService>(context, listen: false)),
+          update: (_, ble, previous) => previous ?? PhoneNotificationService(ble),
+          lazy: false,
+        ),
       ],
       child: const MrMarioControllerApp(),
     ),

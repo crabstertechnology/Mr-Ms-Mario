@@ -4,14 +4,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/gif_model.dart';
 import '../models/robot_profile.dart';
 import '../models/calendar_event.dart';
+import '../models/alarm_model.dart';
 
 class DatabaseService with ChangeNotifier {
   List<GifModel> _gifs = [];
   List<RobotProfile> _robots = [];
   List<CalendarEvent> _events = [];
+  List<AlarmModel> _alarms = [];
   SharedPreferences? _prefs;
 
   // Settings cached values
+  bool _is12HourFormat = false;
   double _gifSpeed = 100.0;
   double _gifDelay = 0.0;
   double _gifIntroSpeed = 100.0;
@@ -33,6 +36,8 @@ class DatabaseService with ChangeNotifier {
   List<GifModel> get gifs => _gifs;
   List<RobotProfile> get robots => _robots;
   List<CalendarEvent> get events => _events;
+  List<AlarmModel> get alarms => _alarms;
+  bool get is12HourFormat => _is12HourFormat;
 
   RobotProfile? get primaryRobot {
     if (_robots.isEmpty) return null;
@@ -137,10 +142,12 @@ class DatabaseService with ChangeNotifier {
     _loadGifs();
     _loadRobots();
     _loadEvents();
+    _loadAlarms();
   }
 
   void _loadSettings() {
     if (_prefs == null) return;
+    _is12HourFormat = _prefs!.getBool('is12HourFormat') ?? false;
     _gifSpeed = _prefs!.getDouble('gifSpeed') ?? 100.0;
     _gifDelay = _prefs!.getDouble('gifDelay') ?? 0.0;
     _gifIntroSpeed = _prefs!.getDouble('gifIntroSpeed') ?? 100.0;
@@ -168,6 +175,30 @@ class DatabaseService with ChangeNotifier {
       try {
         final List<dynamic> decoded = jsonDecode(jsonStr);
         _gifs = decoded.map((item) => GifModel.fromJson(item)).toList();
+        
+        // Merge missing GIFs from animMapping
+        bool modified = false;
+        animMapping.forEach((key, val) {
+          final exists = _gifs.any((g) => g.id == key);
+          if (!exists) {
+            final int sizeBytes = 15000 + (key.hashCode % 40000);
+            final String flashKb = '${(sizeBytes / 1024.0).toStringAsFixed(1)}KB';
+            _gifs.add(GifModel(
+              id: key,
+              name: val['label'] as String,
+              category: val['cat'] as String,
+              favorite: key == 'happy' || key == 'relaxed',
+              selected: true,
+              hidden: false,
+              size: sizeBytes,
+              flashSize: flashKb,
+            ));
+            modified = true;
+          }
+        });
+        if (modified) {
+          _saveGifsToDisk();
+        }
       } catch (e) {
         print("Failed to decode GIFs database: $e");
         _seedDefaultGifs();
@@ -585,6 +616,53 @@ class DatabaseService with ChangeNotifier {
   Future<void> deleteEvent(String id) async {
     _events.removeWhere((e) => e.id == id);
     await _saveEventsToDisk();
+    notifyListeners();
+  }
+
+  void _loadAlarms() {
+    if (_prefs == null) return;
+    final jsonStr = _prefs!.getString('alarms_database');
+    if (jsonStr != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(jsonStr);
+        _alarms = decoded.map((item) => AlarmModel.fromJson(item)).toList();
+      } catch (e) {
+        print("Failed to decode alarms database: $e");
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> _saveAlarmsToDisk() async {
+    if (_prefs == null) return;
+    final String encoded = jsonEncode(_alarms.map((a) => a.toJson()).toList());
+    await _prefs!.setString('alarms_database', encoded);
+  }
+
+  Future<void> addAlarm(AlarmModel alarm) async {
+    _alarms.add(alarm);
+    await _saveAlarmsToDisk();
+    notifyListeners();
+  }
+
+  Future<void> toggleAlarm(String id) async {
+    final idx = _alarms.indexWhere((a) => a.id == id);
+    if (idx != -1) {
+      _alarms[idx] = _alarms[idx].copyWith(isEnabled: !_alarms[idx].isEnabled);
+      await _saveAlarmsToDisk();
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteAlarm(String id) async {
+    _alarms.removeWhere((a) => a.id == id);
+    await _saveAlarmsToDisk();
+    notifyListeners();
+  }
+
+  Future<void> updateIs12HourFormat(bool val) async {
+    _is12HourFormat = val;
+    await _prefs?.setBool('is12HourFormat', val);
     notifyListeners();
   }
 }

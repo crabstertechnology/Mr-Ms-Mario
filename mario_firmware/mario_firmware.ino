@@ -53,6 +53,7 @@ int rtcHour = 12;
 int rtcMinute = 0;
 int rtcSecond = 0;
 unsigned long lastRtcMillis = 0;
+bool is12HourFormat = false;
 
 // Periodic expression cycling — all 7 available face expressions
 const Expression cycleExpressions[] = {
@@ -202,6 +203,12 @@ void handleRobotCommand(String text) {
       lastRtcMillis = millis(); // Align RTC base to right now
       Serial.println("OK:TimeSynced");
     }
+  } else if (text.startsWith("12HR:")) {
+    is12HourFormat = (text.substring(5).toInt() == 1);
+    preferences.begin("mario", false);
+    preferences.putBool("is12H", is12HourFormat);
+    preferences.end();
+    Serial.println("OK:12HourUpdated");
   } else if (text.startsWith("SET:")) {
     applySettings(text.substring(4));
     Serial.println("OK:SettingsSaved");
@@ -376,6 +383,7 @@ void setup() {
   negativeDisplay = preferences.getBool("neg", false);
   gifIntroSpeed = preferences.getInt("intSpeed", 100);
   introSoundSpeed = preferences.getInt("sndSpeed", 100);
+  is12HourFormat = preferences.getBool("is12H", false);
   preferences.end();
 
   // Set the GIF speed delay and default expression
@@ -466,9 +474,10 @@ void cycleExpression() {
   allGifCycleIdx = random(0, ALL_GIFS_COUNT);
   face.setGifIndex(allGifCycleIdx);
   face.setExpression(EXPR_ALL_GIF);
-  // Read GIF name from PROGMEM for serial log
+  // Read GIF name from PROGMEM — update stateLabel so BLE status mirrors hardware
   char gifName[32];
   strcpy_P(gifName, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[allGifCycleIdx].name));
+  face.setStateLabel(String(gifName));   // <-- critical: keeps app simulator in sync
   uint32_t cnt = (uint32_t)pgm_read_dword(&ALL_GIFS_TABLE[allGifCycleIdx].count);
   Serial.print("PLAYING RANDOM:GIF[");
   Serial.print(allGifCycleIdx);
@@ -788,7 +797,7 @@ void loop() {
       face.drawSettingsMenu(menuOption, optionSelected, bleActive, gifSpeed);
     } else {
       face.update();
-      face.draw(rtcHour, rtcMinute, rtcSecond);
+      face.draw(rtcHour, rtcMinute, rtcSecond, is12HourFormat);
     }
   }
 }

@@ -17,6 +17,7 @@ import '../models/calendar_event.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/oled_simulator.dart';
 import '../widgets/pixel_editor.dart';
+import 'package:gif/gif.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -518,61 +519,58 @@ class _MainDashboardState extends State<MainDashboard> {
     _accentColor = const Color(0xFF0284C7); // Premium blue
     _accentColorLight = const Color(0x1F0284C7); // Light blue
 
-    // Resolve current active expression details from BLE or local simulation
+    // ── Resolve the active GIF to show in the simulator ─────────────────────────
+    // Priority: BLE label (exact match) → BLE exprId fallback → local state
     String activeGifId = _localActiveGifId;
     String activeLabel = _localActiveLabel;
 
     if (ble.isConnected) {
-      final bleLabel = ble.activeExpressionLabel.trim().toUpperCase();
-      if (bleLabel.isNotEmpty && bleLabel != "IDLE") {
-        activeLabel = ble.activeExpressionLabel;
-        
-        final match = db.gifs.firstWhere(
-          (g) => g.name.toUpperCase() == bleLabel || g.id.toUpperCase() == bleLabel,
-          orElse: () => db.gifs.firstWhere(
-            (g) => g.category.toUpperCase() == bleLabel,
-            orElse: () => GifModel(id: '', name: '', category: '', favorite: false, selected: false, hidden: false)
-          )
-        );
-        if (match.id.isNotEmpty) {
+      final rawLabel = ble.activeExpressionLabel.trim();
+      final upperLabel = rawLabel.toUpperCase();
+
+      if (upperLabel.isNotEmpty && upperLabel != 'IDLE') {
+        // 1. Try to find the GIF by matching the label from the hardware status packet
+        //    (using robust normalized matching: e.g. "look left" matches "Look Left" or "left")
+        GifModel? match;
+        try {
+          String normalize(String s) => s.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+          final normLabel = normalize(rawLabel);
+          
+          match = db.gifs.firstWhere(
+            (g) => normalize(g.id) == normLabel || normalize(g.name) == normLabel,
+          );
+        } catch (_) {
+          match = null;
+        }
+
+        if (match != null) {
+          // Perfect match by id or name
           activeGifId = match.id;
+          activeLabel = match.name;
         } else {
+          // 2. Fallback: use exprId to resolve the 7 standard expressions
           final exprId = ble.activeExpressionId;
           switch (exprId) {
-            case 0: activeGifId = 'relaxed'; activeLabel = 'Idle'; break;
-            case 1: activeGifId = 'happy'; activeLabel = 'Happy'; break;
-            case 2: activeGifId = 'crying'; activeLabel = 'Sad'; break;
-            case 3: activeGifId = 'angry'; activeLabel = 'Angry'; break;
-            case 4: activeGifId = 'surprised'; activeLabel = 'Surprised'; break;
-            case 5: activeGifId = 'sleepy'; activeLabel = 'Sleeping'; break;
-            case 6: activeGifId = 'wink'; activeLabel = 'Wink'; break;
-            case 7: activeGifId = 'clock'; activeLabel = 'Clock'; break;
-            case 9: activeLabel = 'Cycling All GIFs'; break;
+            case 0: activeGifId = 'relaxed';  activeLabel = 'Idle';      break;
+            case 1: activeGifId = 'happy';    activeLabel = 'Happy';     break;
+            case 2: activeGifId = 'crying';   activeLabel = 'Sad';       break;
+            case 3: activeGifId = 'angry';    activeLabel = 'Angry';     break;
+            case 4: activeGifId = 'surprised';activeLabel = 'Surprised'; break;
+            case 5: activeGifId = 'sleepy';   activeLabel = 'Sleeping';  break;
+            case 6: activeGifId = 'wink';     activeLabel = 'Wink';      break;
+            case 7: activeGifId = 'clock';    activeLabel = 'Clock';     break;
             default:
-              activeGifId = _localActiveGifId;
-              activeLabel = _localActiveLabel;
+              // Keep local state for unknown expressions
               break;
           }
         }
-      } else {
-        final exprId = ble.activeExpressionId;
-        switch (exprId) {
-          case 0: activeGifId = 'relaxed'; activeLabel = 'Idle'; break;
-          case 1: activeGifId = 'happy'; activeLabel = 'Happy'; break;
-          case 2: activeGifId = 'crying'; activeLabel = 'Sad'; break;
-          case 3: activeGifId = 'angry'; activeLabel = 'Angry'; break;
-          case 4: activeGifId = 'surprised'; activeLabel = 'Surprised'; break;
-          case 5: activeGifId = 'sleepy'; activeLabel = 'Sleeping'; break;
-          case 6: activeGifId = 'wink'; activeLabel = 'Wink'; break;
-          case 7: activeGifId = 'clock'; activeLabel = 'Clock'; break;
-          case 9: activeLabel = 'Cycling All GIFs'; break;
-          default:
-            activeGifId = _localActiveGifId;
-            activeLabel = _localActiveLabel;
-            break;
-        }
+      } else if (upperLabel == 'IDLE' || upperLabel.isEmpty) {
+        // Hardware is idle — show the default idle GIF
+        activeGifId = 'relaxed';
+        activeLabel = 'Idle';
       }
     }
+
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -620,10 +618,9 @@ class _MainDashboardState extends State<MainDashboard> {
                 // Top sticky navigation bar
                 _buildTopNavigation(ble),
 
-                // Main Scrollable Panel Content
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _buildPanelContent(db, ble, activeGifId, activeLabel),
                   ),
                 ),
@@ -959,45 +956,68 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildPanelContent(DatabaseService db, BLEService ble, String activeGifId, String activeLabel) {
     switch (_activeTabIdx) {
       case 0:
-        return _buildHomeDashboardPanel(db, ble);
-      case 1:
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                "FACE EXPRESSIONS",
-                style: GoogleFonts.outfit(
-                  color: textColor,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+          key: const PageStorageKey('home_scroll'),
+          padding: const EdgeInsets.only(top: 10, bottom: 20),
+          child: _buildHomeDashboardPanel(db, ble, activeGifId, activeLabel),
+        );
+      case 1:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 10),
+            Text(
+              "FACE EXPRESSIONS",
+              style: GoogleFonts.outfit(
+                color: textColor,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 4),
-              Text(
-                "Trigger, search, and preview pixel animations on the robot.",
-                style: GoogleFonts.outfit(
-                  color: textColor60,
-                  fontSize: 13,
-                ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Preview pixel animations running on the robot.",
+              style: GoogleFonts.outfit(
+                color: textColor60,
+                fontSize: 13,
               ),
-              const SizedBox(height: 24),
-              _buildExpressionsPanel(db, ble, activeGifId, activeLabel),
-            ],
-          ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: OLEDSimulator(
+                activeGifId: activeGifId,
+                activeLabel: activeLabel,
+                marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: SingleChildScrollView(
+                key: const PageStorageKey('expressions_scroll'),
+                padding: const EdgeInsets.only(bottom: 20),
+                child: _buildExpressionsPanel(db, ble),
+              ),
+            ),
+          ],
         );
       case 2:
-        return _buildCalendarPanel(db, ble);
+        return SingleChildScrollView(
+          key: const PageStorageKey('calendar_scroll'),
+          padding: const EdgeInsets.only(top: 10, bottom: 20),
+          child: _buildCalendarPanel(db, ble),
+        );
       case 3:
-        return _buildSettingsPanel(db, ble);
+        return SingleChildScrollView(
+          key: const PageStorageKey('settings_scroll'),
+          padding: const EdgeInsets.only(top: 10, bottom: 20),
+          child: _buildSettingsPanel(db, ble),
+        );
       default:
         return const SizedBox();
     }
   }
 
-  // ================= TAB 0: EXPRESSIONS & LIBRARY =================
-  Widget _buildExpressionsPanel(DatabaseService db, BLEService ble, String activeGifId, String activeLabel) {
+  Widget _buildExpressionsPanel(DatabaseService db, BLEService ble) {
     // Filter lists
     final search = _searchController.text.toLowerCase();
     List<GifModel> filteredGifs = db.gifs.where((gif) {
@@ -1015,16 +1035,6 @@ class _MainDashboardState extends State<MainDashboard> {
 
     return Column(
       children: [
-        // Top section: OLED Simulator (Simulation display)
-        Center(
-          child: OLEDSimulator(
-            activeGifId: activeGifId,
-            activeLabel: activeLabel,
-            marqueeText: _marqueeController.text,
-          ),
-        ),
-        const SizedBox(height: 24),
-
         // GIF Library Header (filters/sorting)
         _buildLibraryControlsHeader(db),
         const SizedBox(height: 12),
@@ -1037,7 +1047,7 @@ class _MainDashboardState extends State<MainDashboard> {
             maxCrossAxisExtent: 160,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 0.9,
+            childAspectRatio: 1.3,
           ),
           itemCount: filteredGifs.length,
           itemBuilder: (context, index) {
@@ -1568,172 +1578,32 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  // Individual Card widget representing GIF
+  // Individual Card widget representing GIF — delegates to StatefulWidget for GifController
   Widget _buildGifCard(DatabaseService db, BLEService ble, GifModel gif) {
-    final isFav = gif.favorite;
-    final isSelected = gif.selected;
-    final isHidden = gif.hidden;
-    final isMiss = db.primaryRobot?.variant == 'miss_mario';
-    final previewColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFF00F0FF);
-    
-    // Resolve GIF image widget source
-    Widget imagePreview;
-    if (gif.customData != null && gif.customData!.isNotEmpty) {
-      try {
-        final rawBytes = base64Decode(gif.customData!.split(',').last);
-        imagePreview = Image.memory(
-          rawBytes,
-          key: ValueKey('${gif.id}_preview'),
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-        );
-      } catch (e) {
-        imagePreview = const Icon(Icons.broken_image, color: Colors.red);
-      }
-    } else {
-      imagePreview = Image.asset(
-        'assets/animations/${gif.id}.gif',
-        key: ValueKey('${gif.id}_preview'),
-        fit: BoxFit.contain,
-        gaplessPlayback: true,
-      );
-    }
+    return _GifCardWidget(
+      gif: gif,
+      db: db,
+      ble: ble,
+      onTap: () async {
+        final mapping = DatabaseService.animMapping[gif.id] ??
+            {'expr': 0, 'sound': 0, 'label': gif.name};
+        final exprVal = mapping['expr'] as int;
+        final soundVal = mapping['sound'] as int;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0x66161526),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Stack(
-        children: [
-          // Select Checkbox Top Left
-          Positioned(
-            top: 2,
-            left: 2,
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: Checkbox(
-                value: isSelected,
-                activeColor: const Color(0xFFA855F7),
-                onChanged: (val) {
-                  db.toggleSelected(gif.id);
-                },
-              ),
-            ),
-          ),
-          
-          // Favorite Star Top Right
-          Positioned(
-            top: 4,
-            right: 4,
-            child: InkWell(
-              onTap: () => db.toggleFavorite(gif.id),
-              child: Icon(
-                isFav ? Icons.star : Icons.star_border,
-                color: isFav ? const Color(0xFFFFDC00) : Colors.white38,
-                size: 16,
-              ),
-            ),
-          ),
+        setState(() {
+          _localActiveGifId = gif.id;
+          _localActiveLabel = gif.name;
+        });
 
-          // Main Preview click triggers Play
-          Align(
-            alignment: Alignment.center,
-            child: GestureDetector(
-              onTap: () async {
-                // Determine expr index and sound index
-                final mapping = DatabaseService.animMapping[gif.id] ?? { 'expr': 0, 'sound': 0, 'label': gif.name };
-                final exprVal = mapping['expr'] as int;
-                final soundVal = mapping['sound'] as int;
-                
-                setState(() {
-                  _localActiveGifId = gif.id;
-                  _localActiveLabel = gif.name;
-                });
-                
-                ble.addLog("Executing expression: ${gif.name}", "ANIM");
-                await ble.transmitExpression(exprVal, gif.name);
-                
-                // Play melody trigger after short delay if sound enabled
-                if (soundVal > 0) {
-                  Future.delayed(const Duration(milliseconds: 150), () {
-                    ble.transmitAudio(soundVal);
-                  });
-                }
-              },
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 24),
-                  Container(
-                    height: 50,
-                    width: 100,
-                    alignment: Alignment.center,
-                    child: ColorFiltered(
-                      colorFilter: ColorFilter.mode(previewColor, BlendMode.modulate),
-                      child: Opacity(
-                        opacity: isHidden ? 0.3 : 1.0,
-                        child: imagePreview,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      gif.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.outfit(
-                        color: isHidden ? Colors.white38 : Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        ble.addLog("Executing expression: ${gif.name}", "ANIM");
+        await ble.transmitExpression(exprVal, gif.name);
 
-          // Action menu bottom row
-          Positioned(
-            bottom: 2,
-            right: 2,
-            child: Row(
-              children: [
-                // Visibility Toggle
-                InkWell(
-                  onTap: () => db.toggleHidden(gif.id),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      isHidden ? Icons.visibility_off : Icons.visibility,
-                      color: textColor38,
-                      size: 12,
-                    ),
-                  ),
-                ),
-                // Delete button for custom assets
-                if (!DatabaseService.animMapping.containsKey(gif.id))
-                  InkWell(
-                    onTap: () => db.deleteCustomGif(gif.id),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(
-                        Icons.delete,
-                        color: Colors.redAccent,
-                        size: 12,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        if (soundVal > 0) {
+          Future.delayed(const Duration(milliseconds: 150), () {
+            ble.transmitAudio(soundVal);
+          });
+        }
+      },
     );
   }
 
@@ -2268,7 +2138,7 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   // ================= NEW TAB 0: HOME DASHBOARD PANEL =================
-  Widget _buildHomeDashboardPanel(DatabaseService db, BLEService ble) {
+  Widget _buildHomeDashboardPanel(DatabaseService db, BLEService ble, String activeGifId, String activeLabel) {
     final primary = db.primaryRobot ?? RobotProfile(
       id: 'mr_mario',
       name: 'Mr. Mario',
@@ -2280,24 +2150,6 @@ class _MainDashboardState extends State<MainDashboard> {
     final isMiss = primary.variant == 'miss_mario';
     final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFF8B5CF6);
     final personality = isMiss ? "Softer & Calmer Personality" : "Friendly & Energetic Personality";
-    
-    String activeGifId = _localActiveGifId;
-    String activeLabel = _localActiveLabel;
-    
-    if (ble.isConnected) {
-      final exprId = ble.activeExpressionId;
-      if (exprId != 9) {
-        switch (exprId) {
-          case 0: activeGifId = 'relaxed'; activeLabel = 'Idle'; break;
-          case 1: activeGifId = 'happy'; activeLabel = 'Happy'; break;
-          case 2: activeGifId = 'crying'; activeLabel = 'Sad'; break;
-          case 3: activeGifId = 'angry'; activeLabel = 'Angry'; break;
-          case 4: activeGifId = 'surprised'; activeLabel = 'Surprised'; break;
-          case 5: activeGifId = 'sleepy'; activeLabel = 'Sleeping'; break;
-          case 6: activeGifId = 'wink'; activeLabel = 'Wink'; break;
-        }
-      }
-    }
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3861,55 +3713,237 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   Widget _buildSettingsPanel(DatabaseService db, BLEService ble) {
-    final activeGifId = _localActiveGifId;
-    final activeLabel = _localActiveLabel;
-
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            "SETTINGS",
-            style: GoogleFonts.outfit(
-              color: textColor,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          "SETTINGS",
+          style: GoogleFonts.outfit(
+            color: textColor,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
           ),
-          const SizedBox(height: 4),
-          Text(
-            "Directly configure and manage your companion robot below.",
-            style: GoogleFonts.outfit(
-              color: textColor60,
-              fontSize: 13,
-            ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Directly configure and manage your companion robot below.",
+          style: GoogleFonts.outfit(
+            color: textColor60,
+            fontSize: 13,
           ),
-          const SizedBox(height: 24),
+        ),
+        const SizedBox(height: 24),
 
-          // 1. Companion Profiles
-          _buildSectionHeader("Companion Profiles", Icons.people, Colors.blue.shade600),
-          const SizedBox(height: 12),
-          _buildCompanionsPanel(db, ble),
-          const SizedBox(height: 28),
+        // 1. Companion Profiles
+        _buildSectionHeader("Companion Profiles", Icons.people, Colors.blue.shade600),
+        const SizedBox(height: 12),
+        _buildCompanionsPanel(db, ble),
+        const SizedBox(height: 28),
 
 
 
-          // 3. Sound & Melody Board
-          _buildSectionHeader("Sound & Melody Board", Icons.audiotrack, Colors.pink.shade600),
-          const SizedBox(height: 12),
-          _buildSoundBoardPanel(db, ble),
-          const SizedBox(height: 28),
+        // 3. Sound & Melody Board
+        _buildSectionHeader("Sound & Melody Board", Icons.audiotrack, Colors.pink.shade600),
+        const SizedBox(height: 12),
+        _buildSoundBoardPanel(db, ble),
+        const SizedBox(height: 28),
 
-          // 4. Device Configuration
-          _buildSectionHeader("Device Configuration", Icons.settings, Colors.purple.shade600),
-          const SizedBox(height: 12),
-          _buildChronosPanel(ble),
-          const SizedBox(height: 16),
-          _buildPixelArtPanel(),
-          const SizedBox(height: 16),
-          _buildHardwarePanel(db, ble),
-          const SizedBox(height: 24),
-        ],
+        // 4. Device Configuration
+        _buildSectionHeader("Device Configuration", Icons.settings, Colors.purple.shade600),
+        const SizedBox(height: 12),
+        _buildChronosPanel(ble),
+        const SizedBox(height: 16),
+        _buildPixelArtPanel(),
+        const SizedBox(height: 16),
+        _buildHardwarePanel(db, ble),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Animated GIF Card — each instance owns a GifController for looping playback
+// ─────────────────────────────────────────────────────────────────────────────
+class _GifCardWidget extends StatefulWidget {
+  final GifModel gif;
+  final DatabaseService db;
+  final BLEService ble;
+  final VoidCallback onTap;
+
+  const _GifCardWidget({
+    required this.gif,
+    required this.db,
+    required this.ble,
+    required this.onTap,
+  });
+
+  @override
+  State<_GifCardWidget> createState() => _GifCardWidgetState();
+}
+
+class _GifCardWidgetState extends State<_GifCardWidget>
+    with SingleTickerProviderStateMixin {
+  late GifController _controller;
+
+  static const Color textColor38 = Color(0x61000000);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = GifController(vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final gif = widget.gif;
+    final db = widget.db;
+    final isFav = gif.favorite;
+    final isSelected = gif.selected;
+    final isHidden = gif.hidden;
+    final isMiss = db.primaryRobot?.variant == 'miss_mario';
+    final previewColor =
+        isMiss ? const Color(0xFFEC4899) : const Color(0xFF00F0FF);
+
+    Widget imageWidget;
+    if (gif.customData != null && gif.customData!.isNotEmpty) {
+      try {
+        final rawBytes = base64Decode(gif.customData!.split(',').last);
+        imageWidget = Gif(
+          image: MemoryImage(rawBytes),
+          controller: _controller,
+          autostart: Autostart.loop,
+          fit: BoxFit.contain,
+        );
+      } catch (_) {
+        imageWidget = const Icon(Icons.broken_image, color: Colors.red);
+      }
+    } else {
+      imageWidget = Gif(
+        image: AssetImage('assets/animations/${gif.id}.gif'),
+        controller: _controller,
+        autostart: Autostart.loop,
+        fit: BoxFit.contain,
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0x66161526),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Stack(
+            children: [
+              // Main content Column (GIF top + text/actions bottom)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 2.0,
+                    child: Container(
+                      color: Colors.black, // background of the gif area
+                      child: ColorFiltered(
+                        colorFilter:
+                            ColorFilter.mode(previewColor, BlendMode.modulate),
+                        child: Opacity(
+                          opacity: isHidden ? 0.3 : 1.0,
+                          child: imageWidget,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              gif.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.outfit(
+                                color: isHidden ? Colors.white38 : Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          // Action buttons (visibility, delete)
+                          GestureDetector(
+                            onTap: () => db.toggleHidden(gif.id),
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: Icon(
+                                isHidden ? Icons.visibility_off : Icons.visibility,
+                                color: Colors.white60,
+                                size: 12,
+                              ),
+                            ),
+                          ),
+                          if (!DatabaseService.animMapping.containsKey(gif.id)) ...[
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () => db.deleteCustomGif(gif.id),
+                              child: const Padding(
+                                padding: EdgeInsets.all(2),
+                                child: Icon(Icons.delete,
+                                    color: Colors.redAccent, size: 12),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Select Checkbox Top Left (drawn over the GIF)
+              Positioned(
+                top: 2,
+                left: 2,
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Checkbox(
+                    value: isSelected,
+                    activeColor: const Color(0xFFA855F7),
+                    onChanged: (_) => db.toggleSelected(gif.id),
+                  ),
+                ),
+              ),
+
+              // Favorite Star Top Right (drawn over the GIF)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: GestureDetector(
+                  onTap: () => db.toggleFavorite(gif.id),
+                  child: Icon(
+                    isFav ? Icons.star : Icons.star_border,
+                    color: isFav ? const Color(0xFFFFDC00) : Colors.white38,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

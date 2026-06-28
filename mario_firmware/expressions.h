@@ -39,8 +39,39 @@ public:
     lastScrollTime = 0;
   }
 
+  void updateLabelFromState() {
+    Expression exprToLabel = currentExpr;
+    if (exprToLabel == EXPR_IDLE) {
+      exprToLabel = defaultExpr;
+    }
+    
+    if (exprToLabel == EXPR_ALL_GIF) {
+      if (currentGifIndex >= 0 && currentGifIndex < ALL_GIFS_COUNT) {
+        char nameBuf[32];
+        strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[currentGifIndex].name));
+        stateLabel = String(nameBuf);
+      } else {
+        stateLabel = "IDLE";
+      }
+    } else {
+      switch (exprToLabel) {
+        case EXPR_IDLE:      stateLabel = "IDLE"; break;
+        case EXPR_HAPPY:     stateLabel = "HAPPY"; break;
+        case EXPR_SAD:       stateLabel = "SAD"; break;
+        case EXPR_ANGRY:     stateLabel = "ANGRY"; break;
+        case EXPR_SURPRISED: stateLabel = "SURPRISE"; break;
+        case EXPR_SLEEPING:  stateLabel = "SLEEP"; break;
+        case EXPR_WINK:      stateLabel = "WINK"; break;
+        case EXPR_CLOCK:     stateLabel = "CLOCK"; break;
+        case EXPR_TEXT:      stateLabel = "TEXT"; break;
+        default:             stateLabel = "IDLE"; break;
+      }
+    }
+  }
+
   void setDefaultExpression(Expression expr) {
     defaultExpr = expr;
+    updateLabelFromState();
   }
 
   void setFrameDelay(int ms) {
@@ -60,6 +91,7 @@ public:
       scrollPos = SCREEN_WIDTH;
       lastScrollTime = millis();
     }
+    updateLabelFromState();
   }
 
   Expression getExpression() {
@@ -84,6 +116,7 @@ public:
     currentGifIndex = idx;
     currentFrame = 0;
     gifFinished = false;
+    updateLabelFromState();
   }
 
   int getGifIndex() {
@@ -203,14 +236,14 @@ public:
     display.display();
   }
 
-  void draw(int hour, int minute, int second) {
+  void draw(int hour, int minute, int second, bool is12Hour = false) {
     display.clearDisplay();
 
     // 1. Draw Text Screen if active
     if (currentExpr == EXPR_TEXT) {
       drawTextScreen();
     } else if (currentExpr == EXPR_CLOCK) {
-      drawClockScreen(hour, minute, second);
+      drawClockScreen(hour, minute, second, is12Hour);
     } else if (currentExpr == EXPR_ALL_GIF) {
       // ── All-GIF mode: render from the PROGMEM master table ──
       if (currentGifIndex < ALL_GIFS_COUNT) {
@@ -275,7 +308,7 @@ public:
   }
 
 private:
-  void drawClockScreen(int hour, int minute, int second) {
+  void drawClockScreen(int hour, int minute, int second, bool is12Hour) {
     // Sleek premium border
     display.drawRoundRect(0, 0, 128, 64, 4, SSD1306_WHITE);
     display.drawRoundRect(2, 2, 124, 60, 2, SSD1306_WHITE);
@@ -288,9 +321,17 @@ private:
     
     // Time
     display.setTextSize(2);
-    display.setCursor(16, 24);
-    char timeStr[9];
-    snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hour, minute, second);
+    char timeStr[12];
+    if (is12Hour) {
+      int dispHour = hour % 12;
+      if (dispHour == 0) dispHour = 12;
+      const char* ampm = (hour >= 12) ? "PM" : "AM";
+      snprintf(timeStr, sizeof(timeStr), "%2d:%02d %s", dispHour, minute, ampm);
+      display.setCursor(14, 24);
+    } else {
+      snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hour, minute, second);
+      display.setCursor(16, 24);
+    }
     display.print(timeStr);
     
     // Bottom status
