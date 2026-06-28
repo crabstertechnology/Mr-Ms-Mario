@@ -75,6 +75,10 @@ public:
     stateLabel = label;
   }
 
+  String getStateLabel() {
+    return stateLabel;
+  }
+
   // Set which entry in ALL_GIFS_TABLE to display (for EXPR_ALL_GIF mode)
   void setGifIndex(int idx) {
     currentGifIndex = idx;

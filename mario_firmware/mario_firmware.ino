@@ -777,7 +777,7 @@ void loop() {
     
     unsigned long uptimeSec = now / 1000;
     float mockBatteryVolts = 3.82f;
-    ble.updateStatus(uptimeSec, touchCount, mockBatteryVolts, face.getExpression());
+    ble.updateStatus(uptimeSec, touchCount, mockBatteryVolts, face.getExpression(), face.getStateLabel());
   }
 
   // Update and Draw Face / Settings Expressions at ~40 fps (every 25ms) non-blocking

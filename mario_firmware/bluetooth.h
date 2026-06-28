@@ -161,11 +161,11 @@ public:
     }
   }
 
-  void updateStatus(unsigned long uptimeSeconds, unsigned int touchCount, float batteryEst, Expression currentExpr) {
+  void updateStatus(unsigned long uptimeSeconds, unsigned int touchCount, float batteryEst, Expression currentExpr, String currentLabel) {
     if (!isConnected()) return;
 
-    // Create comma-separated status payload: uptime_sec,touch_cnt,battery_val,expr_val
-    String payload = String(uptimeSeconds) + "," + String(touchCount) + "," + String(batteryEst, 2) + "," + String((int)currentExpr);
+    // Create comma-separated status payload: uptime_sec,touch_cnt,battery_val,expr_val,label_val
+    String payload = String(uptimeSeconds) + "," + String(touchCount) + "," + String(batteryEst, 2) + "," + String((int)currentExpr) + "," + currentLabel;
     pStatusChar->setValue(payload.c_str());
     pStatusChar->notify();
   }

@@ -110,9 +110,10 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
     final invertVal = widget.invertColor ?? db.oledInvert;
     final rotationVal = db.oledRotation; // in degrees (0, 90, 180, 270)
 
-    final oledCyan = const Color(0xFF00F0FF);
-    final oledColor = invertVal ? Colors.black : oledCyan;
-    final oledBgColor = invertVal ? oledCyan : const Color(0xFF000000);
+    final isMiss = db.primaryRobot?.variant == 'miss_mario';
+    final oledThemeColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFF00F0FF);
+    final oledColor = invertVal ? Colors.black : oledThemeColor;
+    final oledBgColor = invertVal ? oledThemeColor : const Color(0xFF000000);
 
     // Transform degrees to quarter turns for RotatedBox
     int quarterTurns = (rotationVal / 90.0).round() % 4;
@@ -179,7 +180,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
                         fontWeight: FontWeight.bold,
                         shadows: [
                           Shadow(
-                            color: oledCyan.withOpacity(0.6),
+                            color: oledThemeColor.withOpacity(0.6),
                             blurRadius: 4,
                           ),
                         ],
@@ -242,7 +243,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
                   fontSize: 6,
                   shadows: [
                     Shadow(
-                      color: oledCyan.withOpacity(0.6),
+                      color: oledThemeColor.withOpacity(0.6),
                       blurRadius: 3,
                     ),
                   ],
@@ -257,8 +258,8 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
               height: 64,
               padding: const EdgeInsets.only(top: 8),
               child: ColorFiltered(
-                colorFilter: const ColorFilter.mode(
-                  Color(0xFF00F0FF),
+                colorFilter: ColorFilter.mode(
+                  oledThemeColor,
                   BlendMode.modulate,
                 ),
                 child: ColorFiltered(
@@ -309,7 +310,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with SingleTickerProvider
                   offset: const Offset(0, 8),
                 ),
                 BoxShadow(
-                  color: oledCyan.withOpacity(0.08),
+                  color: oledThemeColor.withOpacity(0.08),
                   blurRadius: 24,
                   spreadRadius: 2,
                 ),

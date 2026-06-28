@@ -41,6 +41,7 @@ class BLEService with ChangeNotifier {
   int _touchCount = 0;
   double _batteryVoltage = 0.0;
   int _activeExpressionId = 0;
+  String _activeExpressionLabel = "IDLE";
 
   // Console log entries
   final List<String> _consoleLogs = [];
@@ -58,6 +59,7 @@ class BLEService with ChangeNotifier {
   int get touchCount => _touchCount;
   double get batteryVoltage => _batteryVoltage;
   int get activeExpressionId => _activeExpressionId;
+  String get activeExpressionLabel => _activeExpressionLabel;
   List<String> get consoleLogs => _consoleLogs;
   String get serverIp => _serverIp;
 
@@ -371,6 +373,9 @@ class BLEService with ChangeNotifier {
         if (parts.length >= 4) {
           _activeExpressionId = int.tryParse(parts[3]) ?? _activeExpressionId;
         }
+        if (parts.length >= 5) {
+          _activeExpressionLabel = parts[4].trim();
+        }
         notifyListeners();
       }
     } catch (e) {
@@ -391,6 +396,7 @@ class BLEService with ChangeNotifier {
     _touchCount = 0;
     _batteryVoltage = 0.0;
     _activeExpressionId = 0;
+    _activeExpressionLabel = "IDLE";
 
     _connectionStateSub?.cancel();
     _statusNotificationSub?.cancel();

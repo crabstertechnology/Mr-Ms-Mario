@@ -635,6 +635,7 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildBottomNavigationBar() {
     final List<Map<String, dynamic>> items = [
       {'icon': Icons.home, 'label': 'Home'},
+      {'icon': Icons.face, 'label': 'Expressions'},
       {'icon': Icons.calendar_month, 'label': 'Calendar'},
       {'icon': Icons.settings, 'label': 'Settings'},
     ];
@@ -662,7 +663,7 @@ class _MainDashboardState extends State<MainDashboard> {
             onTap: () {
               setState(() {
                 _activeTabIdx = idx;
-                if (idx == 2) {
+                if (idx == 3) {
                   _currentSettingsSection = 'categories';
                 }
               });
@@ -764,54 +765,188 @@ class _MainDashboardState extends State<MainDashboard> {
             ],
           ),
           
-          // Connection Status button with icon and no wording
-          GestureDetector(
-            onTap: () async {
-              final db = Provider.of<DatabaseService>(context, listen: false);
-              if (ble.isConnected) {
-                ble.disconnect();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Disconnected from robot."),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              } else {
-                if (ble.pairedDeviceId != null && ble.pairedDeviceId!.isNotEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Reconnecting to ${ble.pairedDeviceId}..."),
-                      duration: const Duration(seconds: 2),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => _showTerminalLogsDialog(ble),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9), // Light slate gray
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF94A3B8).withOpacity(0.3), // Slate gray
                     ),
-                  );
-                  await ble.connectById(ble.pairedDeviceId!);
-                } else {
-                  _showBleScanner(db, ble);
-                }
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: ble.isConnected
-                    ? const Color(0xFFE0F2FE) // Light Sky Blue
-                    : const Color(0xFFF1F5F9), // Light slate gray
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: ble.isConnected
-                      ? const Color(0xFF0284C7).withOpacity(0.3) // Sky Blue
-                      : const Color(0xFF94A3B8).withOpacity(0.3), // Slate gray
+                  ),
+                  child: const Icon(
+                    Icons.terminal,
+                    color: Color(0xFF64748B),
+                    size: 18,
+                  ),
                 ),
               ),
-              child: Icon(
-                ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                color: ble.isConnected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
-                size: 18,
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () async {
+                  final db = Provider.of<DatabaseService>(context, listen: false);
+                  if (ble.isConnected) {
+                    ble.disconnect();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Disconnected from robot."),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  } else {
+                    if (ble.pairedDeviceId != null && ble.pairedDeviceId!.isNotEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Reconnecting to ${ble.pairedDeviceId}..."),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                      await ble.connectById(ble.pairedDeviceId!);
+                    } else {
+                      _showBleScanner(db, ble);
+                    }
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: ble.isConnected
+                        ? const Color(0xFFE0F2FE) // Light Sky Blue
+                        : const Color(0xFFF1F5F9), // Light slate gray
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: ble.isConnected
+                          ? const Color(0xFF0284C7).withOpacity(0.3) // Sky Blue
+                          : const Color(0xFF94A3B8).withOpacity(0.3), // Slate gray
+                    ),
+                  ),
+                  child: Icon(
+                    ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                    color: ble.isConnected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
+                    size: 18,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  void _showTerminalLogsDialog(BLEService ble) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final ScrollController logScrollController = ScrollController();
+        
+        // Auto scroll logs to bottom
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (logScrollController.hasClients) {
+            logScrollController.jumpTo(logScrollController.position.maxScrollExtent);
+          }
+        });
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF0F172A), // Dark premium background
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.terminal, color: Color(0xFF22D3EE), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        "DEVICE CONSOLE LOGS",
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF22D3EE),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          ble.clearLogs();
+                          setState(() {});
+                        },
+                        child: Text(
+                          "CLEAR",
+                          style: GoogleFonts.outfit(
+                            color: Colors.redAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Colors.white70, size: 18),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 300,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF05040A),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  ),
+                  child: StreamBuilder(
+                    stream: Stream.periodic(const Duration(seconds: 1)),
+                    builder: (context, snapshot) {
+                      // Trigger scroll to bottom on new logs
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (logScrollController.hasClients) {
+                          logScrollController.jumpTo(logScrollController.position.maxScrollExtent);
+                        }
+                      });
+
+                      return ListView.builder(
+                        controller: logScrollController,
+                        itemCount: ble.consoleLogs.length,
+                        itemBuilder: (context, idx) {
+                          final logLine = ble.consoleLogs[idx];
+                          Color textColor = const Color(0xFF34D399); // default emerald
+                          if (logLine.contains('[ERROR]')) textColor = Colors.redAccent;
+                          if (logLine.contains('[BLE]')) textColor = Colors.lightBlue;
+                          if (logLine.contains('[SETTINGS]')) textColor = Colors.amber;
+                          if (logLine.contains('[CLOCK]')) textColor = Colors.purpleAccent;
+                          if (logLine.contains('[ROBOT]')) textColor = Colors.pinkAccent;
+
+                          return Text(
+                            logLine,
+                            style: GoogleFonts.firaCode(color: textColor, fontSize: 11),
+                          );
+                        },
+                      );
+                    }
+                  ),
+                ),
+              ),
+            );
+          }
+        );
+      },
     );
   }
 
@@ -821,8 +956,35 @@ class _MainDashboardState extends State<MainDashboard> {
       case 0:
         return _buildHomeDashboardPanel(db, ble);
       case 1:
-        return _buildCalendarPanel(db, ble);
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "FACE EXPRESSIONS",
+                style: GoogleFonts.outfit(
+                  color: textColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Trigger, search, and preview pixel animations on the robot.",
+                style: GoogleFonts.outfit(
+                  color: textColor60,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 24),
+              _buildExpressionsPanel(db, ble, activeGifId, activeLabel),
+            ],
+          ),
+        );
       case 2:
+        return _buildCalendarPanel(db, ble);
+      case 3:
         return _buildSettingsPanel(db, ble);
       default:
         return const SizedBox();
@@ -942,10 +1104,6 @@ class _MainDashboardState extends State<MainDashboard> {
             ],
           ),
         ),
-        const SizedBox(height: 20),
-
-        // Terminal Log Box
-        _buildTerminalLogsCard(ble),
         const SizedBox(height: 20),
 
         // Custom GIF conversion uploader
@@ -1500,18 +1658,30 @@ class _MainDashboardState extends State<MainDashboard> {
     final isFav = gif.favorite;
     final isSelected = gif.selected;
     final isHidden = gif.hidden;
+    final isMiss = db.primaryRobot?.variant == 'miss_mario';
+    final previewColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFF00F0FF);
     
     // Resolve GIF image widget source
     Widget imagePreview;
     if (gif.customData != null && gif.customData!.isNotEmpty) {
       try {
         final rawBytes = base64Decode(gif.customData!.split(',').last);
-        imagePreview = Image.memory(rawBytes, fit: BoxFit.contain);
+        imagePreview = Image.memory(
+          rawBytes,
+          key: ValueKey('${gif.id}_preview'),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+        );
       } catch (e) {
         imagePreview = const Icon(Icons.broken_image, color: Colors.red);
       }
     } else {
-      imagePreview = Image.asset('assets/animations/${gif.id}.gif', fit: BoxFit.contain);
+      imagePreview = Image.asset(
+        'assets/animations/${gif.id}.gif',
+        key: ValueKey('${gif.id}_preview'),
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+      );
     }
 
     return Container(
@@ -1587,7 +1757,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     width: 100,
                     alignment: Alignment.center,
                     child: ColorFiltered(
-                      colorFilter: const ColorFilter.mode(Color(0xFF00F0FF), BlendMode.modulate),
+                      colorFilter: ColorFilter.mode(previewColor, BlendMode.modulate),
                       child: Opacity(
                         opacity: isHidden ? 0.3 : 1.0,
                         child: imagePreview,
@@ -2287,7 +2457,7 @@ class _MainDashboardState extends State<MainDashboard> {
           GestureDetector(
             onTap: () {
               setState(() {
-                _activeTabIdx = 2; // Settings tab
+                _activeTabIdx = 3; // Settings tab
                 _currentSettingsSection = 'companions';
               });
             },
@@ -2592,8 +2762,7 @@ class _MainDashboardState extends State<MainDashboard> {
         'label': 'Expression',
         'color': const Color(0xFF8B5CF6),
         'onTap': () => setState(() {
-          _activeTabIdx = 2;
-          _currentSettingsSection = 'expressions';
+          _activeTabIdx = 1;
         }),
       },
       {
@@ -2601,7 +2770,7 @@ class _MainDashboardState extends State<MainDashboard> {
         'label': 'Play Sound',
         'color': const Color(0xFF10B981),
         'onTap': () => setState(() {
-          _activeTabIdx = 2;
+          _activeTabIdx = 3;
           _currentSettingsSection = 'sounds';
         }),
       },
@@ -2615,7 +2784,7 @@ class _MainDashboardState extends State<MainDashboard> {
         'icon': Icons.calendar_month,
         'label': 'Calendar',
         'color': const Color(0xFF0074D9),
-        'onTap': () => setState(() => _activeTabIdx = 1),
+        'onTap': () => setState(() => _activeTabIdx = 2),
       },
       {
         'icon': Icons.message,
@@ -2640,7 +2809,7 @@ class _MainDashboardState extends State<MainDashboard> {
         'label': 'Pair Comp',
         'color': const Color(0xFFEC4899),
         'onTap': () => setState(() {
-          _activeTabIdx = 2;
+          _activeTabIdx = 3;
           _currentSettingsSection = 'companions';
         }),
       },
@@ -3758,216 +3927,20 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   // ================= NEW TAB 4: ADVANCED SETTINGS PANEL =================
-  // ================= NEW TAB 4: ADVANCED SETTINGS PANEL =================
-  Widget _buildSettingsCategories(DatabaseService db, BLEService ble) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          "Settings",
-          style: GoogleFonts.outfit(
-            color: textColor,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          "Select a category below to configure your companion robot.",
-          style: GoogleFonts.outfit(
-            color: textColor60,
-            fontSize: 13,
-          ),
-        ),
-        const SizedBox(height: 20),
-        _buildCategoryCard(
-          icon: Icons.people,
-          iconColor: Colors.blue.shade600,
-          title: "Companion Profiles",
-          subtitle: "Manage and pair blue (Mr. Mario) and pink (Ms. Mario) variants.",
-          onTap: () {
-            setState(() {
-              _currentSettingsSection = 'companions';
-            });
-          },
-        ),
-        const SizedBox(height: 12),
-        _buildCategoryCard(
-          icon: Icons.face,
-          iconColor: Colors.teal.shade600,
-          title: "Face Expressions",
-          subtitle: "Trigger animations, RLE bitmaps, and custom face expressions.",
-          onTap: () {
-            setState(() {
-              _currentSettingsSection = 'expressions';
-            });
-          },
-        ),
-        const SizedBox(height: 12),
-        _buildCategoryCard(
-          icon: Icons.audiotrack,
-          iconColor: Colors.pink.shade600,
-          title: "Sound & Melody Board",
-          subtitle: "Play preloaded melodies or compose custom 8-bit sound effects.",
-          onTap: () {
-            setState(() {
-              _currentSettingsSection = 'sounds';
-            });
-          },
-        ),
-        const SizedBox(height: 12),
-        _buildCategoryCard(
-          icon: Icons.settings,
-          iconColor: Colors.purple.shade600,
-          title: "Device Configuration",
-          subtitle: "Configure clock sync, pixel art editor, orientation, and NVS preferences.",
-          onTap: () {
-            setState(() {
-              _currentSettingsSection = 'device';
-            });
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCategoryCard({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.black.withOpacity(0.06)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: iconColor, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.outfit(
-                      color: textColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.outfit(
-                      color: textColor54,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: textColor38,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingsSubHeader(String title) {
+  Widget _buildSectionHeader(String title, IconData icon, Color color) {
     return Row(
       children: [
-        IconButton(
-          onPressed: () {
-            setState(() {
-              _currentSettingsSection = 'categories';
-            });
-          },
-          icon: const Icon(Icons.arrow_back),
-        ),
+        Icon(icon, color: color, size: 18),
         const SizedBox(width: 8),
         Text(
-          title,
+          title.toUpperCase(),
           style: GoogleFonts.outfit(
             color: textColor,
-            fontSize: 18,
+            fontSize: 13,
             fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildSettingsCompanions(DatabaseService db, BLEService ble) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSettingsSubHeader("Companion Profiles"),
-        const SizedBox(height: 16),
-        _buildCompanionsPanel(db, ble),
-      ],
-    );
-  }
-
-  Widget _buildSettingsExpressions(DatabaseService db, BLEService ble, String activeGifId, String activeLabel) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSettingsSubHeader("Face Expressions"),
-        const SizedBox(height: 16),
-        _buildExpressionsPanel(db, ble, activeGifId, activeLabel),
-      ],
-    );
-  }
-
-  Widget _buildSettingsSounds(DatabaseService db, BLEService ble) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSettingsSubHeader("Sound Board"),
-        const SizedBox(height: 16),
-        _buildSoundBoardPanel(db, ble),
-      ],
-    );
-  }
-
-  Widget _buildSettingsDevice(DatabaseService db, BLEService ble) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSettingsSubHeader("Device Configuration"),
-        const SizedBox(height: 16),
-        _buildChronosPanel(ble),
-        const SizedBox(height: 20),
-        _buildPixelArtPanel(),
-        const SizedBox(height: 20),
-        _buildHardwarePanel(db, ble),
       ],
     );
   }
@@ -3975,19 +3948,54 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildSettingsPanel(DatabaseService db, BLEService ble) {
     final activeGifId = _localActiveGifId;
     final activeLabel = _localActiveLabel;
-    
-    switch (_currentSettingsSection) {
-      case 'companions':
-        return _buildSettingsCompanions(db, ble);
-      case 'expressions':
-        return _buildSettingsExpressions(db, ble, activeGifId, activeLabel);
-      case 'sounds':
-        return _buildSettingsSounds(db, ble);
-      case 'device':
-        return _buildSettingsDevice(db, ble);
-      case 'categories':
-      default:
-        return _buildSettingsCategories(db, ble);
-    }
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            "SETTINGS",
+            style: GoogleFonts.outfit(
+              color: textColor,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Directly configure and manage your companion robot below.",
+            style: GoogleFonts.outfit(
+              color: textColor60,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 1. Companion Profiles
+          _buildSectionHeader("Companion Profiles", Icons.people, Colors.blue.shade600),
+          const SizedBox(height: 12),
+          _buildCompanionsPanel(db, ble),
+          const SizedBox(height: 28),
+
+
+
+          // 3. Sound & Melody Board
+          _buildSectionHeader("Sound & Melody Board", Icons.audiotrack, Colors.pink.shade600),
+          const SizedBox(height: 12),
+          _buildSoundBoardPanel(db, ble),
+          const SizedBox(height: 28),
+
+          // 4. Device Configuration
+          _buildSectionHeader("Device Configuration", Icons.settings, Colors.purple.shade600),
+          const SizedBox(height: 12),
+          _buildChronosPanel(ble),
+          const SizedBox(height: 16),
+          _buildPixelArtPanel(),
+          const SizedBox(height: 16),
+          _buildHardwarePanel(db, ble),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
   }
 }
