@@ -31,6 +31,8 @@ class DatabaseService with ChangeNotifier {
   bool _oledInvert = false;
   double _oledRotation = 0.0;
   double _notificationDuration = 5.0;
+  double _reminderDuration = 10.0;
+  double _birthdayDuration = 15.0;
   double _bleSleepTime = 45.0;
   String _bleName = 'Mr. Mario Robot';
 
@@ -64,6 +66,8 @@ class DatabaseService with ChangeNotifier {
   bool get oledInvert => _oledInvert;
   double get oledRotation => _oledRotation;
   double get notificationDuration => _notificationDuration;
+  double get reminderDuration => _reminderDuration;
+  double get birthdayDuration => _birthdayDuration;
   double get bleSleepTime => _bleSleepTime;
   String get bleName => _bleName;
 
@@ -166,6 +170,8 @@ class DatabaseService with ChangeNotifier {
     _oledInvert = _prefs!.getBool('oledInvert') ?? false;
     _oledRotation = _prefs!.getDouble('oledRotation') ?? 0.0;
     _notificationDuration = _prefs!.getDouble('notificationDuration') ?? 5.0;
+    _reminderDuration = _prefs!.getDouble('reminderDuration') ?? 10.0;
+    _birthdayDuration = _prefs!.getDouble('birthdayDuration') ?? 15.0;
     _bleSleepTime = _prefs!.getDouble('bleSleepTime') ?? 45.0;
     _bleName = _prefs!.getString('bleName') ?? 'Mr. Mario Robot';
     notifyListeners();
@@ -330,6 +336,18 @@ class DatabaseService with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateReminderDuration(double val) async {
+    _reminderDuration = val;
+    await _prefs?.setDouble('reminderDuration', val);
+    notifyListeners();
+  }
+
+  Future<void> updateBirthdayDuration(double val) async {
+    _birthdayDuration = val;
+    await _prefs?.setDouble('birthdayDuration', val);
+    notifyListeners();
+  }
+
   Future<void> updateBleSleepTime(double val) async {
     _bleSleepTime = val;
     await _prefs?.setDouble('bleSleepTime', val);
@@ -437,6 +455,8 @@ class DatabaseService with ChangeNotifier {
     _oledInvert = false;
     _oledRotation = 0.0;
     _notificationDuration = 5.0;
+    _reminderDuration = 10.0;
+    _birthdayDuration = 15.0;
     _bleSleepTime = 45.0;
     _bleName = 'Mr. Mario Robot';
 

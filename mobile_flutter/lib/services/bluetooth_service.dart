@@ -46,6 +46,10 @@ class BLEService with ChangeNotifier {
   // Console log entries
   final List<String> _consoleLogs = [];
 
+  // Robot events stream for dismissals and other custom messages
+  final StreamController<String> _robotEventsController = StreamController<String>.broadcast();
+  Stream<String> get robotEvents => _robotEventsController.stream;
+
   // Server IP & Wi-Fi control helper variables
   String _serverIp = 'localhost';
 
@@ -360,6 +364,7 @@ class BLEService with ChangeNotifier {
       if (dataStr.startsWith("LOG:")) {
         final logMsg = dataStr.substring(4);
         addLog(logMsg, "ROBOT");
+        _robotEventsController.add(logMsg);
         return;
       }
       
@@ -555,10 +560,13 @@ class BLEService with ChangeNotifier {
     required bool negativeEnabled,
     required int introSpeedMs,
     required int introSoundSpeed,
+    required int notificationDurationSec,
+    required int reminderDurationSec,
+    required int birthdayDurationSec,
   }) async {
     final bleVal = bleEnabled ? "1" : "0";
     final negVal = negativeEnabled ? "1" : "0";
-    final payloadStr = 'SET:$bleVal,$speedMs,$defaultGif,$introGif,$touchSingle,$touchDouble,$touchLong,$negVal,$introSpeedMs,$introSoundSpeed';
+    final payloadStr = 'SET:$bleVal,$speedMs,$defaultGif,$introGif,$touchSingle,$touchDouble,$touchLong,$negVal,$introSpeedMs,$introSoundSpeed,$notificationDurationSec,$reminderDurationSec,$birthdayDurationSec';
 
     if (!_isConnected || _textChar == null) {
       final success = await _transmitWifiCommand(payloadStr);

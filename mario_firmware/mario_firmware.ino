@@ -31,7 +31,8 @@ bool bleActive = true;
 int gifSpeed = 100;
 int gifIntroSpeed = 100;
 int introSoundSpeed = 100;
-int defaultGif = 0;      // default GIF expression (0-6)
+int defaultGif = 99;      // default GIF expression (0-6, or 99 for Cycle Mode)
+bool isCycleMode = true;
 int gifIntro = 1;        // intro GIF expression (0-6)
 int touchSingle = 2;     // action for single tap: 0=default, 1=clock, 2=skip_anim, 3=ble_toggle, 10-16=specific expr
 int touchDouble = 0;     // action for double tap
@@ -47,6 +48,12 @@ unsigned long lastInteractionTime = 0;
 const unsigned long SLEEP_TIMEOUT = 45000; // 45 seconds of inactivity -> sleep
 bool isAsleep = false;
 bool inIntroPhase = true;
+bool isAlarmRinging = false;
+unsigned long lastAlarmSoundTime = 0;
+int notificationDurationMs = 5000; // default 5 seconds
+int reminderDurationMs = 10000; // default 10 seconds
+int birthdayDurationMs = 15000; // default 15 seconds
+int activeNotificationDurationMs = 5000;
 
 // Software Real-Time Clock variables
 int rtcHour = 12;
@@ -276,26 +283,42 @@ void handleRobotCommand(String text) {
       String notificationText = "";
       if (type == "birthday") {
         notificationText = "Birthday: " + title;
+        activeNotificationDurationMs = birthdayDurationMs;
       } else {
         notificationText = "Meeting @ " + time + ": " + title;
+        activeNotificationDurationMs = reminderDurationMs;
       }
       face.setNotificationText(notificationText);
       audio.playSound(SOUND_POWERUP); // play alert sound
+    }
+  } else if (text.startsWith("ALARM:")) {
+    String state = text.substring(6);
+    if (state == "START") {
+      isAlarmRinging = true;
+      face.setExpression(EXPR_CLOCK);
+      face.setStateLabel("ALARM!");
+      Serial.println("Alarm triggered via BLE/Wi-Fi.");
+    } else {
+      isAlarmRinging = false;
+      face.setExpression(EXPR_IDLE);
+      face.setStateLabel("IDLE");
+      Serial.println("Alarm stopped/dismissed.");
     }
   } else {
     // Normal text message notification
     face.setNotificationText(text);
     audio.playSound(SOUND_CHIRP); // alert user
+    activeNotificationDurationMs = notificationDurationMs;
   }
 }
 
 void applySettings(String payload) {
   // Robust CSV parsing — split by commas into an array
-  // Expected format: ble,speed,defaultGif,gifIntro,touchSingle,touchDouble,touchLong,negative,introSpeed,introSoundSpeed
-  String parts[10];
+  // Expected format: ble,speed,defaultGif,gifIntro,touchSingle,touchDouble,touchLong,negative,introSpeed,introSoundSpeed,notifDur,remDur,birthDur
+  String parts[13];
   int partCount = 0;
   int startIdx = 0;
-  for (int i = 0; i <= payload.length() && partCount < 10; i++) {
+  for (int i = 0; i <= payload.length() && partCount < 13; i++) {
     if (i == (int)payload.length() || payload[i] == ',') {
       String part = payload.substring(startIdx, i);
       part.trim();
@@ -327,20 +350,40 @@ void applySettings(String payload) {
     if (introSoundSpeed < 20)  introSoundSpeed = 20;
     if (introSoundSpeed > 500) introSoundSpeed = 500;
   }
+  if (partCount > 10) {
+    notificationDurationMs = parts[10].toInt() * 1000;
+    if (notificationDurationMs < 1000) notificationDurationMs = 1000;
+  }
+  if (partCount > 11) {
+    reminderDurationMs = parts[11].toInt() * 1000;
+    if (reminderDurationMs < 1000) reminderDurationMs = 1000;
+  }
+  if (partCount > 12) {
+    birthdayDurationMs = parts[12].toInt() * 1000;
+    if (birthdayDurationMs < 1000) birthdayDurationMs = 1000;
+  }
 
   // Apply settings immediately
   face.setFrameDelay(gifSpeed);
 
-  // defaultGif: values 0-8 = base Expression enum
+  // defaultGif: 99 = Cycle Mode
+  //             0-8 = base Expression enum
   //             values >= 100 = specific GIF index (index = value - 100) in ALL_GIFS_TABLE
-  if (defaultGif >= 100) {
-    int gifIdx = defaultGif - 100;
-    if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-      face.setGifIndex(gifIdx);
-      face.setExpression(EXPR_ALL_GIF);
-    }
+  if (defaultGif == 99) {
+    isCycleMode = true;
+    cycleExpression();
   } else {
-    face.setDefaultExpression((Expression)defaultGif);
+    isCycleMode = false;
+    if (defaultGif >= 100) {
+      int gifIdx = defaultGif - 100;
+      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
+        face.setGifIndex(gifIdx);
+        face.setExpression(EXPR_ALL_GIF);
+      }
+    } else {
+      face.setDefaultExpression((Expression)defaultGif);
+      face.setExpression((Expression)defaultGif);
+    }
   }
 
   ble.setBLEActive(bleActive);
@@ -360,6 +403,9 @@ void applySettings(String payload) {
   preferences.putBool("neg", negativeDisplay);
   preferences.putInt("intSpeed", gifIntroSpeed);
   preferences.putInt("sndSpeed", introSoundSpeed);
+  preferences.putInt("notifDur", notificationDurationMs);
+  preferences.putInt("remDur", reminderDurationMs);
+  preferences.putInt("birthDur", birthdayDurationMs);
   preferences.end();
 
   audio.playSound(SOUND_POWERUP);
@@ -375,7 +421,7 @@ void setup() {
   preferences.begin("mario", false);
   bleActive = preferences.getBool("ble", true);
   gifSpeed = preferences.getInt("speed", 100);
-  defaultGif = preferences.getInt("defGif", 0);
+  defaultGif = preferences.getInt("defGif", 99);
   gifIntro = preferences.getInt("intGif", 1);
   touchSingle = preferences.getInt("tchSing", 2);  // default: skip animation
   touchDouble = preferences.getInt("tchDoub", 0);
@@ -384,18 +430,28 @@ void setup() {
   gifIntroSpeed = preferences.getInt("intSpeed", 100);
   introSoundSpeed = preferences.getInt("sndSpeed", 100);
   is12HourFormat = preferences.getBool("is12H", false);
+  notificationDurationMs = preferences.getInt("notifDur", 5000);
+  reminderDurationMs = preferences.getInt("remDur", 10000);
+  birthdayDurationMs = preferences.getInt("birthDur", 15000);
+  activeNotificationDurationMs = notificationDurationMs;
   preferences.end();
 
   // Set the GIF speed delay and default expression
   face.setFrameDelay(gifSpeed);
-  // defaultGif >= 100 means a specific GIF index (index = value - 100)
-  if (defaultGif >= 100) {
-    int gifIdx = defaultGif - 100;
-    if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-      face.setGifIndex(gifIdx);
-    }
+  if (defaultGif == 99) {
+    isCycleMode = true;
   } else {
-    face.setDefaultExpression((Expression)defaultGif);
+    isCycleMode = false;
+    if (defaultGif >= 100) {
+      int gifIdx = defaultGif - 100;
+      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
+        face.setGifIndex(gifIdx);
+        face.setExpression(EXPR_ALL_GIF);
+      }
+    } else {
+      face.setDefaultExpression((Expression)defaultGif);
+      face.setExpression((Expression)defaultGif);
+    }
   }
 
   // Initialize I2C Communication
@@ -625,13 +681,19 @@ void loop() {
     }
   }
 
-  // 3. Process Touch Sensor Gestures
   TouchEvent touchEvent = interaction.update();
   if (touchEvent != TOUCH_NONE) {
     lastInteractionTime = now; // reset inactivity clock
     lastExpressionCycleTime = now; // reset expression cycle timer
 
-    if (isAsleep && !inSettingsMenu) {
+    if (isAlarmRinging) {
+      isAlarmRinging = false;
+      audio.playSound(SOUND_COIN); // play coin sound to confirm dismissal
+      face.setExpression(EXPR_IDLE);
+      face.setStateLabel("IDLE");
+      ble.sendLog("ALARM:DISMISS");
+      Serial.println("Alarm dismissed by hardware touch button.");
+    } else if (isAsleep && !inSettingsMenu) {
       // Any touch wakes the robot up
       isAsleep = false;
       face.setExpression(EXPR_IDLE);
@@ -757,23 +819,54 @@ void loop() {
         face.clearGifFinished();
         inIntroPhase = false;
         face.setFrameDelay(gifSpeed);
-        cycleExpression();
+        if (isCycleMode) {
+          cycleExpression();
+        } else {
+          if (defaultGif >= 100) {
+            face.setGifIndex(defaultGif - 100);
+            face.setExpression(EXPR_ALL_GIF);
+          } else {
+            face.setExpression((Expression)defaultGif);
+          }
+        }
         lastExpressionCycleTime = now;
       }
     } else {
       if (face.getExpression() == EXPR_ALL_GIF) {
         if (face.isGifFinished()) {
           face.clearGifFinished();
-          cycleExpression();
-          lastExpressionCycleTime = now;
+          if (isCycleMode) {
+            // Only switch to a different random GIF if at least 8 seconds has elapsed since last cycle!
+            if (now - lastExpressionCycleTime >= 8000) {
+              cycleExpression();
+              lastExpressionCycleTime = now;
+            }
+          }
         }
       } else {
-        // Return to random emoji cycling after 5 seconds of showing a manual reaction/message
-        if (now - lastExpressionCycleTime >= 5000) {
-          cycleExpression();
+        // Return to random emoji cycling/default expression after notification duration
+        if (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs) {
+          if (isCycleMode) {
+            cycleExpression();
+          } else {
+            if (defaultGif >= 100) {
+              face.setGifIndex(defaultGif - 100);
+              face.setExpression(EXPR_ALL_GIF);
+            } else {
+              face.setExpression((Expression)defaultGif);
+            }
+          }
           lastExpressionCycleTime = now;
         }
       }
+    }
+  }
+
+  // Periodic alarm ringing sound (1s chirp)
+  if (isAlarmRinging) {
+    if (now - lastAlarmSoundTime >= 1000) {
+      lastAlarmSoundTime = now;
+      audio.playSound(SOUND_CHIRP);
     }
   }
 

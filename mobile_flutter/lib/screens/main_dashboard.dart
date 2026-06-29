@@ -218,6 +218,7 @@ class _MainDashboardState extends State<MainDashboard> {
   double _uploadCompression = 30.0;
   AlarmModel? _ringingAlarm;
   Timer? _alarmSoundTimer;
+  StreamSubscription? _robotEventsSub;
   bool _isNotificationPermissionGranted = false;
 
   @override
@@ -260,6 +261,16 @@ class _MainDashboardState extends State<MainDashboard> {
         _discoverServer();
       }
     });
+
+    final ble = Provider.of<BLEService>(context, listen: false);
+    _robotEventsSub = ble.robotEvents.listen((event) {
+      if (event == "ALARM:DISMISS") {
+        if (_ringingAlarm != null) {
+          _dismissAlarm();
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      }
+    });
   }
 
   @override
@@ -268,6 +279,7 @@ class _MainDashboardState extends State<MainDashboard> {
     _calendarSchedulerTimer?.cancel();
     _udpDiscoveryTimer?.cancel();
     _clockTickerTimer?.cancel();
+    _robotEventsSub?.cancel();
     _marqueeController.dispose();
     _customMelodyController.dispose();
     _aiPromptController.dispose();
@@ -432,6 +444,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
     // Helper map matches JS index calculation
     int getExpressionValue(String val) {
+      if (val == 'cycle') return 99;
       if (val == 'default') return 0;
       final idx = DatabaseService.animMapping.keys.toList().indexOf(val);
       return idx != -1 ? 100 + idx : 0;
@@ -457,6 +470,9 @@ class _MainDashboardState extends State<MainDashboard> {
       negativeEnabled: db.negativeEnabled,
       introSpeedMs: db.gifIntroSpeed.toInt(),
       introSoundSpeed: db.introSoundSpeed.toInt(),
+      notificationDurationSec: db.notificationDuration.round(),
+      reminderDurationSec: db.reminderDuration.round(),
+      birthdayDurationSec: db.birthdayDuration.round(),
     );
 
     setState(() {
@@ -2008,6 +2024,9 @@ class _MainDashboardState extends State<MainDashboard> {
     final gifOptions = ['default', 'clock', 'skip_anim', 'bt_toggle'] +
         db.gifs.where((g) => !g.hidden).map((g) => g.id).toList();
 
+    final defaultGifOptions = ['cycle', 'default'] +
+        db.gifs.where((g) => !g.hidden).map((g) => g.id).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2039,6 +2058,13 @@ class _MainDashboardState extends State<MainDashboard> {
                   contentPadding: EdgeInsets.symmetric(horizontal: 10),
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // Default Screen Mode Dropdown
+              _buildDefaultGifDropdown("Default Screen Mode", db.defaultGif, defaultGifOptions, (val) async {
+                await db.updateDefaultGif(val);
+                _syncSettingsToRobot(db, ble);
+              }),
               const SizedBox(height: 16),
 
               // GIF frame delay ms
@@ -2242,6 +2268,45 @@ class _MainDashboardState extends State<MainDashboard> {
                 if (opt == 'clock') displayName = "Show clock";
                 if (opt == 'skip_anim') displayName = "Skip Eye Animation";
                 if (opt == 'bt_toggle') displayName = "BLE Broadcast Toggle";
+
+                return DropdownMenuItem<String>(
+                  value: opt,
+                  child: Text(displayName, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) onChanged(val);
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDefaultGifDropdown(String label, String value, List<String> options, Function(String) onChanged) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
+        Container(
+          width: 185,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.black.withOpacity(0.06)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: options.contains(value) ? value : 'cycle',
+              dropdownColor: Colors.white,
+              style: GoogleFonts.outfit(color: textColor, fontSize: 12),
+              isExpanded: true,
+              items: options.map((opt) {
+                String displayName = opt;
+                if (opt == 'cycle') displayName = "Random Cycle Mode";
+                if (opt == 'default') displayName = "Default Idle Face";
 
                 return DropdownMenuItem<String>(
                   value: opt,
@@ -4032,7 +4097,117 @@ class _MainDashboardState extends State<MainDashboard> {
                     ),
                 ],
               ),
+              const Divider(color: Colors.white12, height: 24),
+              _buildDurationSlider(
+                title: "Notification Duration",
+                subtitle: "How long standard notifications remain on screen",
+                value: db.notificationDuration,
+                min: 2,
+                max: 30,
+                onChanged: (val) => db.updateNotificationDuration(val),
+                onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
+              ),
+              const SizedBox(height: 16),
+              _buildDurationSlider(
+                title: "Reminder Duration",
+                subtitle: "How long calendar reminders remain on screen",
+                value: db.reminderDuration,
+                min: 2,
+                max: 30,
+                onChanged: (val) => db.updateReminderDuration(val),
+                onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
+              ),
+              const SizedBox(height: 16),
+              _buildDurationSlider(
+                title: "Birthday Duration",
+                subtitle: "How long birthday notifications remain on screen",
+                value: db.birthdayDuration,
+                min: 2,
+                max: 30,
+                onChanged: (val) => db.updateBirthdayDuration(val),
+                onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
+              ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDurationSlider({
+    required String title,
+    required String subtitle,
+    required double value,
+    required double min,
+    required double max,
+    required ValueChanged<double> onChanged,
+    required ValueChanged<double> onChangeEnd,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      color: textColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.outfit(
+                      color: textColor60,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                "${value.round()}s",
+                style: GoogleFonts.outfit(
+                  color: _accentColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: _accentColor,
+            inactiveTrackColor: Colors.white10,
+            thumbColor: _accentColor,
+            overlayColor: _accentColor.withOpacity(0.2),
+            valueIndicatorColor: _accentColor,
+            trackHeight: 3,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+          ),
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: (max - min).toInt(),
+            onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
           ),
         ),
       ],

@@ -13,6 +13,14 @@ class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.mrmario/notifications"
     private var methodChannel: MethodChannel? = null
 
+    companion object {
+        var flutterEngine: FlutterEngine? = null
+    }
+
+    override fun shouldDestroyEngineWithHost(): Boolean {
+        return false
+    }
+
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "com.mrmario.NOTIFICATION_RECEIVED") {
@@ -31,7 +39,16 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        Companion.flutterEngine = flutterEngine
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        
+        // Start background service
+        val serviceIntent = Intent(this, MrMarioBackgroundService::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
         
         methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
