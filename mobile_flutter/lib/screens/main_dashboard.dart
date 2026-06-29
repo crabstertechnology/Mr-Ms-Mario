@@ -158,6 +158,7 @@ class _MainDashboardState extends State<MainDashboard> {
     if (!listenerGranted) {
       await service.openSettings();
     }
+    await service.startBackgroundService();
   }
 
   Future<void> _compileFirmware() async {
@@ -4292,6 +4293,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       onPressed: () async {
                         final service = Provider.of<PhoneNotificationService>(context, listen: false);
                         await service.requestPostNotificationsPermission();
+                        await service.startBackgroundService();
                       },
                       child: Text(
                         "GRANT",

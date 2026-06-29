@@ -20,6 +20,7 @@ private:
   bool gifFinished;
 
   // Text state
+  String notificationTitle;
   String notificationText;
   int scrollPos;
   unsigned long lastScrollTime;
@@ -38,6 +39,7 @@ public:
     lastFrameTime = 0;
     gifFinished = false;
 
+    notificationTitle = "";
     notificationText = "";
     scrollPos = SCREEN_WIDTH;
     lastScrollTime = 0;
@@ -106,7 +108,18 @@ public:
   }
 
   void setNotificationText(String text) {
+    notificationTitle = "Notification";
     notificationText = text;
+    scrollPos = SCREEN_WIDTH;
+    lastScrollTime = millis();
+    setExpression(EXPR_TEXT);
+  }
+
+  void setDetailedNotification(String title, String body) {
+    notificationTitle = title;
+    notificationText = body;
+    scrollPos = SCREEN_WIDTH;
+    lastScrollTime = millis();
     setExpression(EXPR_TEXT);
   }
 
@@ -193,9 +206,9 @@ public:
         scrollPos -= 2;
         int textLength = notificationText.length() * 12; // size-2 font: ~12px per char
         
-        // Loop back to idle if scrolled off screen
+        // Loop scrolling until duration timeout in main loop
         if (scrollPos < -textLength) {
-          setExpression(EXPR_IDLE);
+          scrollPos = SCREEN_WIDTH;
         }
       }
     }
@@ -355,23 +368,47 @@ private:
     display.print("[Tap to close clock]");
   }
   void drawTextScreen() {
-    // Draw small animated face at the top-left
-    display.fillRoundRect(8, 4, 16, 12, 3, SSD1306_WHITE);
-    display.fillCircle(12, 9, 2, SSD1306_BLACK); // Left eye
-    display.fillCircle(20, 9, 2, SSD1306_BLACK); // Right eye
-    display.drawFastHLine(14, 13, 4, SSD1306_WHITE); // Smile outline
+    // 1. Draw header background and small animated face
+    display.fillRoundRect(4, 2, 14, 10, 2, SSD1306_WHITE);
+    display.fillCircle(7, 6, 1, SSD1306_BLACK); // Left eye
+    display.fillCircle(14, 6, 1, SSD1306_BLACK); // Right eye
+    display.drawFastHLine(9, 9, 3, SSD1306_WHITE); // Smile
 
-    // Draw notification title
+    // 2. Draw notification title (truncated to fit screen size)
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
-    display.setCursor(32, 6);
-    display.print("Notification:");
-    display.drawFastHLine(0, 20, SCREEN_WIDTH, SSD1306_WHITE);
+    display.setCursor(24, 3);
+    
+    String displayTitle = notificationTitle;
+    if (displayTitle.length() == 0) {
+      displayTitle = "Notification";
+    }
+    // Truncate title if too long (max ~16 chars at size 1 to fit next to face)
+    if (displayTitle.length() > 16) {
+      displayTitle = displayTitle.substring(0, 13) + "...";
+    }
+    display.print(displayTitle);
+    
+    // Draw divider line separating header from body
+    display.drawFastHLine(0, 14, SCREEN_WIDTH, SSD1306_WHITE);
 
-    // Draw scrolling text
+    // 3. Draw Body Text
+    // Center vertically in the remaining space (y=15 to 64, height=49)
+    // Size 2 text is 16px high, so centered y = 15 + (49 - 16)/2 = 31
     display.setTextSize(2);
-    display.setCursor(scrollPos, 35);
-    display.print(notificationText);
+    
+    // If text is short, center it statically instead of scrolling!
+    // Max characters that can fit statically on screen in size 2 is 10 chars (10 * 12 = 120px)
+    if (notificationText.length() <= 10) {
+      int textW = notificationText.length() * 12;
+      int startX = (SCREEN_WIDTH - textW) / 2;
+      display.setCursor(startX, 31);
+      display.print(notificationText);
+    } else {
+      // Scroll long text
+      display.setCursor(scrollPos, 31);
+      display.print(notificationText);
+    }
   }
 
   void drawMapScreen() {

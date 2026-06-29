@@ -34,8 +34,10 @@ class PhoneNotificationService {
           }
         }
         
-        // Forward notification to the robot!
-        final String displayMessage = "${title.isNotEmpty ? '$title: ' : ''}$text";
+        // Forward notification to the robot in detailed NOTIF:Title|Body format!
+        final String titleClean = title.replaceAll('|', ' ').trim();
+        final String textClean = text.replaceAll('|', ' ').trim();
+        final String displayMessage = "NOTIF:$titleClean|$textClean";
         await _forwardToRobot(displayMessage);
         break;
     }
@@ -142,6 +144,14 @@ class PhoneNotificationService {
       await _channel.invokeMethod('requestPostNotificationsPermission');
     } on PlatformException catch (e) {
       print("Failed to request post notification permission: $e");
+    }
+  }
+
+  Future<void> startBackgroundService() async {
+    try {
+      await _channel.invokeMethod('startBackgroundService');
+    } on PlatformException catch (e) {
+      print("Failed to start background service: $e");
     }
   }
 }

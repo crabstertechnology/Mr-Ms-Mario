@@ -73,6 +73,15 @@ class MainActivity: FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "startBackgroundService" -> {
+                    val serviceIntent = Intent(this, MrMarioBackgroundService::class.java)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent)
+                    } else {
+                        startService(serviceIntent)
+                    }
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }

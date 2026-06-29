@@ -54,6 +54,8 @@ class MrMarioBackgroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Refresh foreground notification in case permission was granted after service started
+        startMyForeground()
         // Return START_STICKY to keep service running when app process is pushed out of memory
         return START_STICKY
     }
@@ -71,9 +73,9 @@ class MrMarioBackgroundService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Mr. Mario Controller Background Service"
-            val descriptionText = "Keeps the controller running in the background to sync notifications and alarms."
-            val importance = NotificationManager.IMPORTANCE_LOW
+            val name = "Mr. Mario Controller"
+            val descriptionText = "Keeps Mr. Mario background sync active"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
             }
@@ -90,11 +92,14 @@ class MrMarioBackgroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val iconId = resources.getIdentifier("ic_launcher", "mipmap", packageName)
+        val smallIcon = if (iconId != 0) iconId else android.R.drawable.stat_notify_sync
+
         val notification: Notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("Mr. Mario Background Sync")
                 .setContentText("Connected to Mr. Mario Robot in background")
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .setSmallIcon(smallIcon)
                 .setContentIntent(pendingIntent)
                 .build()
         } else {
@@ -102,7 +107,7 @@ class MrMarioBackgroundService : Service() {
             Notification.Builder(this)
                 .setContentTitle("Mr. Mario Background Sync")
                 .setContentText("Connected to Mr. Mario Robot in background")
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .setSmallIcon(smallIcon)
                 .setContentIntent(pendingIntent)
                 .build()
         }

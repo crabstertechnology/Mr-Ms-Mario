@@ -323,6 +323,21 @@ void handleRobotCommand(String text) {
       audio.playSound(SOUND_CHIRP);
       activeNotificationDurationMs = 15000; // 15 seconds visibility
     }
+  } else if (text.startsWith("NOTIF:")) {
+    // Command format: NOTIF:Title|Body
+    String payload = text.substring(6);
+    int sep = payload.indexOf('|');
+    if (sep > 0) {
+      String notifTitle = payload.substring(0, sep);
+      String notifBody = payload.substring(sep + 1);
+      notifTitle.trim();
+      notifBody.trim();
+      face.setDetailedNotification(notifTitle, notifBody);
+    } else {
+      face.setNotificationText(payload);
+    }
+    audio.playSound(SOUND_CHIRP);
+    activeNotificationDurationMs = notificationDurationMs;
   } else {
     // Normal text message notification
     face.setNotificationText(text);
