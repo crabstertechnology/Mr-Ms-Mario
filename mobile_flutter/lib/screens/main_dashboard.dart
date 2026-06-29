@@ -2375,12 +2375,7 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  // ================= TAB 4: PIXEL ART DRAW PANEL =================
-  Widget _buildPixelArtPanel() {
-    return const GlassCard(
-      child: PixelEditor(),
-    );
-  }
+
 
   // ================= NEW TAB 0: HOME DASHBOARD PANEL =================
   Widget _buildHomeDashboardPanel(DatabaseService db, BLEService ble, String activeGifId, String activeLabel) {
@@ -4336,10 +4331,86 @@ class _MainDashboardState extends State<MainDashboard> {
                 onChanged: (val) => db.updateBirthdayDuration(val),
                 onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
               ),
+              const Divider(color: Colors.white12, height: 24),
+              Text(
+                "Filter Applications",
+                style: GoogleFonts.outfit(
+                  color: textColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Select which apps are allowed to send notifications to Mario Hardware",
+                style: GoogleFonts.outfit(
+                  color: textColor60,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildAppFilterChip(db, 'whatsapp', 'WhatsApp', Icons.message),
+                  _buildAppFilterChip(db, 'whatsapp_business', 'WA Business', Icons.business),
+                  _buildAppFilterChip(db, 'instagram', 'Instagram', Icons.camera_alt),
+                  _buildAppFilterChip(db, 'snapchat', 'Snapchat', Icons.chat_bubble),
+                  _buildAppFilterChip(db, 'telegram', 'Telegram', Icons.send),
+                  _buildAppFilterChip(db, 'messenger', 'Messenger', Icons.chat),
+                  _buildAppFilterChip(db, 'google_maps', 'Google Maps', Icons.map),
+                  _buildAppFilterChip(db, 'gmail', 'Gmail', Icons.email),
+                  _buildAppFilterChip(db, 'youtube', 'YouTube', Icons.play_circle),
+                  _buildAppFilterChip(db, 'sms', 'SMS / Messages', Icons.sms),
+                  _buildAppFilterChip(db, 'phone', 'Phone Calls', Icons.phone),
+                  _buildAppFilterChip(db, 'other_apps', 'Other Apps', Icons.apps),
+                ],
+              ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildAppFilterChip(DatabaseService db, String appKey, String label, IconData icon) {
+    final isSelected = db.allowedNotificationApps.contains(appKey);
+    return FilterChip(
+      avatar: Icon(
+        icon,
+        size: 14,
+        color: isSelected ? Colors.white : textColor60,
+      ),
+      label: Text(
+        label,
+        style: GoogleFonts.outfit(
+          color: isSelected ? Colors.white : textColor,
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      selected: isSelected,
+      selectedColor: _accentColor,
+      backgroundColor: Colors.white.withOpacity(0.05),
+      checkmarkColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isSelected ? _accentColor.withOpacity(0.5) : Colors.white10,
+        ),
+      ),
+      onSelected: (selected) async {
+        final List<String> updated = List.from(db.allowedNotificationApps);
+        if (selected) {
+          if (!updated.contains(appKey)) {
+            updated.add(appKey);
+          }
+        } else {
+          updated.remove(appKey);
+        }
+        await db.updateAllowedNotificationApps(updated);
+      },
     );
   }
 
@@ -4460,8 +4531,6 @@ class _MainDashboardState extends State<MainDashboard> {
         const SizedBox(height: 28),
         _buildNotificationSyncPanel(db, ble),
         const SizedBox(height: 28),
-        _buildPixelArtPanel(),
-        const SizedBox(height: 16),
         _buildHardwarePanel(db, ble),
         const SizedBox(height: 24),
       ],
@@ -4574,50 +4643,49 @@ class _GifCardWidgetState extends State<_GifCardWidget>
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: Container(
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              gif.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.outfit(
-                                color: isHidden ? Colors.white38 : Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
+                  Container(
+                    height: 36,
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            gif.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.outfit(
+                              color: isHidden ? Colors.white38 : Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
+                        ),
+                        const SizedBox(width: 4),
+                        // Action buttons (visibility, delete)
+                        GestureDetector(
+                          onTap: () => db.toggleHidden(gif.id),
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Icon(
+                              isHidden ? Icons.visibility_off : Icons.visibility,
+                              color: Colors.white60,
+                              size: 12,
+                            ),
+                          ),
+                        ),
+                        if (!DatabaseService.animMapping.containsKey(gif.id)) ...[
                           const SizedBox(width: 4),
-                          // Action buttons (visibility, delete)
                           GestureDetector(
-                            onTap: () => db.toggleHidden(gif.id),
-                            child: Padding(
-                              padding: const EdgeInsets.all(2),
-                              child: Icon(
-                                isHidden ? Icons.visibility_off : Icons.visibility,
-                                color: Colors.white60,
-                                size: 12,
-                              ),
+                            onTap: () => db.deleteCustomGif(gif.id),
+                            child: const Padding(
+                              padding: EdgeInsets.all(2),
+                              child: Icon(Icons.delete,
+                                  color: Colors.redAccent, size: 12),
                             ),
                           ),
-                          if (!DatabaseService.animMapping.containsKey(gif.id)) ...[
-                            const SizedBox(width: 4),
-                            GestureDetector(
-                              onTap: () => db.deleteCustomGif(gif.id),
-                              child: const Padding(
-                                padding: EdgeInsets.all(2),
-                                child: Icon(Icons.delete,
-                                    color: Colors.redAccent, size: 12),
-                              ),
-                            ),
-                          ],
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ],

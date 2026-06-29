@@ -35,6 +35,7 @@ class DatabaseService with ChangeNotifier {
   double _birthdayDuration = 15.0;
   double _bleSleepTime = 45.0;
   String _bleName = 'Mr. Mario Robot';
+  List<String> _allowedNotificationApps = [];
 
   List<GifModel> get gifs => _gifs;
   List<RobotProfile> get robots => _robots;
@@ -42,6 +43,7 @@ class DatabaseService with ChangeNotifier {
   List<AlarmModel> get alarms => _alarms;
   bool get is12HourFormat => _is12HourFormat;
   bool get notificationSyncEnabled => _notificationSyncEnabled;
+  List<String> get allowedNotificationApps => _allowedNotificationApps;
 
   RobotProfile? get primaryRobot {
     if (_robots.isEmpty) return null;
@@ -174,6 +176,20 @@ class DatabaseService with ChangeNotifier {
     _birthdayDuration = _prefs!.getDouble('birthdayDuration') ?? 15.0;
     _bleSleepTime = _prefs!.getDouble('bleSleepTime') ?? 45.0;
     _bleName = _prefs!.getString('bleName') ?? 'Mr. Mario Robot';
+    _allowedNotificationApps = _prefs!.getStringList('allowedNotificationApps') ?? [
+      'whatsapp',
+      'whatsapp_business',
+      'instagram',
+      'snapchat',
+      'telegram',
+      'messenger',
+      'google_maps',
+      'gmail',
+      'youtube',
+      'sms',
+      'phone',
+      'other_apps'
+    ];
     notifyListeners();
   }
 
@@ -692,6 +708,12 @@ class DatabaseService with ChangeNotifier {
   Future<void> updateNotificationSyncEnabled(bool val) async {
     _notificationSyncEnabled = val;
     await _prefs?.setBool('notificationSyncEnabled', val);
+    notifyListeners();
+  }
+
+  Future<void> updateAllowedNotificationApps(List<String> apps) async {
+    _allowedNotificationApps = apps;
+    await _prefs?.setStringList('allowedNotificationApps', apps);
     notifyListeners();
   }
 }

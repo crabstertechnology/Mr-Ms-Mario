@@ -39,6 +39,17 @@ class MrMarioBackgroundService : Service() {
         }
     }
 
+    private var isConnectedToRobot = false
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val updateRunnable = object : Runnable {
+        override fun run() {
+            val engine = MainActivity.flutterEngine
+            val connected = if (engine == null) false else isConnectedToRobot
+            updateNotificationStatus(connected)
+            handler.postDelayed(this, 1000)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -51,17 +62,25 @@ class MrMarioBackgroundService : Service() {
         } else {
             registerReceiver(receiver, filter)
         }
+
+        // Start 1-second background connection status updater
+        handler.post(updateRunnable)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Refresh foreground notification in case permission was granted after service started
-        startMyForeground()
-        // Return START_STICKY to keep service running when app process is pushed out of memory
+        if (intent != null && intent.hasExtra("connected")) {
+            isConnectedToRobot = intent.getBooleanExtra("connected", false)
+        }
+        val engine = MainActivity.flutterEngine
+        val connected = if (engine == null) false else isConnectedToRobot
+        updateNotificationStatus(connected)
+        
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        handler.removeCallbacks(updateRunnable)
         try {
             unregisterReceiver(receiver)
         } catch (e: Exception) {}
@@ -86,6 +105,12 @@ class MrMarioBackgroundService : Service() {
     }
 
     private fun startMyForeground() {
+        val engine = MainActivity.flutterEngine
+        val connected = if (engine == null) false else isConnectedToRobot
+        updateNotificationStatus(connected)
+    }
+
+    private fun updateNotificationStatus(connected: Boolean) {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, notificationIntent,
@@ -95,20 +120,26 @@ class MrMarioBackgroundService : Service() {
         val iconId = resources.getIdentifier("ic_launcher", "mipmap", packageName)
         val smallIcon = if (iconId != 0) iconId else android.R.drawable.stat_notify_sync
 
+        val statusText = if (connected) "Status: Connected to Robot" else "Status: Disconnected from Robot"
+
         val notification: Notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("Mr. Mario Background Sync")
-                .setContentText("Connected to Mr. Mario Robot in background")
+                .setContentTitle("Mr. Mario Controller")
+                .setContentText(statusText)
                 .setSmallIcon(smallIcon)
                 .setContentIntent(pendingIntent)
+                .setOngoing(true) // Prevents user swiping it away
+                .setOnlyAlertOnce(true) // Prevents continuous alert chirps
                 .build()
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
-                .setContentTitle("Mr. Mario Background Sync")
-                .setContentText("Connected to Mr. Mario Robot in background")
+                .setContentTitle("Mr. Mario Controller")
+                .setContentText(statusText)
                 .setSmallIcon(smallIcon)
                 .setContentIntent(pendingIntent)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
                 .build()
         }
 

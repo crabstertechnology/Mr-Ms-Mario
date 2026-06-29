@@ -82,6 +82,18 @@ class MainActivity: FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "updateConnectionStatus" -> {
+                    val connected = call.argument<Boolean>("connected") ?: false
+                    val serviceIntent = Intent(this, MrMarioBackgroundService::class.java).apply {
+                        putExtra("connected", connected)
+                    }
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent)
+                    } else {
+                        startService(serviceIntent)
+                    }
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }

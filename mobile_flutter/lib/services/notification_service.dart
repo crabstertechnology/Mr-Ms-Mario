@@ -23,6 +23,37 @@ class PhoneNotificationService {
         // Skip system/empty notifications
         if (title.isEmpty && text.isEmpty) return;
 
+        // Check if the notification's app is allowed by user settings
+        String matchedAppKey = 'other_apps';
+        final pkgLower = packageName.toLowerCase();
+        if (pkgLower == 'com.whatsapp') {
+          matchedAppKey = 'whatsapp';
+        } else if (pkgLower == 'com.whatsapp.w4b') {
+          matchedAppKey = 'whatsapp_business';
+        } else if (pkgLower == 'com.instagram.android') {
+          matchedAppKey = 'instagram';
+        } else if (pkgLower == 'com.snapchat.android') {
+          matchedAppKey = 'snapchat';
+        } else if (pkgLower == 'org.telegram.messenger') {
+          matchedAppKey = 'telegram';
+        } else if (pkgLower == 'com.facebook.orca') {
+          matchedAppKey = 'messenger';
+        } else if (pkgLower == 'com.google.android.apps.maps') {
+          matchedAppKey = 'google_maps';
+        } else if (pkgLower == 'com.google.android.gm') {
+          matchedAppKey = 'gmail';
+        } else if (pkgLower == 'com.google.android.youtube') {
+          matchedAppKey = 'youtube';
+        } else if (pkgLower.contains('messaging') || pkgLower.contains('sms') || pkgLower.contains('mms')) {
+          matchedAppKey = 'sms';
+        } else if (pkgLower.contains('dialer') || pkgLower.contains('telecom') || pkgLower.contains('phone') || pkgLower.contains('incallui')) {
+          matchedAppKey = 'phone';
+        }
+
+        if (!_dbService.allowedNotificationApps.contains(matchedAppKey)) {
+          return;
+        }
+
         // Google Maps Navigation Notification
         if (packageName == 'com.google.android.apps.maps') {
           final mapInfo = _parseGoogleMapsNotification(title, text);

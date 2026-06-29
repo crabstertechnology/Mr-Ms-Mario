@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -105,6 +106,11 @@ class BLEService with ChangeNotifier {
     _initBLE();
     _loadPairedDevice();
     _startReconnectTimer();
+    
+    // Periodically sync connection status with background service
+    Timer.periodic(const Duration(seconds: 5), (timer) {
+      const MethodChannel('com.mrmario/notifications').invokeMethod('updateConnectionStatus', {'connected': _isConnected});
+    });
   }
 
   void _initBLE() {
@@ -322,6 +328,10 @@ class BLEService with ChangeNotifier {
     });
     addLog("Connected to Mr. Mario successfully!", "BLE");
     _setupServices(device);
+    
+    // Update background service immediately
+    const MethodChannel('com.mrmario/notifications').invokeMethod('updateConnectionStatus', {'connected': true});
+    
     notifyListeners();
   }
 
@@ -407,6 +417,10 @@ class BLEService with ChangeNotifier {
     _statusNotificationSub?.cancel();
     
     addLog("Disconnected from Mr. Mario companion robot.", "BLE");
+    
+    // Update background service immediately
+    const MethodChannel('com.mrmario/notifications').invokeMethod('updateConnectionStatus', {'connected': false});
+    
     notifyListeners();
   }
 
