@@ -19,6 +19,7 @@ class MyNotificationListener : NotificationListenerService() {
         // Only process if there's actual content
         if (title.isNotEmpty() || text.isNotEmpty()) {
             val intent = Intent("com.mrmario.NOTIFICATION_RECEIVED")
+            intent.setPackage(this.packageName)
             intent.putExtra("title", title)
             intent.putExtra("text", text)
             intent.putExtra("package", packageName)

@@ -50,6 +50,8 @@ bool isAsleep = false;
 bool inIntroPhase = true;
 bool isAlarmRinging = false;
 unsigned long lastAlarmSoundTime = 0;
+bool isReminderRinging = false;
+unsigned long lastReminderSoundTime = 0;
 int notificationDurationMs = 5000; // default 5 seconds
 int reminderDurationMs = 10000; // default 10 seconds
 int birthdayDurationMs = 15000; // default 15 seconds
@@ -288,6 +290,8 @@ void handleRobotCommand(String text) {
         notificationText = "Meeting @ " + time + ": " + title;
         activeNotificationDurationMs = reminderDurationMs;
       }
+      isReminderRinging = true;
+      lastReminderSoundTime = millis();
       face.setNotificationText(notificationText);
       audio.playSound(SOUND_POWERUP); // play alert sound
     }
@@ -686,13 +690,23 @@ void loop() {
     lastInteractionTime = now; // reset inactivity clock
     lastExpressionCycleTime = now; // reset expression cycle timer
 
-    if (isAlarmRinging) {
+    if (isAlarmRinging || isReminderRinging) {
       isAlarmRinging = false;
+      isReminderRinging = false;
       audio.playSound(SOUND_COIN); // play coin sound to confirm dismissal
-      face.setExpression(EXPR_IDLE);
+      if (isCycleMode) {
+        cycleExpression();
+      } else {
+        if (defaultGif >= 100) {
+          face.setGifIndex(defaultGif - 100);
+          face.setExpression(EXPR_ALL_GIF);
+        } else {
+          face.setExpression((Expression)defaultGif);
+        }
+      }
       face.setStateLabel("IDLE");
       ble.sendLog("ALARM:DISMISS");
-      Serial.println("Alarm dismissed by hardware touch button.");
+      Serial.println("Alarm/Reminder dismissed by hardware touch button.");
     } else if (isAsleep && !inSettingsMenu) {
       // Any touch wakes the robot up
       isAsleep = false;
@@ -845,7 +859,7 @@ void loop() {
         }
       } else {
         // Return to random emoji cycling/default expression after notification duration
-        if (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs) {
+        if (!isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
           if (isCycleMode) {
             cycleExpression();
           } else {
@@ -867,6 +881,14 @@ void loop() {
     if (now - lastAlarmSoundTime >= 1000) {
       lastAlarmSoundTime = now;
       audio.playSound(SOUND_CHIRP);
+    }
+  }
+
+  // Periodic reminder ringing sound (2s powerup chirp)
+  if (isReminderRinging) {
+    if (now - lastReminderSoundTime >= 2000) {
+      lastReminderSoundTime = now;
+      audio.playSound(SOUND_POWERUP);
     }
   }
 
