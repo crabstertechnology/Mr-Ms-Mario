@@ -49,6 +49,7 @@ class _MainDashboardState extends State<MainDashboard> {
   static const Color textColor10 = Color(0xFFF1F5F9);
 
   // Local state for UI inputs
+  final TextEditingController _homeMessageController = TextEditingController();
   final TextEditingController _marqueeController = TextEditingController();
   final TextEditingController _customMelodyController = TextEditingController();
   final TextEditingController _aiPromptController = TextEditingController();
@@ -280,6 +281,7 @@ class _MainDashboardState extends State<MainDashboard> {
     _udpDiscoveryTimer?.cancel();
     _clockTickerTimer?.cancel();
     _robotEventsSub?.cancel();
+    _homeMessageController.dispose();
     _marqueeController.dispose();
     _customMelodyController.dispose();
     _aiPromptController.dispose();
@@ -753,6 +755,7 @@ class _MainDashboardState extends State<MainDashboard> {
     final List<Map<String, dynamic>> items = [
       {'icon': Icons.home, 'label': 'Home'},
       {'icon': Icons.face, 'label': 'Expressions'},
+      {'icon': Icons.audiotrack, 'label': 'Sounds'},
       {'icon': Icons.calendar_month, 'label': 'Calendar'},
       {'icon': Icons.settings, 'label': 'Settings'},
     ];
@@ -780,7 +783,7 @@ class _MainDashboardState extends State<MainDashboard> {
             onTap: () {
               setState(() {
                 _activeTabIdx = idx;
-                if (idx == 3) {
+                if (idx == 4) {
                   _currentSettingsSection = 'categories';
                 }
               });
@@ -1117,11 +1120,39 @@ class _MainDashboardState extends State<MainDashboard> {
         );
       case 2:
         return SingleChildScrollView(
+          key: const PageStorageKey('sounds_scroll'),
+          padding: const EdgeInsets.only(top: 10, bottom: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "SOUNDS & EFFECTS",
+                style: GoogleFonts.outfit(
+                  color: textColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Trigger hardware sound effects and compose 8-bit melodies.",
+                style: GoogleFonts.outfit(
+                  color: textColor60,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildSoundBoardPanel(db, ble),
+            ],
+          ),
+        );
+      case 3:
+        return SingleChildScrollView(
           key: const PageStorageKey('calendar_scroll'),
           padding: const EdgeInsets.only(top: 10, bottom: 20),
           child: _buildCalendarPanel(db, ble),
         );
-      case 3:
+      case 4:
         return SingleChildScrollView(
           key: const PageStorageKey('settings_scroll'),
           padding: const EdgeInsets.only(top: 10, bottom: 20),
@@ -1731,6 +1762,9 @@ class _MainDashboardState extends State<MainDashboard> {
       {'id': 4, 'name': 'Stomp SFX', 'color': const Color(0xFFFFA500)},
       {'id': 5, 'name': 'Player Shrink', 'color': const Color(0xFFFF4136)},
       {'id': 6, 'name': 'Surprise Warp', 'color': const Color(0xFF8B5CF6)},
+      {'id': 8, 'name': 'Castle Theme', 'color': const Color(0xFFE11D48)},
+      {'id': 9, 'name': 'Underworld Theme', 'color': const Color(0xFF7C3AED)},
+      {'id': 10, 'name': 'Theme Toggle SFX', 'color': const Color(0xFF0EA5E9)},
     ];
 
     return Column(
@@ -2200,6 +2234,9 @@ class _MainDashboardState extends State<MainDashboard> {
                       await db.updateOledInvert(val);
                       await db.updateNegativeEnabled(val);
                       _syncSettingsToRobot(db, ble);
+                      if (ble.isConnected) {
+                        await ble.transmitAudio(10);
+                      }
                     },
                   ),
                 ],
@@ -2439,8 +2476,126 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
         const SizedBox(height: 20),
 
+        _buildSendMessageSection(ble),
+        const SizedBox(height: 20),
+
         // Quick Actions panel
         _buildQuickActionsPanel(ble),
+      ],
+    );
+  }
+
+  Widget _buildSendMessageSection(BLEService ble) {
+    final isMiss = _isMissMario;
+    final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFF8B5CF6);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionHeader("Send Message to Robot", Icons.chat_bubble_outline, accentColor),
+        const SizedBox(height: 12),
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _homeMessageController,
+                      style: GoogleFonts.outfit(color: textColor, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: "Type a scrolling message...",
+                        hintStyle: GoogleFonts.outfit(color: textColor38),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.03),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.white.withOpacity(0.07)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.white.withOpacity(0.07)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: accentColor),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final text = _homeMessageController.text.trim();
+                      if (text.isNotEmpty) {
+                        _marqueeController.text = text; // sync with simulator
+                        setState(() {}); // Updates OLED preview
+                        await ble.transmitMarqueeText(text);
+                        _homeMessageController.clear();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text("Sent: '$text'"),
+                            backgroundColor: const Color(0xFF10B981),
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Icon(Icons.send, size: 18),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    "Hello! 👋",
+                    "I Love You! ❤️",
+                    "Good Morning! ☀️",
+                    "Battery Low! 🔋",
+                    "Meeting Started! 💼",
+                  ].map((preset) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ActionChip(
+                        label: Text(
+                          preset,
+                          style: GoogleFonts.outfit(color: textColor70, fontSize: 11),
+                        ),
+                        backgroundColor: Colors.white.withOpacity(0.05),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(color: Colors.white.withOpacity(0.07)),
+                        ),
+                        onPressed: () async {
+                          _marqueeController.text = preset;
+                          setState(() {});
+                          await ble.transmitMarqueeText(preset);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Sent Preset: '$preset'"),
+                              backgroundColor: const Color(0xFF10B981),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -2730,8 +2885,7 @@ class _MainDashboardState extends State<MainDashboard> {
         'label': 'Play Sound',
         'color': const Color(0xFF10B981),
         'onTap': () => setState(() {
-          _activeTabIdx = 3;
-          _currentSettingsSection = 'sounds';
+          _activeTabIdx = 2; // Sounds tab
         }),
       },
       {
@@ -2744,7 +2898,7 @@ class _MainDashboardState extends State<MainDashboard> {
         'icon': Icons.calendar_month,
         'label': 'Calendar',
         'color': const Color(0xFF0074D9),
-        'onTap': () => setState(() => _activeTabIdx = 2),
+        'onTap': () => setState(() => _activeTabIdx = 3), // Calendar tab
       },
       {
         'icon': Icons.message,
@@ -2769,7 +2923,7 @@ class _MainDashboardState extends State<MainDashboard> {
         'label': 'Pair Comp',
         'color': const Color(0xFFEC4899),
         'onTap': () => setState(() {
-          _activeTabIdx = 3;
+          _activeTabIdx = 4; // Settings tab
           _currentSettingsSection = 'companions';
         }),
       },
@@ -3882,6 +4036,8 @@ class _MainDashboardState extends State<MainDashboard> {
               );
             },
           ),
+        const SizedBox(height: 28),
+        _buildAlarmsSection(db, ble),
       ],
     );
   }
@@ -4244,18 +4400,10 @@ class _MainDashboardState extends State<MainDashboard> {
 
 
 
-        // 3. Sound & Melody Board
-        _buildSectionHeader("Sound & Melody Board", Icons.audiotrack, Colors.pink.shade600),
-        const SizedBox(height: 12),
-        _buildSoundBoardPanel(db, ble),
-        const SizedBox(height: 28),
-
-        // 4. Device Configuration
+        // 2. Device Configuration
         _buildSectionHeader("Device Configuration", Icons.settings, Colors.purple.shade600),
         const SizedBox(height: 12),
         _buildChronosPanel(db, ble),
-        const SizedBox(height: 28),
-        _buildAlarmsSection(db, ble),
         const SizedBox(height: 28),
         _buildNotificationSyncPanel(db, ble),
         const SizedBox(height: 28),

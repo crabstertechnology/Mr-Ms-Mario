@@ -63,7 +63,7 @@ private:
       size_t len = pChar->getLength();
       if (len > 0) {
         uint8_t audioVal = data[0];
-        if (audioVal <= SOUND_STARTUP) {
+        if (audioVal <= SOUND_THEMECHANGE) {
           handleBLEAudio((SoundEffect)audioVal);
         }
       }

@@ -137,10 +137,45 @@ public:
         eq(784, 50); eq(0, 10);   // G5 50 10
         eq(659, 50); eq(0, 10);   // E5 50 10
         eq(523, 50); eq(0, 10);   // C5 50 10
-        eq(587, 50); eq(0, 10);   // D5 50 10
         eq(494, 50); eq(0, 50);   // B4 50 50
         break;
       }
+
+      case SOUND_CASTLE: {
+        auto eq = [this, speedPercent](uint16_t freq, uint16_t dur) {
+          enqueueNote(freq, (dur * 100) / speedPercent);
+        };
+        eq(740, 80); eq(0, 20);   // F#5
+        eq(698, 80); eq(0, 20);   // F5
+        eq(622, 80); eq(0, 20);   // D#5
+        eq(587, 80); eq(0, 20);   // D5
+        eq(740, 80); eq(0, 20);   // F#5
+        eq(698, 80); eq(0, 20);   // F5
+        eq(622, 80); eq(0, 20);   // D#5
+        eq(587, 160);             // D5
+        break;
+      }
+
+      case SOUND_UNDERWORLD: {
+        auto eq = [this, speedPercent](uint16_t freq, uint16_t dur) {
+          enqueueNote(freq, (dur * 100) / speedPercent);
+        };
+        eq(131, 80); eq(0, 40);   // C4
+        eq(262, 80); eq(0, 40);   // C5
+        eq(110, 80); eq(0, 40);   // A3
+        eq(220, 80); eq(0, 40);   // A4
+        eq(117, 80); eq(0, 40);   // AS3
+        eq(233, 80); eq(0, 40);   // AS4
+        break;
+      }
+
+      case SOUND_THEMECHANGE:
+        enqueueNote(523, 60);    // C5
+        enqueueNote(0, 10);
+        enqueueNote(659, 60);    // E5
+        enqueueNote(0, 10);
+        enqueueNote(784, 80);    // G5
+        break;
         
       default:
         break;
