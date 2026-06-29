@@ -140,11 +140,24 @@ class _MainDashboardState extends State<MainDashboard> {
         _isNotificationPermissionGranted = granted;
       });
     }
+    final postGranted = await service.isPostNotificationsPermissionGranted();
+    if (mounted && _isPostNotificationsPermissionGranted != postGranted) {
+      setState(() {
+        _isPostNotificationsPermissionGranted = postGranted;
+      });
+    }
   }
 
   Future<void> _requestNotificationPermission() async {
     final service = Provider.of<PhoneNotificationService>(context, listen: false);
-    await service.openSettings();
+    final postGranted = await service.isPostNotificationsPermissionGranted();
+    if (!postGranted) {
+      await service.requestPostNotificationsPermission();
+    }
+    final listenerGranted = await service.isPermissionGranted();
+    if (!listenerGranted) {
+      await service.openSettings();
+    }
   }
 
   Future<void> _compileFirmware() async {
@@ -221,6 +234,7 @@ class _MainDashboardState extends State<MainDashboard> {
   Timer? _alarmSoundTimer;
   StreamSubscription? _robotEventsSub;
   bool _isNotificationPermissionGranted = false;
+  bool _isPostNotificationsPermissionGranted = false;
 
   @override
   void initState() {
@@ -4230,8 +4244,8 @@ class _MainDashboardState extends State<MainDashboard> {
                   const SizedBox(width: 8),
                   Text(
                     _isNotificationPermissionGranted
-                        ? "Notification access is GRANTED"
-                        : "Notification access is REQUIRED",
+                        ? "Notification Listener access is GRANTED"
+                        : "Notification Listener access is REQUIRED",
                     style: GoogleFonts.outfit(
                       color: _isNotificationPermissionGranted ? Colors.green : Colors.amber.shade700,
                       fontSize: 12,
@@ -4243,7 +4257,44 @@ class _MainDashboardState extends State<MainDashboard> {
                     TextButton(
                       onPressed: _requestNotificationPermission,
                       child: Text(
-                        "GRANT ACCESS",
+                        "GRANT",
+                        style: GoogleFonts.outfit(
+                          color: _accentColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    _isPostNotificationsPermissionGranted ? Icons.check_circle : Icons.warning,
+                    color: _isPostNotificationsPermissionGranted ? Colors.green : Colors.amber,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _isPostNotificationsPermissionGranted
+                        ? "System Notification Bar is GRANTED"
+                        : "System Notification Bar is REQUIRED",
+                    style: GoogleFonts.outfit(
+                      color: _isPostNotificationsPermissionGranted ? Colors.green : Colors.amber.shade700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (!_isPostNotificationsPermissionGranted)
+                    TextButton(
+                      onPressed: () async {
+                        final service = Provider.of<PhoneNotificationService>(context, listen: false);
+                        await service.requestPostNotificationsPermission();
+                      },
+                      child: Text(
+                        "GRANT",
                         style: GoogleFonts.outfit(
                           color: _accentColor,
                           fontWeight: FontWeight.bold,

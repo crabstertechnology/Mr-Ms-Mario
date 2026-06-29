@@ -308,6 +308,21 @@ void handleRobotCommand(String text) {
       face.setStateLabel("IDLE");
       Serial.println("Alarm stopped/dismissed.");
     }
+  } else if (text.startsWith("MAP:")) {
+    // Command format: MAP:direction,distance
+    String payload = text.substring(4);
+    int comma = payload.indexOf(',');
+    if (comma > 0) {
+      String direction = payload.substring(0, comma);
+      String distance = payload.substring(comma + 1);
+      direction.trim();
+      distance.trim();
+      direction.toUpperCase();
+      
+      face.setMapNavigation(direction, distance);
+      audio.playSound(SOUND_CHIRP);
+      activeNotificationDurationMs = 15000; // 15 seconds visibility
+    }
   } else {
     // Normal text message notification
     face.setNotificationText(text);

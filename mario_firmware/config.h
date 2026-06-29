@@ -34,7 +34,8 @@ enum Expression {
   EXPR_WINK,
   EXPR_TEXT,
   EXPR_CLOCK,
-  EXPR_ALL_GIF = 9  // Auto-cycle from master ALL_GIFS_TABLE (all 63 animations)
+  EXPR_MAP,
+  EXPR_ALL_GIF = 10  // Auto-cycle from master ALL_GIFS_TABLE (all 63 animations)
 };
 
 // Buzzer Sound Effects

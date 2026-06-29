@@ -26,6 +26,10 @@ private:
   String stateLabel;
   int frameDelayMs;
 
+  // Map navigation state
+  String mapDirection;
+  String mapDistance;
+
 public:
   MarioFace(Adafruit_SSD1306& disp) 
     : display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100) {
@@ -37,6 +41,9 @@ public:
     notificationText = "";
     scrollPos = SCREEN_WIDTH;
     lastScrollTime = 0;
+
+    mapDirection = "STRAIGHT";
+    mapDistance = "--";
   }
 
   void updateLabelFromState() {
@@ -101,6 +108,12 @@ public:
   void setNotificationText(String text) {
     notificationText = text;
     setExpression(EXPR_TEXT);
+  }
+
+  void setMapNavigation(String direction, String distance) {
+    mapDirection = direction;
+    mapDistance = distance;
+    setExpression(EXPR_MAP);
   }
 
   void setStateLabel(String label) {
@@ -244,6 +257,8 @@ public:
       drawTextScreen();
     } else if (currentExpr == EXPR_CLOCK) {
       drawClockScreen(hour, minute, second, is12Hour);
+    } else if (currentExpr == EXPR_MAP) {
+      drawMapScreen();
     } else if (currentExpr == EXPR_ALL_GIF) {
       // ── All-GIF mode: render from the PROGMEM master table ──
       if (currentGifIndex < ALL_GIFS_COUNT) {
@@ -357,6 +372,48 @@ private:
     display.setTextSize(2);
     display.setCursor(scrollPos, 35);
     display.print(notificationText);
+  }
+
+  void drawMapScreen() {
+    // 1. Draw header
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(4, 2);
+    display.print("NAVIGATION");
+    display.drawFastHLine(0, 12, SCREEN_WIDTH, SSD1306_WHITE);
+
+    // 2. Draw Arrow based on mapDirection (centered around x=24)
+    if (mapDirection == "LEFT") {
+      display.fillRect(20, 24, 12, 6, SSD1306_WHITE); // horizontal shaft
+      display.fillRect(26, 30, 6, 18, SSD1306_WHITE); // vertical shaft
+      display.drawTriangle(20, 17, 20, 37, 8, 27, SSD1306_WHITE); // head pointing left
+    } else if (mapDirection == "RIGHT") {
+      display.fillRect(16, 24, 12, 6, SSD1306_WHITE); // horizontal shaft
+      display.fillRect(16, 30, 6, 18, SSD1306_WHITE); // vertical shaft
+      display.drawTriangle(28, 17, 28, 37, 40, 27, SSD1306_WHITE); // head pointing right
+    } else if (mapDirection == "UTURN") {
+      display.drawCircle(24, 32, 12, SSD1306_WHITE);
+      display.fillRect(18, 32, 12, 20, SSD1306_BLACK); // clear bottom middle
+      display.fillRect(12, 32, 6, 16, SSD1306_WHITE); // left leg
+      display.fillRect(30, 32, 6, 16, SSD1306_WHITE); // right leg
+      display.drawTriangle(12, 34, 12, 46, 4, 40, SSD1306_WHITE); // head pointing down
+    } else if (mapDirection == "ROUNDABOUT") {
+      display.drawCircle(24, 32, 12, SSD1306_WHITE);
+      display.drawCircle(24, 32, 6, SSD1306_BLACK);
+      display.drawTriangle(32, 24, 40, 30, 32, 36, SSD1306_WHITE); // exit arrow
+    } else { // STRAIGHT / default
+      display.fillRect(21, 28, 6, 20, SSD1306_WHITE); // vertical shaft
+      display.drawTriangle(14, 28, 34, 28, 24, 16, SSD1306_WHITE); // head pointing up
+    }
+
+    // 3. Draw Distance / Meter Text on the right side
+    display.setTextSize(1);
+    display.setCursor(60, 22);
+    display.print("Distance:");
+    
+    display.setTextSize(2);
+    display.setCursor(60, 36);
+    display.print(mapDistance);
   }
 };
 
