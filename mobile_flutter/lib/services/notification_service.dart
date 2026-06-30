@@ -72,6 +72,15 @@ class PhoneNotificationService {
         final String displayMessage = "NOTIF:$titleClean|$textClean";
         await _forwardToRobot(displayMessage);
         break;
+
+      case 'onNotificationRemoved':
+        if (!_dbService.notificationSyncEnabled) return;
+        final Map<dynamic, dynamic> data = call.arguments as Map<dynamic, dynamic>;
+        final String packageName = data['package'] ?? '';
+        if (packageName == 'com.google.android.apps.maps') {
+          await _forwardToRobot("MAP:EXIT");
+        }
+        break;
     }
   }
 
@@ -113,17 +122,13 @@ class PhoneNotificationService {
       direction = "STRAIGHT";
     }
 
-    if (direction.isEmpty && distance.isNotEmpty) {
+    if (direction.isEmpty) {
       direction = "STRAIGHT";
-    }
-
-    if (direction.isEmpty && distance.isEmpty) {
-      return null;
     }
 
     // 3. Extract description (street/instruction)
     String description = title;
-    if (description.isEmpty || description == "Google Maps") {
+    if (description.isEmpty || description == "Google Maps" || description == "Notification") {
       description = text;
     }
     // Clean distance and time from description

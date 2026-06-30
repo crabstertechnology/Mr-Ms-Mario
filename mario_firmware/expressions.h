@@ -274,7 +274,7 @@ public:
     } else if (currentExpr == EXPR_CLOCK) {
       drawClockScreen(hour, minute, second, is12Hour);
     } else if (currentExpr == EXPR_MAP) {
-      drawMapScreen();
+      drawMapScreen(hour, minute, is12Hour);
     } else if (currentExpr == EXPR_ALL_GIF) {
       // ── All-GIF mode: render from the PROGMEM master table ──
       if (currentGifIndex < ALL_GIFS_COUNT) {
@@ -414,47 +414,80 @@ private:
     }
   }
 
-  void drawMapScreen() {
+  void drawMapScreen(int hour, int minute, bool is12Hour) {
     display.setTextColor(SSD1306_WHITE);
-    display.setTextWrap(true);
+    display.setTextWrap(false);
 
-    // 1. Draw Arrow based on mapDirection (centered left-right around x=24)
+    // 1. Draw Header (GPS & Time)
+    display.setTextSize(1);
+    display.setCursor(4, 2);
+    display.print("GPS");
+
+    char timeStr[8];
+    if (is12Hour) {
+      int dispHour = hour % 12;
+      if (dispHour == 0) dispHour = 12;
+      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
+    } else {
+      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", hour, minute);
+    }
+    display.setCursor(98, 2);
+    display.print(timeStr);
+
+    display.drawFastHLine(0, 11, SCREEN_WIDTH, SSD1306_WHITE);
+
+    // 2. Draw Giant Arrow in the middle (centered around x=64, y=27)
     if (mapDirection == "LEFT") {
-      display.fillRect(24, 16, 5, 18, SSD1306_WHITE); // vertical shaft
-      display.fillRect(14, 12, 11, 5, SSD1306_WHITE); // horizontal shaft
-      display.drawTriangle(14, 7, 14, 21, 6, 14, SSD1306_WHITE); // head pointing left
+      // Bold LEFT Turn Arrow
+      display.fillRect(58, 24, 12, 6, SSD1306_WHITE); // horizontal shaft
+      display.fillRect(64, 30, 6, 11, SSD1306_WHITE); // vertical shaft
+      display.fillTriangle(58, 27, 68, 17, 68, 37, SSD1306_WHITE); // filled arrowhead
     } else if (mapDirection == "RIGHT") {
-      display.fillRect(19, 16, 5, 18, SSD1306_WHITE); // vertical shaft
-      display.fillRect(23, 12, 11, 5, SSD1306_WHITE); // horizontal shaft
-      display.drawTriangle(33, 7, 33, 21, 41, 14, SSD1306_WHITE); // head pointing right
+      // Bold RIGHT Turn Arrow
+      display.fillRect(58, 24, 12, 6, SSD1306_WHITE); // horizontal shaft
+      display.fillRect(58, 30, 6, 11, SSD1306_WHITE); // vertical shaft
+      display.fillTriangle(70, 27, 60, 17, 60, 37, SSD1306_WHITE); // filled arrowhead
     } else if (mapDirection == "UTURN") {
-      display.drawCircle(24, 20, 10, SSD1306_WHITE);
-      display.drawCircle(24, 20, 6, SSD1306_BLACK);
-      display.fillRect(14, 20, 20, 15, SSD1306_BLACK); // clear bottom
-      display.fillRect(14, 20, 4, 14, SSD1306_WHITE); // left leg
-      display.fillRect(26, 20, 4, 14, SSD1306_WHITE); // right leg
-      display.drawTriangle(11, 28, 21, 28, 16, 34, SSD1306_WHITE); // head pointing down
+      // Bold U-Turn
+      display.drawCircle(64, 26, 10, SSD1306_WHITE);
+      display.drawCircle(64, 26, 9, SSD1306_WHITE);
+      display.drawCircle(64, 26, 8, SSD1306_WHITE);
+      display.fillRect(50, 26, 28, 16, SSD1306_BLACK); // clear bottom
+      display.fillRect(54, 26, 3, 12, SSD1306_WHITE); // left leg
+      display.fillRect(67, 26, 3, 12, SSD1306_WHITE); // right leg
+      display.fillTriangle(55, 38, 50, 32, 60, 32, SSD1306_WHITE); // head pointing down
     } else if (mapDirection == "ROUNDABOUT") {
-      display.drawCircle(24, 22, 9, SSD1306_WHITE);
-      display.drawCircle(24, 22, 5, SSD1306_BLACK);
-      display.drawTriangle(33, 17, 33, 27, 39, 22, SSD1306_WHITE); // exit arrow
+      // Bold Roundabout
+      display.drawCircle(64, 26, 9, SSD1306_WHITE);
+      display.drawCircle(64, 26, 8, SSD1306_WHITE);
+      display.drawCircle(64, 26, 7, SSD1306_WHITE);
+      display.fillRect(59, 21, 10, 10, SSD1306_BLACK); // clear center
+      display.fillTriangle(77, 26, 69, 19, 69, 33, SSD1306_WHITE); // exit arrow
     } else { // STRAIGHT / default
-      display.fillRect(21, 18, 6, 16, SSD1306_WHITE); // vertical shaft
-      display.drawTriangle(14, 18, 34, 18, 24, 6, SSD1306_WHITE); // head pointing up
+      // Bold Straight Arrow
+      display.fillRect(61, 21, 6, 20, SSD1306_WHITE); // vertical shaft
+      display.fillTriangle(64, 11, 52, 22, 76, 22, SSD1306_WHITE); // filled arrowhead
     }
 
-    // 2. Draw Distance / Meter Text under the arrow (centered or left-aligned)
+    // 3. Draw bottom texts (Turn Right, In 120 m)
     display.setTextSize(1);
-    display.setCursor(6, 40);
-    display.print(mapDistance);
+    
+    // Description line (e.g. "Turn Right" / "Head west")
+    display.setCursor(4, 45);
+    String shortDesc = mapDescription;
+    if (shortDesc.length() > 20) {
+      shortDesc = shortDesc.substring(0, 17) + "...";
+    }
+    display.print(shortDesc);
 
-    // 3. Draw Street name / Turn description next to arrow (starting at x=50, wrapped)
-    display.setCursor(50, 12);
-    display.print(mapDescription);
-
-    // 4. Draw Double Divider Line at the bottom
-    display.drawFastHLine(0, 52, SCREEN_WIDTH, SSD1306_WHITE);
-    display.drawFastHLine(0, 55, SCREEN_WIDTH, SSD1306_WHITE);
+    // Distance line (e.g. "In 120 m")
+    display.setCursor(4, 53);
+    if (mapDistance != "" && mapDistance != "--") {
+      display.print("In ");
+      display.print(mapDistance);
+    } else {
+      display.print("");
+    }
   }
 };
 

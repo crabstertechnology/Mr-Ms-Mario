@@ -309,8 +309,15 @@ void handleRobotCommand(String text) {
       Serial.println("Alarm stopped/dismissed.");
     }
   } else if (text.startsWith("MAP:")) {
-    // Command format: MAP:direction,distance,description
+    // Command format: MAP:direction,distance,description OR MAP:EXIT
     String payload = text.substring(4);
+    payload.trim();
+    if (payload == "EXIT") {
+      face.setExpression(EXPR_IDLE);
+      lastExpressionCycleTime = millis() - activeNotificationDurationMs;
+      Serial.println("Maps Navigation Exited.");
+      return;
+    }
     int firstComma = payload.indexOf(',');
     if (firstComma > 0) {
       String direction = payload.substring(0, firstComma);
@@ -900,7 +907,7 @@ void loop() {
         }
       } else {
         // Return to random emoji cycling/default expression after notification duration
-        if (!isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
+        if (face.getExpression() != EXPR_MAP && !isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
           if (isCycleMode) {
             cycleExpression();
           } else {

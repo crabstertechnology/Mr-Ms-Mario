@@ -19,7 +19,8 @@ class MrMarioBackgroundService : Service() {
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.mrmario.NOTIFICATION_RECEIVED") {
+            val action = intent?.action
+            if (action == "com.mrmario.NOTIFICATION_RECEIVED") {
                 val title = intent.getStringExtra("title") ?: ""
                 val text = intent.getStringExtra("text") ?: ""
                 val packageName = intent.getStringExtra("package") ?: ""
@@ -32,6 +33,15 @@ class MrMarioBackgroundService : Service() {
                     channel.invokeMethod("onNotification", mapOf(
                         "title" to title,
                         "text" to text,
+                        "package" to packageName
+                    ))
+                }
+            } else if (action == "com.mrmario.NOTIFICATION_REMOVED") {
+                val packageName = intent.getStringExtra("package") ?: ""
+                val engine = MainActivity.flutterEngine
+                if (engine != null) {
+                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.mrmario/notifications")
+                    channel.invokeMethod("onNotificationRemoved", mapOf(
                         "package" to packageName
                     ))
                 }
@@ -56,7 +66,9 @@ class MrMarioBackgroundService : Service() {
         startMyForeground()
 
         // Register broadcast receiver to intercept notifications in the background service itself
-        val filter = IntentFilter("com.mrmario.NOTIFICATION_RECEIVED")
+        val filter = IntentFilter()
+        filter.addAction("com.mrmario.NOTIFICATION_RECEIVED")
+        filter.addAction("com.mrmario.NOTIFICATION_REMOVED")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
