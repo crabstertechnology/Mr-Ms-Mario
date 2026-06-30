@@ -110,21 +110,21 @@ class PhoneNotificationService {
     }
     
     // Clean distance format: e.g. "500 M" -> "500 m"
-    distance = distance.replaceAll(" ", "").toLowerCase();
+    distance = distance.replaceAll(" ", "").replaceAll("\u00a0", "").replaceAll(RegExp(r'\s+'), "").toLowerCase();
     if (distance.endsWith("meters")) distance = distance.replaceAll("meters", "m");
     if (distance.endsWith("kilometers")) distance = distance.replaceAll("kilometers", "km");
     if (distance.endsWith("feet")) distance = distance.replaceAll("feet", "ft");
     if (distance.endsWith("miles")) distance = distance.replaceAll("miles", "mi");
-    // Format distance nicely with space, e.g. "500m" -> "500 m", "1.2km" -> "1.2 km"
+    // Format distance nicely with standard ASCII space, e.g. "500m" -> "500 m", "1.2km" -> "1.2 km"
     final spaceMatch = RegExp(r'^(\d+(?:[\.,]\d+)?)([a-zA-Z]+)$').firstMatch(distance);
     if (spaceMatch != null) {
       distance = "${spaceMatch.group(1)} ${spaceMatch.group(2)}";
     }
     distance = distance.toUpperCase();
 
-    // Clean "left" when it means "remaining" (e.g., "12 min left") to avoid matching it as a left turn instruction
+    // Clean "left" when it means "remaining" (e.g., "12 min. left", "12 min left", "12 m left") to avoid matching it as a left turn instruction
     String cleanedForDirection = combined
-        .replaceAll(RegExp(r'\b\d+\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours|h)\s+left\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\b\d+\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours|h|m)\.?\s+left\b', caseSensitive: false), '')
         .replaceAll(RegExp(r'\bleft\b\s*•', caseSensitive: false), '')
         .replaceAll(RegExp(r'\bleft\b\s*$', caseSensitive: false), '');
 
