@@ -99,92 +99,73 @@ class PhoneNotificationService {
   }
 
   Map<String, String>? _parseGoogleMapsNotification(String title, String text, String subText, String bigText) {
-    // Keep original text for pattern matching too
-    final combinedRaw = "$title $text $subText $bigText";
-    final combined = combinedRaw.toLowerCase();
-    
-    // 1. Extract Distance — ONLY from title and text (NOT subText which has total route distance like "8.2 km")
-    //    Google Maps puts turn distance in the title when approaching (e.g. "In 200 m") or in text.
-    //    subText has "19 min · 8.2 km · 4:18 pm ETA" — we must NOT pick that 8.2 km as turn distance.
-    final distanceRegex = RegExp(r'\b\d+(?:[\.,]\d+)?\s*(?:m|km|ft|mi|yards|yd|meters|kilometers|feet|miles)\b');
-    final turnTextLower = "$title $text $bigText".toLowerCase();
-    final match = distanceRegex.firstMatch(turnTextLower);
-    String distance = "";
-    if (match != null) {
-      distance = match.group(0)!;
+    // From live logs: Google Maps sends text='Turn right', text='Turn left', text='Head west'
+    // subText='19 min · 8.2 km · 4:18 pm ETA'
+    // title is often empty during navigation
+
+    final combined = "$title $text $subText $bigText".toLowerCase();
+
+    // ── 1. DISTANCE ──────────────────────────────────────────────────────────
+    // Use ALL fields so we get the km value from subText when title is empty.
+    // e.g. subText='19 min · 8.2 km · ...' → shows "8.2 KM" as remaining distance
+    final distanceRegex = RegExp(r'\b(\d+(?:[.,]\d+)?)\s*(m|km|ft|mi|meters|kilometers|feet|miles|yards|yd)\b');
+    final distMatch = distanceRegex.firstMatch(combined);
+    String distance = "--";
+    if (distMatch != null) {
+      String num  = distMatch.group(1)!;
+      String unit = distMatch.group(2)!.toLowerCase();
+      // Normalize unit
+      if (unit == "meters")     unit = "m";
+      if (unit == "kilometers") unit = "km";
+      if (unit == "feet")       unit = "ft";
+      if (unit == "miles")      unit = "mi";
+      if (unit == "yards")      unit = "yd";
+      distance = "$num $unit".toUpperCase();
     }
-    
-    // Clean distance format: e.g. "500 M" -> "500 m"
-    distance = distance.replaceAll(" ", "").replaceAll("\u00a0", "").replaceAll(RegExp(r'\s+'), "").toLowerCase();
-    if (distance.endsWith("meters")) distance = distance.replaceAll("meters", "m");
-    if (distance.endsWith("kilometers")) distance = distance.replaceAll("kilometers", "km");
-    if (distance.endsWith("feet")) distance = distance.replaceAll("feet", "ft");
-    if (distance.endsWith("miles")) distance = distance.replaceAll("miles", "mi");
-    // Format distance nicely with standard ASCII space, e.g. "500m" -> "500 m", "1.2km" -> "1.2 km"
-    final spaceMatch = RegExp(r'^(\d+(?:[\.,]\d+)?)([a-zA-Z]+)$').firstMatch(distance);
-    if (spaceMatch != null) {
-      distance = "${spaceMatch.group(1)} ${spaceMatch.group(2)}";
-    }
-    distance = distance.toUpperCase();
-    _bleService.addLog("Maps dist parse from title+text: '$distance'", "NOTIF");
+    _bleService.addLog("Maps dist: '$distance'", "NOTIF");
 
-    // Clean "left" when it means "remaining" (e.g., "12 min. left", "12 min left", "12 m left") to avoid matching it as a left turn instruction
-    String cleanedForDirection = combined
-        .replaceAll(RegExp(r'\b\d+\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours|h|m)\.?\s+left\b', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\bleft\b\s*•', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\bleft\b\s*$', caseSensitive: false), '');
+    // ── 2. DIRECTION ─────────────────────────────────────────────────────────
+    // Use the text field directly (most reliable per live logs: text='Turn right')
+    // Strip any "N min left" phrases first to prevent false LEFT matches
+    final cleanedText = combined
+        .replaceAll(RegExp(r'\b\d+\s*(?:min|mins|minute|minutes|hr|hrs|h)\s+left\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\bleft\b(?=\s*[·•])', caseSensitive: false), '');
 
+    String direction = "STRAIGHT";
 
-    // 2. Extract Direction / Maneuver
-    // NOTE: "exit" removed from roundabout list — it falsely matched highway exit ramps (which are right turns)
-    String direction = "";
-    final leftKeywords = ["left", "gauche", "links", "sinistra", "izquierda", "esquerda", "налево", "←", "↖", "↙", "lft", "turn left", "keep left", "bear left", "slight left", "बायें"];
-    final rightKeywords = ["right", "droite", "rechts", "destra", "derecha", "direita", "направо", "→", "↗", "↘", "rgt", "turn right", "keep right", "bear right", "slight right", "दायें", "take the ramp", "take the exit"];
-    // Note: "exit" removed — use only explicit roundabout markers to avoid highway exit ramp false positives
-    final uturnKeywords = ["u-turn", "uturn", "↶", "↷", "↺", "↻", "demi-tour", "wenden", "u turn"];
-    final roundaboutKeywords = ["roundabout", "rotary", "⟳", "⟲", "rond-point", "kreisverkehr", "rotonda"];
-    final straightKeywords = ["straight", "continue", "head north", "head south", "head east", "head west", "keep straight", "↑", "↓", "straighten"];
-
-    _bleService.addLog("Maps direction parse — cleanedText: '$cleanedForDirection'", "NOTIF");
-
-    if (uturnKeywords.any((k) => cleanedForDirection.contains(k))) {
+    if (RegExp(r'\bu.?turn\b').hasMatch(cleanedText)) {
       direction = "UTURN";
-    } else if (roundaboutKeywords.any((k) => cleanedForDirection.contains(k))) {
+    } else if (RegExp(r'\b(roundabout|rotary|rond.point)\b').hasMatch(cleanedText)) {
       direction = "ROUNDABOUT";
-    } else if (leftKeywords.any((k) => cleanedForDirection.contains(k))) {
-      direction = "LEFT";
-    } else if (rightKeywords.any((k) => cleanedForDirection.contains(k))) {
+    } else if (RegExp(r'\bright\b').hasMatch(cleanedText)) {
+      // Check RIGHT before LEFT to avoid false positives
       direction = "RIGHT";
-    } else if (straightKeywords.any((k) => cleanedForDirection.contains(k))) {
+    } else if (RegExp(r'\bleft\b').hasMatch(cleanedText)) {
+      direction = "LEFT";
+    } else if (RegExp(r'\b(straight|continue|head\s+(north|south|east|west))\b').hasMatch(cleanedText)) {
       direction = "STRAIGHT";
     }
 
-    _bleService.addLog("Maps direction result: '$direction'", "NOTIF");
+    _bleService.addLog("Maps dir: '$direction' from: '$cleanedText'", "NOTIF");
 
-    if (direction.isEmpty) {
-      direction = "STRAIGHT";
-    }
-
-    // 3. Extract remaining time (e.g. "15 min", "1 hr 12 min", "1h 30m")
-    final timeRemainingRegex = RegExp(
+    // ── 3. REMAINING TIME ────────────────────────────────────────────────────
+    final timeRegex = RegExp(
       r'\b\d+\s*(?:hr|hrs|hour|hours|h)\s*\d+\s*(?:min|mins|minutes)\b|\b\d+\s*(?:min|mins|minutes)\b|\b\d+\s*(?:hr|hrs|hour|hours|h)\b',
-      caseSensitive: false
+      caseSensitive: false,
     );
-    final timeMatch = timeRemainingRegex.firstMatch("$subText $bigText $text $title");
+    final timeMatch = timeRegex.firstMatch("$subText $bigText $text $title");
     String remainingTime = "";
     if (timeMatch != null) {
-      remainingTime = timeMatch.group(0)!.trim().toLowerCase();
-      // Format to short representation, e.g. "1h 15m" or "15min"
-      remainingTime = remainingTime
-        .replaceAll(RegExp(r'\s*(?:minutes|minute|mins)\b'), 'min')
-        .replaceAll(RegExp(r'\s*(?:hours|hour|hrs|hr)\b'), 'h')
-        .replaceAll(RegExp(r'\s+'), '');
+      remainingTime = timeMatch.group(0)!.trim().toLowerCase()
+          .replaceAll(RegExp(r'\s*(?:minutes|minute|mins)\b'), 'min')
+          .replaceAll(RegExp(r'\s*(?:hours|hour|hrs|hr)\b'), 'h')
+          .replaceAll(RegExp(r'\s+'), '');
     }
 
     return {
       'direction': direction,
-      'distance': distance.isNotEmpty ? distance : "--",
-      'description': remainingTime.isNotEmpty ? remainingTime : "",
+      'distance': distance,
+      'description': remainingTime,
     };
   }
 
