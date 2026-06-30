@@ -309,19 +309,30 @@ void handleRobotCommand(String text) {
       Serial.println("Alarm stopped/dismissed.");
     }
   } else if (text.startsWith("MAP:")) {
-    // Command format: MAP:direction,distance
+    // Command format: MAP:direction,distance,description
     String payload = text.substring(4);
-    int comma = payload.indexOf(',');
-    if (comma > 0) {
-      String direction = payload.substring(0, comma);
-      String distance = payload.substring(comma + 1);
+    int firstComma = payload.indexOf(',');
+    if (firstComma > 0) {
+      String direction = payload.substring(0, firstComma);
+      String rest = payload.substring(firstComma + 1);
+      int secondComma = rest.indexOf(',');
+      String distance = "";
+      String description = "";
+      if (secondComma > 0) {
+        distance = rest.substring(0, secondComma);
+        description = rest.substring(secondComma + 1);
+      } else {
+        distance = rest;
+        description = "Maps Navigation";
+      }
       direction.trim();
       distance.trim();
+      description.trim();
       direction.toUpperCase();
       
-      face.setMapNavigation(direction, distance);
+      face.setMapNavigation(direction, distance, description);
       audio.playSound(SOUND_CHIRP);
-      activeNotificationDurationMs = 15000; // 15 seconds visibility
+      activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
     }
   } else if (text.startsWith("NOTIF:")) {
     // Command format: NOTIF:Title|Body

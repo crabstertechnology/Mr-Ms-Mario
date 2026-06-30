@@ -60,7 +60,8 @@ class PhoneNotificationService {
           if (mapInfo != null) {
             final String direction = mapInfo['direction']!;
             final String distance = mapInfo['distance']!;
-            await _forwardToRobot("MAP:$direction,$distance");
+            final String description = mapInfo['description']!;
+            await _forwardToRobot("MAP:$direction,$distance,$description");
             break;
           }
         }
@@ -85,12 +86,17 @@ class PhoneNotificationService {
       distance = match.group(0)!.toUpperCase();
     }
     
-    // Clean distance format: e.g. "500 M" -> "500M"
+    // Clean distance format: e.g. "500 M" -> "500 m"
     distance = distance.replaceAll(" ", "").toLowerCase();
     if (distance.endsWith("meters")) distance = distance.replaceAll("meters", "m");
     if (distance.endsWith("kilometers")) distance = distance.replaceAll("kilometers", "km");
     if (distance.endsWith("feet")) distance = distance.replaceAll("feet", "ft");
     if (distance.endsWith("miles")) distance = distance.replaceAll("miles", "mi");
+    // Format distance nicely with space, e.g. "500m" -> "500 m", "1.2km" -> "1.2 km"
+    final spaceMatch = RegExp(r'^(\d+(?:[\.,]\d+)?)([a-zA-Z]+)$').firstMatch(distance);
+    if (spaceMatch != null) {
+      distance = "${spaceMatch.group(1)} ${spaceMatch.group(2)}";
+    }
     distance = distance.toUpperCase();
 
     // 2. Extract Direction / Maneuver
@@ -107,7 +113,6 @@ class PhoneNotificationService {
       direction = "STRAIGHT";
     }
 
-    // Default to STRAIGHT if distance is found but no specific turn word is matched
     if (direction.isEmpty && distance.isNotEmpty) {
       direction = "STRAIGHT";
     }
@@ -116,9 +121,26 @@ class PhoneNotificationService {
       return null;
     }
 
+    // 3. Extract description (street/instruction)
+    String description = title;
+    if (description.isEmpty || description == "Google Maps") {
+      description = text;
+    }
+    // Clean distance and time from description
+    description = description.replaceAll(distanceRegex, "").trim();
+    description = description.replaceAll(RegExp(r'(?i)\bin\b\s*\d+\s*(?:m|km|ft|mi|yards|yd|meters|kilometers)\b,?\s*'), "").trim();
+    description = description.replaceAll(RegExp(r'(?i)\bIn\b\s*\d+\s*(?:m|km|ft|mi|yards|yd|meters|kilometers)\b,?\s*'), "").trim();
+    description = description.replaceAll(RegExp(r'\s*-\s*\d+\s*(?:min|mins|hr|hrs|hour|hours).*'), "").trim();
+    // Strip trailing/leading punctuation
+    description = description.trim();
+    if (description.endsWith(",") || description.endsWith(".") || description.endsWith("-")) {
+      description = description.substring(0, description.length - 1).trim();
+    }
+
     return {
       'direction': direction,
       'distance': distance.isNotEmpty ? distance : "--",
+      'description': description.isNotEmpty ? description : "Maps Navigation",
     };
   }
 
