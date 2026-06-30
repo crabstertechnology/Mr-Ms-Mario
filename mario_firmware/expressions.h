@@ -418,75 +418,62 @@ private:
     display.setTextColor(SSD1306_WHITE);
     display.setTextWrap(false);
 
-    // 1. Draw Header (GPS & Time)
-    display.setTextSize(1);
-    display.setCursor(4, 2);
-    display.print("GPS");
-
-    char timeStr[8];
-    if (is12Hour) {
-      int dispHour = hour % 12;
-      if (dispHour == 0) dispHour = 12;
-      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
-    } else {
-      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", hour, minute);
-    }
-    display.setCursor(98, 2);
-    display.print(timeStr);
-
-    display.drawFastHLine(0, 11, SCREEN_WIDTH, SSD1306_WHITE);
-
-    // 2. Draw Giant Arrow in the middle (centered around x=64, y=27)
+    // 1. Draw Giant Arrow in the upper/middle area (centered around x=64, y=25)
     if (mapDirection == "LEFT") {
-      // Bold LEFT Turn Arrow
-      display.fillRect(58, 24, 12, 6, SSD1306_WHITE); // horizontal shaft
-      display.fillRect(64, 30, 6, 11, SSD1306_WHITE); // vertical shaft
-      display.fillTriangle(58, 27, 68, 17, 68, 37, SSD1306_WHITE); // filled arrowhead
+      // Bold LEFT Turn Arrow (up and left)
+      display.fillTriangle(32, 22, 48, 6, 48, 38, SSD1306_WHITE); // Arrowhead pointing left
+      display.fillRect(48, 16, 24, 12, SSD1306_WHITE); // Horizontal shaft (x: 48 to 72, y: 16 to 28)
+      display.fillRect(60, 28, 12, 20, SSD1306_WHITE); // Vertical shaft (x: 60 to 72, y: 28 to 48)
     } else if (mapDirection == "RIGHT") {
-      // Bold RIGHT Turn Arrow
-      display.fillRect(58, 24, 12, 6, SSD1306_WHITE); // horizontal shaft
-      display.fillRect(58, 30, 6, 11, SSD1306_WHITE); // vertical shaft
-      display.fillTriangle(70, 27, 60, 17, 60, 37, SSD1306_WHITE); // filled arrowhead
+      // Bold RIGHT Turn Arrow (up and right)
+      display.fillTriangle(96, 22, 80, 6, 80, 38, SSD1306_WHITE); // Arrowhead pointing right
+      display.fillRect(56, 16, 24, 12, SSD1306_WHITE); // Horizontal shaft (x: 56 to 80, y: 16 to 28)
+      display.fillRect(56, 28, 12, 20, SSD1306_WHITE); // Vertical shaft (x: 56 to 68, y: 28 to 48)
     } else if (mapDirection == "UTURN") {
       // Bold U-Turn
-      display.drawCircle(64, 26, 10, SSD1306_WHITE);
-      display.drawCircle(64, 26, 9, SSD1306_WHITE);
-      display.drawCircle(64, 26, 8, SSD1306_WHITE);
-      display.fillRect(50, 26, 28, 16, SSD1306_BLACK); // clear bottom
-      display.fillRect(54, 26, 3, 12, SSD1306_WHITE); // left leg
-      display.fillRect(67, 26, 3, 12, SSD1306_WHITE); // right leg
-      display.fillTriangle(55, 38, 50, 32, 60, 32, SSD1306_WHITE); // head pointing down
+      display.drawCircle(64, 26, 16, SSD1306_WHITE);
+      display.drawCircle(64, 26, 15, SSD1306_WHITE);
+      display.drawCircle(64, 26, 14, SSD1306_WHITE);
+      display.drawCircle(64, 26, 13, SSD1306_WHITE);
+      display.drawCircle(64, 26, 12, SSD1306_WHITE);
+      display.fillRect(44, 26, 40, 24, SSD1306_BLACK); // clear bottom half of circles
+      display.fillRect(48, 26, 5, 12, SSD1306_WHITE); // left leg down
+      display.fillRect(75, 26, 5, 22, SSD1306_WHITE); // right leg down
+      display.fillTriangle(50, 48, 42, 38, 58, 38, SSD1306_WHITE); // arrowhead pointing down on left leg
     } else if (mapDirection == "ROUNDABOUT") {
       // Bold Roundabout
-      display.drawCircle(64, 26, 9, SSD1306_WHITE);
-      display.drawCircle(64, 26, 8, SSD1306_WHITE);
-      display.drawCircle(64, 26, 7, SSD1306_WHITE);
-      display.fillRect(59, 21, 10, 10, SSD1306_BLACK); // clear center
-      display.fillTriangle(77, 26, 69, 19, 69, 33, SSD1306_WHITE); // exit arrow
+      display.drawCircle(64, 24, 14, SSD1306_WHITE);
+      display.drawCircle(64, 24, 13, SSD1306_WHITE);
+      display.drawCircle(64, 24, 12, SSD1306_WHITE);
+      display.drawCircle(64, 24, 11, SSD1306_WHITE);
+      display.drawCircle(64, 24, 10, SSD1306_WHITE);
+      display.drawCircle(64, 24, 9, SSD1306_WHITE);
+      display.fillRect(59, 19, 10, 10, SSD1306_BLACK); // clear center
+      display.fillRect(60, 34, 8, 14, SSD1306_BLACK); // clear bottom entrance
+      display.fillRect(74, 20, 8, 8, SSD1306_WHITE); // shaft connecting to the circle
+      display.fillTriangle(94, 24, 80, 14, 80, 34, SSD1306_WHITE); // exit arrowhead pointing right
     } else { // STRAIGHT / default
       // Bold Straight Arrow
-      display.fillRect(61, 21, 6, 20, SSD1306_WHITE); // vertical shaft
-      display.fillTriangle(64, 11, 52, 22, 76, 22, SSD1306_WHITE); // filled arrowhead
+      display.fillRect(56, 22, 16, 26, SSD1306_WHITE); // thick vertical shaft
+      display.fillTriangle(64, 2, 44, 22, 84, 22, SSD1306_WHITE); // giant filled arrowhead
     }
 
-    // 3. Draw bottom texts (Turn Right, In 120 m)
+    // 2. Draw Bottom Status Info (Left: Distance, Right: Remaining Time)
     display.setTextSize(1);
     
-    // Description line (e.g. "Turn Right" / "Head west")
-    display.setCursor(4, 45);
-    String shortDesc = mapDescription;
-    if (shortDesc.length() > 20) {
-      shortDesc = shortDesc.substring(0, 17) + "...";
-    }
-    display.print(shortDesc);
-
-    // Distance line (e.g. "In 120 m")
-    display.setCursor(4, 53);
+    // Left side: Distance
+    display.setCursor(4, 55);
     if (mapDistance != "" && mapDistance != "--") {
-      display.print("In ");
       display.print(mapDistance);
-    } else {
-      display.print("");
+    }
+
+    // Right side: Remaining Time (stored in mapDescription)
+    if (mapDescription != "") {
+      int timeWidth = mapDescription.length() * 6;
+      int startX = SCREEN_WIDTH - timeWidth - 4;
+      if (startX < 60) startX = 60; // Keep on right half
+      display.setCursor(startX, 55);
+      display.print(mapDescription);
     }
   }
 };
