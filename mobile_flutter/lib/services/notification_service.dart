@@ -122,6 +122,12 @@ class PhoneNotificationService {
     }
     distance = distance.toUpperCase();
 
+    // Clean "left" when it means "remaining" (e.g., "12 min left") to avoid matching it as a left turn instruction
+    String cleanedForDirection = combined
+        .replaceAll(RegExp(r'\b\d+\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours|h)\s+left\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\bleft\b\s*•', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\bleft\b\s*$', caseSensitive: false), '');
+
     // 2. Extract Direction / Maneuver (UTURN and ROUNDABOUT first, then LEFT and RIGHT)
     String direction = "";
     final leftKeywords = ["left", "gauche", "links", "sinistra", "izquierda", "esquerda", "налево", "←", "↖", "↙", "lft", "turn left", "keep left", "bear left", "slight left", "बायें"];
@@ -130,15 +136,15 @@ class PhoneNotificationService {
     final roundaboutKeywords = ["roundabout", "rotary", "exit", "⟳", "⟲", "rond-point", "kreisverkehr", "rotonda"];
     final straightKeywords = ["straight", "continue", "head north", "head south", "head east", "head west", "keep straight", "↑", "↓", "straighten"];
 
-    if (uturnKeywords.any((k) => combined.contains(k))) {
+    if (uturnKeywords.any((k) => cleanedForDirection.contains(k))) {
       direction = "UTURN";
-    } else if (roundaboutKeywords.any((k) => combined.contains(k))) {
+    } else if (roundaboutKeywords.any((k) => cleanedForDirection.contains(k))) {
       direction = "ROUNDABOUT";
-    } else if (leftKeywords.any((k) => combined.contains(k))) {
+    } else if (leftKeywords.any((k) => cleanedForDirection.contains(k))) {
       direction = "LEFT";
-    } else if (rightKeywords.any((k) => combined.contains(k))) {
+    } else if (rightKeywords.any((k) => cleanedForDirection.contains(k))) {
       direction = "RIGHT";
-    } else if (straightKeywords.any((k) => combined.contains(k))) {
+    } else if (straightKeywords.any((k) => cleanedForDirection.contains(k))) {
       direction = "STRAIGHT";
     }
 
