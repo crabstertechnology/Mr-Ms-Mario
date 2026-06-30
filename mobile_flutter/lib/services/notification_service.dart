@@ -124,15 +124,21 @@ class PhoneNotificationService {
 
     // 2. Extract Direction / Maneuver (UTURN and ROUNDABOUT first, then LEFT and RIGHT)
     String direction = "";
-    if (combined.contains("u-turn") || combined.contains("uturn") || combined.contains("↶") || combined.contains("↷") || combined.contains("↺") || combined.contains("↻")) {
+    final leftKeywords = ["left", "gauche", "links", "sinistra", "izquierda", "esquerda", "налево", "←", "↖", "↙", "lft", "turn left", "keep left", "bear left", "slight left", "बायें"];
+    final rightKeywords = ["right", "droite", "rechts", "destra", "derecha", "direita", "направо", "→", "↗", "↘", "rgt", "turn right", "keep right", "bear right", "slight right", "दायें"];
+    final uturnKeywords = ["u-turn", "uturn", "↶", "↷", "↺", "↻", "demi-tour", "wenden", "u turn"];
+    final roundaboutKeywords = ["roundabout", "rotary", "exit", "⟳", "⟲", "rond-point", "kreisverkehr", "rotonda"];
+    final straightKeywords = ["straight", "continue", "head north", "head south", "head east", "head west", "keep straight", "↑", "↓", "straighten"];
+
+    if (uturnKeywords.any((k) => combined.contains(k))) {
       direction = "UTURN";
-    } else if (combined.contains("roundabout") || combined.contains("rotary") || combined.contains("exit") || combined.contains("⟳") || combined.contains("⟲")) {
+    } else if (roundaboutKeywords.any((k) => combined.contains(k))) {
       direction = "ROUNDABOUT";
-    } else if (combined.contains("left") || combined.contains("←") || combined.contains("↖") || combined.contains("↙")) {
+    } else if (leftKeywords.any((k) => combined.contains(k))) {
       direction = "LEFT";
-    } else if (combined.contains("right") || combined.contains("→") || combined.contains("↗") || combined.contains("↘")) {
+    } else if (rightKeywords.any((k) => combined.contains(k))) {
       direction = "RIGHT";
-    } else if (combined.contains("straight") || combined.contains("continue") || combined.contains("head north") || combined.contains("head south") || combined.contains("head east") || combined.contains("head west") || combined.contains("keep straight") || combined.contains("↑") || combined.contains("↓")) {
+    } else if (straightKeywords.any((k) => combined.contains(k))) {
       direction = "STRAIGHT";
     }
 

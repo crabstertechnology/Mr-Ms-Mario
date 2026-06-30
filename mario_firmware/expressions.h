@@ -419,17 +419,17 @@ private:
     display.setTextWrap(false);
 
     // 1. Draw Giant Arrow in the upper/middle area (centered around x=64, y=25)
-    if (mapDirection == "LEFT") {
+    if (mapDirection.indexOf("LEFT") >= 0) {
       // Bold LEFT Turn Arrow (up and left)
       display.fillTriangle(32, 22, 48, 6, 48, 38, SSD1306_WHITE); // Arrowhead pointing left
       display.fillRect(48, 16, 24, 12, SSD1306_WHITE); // Horizontal shaft (x: 48 to 72, y: 16 to 28)
       display.fillRect(60, 28, 12, 20, SSD1306_WHITE); // Vertical shaft (x: 60 to 72, y: 28 to 48)
-    } else if (mapDirection == "RIGHT") {
+    } else if (mapDirection.indexOf("RIGHT") >= 0) {
       // Bold RIGHT Turn Arrow (up and right)
       display.fillTriangle(96, 22, 80, 6, 80, 38, SSD1306_WHITE); // Arrowhead pointing right
       display.fillRect(56, 16, 24, 12, SSD1306_WHITE); // Horizontal shaft (x: 56 to 80, y: 16 to 28)
       display.fillRect(56, 28, 12, 20, SSD1306_WHITE); // Vertical shaft (x: 56 to 68, y: 28 to 48)
-    } else if (mapDirection == "UTURN") {
+    } else if (mapDirection.indexOf("UTURN") >= 0 || mapDirection.indexOf("U-TURN") >= 0) {
       // Bold U-Turn
       display.drawCircle(64, 26, 16, SSD1306_WHITE);
       display.drawCircle(64, 26, 15, SSD1306_WHITE);
@@ -440,7 +440,7 @@ private:
       display.fillRect(48, 26, 5, 12, SSD1306_WHITE); // left leg down
       display.fillRect(75, 26, 5, 22, SSD1306_WHITE); // right leg down
       display.fillTriangle(50, 48, 42, 38, 58, 38, SSD1306_WHITE); // arrowhead pointing down on left leg
-    } else if (mapDirection == "ROUNDABOUT") {
+    } else if (mapDirection.indexOf("ROUNDABOUT") >= 0 || mapDirection.indexOf("ROUND") >= 0 || mapDirection.indexOf("ROTARY") >= 0) {
       // Bold Roundabout
       display.drawCircle(64, 24, 14, SSD1306_WHITE);
       display.drawCircle(64, 24, 13, SSD1306_WHITE);

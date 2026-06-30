@@ -319,28 +319,31 @@ void handleRobotCommand(String text) {
       return;
     }
     int firstComma = payload.indexOf(',');
-    if (firstComma > 0) {
-      String direction = payload.substring(0, firstComma);
+    String direction = "";
+    String distance = "";
+    String description = "";
+
+    if (firstComma < 0) {
+      direction = payload;
+    } else {
+      direction = payload.substring(0, firstComma);
       String rest = payload.substring(firstComma + 1);
       int secondComma = rest.indexOf(',');
-      String distance = "";
-      String description = "";
-      if (secondComma > 0) {
+      if (secondComma < 0) {
+        distance = rest;
+      } else {
         distance = rest.substring(0, secondComma);
         description = rest.substring(secondComma + 1);
-      } else {
-        distance = rest;
-        description = "Maps Navigation";
       }
-      direction.trim();
-      distance.trim();
-      description.trim();
-      direction.toUpperCase();
-      
-      face.setMapNavigation(direction, distance, description);
-      audio.playSound(SOUND_CHIRP);
-      activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
     }
+    direction.trim();
+    distance.trim();
+    description.trim();
+    direction.toUpperCase();
+    
+    face.setMapNavigation(direction, distance, description);
+    audio.playSound(SOUND_CHIRP);
+    activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
   } else if (text.startsWith("NOTIF:")) {
     // Command format: NOTIF:Title|Body
     String payload = text.substring(6);
