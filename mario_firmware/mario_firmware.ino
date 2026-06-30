@@ -339,10 +339,14 @@ void handleRobotCommand(String text) {
     direction.trim();
     distance.trim();
     description.trim();
-    direction.toUpperCase();
+    // IMPORTANT: toUpperCase() modifies in-place on Arduino but we must reassign
+    direction.toUpperCase(); // modifies in-place
+    String dirUpper = direction; // ensure we use the modified value
     
-    face.setMapNavigation(direction, distance, description);
-    audio.playSound(SOUND_CHIRP);
+    Serial.println("[MAP] direction='" + dirUpper + "' distance='" + distance + "' desc='" + description + "'");
+    
+    face.setMapNavigation(dirUpper, distance, description);
+    // No chirp sound for navigation updates (removed)
     activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
   } else if (text.startsWith("NOTIF:")) {
     // Command format: NOTIF:Title|Body

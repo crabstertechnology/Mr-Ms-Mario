@@ -99,14 +99,19 @@ class PhoneNotificationService {
   }
 
   Map<String, String>? _parseGoogleMapsNotification(String title, String text, String subText, String bigText) {
-    final combined = "$title $text $subText $bigText".toLowerCase();
+    // Keep original text for pattern matching too
+    final combinedRaw = "$title $text $subText $bigText";
+    final combined = combinedRaw.toLowerCase();
     
-    // 1. Extract Distance / Meter
+    // 1. Extract Distance — ONLY from title and text (NOT subText which has total route distance like "8.2 km")
+    //    Google Maps puts turn distance in the title when approaching (e.g. "In 200 m") or in text.
+    //    subText has "19 min · 8.2 km · 4:18 pm ETA" — we must NOT pick that 8.2 km as turn distance.
     final distanceRegex = RegExp(r'\b\d+(?:[\.,]\d+)?\s*(?:m|km|ft|mi|yards|yd|meters|kilometers|feet|miles)\b');
-    final match = distanceRegex.firstMatch(combined);
+    final turnTextLower = "$title $text $bigText".toLowerCase();
+    final match = distanceRegex.firstMatch(turnTextLower);
     String distance = "";
     if (match != null) {
-      distance = match.group(0)!.toUpperCase();
+      distance = match.group(0)!;
     }
     
     // Clean distance format: e.g. "500 M" -> "500 m"
@@ -121,6 +126,7 @@ class PhoneNotificationService {
       distance = "${spaceMatch.group(1)} ${spaceMatch.group(2)}";
     }
     distance = distance.toUpperCase();
+    _bleService.addLog("Maps dist parse from title+text: '$distance'", "NOTIF");
 
     // Clean "left" when it means "remaining" (e.g., "12 min. left", "12 min left", "12 m left") to avoid matching it as a left turn instruction
     String cleanedForDirection = combined
@@ -128,13 +134,18 @@ class PhoneNotificationService {
         .replaceAll(RegExp(r'\bleft\b\s*•', caseSensitive: false), '')
         .replaceAll(RegExp(r'\bleft\b\s*$', caseSensitive: false), '');
 
-    // 2. Extract Direction / Maneuver (UTURN and ROUNDABOUT first, then LEFT and RIGHT)
+
+    // 2. Extract Direction / Maneuver
+    // NOTE: "exit" removed from roundabout list — it falsely matched highway exit ramps (which are right turns)
     String direction = "";
     final leftKeywords = ["left", "gauche", "links", "sinistra", "izquierda", "esquerda", "налево", "←", "↖", "↙", "lft", "turn left", "keep left", "bear left", "slight left", "बायें"];
-    final rightKeywords = ["right", "droite", "rechts", "destra", "derecha", "direita", "направо", "→", "↗", "↘", "rgt", "turn right", "keep right", "bear right", "slight right", "दायें"];
+    final rightKeywords = ["right", "droite", "rechts", "destra", "derecha", "direita", "направо", "→", "↗", "↘", "rgt", "turn right", "keep right", "bear right", "slight right", "दायें", "take the ramp", "take the exit"];
+    // Note: "exit" removed — use only explicit roundabout markers to avoid highway exit ramp false positives
     final uturnKeywords = ["u-turn", "uturn", "↶", "↷", "↺", "↻", "demi-tour", "wenden", "u turn"];
-    final roundaboutKeywords = ["roundabout", "rotary", "exit", "⟳", "⟲", "rond-point", "kreisverkehr", "rotonda"];
+    final roundaboutKeywords = ["roundabout", "rotary", "⟳", "⟲", "rond-point", "kreisverkehr", "rotonda"];
     final straightKeywords = ["straight", "continue", "head north", "head south", "head east", "head west", "keep straight", "↑", "↓", "straighten"];
+
+    _bleService.addLog("Maps direction parse — cleanedText: '$cleanedForDirection'", "NOTIF");
 
     if (uturnKeywords.any((k) => cleanedForDirection.contains(k))) {
       direction = "UTURN";
@@ -147,6 +158,8 @@ class PhoneNotificationService {
     } else if (straightKeywords.any((k) => cleanedForDirection.contains(k))) {
       direction = "STRAIGHT";
     }
+
+    _bleService.addLog("Maps direction result: '$direction'", "NOTIF");
 
     if (direction.isEmpty) {
       direction = "STRAIGHT";
