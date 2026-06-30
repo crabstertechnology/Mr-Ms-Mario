@@ -515,6 +515,7 @@ void setup() {
 
   // Initialize I2C Communication
   Wire.begin(SDA_PIN, SCL_PIN);
+  Wire.setClock(800000); // 800kHz high-speed I2C for smooth rendering
   
   // Initialize SSD1306 Display
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
@@ -959,15 +960,32 @@ void loop() {
     ble.updateStatus(uptimeSec, touchCount, mockBatteryVolts, face.getExpression(), face.getStateLabel());
   }
 
-  // Update and Draw Face / Settings Expressions at ~40 fps (every 25ms) non-blocking
+  // Update GIF frame states on every loop iteration for microsecond precision
+  bool faceChanged = false;
+  if (!inSettingsMenu) {
+    faceChanged = face.update();
+  }
+
+  // Draw the display under these conditions:
+  // 1. In settings menu (draw at 40fps rate / every 25ms)
+  // 2. Face changed (frame advanced or text scrolled)
+  // 3. Current clock second changed while on clock/map screens
+  // 4. Fallback redraw every 500ms
+  static int lastDrawnSecond = -1;
+  bool timeUpdated = (rtcSecond != lastDrawnSecond);
+
   static unsigned long lastDisplayDrawTime = 0;
-  if (now - lastDisplayDrawTime >= 25) {
-    lastDisplayDrawTime = now;
-    if (inSettingsMenu) {
+  bool forceRedraw = (now - lastDisplayDrawTime >= 500);
+
+  if (inSettingsMenu) {
+    // Redraw settings menu at ~40fps
+    if (now - lastDisplayDrawTime >= 25) {
+      lastDisplayDrawTime = now;
       face.drawSettingsMenu(menuOption, optionSelected, bleActive, gifSpeed);
-    } else {
-      face.update();
-      face.draw(rtcHour, rtcMinute, rtcSecond, is12HourFormat);
     }
+  } else if (faceChanged || ((face.getExpression() == EXPR_CLOCK || face.getExpression() == EXPR_MAP) && timeUpdated) || forceRedraw) {
+    lastDisplayDrawTime = now;
+    lastDrawnSecond = rtcSecond;
+    face.draw(rtcHour, rtcMinute, rtcSecond, is12HourFormat);
   }
 }

@@ -18,6 +18,7 @@ private:
   int currentGifIndex;        // index into ALL_GIFS_TABLE for EXPR_ALL_GIF mode
   unsigned long lastFrameTime;
   bool gifFinished;
+  bool expressionChanged;
 
   // Text state
   String notificationTitle;
@@ -34,7 +35,7 @@ private:
 
 public:
   MarioFace(Adafruit_SSD1306& disp) 
-    : display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100) {
+    : display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
     currentFrame = 0;
     currentGifIndex = 0;
     lastFrameTime = 0;
@@ -89,6 +90,90 @@ public:
     frameDelayMs = ms;
   }
 
+  // Returns the correct frame delay (ms) for each named GIF,
+  // measured from actual GIF file timing minus OLED I2C render overhead (~45ms).
+  // Source: analyze_gifs.py on 63 animation files in mobile_app/animations/
+  int getGifFrameDelay(int gifIndex) {
+    // Per-GIF delays derived from GIF file frame timing (original - 45ms overhead)
+    // Sorted by index matching ALL_GIFS_TABLE order:
+    // ADORE ANGRY BLANK BLINDING BRAVE BUZZING CONTEMPT CRYING DANCING DEVIL
+    // DISTRACTED DIZZY DOWN DROWSY ENCOURAGEMENT ENERGETIC ENRAGED EVIL FAST FIERCE
+    // FURIOUS GIGGLE GLOWING GROWING HANDSOME HAPPY HELLO IRRITATED LAUGHING LEFT
+    // LOVE MENACING MISTAKE PLAYFUL POLICE RAIN RELAXED RIGHT RUSH SCARED
+    // SERENE SHRINK SHY SICK SLEEPY SMILE SMIRK SMOKE SNEEZE SOBBING
+    // SPARKLE SPEED SPLASH SPRAYING SQUINT SURPRISED SUSHI SWINGING TEASING TOUGH
+    // WEEPING WINK YAWN
+    static const uint8_t gifDelays[] PROGMEM = {
+      112, // 0  ADORE       (120ms orig)
+      112, // 1  ANGRY       (120ms orig)
+      52,  // 2  BLANK       ( 60ms orig)
+      252, // 3  BLINDING    (260ms orig)
+      112, // 4  BRAVE       (120ms orig)
+      112, // 5  BUZZING     (120ms orig)
+      92,  // 6  CONTEMPT    (100ms orig)
+      112, // 7  CRYING      (120ms orig)
+      112, // 8  DANCING     (120ms orig)
+      92,  // 9  DEVIL       (100ms orig)
+      52,  // 10 DISTRACTED  ( 60ms orig)
+      112, // 11 DIZZY       (120ms orig)
+      52,  // 12 DOWN        ( 60ms orig)
+      112, // 13 DROWSY      (120ms orig)
+      92,  // 14 ENCOURAGEMENT(100ms orig)
+      52,  // 15 ENERGETIC   ( 60ms orig)
+      112, // 16 ENRAGED     (120ms orig)
+      92,  // 17 EVIL        (100ms orig)
+      92,  // 18 FAST        (100ms orig)
+      112, // 19 FIERCE      (120ms orig)
+      92,  // 20 FURIOUS     (100ms orig)
+      112, // 21 GIGGLE      (120ms orig)
+      112, // 22 GLOWING     (120ms orig)
+      112, // 23 GROWING     (120ms orig)
+      112, // 24 HANDSOME    (120ms orig)
+      112, // 25 HAPPY       (120ms orig)
+      92,  // 26 HELLO       (100ms orig)
+      112, // 27 IRRITATED   (120ms orig)
+      92,  // 28 LAUGHING    (100ms orig)
+      52,  // 29 LEFT        ( 60ms orig)
+      112, // 30 LOVE        (120ms orig)
+      92,  // 31 MENACING    (100ms orig)
+      112, // 32 MISTAKE     (120ms orig)
+      112, // 33 PLAYFUL     (120ms orig)
+      112, // 34 POLICE      (120ms orig)
+      112, // 35 RAIN        (120ms orig)
+      92,  // 36 RELAXED     (100ms orig)
+      52,  // 37 RIGHT       ( 60ms orig)
+      92,  // 38 RUSH        (100ms orig)
+      112, // 39 SCARED      (120ms orig)
+      112, // 40 SERENE      (120ms orig)
+      52,  // 41 SHRINK      ( 60ms orig)
+      52,  // 42 SHY         ( 60ms orig)
+      112, // 43 SICK        (120ms orig)
+      92,  // 44 SLEEPY      (100ms orig)
+      112, // 45 SMILE       (120ms orig)
+      52,  // 46 SMIRK       ( 60ms orig)
+      92,  // 47 SMOKE       (100ms orig)
+      112, // 48 SNEEZE      (120ms orig)
+      112, // 49 SOBBING     (120ms orig)
+      112, // 50 SPARKLE     (120ms orig)
+      52,  // 51 SPEED       ( 60ms orig)
+      112, // 52 SPLASH      (120ms orig)
+      112, // 53 SPRAYING    (120ms orig)
+      52,  // 54 SQUINT      ( 60ms orig)
+      112, // 55 SURPRISED   (120ms orig)
+      112, // 56 SUSHI       (120ms orig)
+      112, // 57 SWINGING    (120ms orig)
+      112, // 58 TEASING     (120ms orig)
+      122, // 59 TOUGH       (130ms orig)
+      92,  // 60 WEEPING     (100ms orig)
+      112, // 61 WINK        (120ms orig)
+      112, // 62 YAWN        (120ms orig)
+    };
+    if (gifIndex >= 0 && gifIndex < ALL_GIFS_COUNT) {
+      return pgm_read_byte(&gifDelays[gifIndex]);
+    }
+    return frameDelayMs; // fallback to global setting
+  }
+
   void setExpression(Expression expr) {
     if (currentExpr == expr) return;
     targetExpr = expr;
@@ -96,6 +181,7 @@ public:
     currentFrame = 0;
     lastFrameTime = millis();
     gifFinished = false;
+    expressionChanged = true;
     
     // If text expression, reset scroll position
     if (expr == EXPR_TEXT) {
@@ -144,7 +230,9 @@ public:
   void setGifIndex(int idx) {
     currentGifIndex = idx;
     currentFrame = 0;
+    lastFrameTime = millis();
     gifFinished = false;
+    expressionChanged = true;
     updateLabelFromState();
   }
 
@@ -160,8 +248,14 @@ public:
     gifFinished = false;
   }
 
-  void update() {
+  bool update() {
     unsigned long now = millis();
+    bool changed = false;
+
+    if (expressionChanged) {
+      expressionChanged = false;
+      changed = true;
+    }
 
     // 1. Frame Animation logic
     if (currentExpr != EXPR_TEXT) {
@@ -191,14 +285,40 @@ public:
         default: maxFrames = 1; break;
       }
 
-      // Play Mochi GIF frames at custom dynamic frame speed
-      if (now - lastFrameTime > frameDelayMs) {
+      // Play Mochi GIF frames using accurate per-GIF timing.
+      // Delay is determined by actual GIF file frame duration minus OLED render overhead.
+      int activeDelay;
+      if (exprToUpdate == EXPR_ALL_GIF) {
+        activeDelay = getGifFrameDelay(currentGifIndex);
+      } else {
+        // Standard 7-expression GIFs: use their actual measured delays (original - 8ms)
+        // relaxed=92, happy=112, crying=112, angry=112, surprised=112, sleepy=92, wink=112
+        switch (exprToUpdate) {
+          case EXPR_IDLE:      activeDelay = 92; break;  // relaxed.gif  100ms orig
+          case EXPR_HAPPY:     activeDelay = 112; break;  // happy.gif    120ms orig
+          case EXPR_SAD:       activeDelay = 112; break;  // crying.gif   120ms orig
+          case EXPR_ANGRY:     activeDelay = 112; break;  // angry.gif    120ms orig
+          case EXPR_SURPRISED: activeDelay = 112; break;  // surprised    120ms orig
+          case EXPR_SLEEPING:  activeDelay = 92; break;  // sleepy.gif   100ms orig
+          case EXPR_WINK:      activeDelay = 112; break;  // wink.gif     120ms orig
+          default:             activeDelay = 100; break;
+        }
+      }
+      // Scale activeDelay based on user-configured frameDelayMs (slider value from app)
+      // frameDelayMs defaults to 100. Scale = frameDelayMs / 100.0
+      if (frameDelayMs != 100) {
+        activeDelay = (int)(activeDelay * (frameDelayMs / 100.0f));
+      }
+      activeDelay = max(20, activeDelay); // never go below 20ms to prevent choking the display
+
+      if (now - lastFrameTime > (unsigned long)activeDelay) {
         lastFrameTime = now;
         currentFrame++;
         if (currentFrame >= maxFrames) {
           currentFrame = 0;
           gifFinished = true;
         }
+        changed = true;
       }
     }
 
@@ -213,8 +333,10 @@ public:
         if (scrollPos < -textLength) {
           scrollPos = SCREEN_WIDTH;
         }
+        changed = true;
       }
     }
+    return changed;
   }
 
   void drawSettingsMenu(int option, bool selected, bool bleOn, int speed) {

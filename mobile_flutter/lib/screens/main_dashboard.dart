@@ -2151,7 +2151,6 @@ class _MainDashboardState extends State<MainDashboard> {
                 onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
               ),
               const SizedBox(height: 12),
-
               // Intro Sound Speed
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
