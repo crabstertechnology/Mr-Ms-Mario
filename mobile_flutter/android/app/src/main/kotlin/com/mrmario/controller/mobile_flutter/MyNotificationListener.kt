@@ -18,14 +18,20 @@ class MyNotificationListener : NotificationListenerService() {
         val extras = sbn.notification.extras
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
+        val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
         val packageName = sbn.packageName ?: ""
 
+        println("MyNotificationListener - Posted: pkg=$packageName, title=$title, text=$text")
+
         // Only process if there's actual content
-        if (title.isNotEmpty() || text.isNotEmpty()) {
+        if (title.isNotEmpty() || text.isNotEmpty() || subText.isNotEmpty() || bigText.isNotEmpty()) {
             val intent = Intent("com.mrmario.NOTIFICATION_RECEIVED")
             intent.setPackage(this.packageName)
             intent.putExtra("title", title)
             intent.putExtra("text", text)
+            intent.putExtra("subText", subText)
+            intent.putExtra("bigText", bigText)
             intent.putExtra("package", packageName)
             sendBroadcast(intent)
         }
@@ -35,6 +41,7 @@ class MyNotificationListener : NotificationListenerService() {
         super.onNotificationRemoved(sbn)
         if (sbn == null) return
         val packageName = sbn.packageName ?: ""
+        println("MyNotificationListener - Removed: pkg=$packageName")
 
         if (packageName == "com.google.android.apps.maps") {
             // Debounce exit check by 1.5 seconds to prevent race conditions during updates

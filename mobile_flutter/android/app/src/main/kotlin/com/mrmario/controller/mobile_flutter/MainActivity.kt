@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ComponentName
+import android.content.pm.PackageManager
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -21,26 +23,28 @@ class MainActivity: FlutterActivity() {
         return false
     }
 
-    private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.mrmario.NOTIFICATION_RECEIVED") {
-                val title = intent.getStringExtra("title") ?: ""
-                val text = intent.getStringExtra("text") ?: ""
-                val packageName = intent.getStringExtra("package") ?: ""
-                
-                methodChannel?.invokeMethod("onNotification", mapOf(
-                    "title" to title,
-                    "text" to text,
-                    "package" to packageName
-                ))
-            }
-        }
-    }
+
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         Companion.flutterEngine = flutterEngine
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+
+        // Force rebind NotificationListenerService to avoid Android binding issues on upgrade
+        try {
+            val pm = packageManager
+            val componentName = ComponentName(this, MyNotificationListener::class.java)
+            pm.setComponentEnabledSetting(
+                componentName,
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP
+            )
+            pm.setComponentEnabledSetting(
+                componentName,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP
+            )
+        } catch (e: Exception) {}
         
         // Start background service
         val serviceIntent = Intent(this, MrMarioBackgroundService::class.java)
@@ -95,22 +99,12 @@ class MainActivity: FlutterActivity() {
                     result.success(true)
                 }
                 else -> result.notImplemented()
-            }
         }
-
-        val filter = IntentFilter("com.mrmario.NOTIFICATION_RECEIVED")
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(receiver, filter)
-        }
+    }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            unregisterReceiver(receiver)
-        } catch (e: Exception) {}
     }
 
     private fun isNotificationServiceEnabled(): Boolean {

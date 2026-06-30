@@ -23,6 +23,8 @@ class MrMarioBackgroundService : Service() {
             if (action == "com.mrmario.NOTIFICATION_RECEIVED") {
                 val title = intent.getStringExtra("title") ?: ""
                 val text = intent.getStringExtra("text") ?: ""
+                val subText = intent.getStringExtra("subText") ?: ""
+                val bigText = intent.getStringExtra("bigText") ?: ""
                 val packageName = intent.getStringExtra("package") ?: ""
 
                 // Forward to Flutter engine if it's alive
@@ -33,6 +35,8 @@ class MrMarioBackgroundService : Service() {
                     channel.invokeMethod("onNotification", mapOf(
                         "title" to title,
                         "text" to text,
+                        "subText" to subText,
+                        "bigText" to bigText,
                         "package" to packageName
                     ))
                 }

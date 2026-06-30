@@ -14,14 +14,19 @@ class PhoneNotificationService {
   Future<dynamic> _handleMethodCall(MethodCall call) async {
     switch (call.method) {
       case 'onNotification':
-        if (!_dbService.notificationSyncEnabled) return;
         final Map<dynamic, dynamic> data = call.arguments as Map<dynamic, dynamic>;
         final String title = data['title'] ?? '';
         final String text = data['text'] ?? '';
+        final String subText = data['subText'] ?? '';
+        final String bigText = data['bigText'] ?? '';
         final String packageName = data['package'] ?? '';
+
+        _bleService.addLog("Recv Notif: pkg=$packageName, title='$title', text='$text', subText='$subText', bigText='$bigText', syncEnabled=${_dbService.notificationSyncEnabled}", "NOTIF");
+
+        if (!_dbService.notificationSyncEnabled) return;
         
         // Skip system/empty notifications
-        if (title.isEmpty && text.isEmpty) return;
+        if (title.isEmpty && text.isEmpty && subText.isEmpty && bigText.isEmpty) return;
 
         // Check if the notification's app is allowed by user settings
         String matchedAppKey = 'other_apps';
@@ -50,19 +55,25 @@ class PhoneNotificationService {
           matchedAppKey = 'phone';
         }
 
+        _bleService.addLog("Checking if app key '$matchedAppKey' is allowed by user settings...", "NOTIF");
         if (!_dbService.allowedNotificationApps.contains(matchedAppKey)) {
+          _bleService.addLog("App key '$matchedAppKey' is NOT allowed in settings.", "NOTIF");
           return;
         }
 
         // Google Maps Navigation Notification
-        if (packageName == 'com.google.android.apps.maps') {
-          final mapInfo = _parseGoogleMapsNotification(title, text);
+        if (pkgLower == 'com.google.android.apps.maps') {
+          _bleService.addLog("Parsing Google Maps navigation payload...", "NOTIF");
+          final mapInfo = _parseGoogleMapsNotification(title, text, subText, bigText);
           if (mapInfo != null) {
             final String direction = mapInfo['direction']!;
             final String distance = mapInfo['distance']!;
             final String description = mapInfo['description']!;
+            _bleService.addLog("Maps Parsed: dir=$direction, dist=$distance, desc=$description", "NOTIF");
             await _forwardToRobot("MAP:$direction,$distance,$description");
             break;
+          } else {
+            _bleService.addLog("Maps parsing returned null", "NOTIF");
           }
         }
         
@@ -70,22 +81,25 @@ class PhoneNotificationService {
         final String titleClean = title.replaceAll('|', ' ').trim();
         final String textClean = text.replaceAll('|', ' ').trim();
         final String displayMessage = "NOTIF:$titleClean|$textClean";
+        _bleService.addLog("Forwarding non-Maps notification to robot: $displayMessage", "NOTIF");
         await _forwardToRobot(displayMessage);
         break;
 
       case 'onNotificationRemoved':
-        if (!_dbService.notificationSyncEnabled) return;
         final Map<dynamic, dynamic> data = call.arguments as Map<dynamic, dynamic>;
         final String packageName = data['package'] ?? '';
-        if (packageName == 'com.google.android.apps.maps') {
+        final pkgRemovedLower = packageName.toLowerCase();
+        _bleService.addLog("Notification removed: pkg=$packageName, syncEnabled=${_dbService.notificationSyncEnabled}", "NOTIF");
+        if (!_dbService.notificationSyncEnabled) return;
+        if (pkgRemovedLower == 'com.google.android.apps.maps') {
+          _bleService.addLog("Forwarding MAP:EXIT to robot", "NOTIF");
           await _forwardToRobot("MAP:EXIT");
         }
-        break;
     }
   }
 
-  Map<String, String>? _parseGoogleMapsNotification(String title, String text) {
-    final combined = "$title $text".toLowerCase();
+  Map<String, String>? _parseGoogleMapsNotification(String title, String text, String subText, String bigText) {
+    final combined = "$title $text $subText $bigText".toLowerCase();
     
     // 1. Extract Distance / Meter
     final distanceRegex = RegExp(r'\b\d+(?:[\.,]\d+)?\s*(?:m|km|ft|mi|yards|yd|meters|kilometers|feet|miles)\b');
@@ -108,17 +122,17 @@ class PhoneNotificationService {
     }
     distance = distance.toUpperCase();
 
-    // 2. Extract Direction / Maneuver
+    // 2. Extract Direction / Maneuver (UTURN and ROUNDABOUT first, then LEFT and RIGHT)
     String direction = "";
-    if (combined.contains("turn left") || combined.contains("take left") || combined.contains("keep left") || combined.contains("slight left")) {
-      direction = "LEFT";
-    } else if (combined.contains("turn right") || combined.contains("take right") || combined.contains("keep right") || combined.contains("slight right")) {
-      direction = "RIGHT";
-    } else if (combined.contains("u-turn") || combined.contains("uturn") || combined.contains("make a u-turn")) {
+    if (combined.contains("u-turn") || combined.contains("uturn") || combined.contains("↶") || combined.contains("↷") || combined.contains("↺") || combined.contains("↻")) {
       direction = "UTURN";
-    } else if (combined.contains("roundabout") || combined.contains("exit")) {
+    } else if (combined.contains("roundabout") || combined.contains("rotary") || combined.contains("exit") || combined.contains("⟳") || combined.contains("⟲")) {
       direction = "ROUNDABOUT";
-    } else if (combined.contains("straight") || combined.contains("continue") || combined.contains("head north") || combined.contains("head south") || combined.contains("head east") || combined.contains("head west") || combined.contains("keep straight")) {
+    } else if (combined.contains("left") || combined.contains("←") || combined.contains("↖") || combined.contains("↙")) {
+      direction = "LEFT";
+    } else if (combined.contains("right") || combined.contains("→") || combined.contains("↗") || combined.contains("↘")) {
+      direction = "RIGHT";
+    } else if (combined.contains("straight") || combined.contains("continue") || combined.contains("head north") || combined.contains("head south") || combined.contains("head east") || combined.contains("head west") || combined.contains("keep straight") || combined.contains("↑") || combined.contains("↓")) {
       direction = "STRAIGHT";
     }
 
@@ -126,26 +140,26 @@ class PhoneNotificationService {
       direction = "STRAIGHT";
     }
 
-    // 3. Extract description (street/instruction)
-    String description = title;
-    if (description.isEmpty || description == "Google Maps" || description == "Notification") {
-      description = text;
-    }
-    // Clean distance and time from description
-    description = description.replaceAll(distanceRegex, "").trim();
-    description = description.replaceAll(RegExp(r'(?i)\bin\b\s*\d+\s*(?:m|km|ft|mi|yards|yd|meters|kilometers)\b,?\s*'), "").trim();
-    description = description.replaceAll(RegExp(r'(?i)\bIn\b\s*\d+\s*(?:m|km|ft|mi|yards|yd|meters|kilometers)\b,?\s*'), "").trim();
-    description = description.replaceAll(RegExp(r'\s*-\s*\d+\s*(?:min|mins|hr|hrs|hour|hours).*'), "").trim();
-    // Strip trailing/leading punctuation
-    description = description.trim();
-    if (description.endsWith(",") || description.endsWith(".") || description.endsWith("-")) {
-      description = description.substring(0, description.length - 1).trim();
+    // 3. Extract remaining time (e.g. "15 min", "1 hr 12 min", "1h 30m")
+    final timeRemainingRegex = RegExp(
+      r'\b\d+\s*(?:hr|hrs|hour|hours|h)\s*\d+\s*(?:min|mins|minutes)\b|\b\d+\s*(?:min|mins|minutes)\b|\b\d+\s*(?:hr|hrs|hour|hours|h)\b',
+      caseSensitive: false
+    );
+    final timeMatch = timeRemainingRegex.firstMatch("$subText $bigText $text $title");
+    String remainingTime = "";
+    if (timeMatch != null) {
+      remainingTime = timeMatch.group(0)!.trim().toLowerCase();
+      // Format to short representation, e.g. "1h 15m" or "15min"
+      remainingTime = remainingTime
+        .replaceAll(RegExp(r'\s*(?:minutes|minute|mins)\b'), 'min')
+        .replaceAll(RegExp(r'\s*(?:hours|hour|hrs|hr)\b'), 'h')
+        .replaceAll(RegExp(r'\s+'), '');
     }
 
     return {
       'direction': direction,
       'distance': distance.isNotEmpty ? distance : "--",
-      'description': description.isNotEmpty ? description : "Maps Navigation",
+      'description': remainingTime.isNotEmpty ? remainingTime : "",
     };
   }
 

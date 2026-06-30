@@ -156,7 +156,7 @@ class DatabaseService with ChangeNotifier {
   void _loadSettings() {
     if (_prefs == null) return;
     _is12HourFormat = _prefs!.getBool('is12HourFormat') ?? false;
-    _notificationSyncEnabled = _prefs!.getBool('notificationSyncEnabled') ?? false;
+    _notificationSyncEnabled = _prefs!.getBool('notificationSyncEnabled') ?? true;
     _gifSpeed = _prefs!.getDouble('gifSpeed') ?? 100.0;
     _gifDelay = _prefs!.getDouble('gifDelay') ?? 0.0;
     _gifIntroSpeed = _prefs!.getDouble('gifIntroSpeed') ?? 100.0;

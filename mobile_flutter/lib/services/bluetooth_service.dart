@@ -198,6 +198,7 @@ class BLEService with ChangeNotifier {
 
   void addLog(String message, String type) {
     final timestamp = DateTime.now().toLocal().toString().split(' ')[1].substring(0, 8);
+    print("[$type] $message");
     _consoleLogs.add('[$timestamp] [$type] $message');
     if (_consoleLogs.length > 150) {
       _consoleLogs.removeAt(0);
