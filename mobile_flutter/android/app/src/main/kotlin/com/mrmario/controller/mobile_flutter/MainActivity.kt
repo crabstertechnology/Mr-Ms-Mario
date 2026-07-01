@@ -46,12 +46,14 @@ class MainActivity: FlutterActivity() {
             )
         } catch (e: Exception) {}
         
-        // Start background service
-        val serviceIntent = Intent(this, MrMarioBackgroundService::class.java)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
+        // Start background service only if permissions are already granted to prevent SecurityException
+        if (hasConnectedDevicePermissions()) {
+            val serviceIntent = Intent(this, MrMarioBackgroundService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
         }
         
         methodChannel?.setMethodCallHandler { call, result ->
@@ -78,25 +80,33 @@ class MainActivity: FlutterActivity() {
                     result.success(true)
                 }
                 "startBackgroundService" -> {
-                    val serviceIntent = Intent(this, MrMarioBackgroundService::class.java)
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        startForegroundService(serviceIntent)
+                    if (hasConnectedDevicePermissions()) {
+                        val serviceIntent = Intent(this, MrMarioBackgroundService::class.java)
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            startForegroundService(serviceIntent)
+                        } else {
+                            startService(serviceIntent)
+                        }
+                        result.success(true)
                     } else {
-                        startService(serviceIntent)
+                        result.success(false)
                     }
-                    result.success(true)
                 }
                 "updateConnectionStatus" -> {
                     val connected = call.argument<Boolean>("connected") ?: false
-                    val serviceIntent = Intent(this, MrMarioBackgroundService::class.java).apply {
-                        putExtra("connected", connected)
-                    }
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        startForegroundService(serviceIntent)
+                    if (hasConnectedDevicePermissions()) {
+                        val serviceIntent = Intent(this, MrMarioBackgroundService::class.java).apply {
+                            putExtra("connected", connected)
+                        }
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            startForegroundService(serviceIntent)
+                        } else {
+                            startService(serviceIntent)
+                        }
+                        result.success(true)
                     } else {
-                        startService(serviceIntent)
+                        result.success(false)
                     }
-                    result.success(true)
                 }
                 "getInstalledApps" -> {
                     try {
@@ -140,5 +150,14 @@ class MainActivity: FlutterActivity() {
             }
         }
         return false
+    }
+
+    private fun hasConnectedDevicePermissions(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val hasConnect = checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+            val hasScan = checkSelfPermission(android.Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+            return hasConnect || hasScan
+        }
+        return true
     }
 }
