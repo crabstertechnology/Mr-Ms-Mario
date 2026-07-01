@@ -206,6 +206,9 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
                     left: offset,
                     child: Text(
                       widget.marqueeText!.toUpperCase(),
+                      softWrap: false,
+                      maxLines: 1,
+                      overflow: TextOverflow.visible,
                       style: GoogleFonts.pressStart2p(
                         color: oledColor,
                         fontSize: 9,

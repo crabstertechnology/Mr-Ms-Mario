@@ -493,11 +493,13 @@ private:
     display.print("[Tap to close clock]");
   }
   void drawTextScreen() {
+    display.setTextWrap(false);
+    
     // 1. Draw header background and small animated face
     display.fillRoundRect(4, 2, 14, 10, 2, SSD1306_WHITE);
     display.fillCircle(7, 6, 1, SSD1306_BLACK); // Left eye
     display.fillCircle(14, 6, 1, SSD1306_BLACK); // Right eye
-    display.drawFastHLine(9, 9, 3, SSD1306_WHITE); // Smile
+    display.drawFastHLine(9, 9, 3, SSD1306_BLACK); // Smile
 
     // 2. Draw notification title (truncated to fit screen size)
     display.setTextSize(1);
