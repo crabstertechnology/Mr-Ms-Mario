@@ -450,7 +450,7 @@ class _MainDashboardState extends State<MainDashboard> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text("Custom GIF '${newGif.name}' saved to Database!"),
-        backgroundColor: const Color(0xFF8B5CF6),
+        backgroundColor: const Color(0xFFE53935),
       ),
     );
   }
@@ -656,11 +656,15 @@ class _MainDashboardState extends State<MainDashboard> {
     final db = Provider.of<DatabaseService>(context);
     final ble = Provider.of<BLEService>(context);
 
-    _accentColor = const Color(0xFF0284C7); // Premium blue
-    _accentColorLight = const Color(0x1F0284C7); // Light blue
+    // Dynamic theme: Ms Mario = pink, Mr Mario = blue
+    final isMsMario = db.primaryRobot?.variant == 'miss_mario';
+    _accentColor = isMsMario ? const Color(0xFFE91E8C) : const Color(0xFF0284C7);
+    _accentColorLight = isMsMario ? const Color(0x1FE91E8C) : const Color(0x1F0284C7);
+    // Secondary accent (red for Mr Mario, rose for Ms Mario)
+    final Color _secondaryColor = isMsMario ? const Color(0xFFEC4899) : const Color(0xFFE53935);
 
-    // ── Resolve the active GIF to show in the simulator ─────────────────────────
-    // Priority: BLE label (exact match) → BLE exprId fallback → local state
+    // â”€â”€ Resolve the active GIF to show in the simulator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Priority: BLE label (exact match) â†’ BLE exprId fallback â†’ local state
     String activeGifId = _localActiveGifId;
     String activeLabel = _localActiveLabel;
 
@@ -705,7 +709,7 @@ class _MainDashboardState extends State<MainDashboard> {
           }
         }
       } else if (upperLabel == 'IDLE' || upperLabel.isEmpty) {
-        // Hardware is idle — show the default idle GIF
+        // Hardware is idle â€” show the default idle GIF
         activeGifId = 'relaxed';
         activeLabel = 'Idle';
       }
@@ -713,8 +717,9 @@ class _MainDashboardState extends State<MainDashboard> {
 
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: MarioBackground(
+        isMsMario: isMsMario,
         child: Stack(
           children: [
           SafeArea(
@@ -735,7 +740,10 @@ class _MainDashboardState extends State<MainDashboard> {
         ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
+      bottomNavigationBar: Container(
+        color: Colors.white,
+        child: _buildBottomNavigationBar(),
+      ),
     );
   }
 
@@ -750,66 +758,77 @@ class _MainDashboardState extends State<MainDashboard> {
     ];
 
     return Container(
-      margin: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-      height: 64,
+      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+      height: 68,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _accentColor.withOpacity(0.15), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
+            color: _accentColor.withOpacity(0.10),
+            blurRadius: 18,
+            spreadRadius: 1,
             offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (idx) {
-          final isSelected = _activeTabIdx == idx;
-          return InkWell(
-            onTap: () {
-              setState(() {
-                _activeTabIdx = idx;
-                if (idx == 4) {
-                  _currentSettingsSection = 'categories';
-                }
-              });
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? _accentColorLight : Colors.transparent,
-                border: isSelected
-                    ? Border.all(color: _accentColor.withOpacity(0.3))
-                    : null,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    items[idx]['icon'] as IconData,
-                    color: isSelected ? _accentColor : textColor54,
-                    size: 20,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    items[idx]['label'] as String,
-                    style: GoogleFonts.outfit(
-                      color: isSelected ? _accentColor : textColor38,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: List.generate(items.length, (idx) {
+            final isSelected = _activeTabIdx == idx;
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _activeTabIdx = idx;
+                  if (idx == 4) {
+                    _currentSettingsSection = 'categories';
+                  }
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected ? _accentColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedScale(
+                      scale: isSelected ? 1.15 : 1.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        items[idx]['icon'] as IconData,
+                        color: isSelected ? Colors.white : const Color(0xFF9E9E9E),
+                        size: 20,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 3),
+                    Text(
+                      items[idx]['label'] as String,
+                      style: GoogleFonts.outfit(
+                        color: isSelected ? Colors.white : const Color(0xFF9E9E9E),
+                        fontSize: 9.5,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -818,10 +837,20 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildTopNavigation(BLEService ble) {
     _isMissMario = Provider.of<DatabaseService>(context, listen: false).primaryRobot?.variant == 'miss_mario';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
-        border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.06))),
+        color: Colors.white,
+        border: Border(bottom: BorderSide(
+          color: _accentColor.withOpacity(0.12),
+          width: 1.2,
+        )),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -852,10 +881,10 @@ class _MainDashboardState extends State<MainDashboard> {
                   Text(
                     _isMissMario ? "Ms. Mario" : "Mr. Mario",
                     style: GoogleFonts.outfit(
-                      color: textColor,
-                      fontSize: 16,
+                      color: _accentColor,
+                      fontSize: 17,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
+                      letterSpacing: 0.2,
                     ),
                   ),
                   if (ble.pairedDeviceId != null) ...[
@@ -881,15 +910,15 @@ class _MainDashboardState extends State<MainDashboard> {
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9), // Light slate gray
+                    color: const Color(0xFFFFF3E0),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: const Color(0xFF94A3B8).withOpacity(0.3), // Slate gray
+                      color: const Color(0xFFFF9800).withOpacity(0.35),
                     ),
                   ),
                   child: const Icon(
                     Icons.terminal,
-                    color: Color(0xFF64748B),
+                    color: Color(0xFFE65100),
                     size: 18,
                   ),
                 ),
@@ -924,18 +953,18 @@ class _MainDashboardState extends State<MainDashboard> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: ble.isConnected
-                        ? const Color(0xFFE0F2FE) // Light Sky Blue
-                        : const Color(0xFFF1F5F9), // Light slate gray
+                        ? _accentColor.withOpacity(0.10)
+                        : const Color(0xFFF5F5F5),
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: ble.isConnected
-                          ? const Color(0xFF0284C7).withOpacity(0.3) // Sky Blue
-                          : const Color(0xFF94A3B8).withOpacity(0.3), // Slate gray
+                          ? _accentColor.withOpacity(0.35)
+                          : const Color(0xFF9E9E9E).withOpacity(0.3),
                     ),
                   ),
                   child: Icon(
                     ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                    color: ble.isConnected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
+                    color: ble.isConnected ? _accentColor : const Color(0xFF9E9E9E),
                     size: 18,
                   ),
                 ),
@@ -1213,7 +1242,7 @@ class _MainDashboardState extends State<MainDashboard> {
               children: [
                 Icon(
                   ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                  color: ble.isConnected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
+                  color: ble.isConnected ? const Color(0xFFE53935) : const Color(0xFF9E9E9E),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -1349,13 +1378,17 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(height: 6),
               ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(6),
                 child: LinearProgressIndicator(
                   value: ble.isConnected ? (batteryPct / 100.0) : 0.0,
-                  minHeight: 6,
-                  backgroundColor: Colors.white.withOpacity(0.05),
+                  minHeight: 7,
+                  backgroundColor: const Color(0xFFEEEEEE),
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    batteryPct < 20 ? Colors.red : (batteryPct < 55 ? Colors.yellow : Colors.green),
+                    batteryPct < 20
+                        ? const Color(0xFFE53935)
+                        : (batteryPct < 55
+                            ? const Color(0xFFFFB300)
+                            : const Color(0xFF43A047)),
                   ),
                 ),
               ),
@@ -1466,7 +1499,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.cloud_upload, color: Color(0xFFD8B4FE), size: 28),
+                    const Icon(Icons.cloud_upload, color: Color(0xFFFFCDD2), size: 28),
                     const SizedBox(height: 4),
                     Text(
                       "Click to choose custom GIF file",
@@ -1565,7 +1598,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   child: ElevatedButton(
                     onPressed: () => _saveCustomGifToLibrary(db),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8B5CF6),
+                      backgroundColor: const Color(0xFFE53935),
                       foregroundColor: Colors.white,
                     ),
                     child: const Text("SAVE TO LIBRARY"),
@@ -1694,7 +1727,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   onTap: () => db.selectAll(true),
                   child: Text(
                     "SELECT ALL",
-                    style: GoogleFonts.outfit(color: const Color(0xFFD8B4FE), fontSize: 11, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.outfit(color: const Color(0xFFFFCDD2), fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1713,7 +1746,7 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  // Individual Card widget representing GIF — delegates to StatefulWidget for GifController
+  // Individual Card widget representing GIF â€” delegates to StatefulWidget for GifController
   Widget _buildGifCard(DatabaseService db, BLEService ble, GifModel gif) {
     return _GifCardWidget(
       gif: gif,
@@ -1750,7 +1783,7 @@ class _MainDashboardState extends State<MainDashboard> {
       {'id': 3, 'name': '1-Up Melody', 'color': const Color(0xFF0074D9)},
       {'id': 4, 'name': 'Stomp SFX', 'color': const Color(0xFFFFA500)},
       {'id': 5, 'name': 'Player Shrink', 'color': const Color(0xFFFF4136)},
-      {'id': 6, 'name': 'Surprise Warp', 'color': const Color(0xFF8B5CF6)},
+      {'id': 6, 'name': 'Surprise Warp', 'color': const Color(0xFFE53935)},
       {'id': 8, 'name': 'Castle Theme', 'color': const Color(0xFFE11D48)},
       {'id': 9, 'name': 'Underworld Theme', 'color': const Color(0xFF7C3AED)},
       {'id': 10, 'name': 'Theme Toggle SFX', 'color': const Color(0xFF0EA5E9)},
@@ -1767,7 +1800,7 @@ class _MainDashboardState extends State<MainDashboard> {
               Text(
                 "8-BIT MUSIC COMPOSER",
                 style: GoogleFonts.outfit(
-                  color: const Color(0xFFD8B4FE),
+                  color: const Color(0xFFFFCDD2),
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                   letterSpacing: 1,
@@ -1807,7 +1840,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       icon: Icon(_audioSynth.isPlaying ? Icons.stop : Icons.play_arrow, size: 16),
                       label: Text(_audioSynth.isPlaying ? "STOP PREVIEW" : "PLAY PREVIEW"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _audioSynth.isPlaying ? Colors.red.shade900 : const Color(0xFF8B5CF6),
+                        backgroundColor: _audioSynth.isPlaying ? Colors.red.shade900 : const Color(0xFFE53935),
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -1864,7 +1897,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8B5CF6),
+                      backgroundColor: const Color(0xFFE53935),
                       foregroundColor: Colors.white,
                     ),
                     child: const Text("COMPOSE"),
@@ -2014,7 +2047,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 const SizedBox(width: 8),
                 Switch(
                   value: is12H,
-                  activeColor: const Color(0xFF8B5CF6),
+                  activeColor: const Color(0xFFE53935),
                   onChanged: (val) async {
                     await db.updateIs12HourFormat(val);
                     await ble.updateTimeFormat(val);
@@ -2030,7 +2063,7 @@ class _MainDashboardState extends State<MainDashboard> {
               icon: const Icon(Icons.sync),
               label: const Text("SYNC TIME CLOCK"),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF8B5CF6),
+                backgroundColor: const Color(0xFFE53935),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -2060,7 +2093,7 @@ class _MainDashboardState extends State<MainDashboard> {
             children: [
               Text(
                 "SYSTEM HARDWARE OPTIONS",
-                style: GoogleFonts.outfit(color: const Color(0xFFD8B4FE), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                style: GoogleFonts.outfit(color: const Color(0xFFFFCDD2), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
               ),
               const SizedBox(height: 12),
 
@@ -2102,7 +2135,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 value: db.gifSpeed,
                 min: 20,
                 max: 300,
-                activeColor: const Color(0xFF8B5CF6),
+                activeColor: const Color(0xFFE53935),
                 onChanged: (val) => db.updateGifSpeed(val),
                 onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
               ),
@@ -2120,7 +2153,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 value: db.gifIntroSpeed,
                 min: 20,
                 max: 300,
-                activeColor: const Color(0xFF8B5CF6),
+                activeColor: const Color(0xFFE53935),
                 onChanged: (val) => db.updateGifIntroSpeed(val),
                 onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
               ),
@@ -2137,7 +2170,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 value: db.introSoundSpeed,
                 min: 20,
                 max: 300,
-                activeColor: const Color(0xFF8B5CF6),
+                activeColor: const Color(0xFFE53935),
                 onChanged: (val) => db.updateIntroSoundSpeed(val),
                 onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
               ),
@@ -2153,7 +2186,7 @@ class _MainDashboardState extends State<MainDashboard> {
             children: [
               Text(
                 "OLED GLASS PANEL CONFIGS",
-                style: GoogleFonts.outfit(color: const Color(0xFFD8B4FE), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                style: GoogleFonts.outfit(color: const Color(0xFFFFCDD2), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
               ),
               const SizedBox(height: 16),
 
@@ -2164,7 +2197,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   Text("Invert OLED Display (Negative)", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
                   Switch(
                     value: db.oledInvert,
-                    activeColor: const Color(0xFF8B5CF6),
+                    activeColor: const Color(0xFFE53935),
                     onChanged: (val) async {
                       await db.updateOledInvert(val);
                       await db.updateNegativeEnabled(val);
@@ -2188,7 +2221,7 @@ class _MainDashboardState extends State<MainDashboard> {
             children: [
               Text(
                 "HARDWARE TTP233 GESTURES",
-                style: GoogleFonts.outfit(color: const Color(0xFFD8B4FE), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                style: GoogleFonts.outfit(color: const Color(0xFFFFCDD2), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
               ),
               const SizedBox(height: 16),
 
@@ -2308,7 +2341,7 @@ class _MainDashboardState extends State<MainDashboard> {
     );
     
     final isMiss = primary.variant == 'miss_mario';
-    final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFF8B5CF6);
+    final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
     final personality = isMiss ? "Softer & Calmer Personality" : "Friendly & Energetic Personality";
     
     return Column(
@@ -2324,7 +2357,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    colors: isMiss ? [const Color(0xFFEC4899), const Color(0xFFF472B6)] : [const Color(0xFF8B5CF6), const Color(0xFFA78BFA)],
+                    colors: isMiss ? [const Color(0xFFEC4899), const Color(0xFFF472B6)] : [const Color(0xFFE53935), const Color(0xFFFFB300)],
                   ),
                 ),
                 child: const Icon(Icons.face, color: textColor, size: 28),
@@ -2417,7 +2450,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
   Widget _buildSendMessageSection(BLEService ble) {
     final isMiss = _isMissMario;
-    final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFF8B5CF6);
+    final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2625,13 +2658,13 @@ class _MainDashboardState extends State<MainDashboard> {
                 children: [
                   Icon(
                     ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                    color: ble.isConnected ? const Color(0xFF8B5CF6) : Colors.white38,
+                    color: ble.isConnected ? const Color(0xFFE53935) : Colors.white38,
                     size: 18,
                   ),
                   Text(
                     ble.isConnected ? "Active" : "Offline",
                     style: GoogleFonts.outfit(
-                      color: ble.isConnected ? const Color(0xFF8B5CF6) : Colors.white38,
+                      color: ble.isConnected ? const Color(0xFFE53935) : Colors.white38,
                       fontWeight: FontWeight.bold,
                       fontSize: 10,
                     ),
@@ -2659,7 +2692,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 children: [
                   Icon(
                     robot.cloudStatus == 'online' ? Icons.cloud_done : Icons.cloud_off,
-                    color: robot.cloudStatus == 'online' ? const Color(0xFFD8B4FE) : Colors.white38,
+                    color: robot.cloudStatus == 'online' ? const Color(0xFFFFCDD2) : Colors.white38,
                     size: 18,
                   ),
                   Container(
@@ -2667,7 +2700,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     height: 8,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: robot.cloudStatus == 'online' ? const Color(0xFFD8B4FE) : Colors.transparent,
+                      color: robot.cloudStatus == 'online' ? const Color(0xFFFFCDD2) : Colors.transparent,
                     ),
                   ),
                 ],
@@ -2676,7 +2709,7 @@ class _MainDashboardState extends State<MainDashboard> {
               Text(
                 robot.cloudStatus == 'online' ? "Connected" : "Offline",
                 style: GoogleFonts.outfit(
-                  color: robot.cloudStatus == 'online' ? const Color(0xFFD8B4FE) : Colors.white70,
+                  color: robot.cloudStatus == 'online' ? const Color(0xFFFFCDD2) : Colors.white70,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -2705,7 +2738,7 @@ class _MainDashboardState extends State<MainDashboard> {
               const SizedBox(height: 8),
               Text(
                 robot.companionDeviceId != null
-                    ? (robot.relationshipType == 'couple' ? "Couple ❤️" : "Friends 🤝")
+                    ? (robot.relationshipType == 'couple' ? "Couple â¤ï¸" : "Friends ðŸ¤")
                     : "Single",
                 style: GoogleFonts.outfit(
                   color: robot.companionDeviceId != null ? const Color(0xFFEC4899) : Colors.white70,
@@ -2754,7 +2787,7 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildRelationshipBanner(RobotProfile primary, DatabaseService db) {
     final companion = db.robots.firstWhere((r) => r.id == primary.companionDeviceId, orElse: () => primary);
     final isCouple = primary.relationshipType == 'couple';
-    final heartEmoji = isCouple ? "❤️" : "🤝";
+    final heartEmoji = isCouple ? "â¤ï¸" : "ðŸ¤";
     final relText = isCouple ? "Couple" : "Friends";
     final relationshipColor = isCouple ? const Color(0xFFEC4899) : const Color(0xFF10B981);
 
@@ -2805,7 +2838,7 @@ class _MainDashboardState extends State<MainDashboard> {
       {
         'icon': Icons.face,
         'label': 'Expression',
-        'color': const Color(0xFF8B5CF6),
+        'color': const Color(0xFFE53935),
         'onTap': () => setState(() {
           _activeTabIdx = 1;
         }),
@@ -2821,7 +2854,7 @@ class _MainDashboardState extends State<MainDashboard> {
       {
         'icon': Icons.watch_later,
         'label': 'Show Clock',
-        'color': const Color(0xFF8B5CF6),
+        'color': const Color(0xFFE53935),
         'onTap': () => ble.transmitExpression(8, ""), // 8 is EXPR_CLOCK
       },
       {
@@ -3029,10 +3062,10 @@ class _MainDashboardState extends State<MainDashboard> {
 
   void _showNotificationCenterDialog(BLEService ble) {
     final List<Map<String, dynamic>> notifs = [
-      {'label': 'Birthday Reminder 🎂', 'text': 'HAPPY BIRTHDAY!'},
-      {'label': 'Meeting Reminder 📅', 'text': 'MEETING IN 5 MINS'},
-      {'label': 'Task Reminder ✅', 'text': 'DRINK WATER / STAND UP'},
-      {'label': 'Weather Alert ⛈️', 'text': 'HEAVY RAIN EXPECTED'},
+      {'label': 'Birthday Reminder ðŸŽ‚', 'text': 'HAPPY BIRTHDAY!'},
+      {'label': 'Meeting Reminder ðŸ“…', 'text': 'MEETING IN 5 MINS'},
+      {'label': 'Task Reminder âœ…', 'text': 'DRINK WATER / STAND UP'},
+      {'label': 'Weather Alert â›ˆï¸', 'text': 'HEAVY RAIN EXPECTED'},
     ];
 
     showDialog(
@@ -3046,7 +3079,7 @@ class _MainDashboardState extends State<MainDashboard> {
             children: notifs.map((n) {
               return ListTile(
                 title: Text(n['label'] as String, style: GoogleFonts.outfit(color: textColor, fontSize: 13)),
-                trailing: const Icon(Icons.send, color: Color(0xFF8B5CF6), size: 16),
+                trailing: const Icon(Icons.send, color: Color(0xFFE53935), size: 16),
                 onTap: () async {
                   Navigator.pop(context);
                   await ble.transmitMarqueeText(n['text'] as String);
@@ -3092,7 +3125,7 @@ class _MainDashboardState extends State<MainDashboard> {
               final robot = db.robots[index];
               final isPrimary = robot.isPrimary;
               final isMiss = robot.variant == 'miss_mario';
-              final accent = isMiss ? const Color(0xFFEC4899) : const Color(0xFF8B5CF6);
+              final accent = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
 
               return Card(
                 color: const Color(0x66161526),
@@ -3171,7 +3204,7 @@ class _MainDashboardState extends State<MainDashboard> {
           icon: const Icon(Icons.add),
           label: const Text("PAIR NEW ROBOT"),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF8B5CF6),
+            backgroundColor: const Color(0xFFE53935),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
@@ -3231,7 +3264,7 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(height: 6),
               Text(
-                "Manage relationship status (Friends 🤝 vs Couple ❤️) between Mr. Mario and Miss Mario companions.",
+                "Manage relationship status (Friends ðŸ¤ vs Couple â¤ï¸) between Mr. Mario and Miss Mario companions.",
                 style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
               ),
               const SizedBox(height: 16),
@@ -3453,7 +3486,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       side: BorderSide(color: selectedRel == 'friends' ? const Color(0xFF10B981) : Colors.black.withOpacity(0.06)),
                     ),
                     child: ListTile(
-                      title: Text("🤝 Friends Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                      title: Text("ðŸ¤ Friends Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
                       subtitle: Text("Casual talk, synchronized friendly expressions.", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
                       onTap: () => setModalState(() => selectedRel = 'friends'),
                     ),
@@ -3467,7 +3500,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       side: BorderSide(color: selectedRel == 'couple' ? const Color(0xFFEC4899) : Colors.black.withOpacity(0.06)),
                     ),
                     child: ListTile(
-                      title: Text("❤️ Couple Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                      title: Text("â¤ï¸ Couple Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
                       subtitle: Text("Romantic expressions, shared hearts, anniversary reminders.", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
                       onTap: () => setModalState(() => selectedRel = 'couple'),
                     ),
@@ -3565,7 +3598,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.groups, color: Color(0xFFD8B4FE), size: 18),
+                            const Icon(Icons.groups, color: Color(0xFFFFCDD2), size: 18),
                             const SizedBox(width: 6),
                             Text(
                               "Meeting",
@@ -3815,7 +3848,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   });
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B5CF6),
+                  backgroundColor: const Color(0xFFE53935),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -3883,7 +3916,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
                           colors: isMeeting
-                              ? [const Color(0xFF8B5CF6), const Color(0xFF6366F1)]
+                              ? [const Color(0xFFE53935), const Color(0xFFFFB300)]
                               : [const Color(0xFFEC4899), const Color(0xFFF43F5E)],
                         ),
                       ),
@@ -4855,9 +4888,9 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Animated GIF Card — each instance owns a GifController for looping playback
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Animated GIF Card â€” each instance owns a GifController for looping playback
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _GifCardWidget extends StatefulWidget {
   final GifModel gif;
   final DatabaseService db;
@@ -5043,3 +5076,4 @@ class _GifCardWidgetState extends State<_GifCardWidget>
     );
   }
 }
+
