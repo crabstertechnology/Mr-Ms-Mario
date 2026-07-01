@@ -54,6 +54,7 @@ class MrMarioBackgroundService : Service() {
     }
 
     private var isConnectedToRobot = false
+    private var lastConnectedStatus: Boolean? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val updateRunnable = object : Runnable {
         override fun run() {
@@ -127,6 +128,11 @@ class MrMarioBackgroundService : Service() {
     }
 
     private fun updateNotificationStatus(connected: Boolean) {
+        if (lastConnectedStatus == connected) {
+            return
+        }
+        lastConnectedStatus = connected
+
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, notificationIntent,
@@ -159,6 +165,10 @@ class MrMarioBackgroundService : Service() {
                 .build()
         }
 
-        startForeground(NOTIFICATION_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 }
