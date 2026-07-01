@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +20,7 @@ import '../services/notification_service.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/oled_simulator.dart';
 import '../widgets/pixel_editor.dart';
+import '../widgets/mario_background.dart';
 import 'package:gif/gif.dart';
 
 class MainDashboard extends StatefulWidget {
@@ -236,6 +238,9 @@ class _MainDashboardState extends State<MainDashboard> {
   StreamSubscription? _robotEventsSub;
   bool _isNotificationPermissionGranted = false;
   bool _isPostNotificationsPermissionGranted = false;
+  final TextEditingController _appSearchController = TextEditingController();
+  List<Map<String, String>> _installedApps = [];
+  bool _isLoadingApps = false;
 
   @override
   void initState() {
@@ -287,6 +292,8 @@ class _MainDashboardState extends State<MainDashboard> {
         }
       }
     });
+
+    _loadInstalledApps();
   }
 
   @override
@@ -301,6 +308,7 @@ class _MainDashboardState extends State<MainDashboard> {
     _customMelodyController.dispose();
     _aiPromptController.dispose();
     _searchController.dispose();
+    _appSearchController.dispose();
     _audioSynth.stop();
     super.dispose();
   }
@@ -705,45 +713,10 @@ class _MainDashboardState extends State<MainDashboard> {
 
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Stack(
-        children: [
-          // Premium Glowing Radial Gradient Backgrounds
-          Positioned(
-            top: -100,
-            left: -100,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    _accentColor.withOpacity(0.08),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -100,
-            right: -100,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    _accentColor.withOpacity(0.05),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-
+      backgroundColor: Colors.transparent,
+      body: MarioBackground(
+        child: Stack(
+          children: [
           SafeArea(
             child: Column(
               children: [
@@ -760,6 +733,7 @@ class _MainDashboardState extends State<MainDashboard> {
             ),
           ),
         ],
+        ),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
@@ -1927,10 +1901,10 @@ class _MainDashboardState extends State<MainDashboard> {
             final sfx = sfxList[index];
             final color = sfx['color'] as Color;
             return Card(
-              color: const Color(0x66161526),
+              color: const Color(0xFFE0F2FE),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: color.withOpacity(0.2)),
+                side: BorderSide(color: _accentColor.withOpacity(0.3), width: 1.2),
               ),
               child: InkWell(
                 onTap: () async {
@@ -2182,59 +2156,6 @@ class _MainDashboardState extends State<MainDashboard> {
                 style: GoogleFonts.outfit(color: const Color(0xFFD8B4FE), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
               ),
               const SizedBox(height: 16),
-
-              // Rotation dropdown
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Screen Rotation Angle", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.black.withOpacity(0.06)),
-                    ),
-                    child: DropdownButton<double>(
-                      value: db.oledRotation,
-                      dropdownColor: Colors.white,
-                      style: GoogleFonts.outfit(color: textColor, fontSize: 13),
-                      underline: const SizedBox(),
-                      items: const [
-                        DropdownMenuItem(value: 0.0, child: Text("0° Normal")),
-                        DropdownMenuItem(value: 90.0, child: Text("90° Right")),
-                        DropdownMenuItem(value: 180.0, child: Text("180° Inverted")),
-                        DropdownMenuItem(value: 270.0, child: Text("270° Left")),
-                      ],
-                      onChanged: (val) async {
-                        if (val != null) {
-                          await db.updateOledRotation(val);
-                          _syncSettingsToRobot(db, ble);
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Contrast slider
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Screen Pixel Contrast", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
-                  Text(db.oledContrast.toStringAsFixed(1), style: GoogleFonts.firaCode(color: Colors.yellow, fontSize: 12, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              Slider(
-                value: db.oledContrast,
-                min: 0.5,
-                max: 3.0,
-                activeColor: const Color(0xFF8B5CF6),
-                onChanged: (val) => db.updateOledContrast(val),
-                onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
-              ),
-              const SizedBox(height: 12),
 
               // Invert option
               Row(
@@ -2568,11 +2489,11 @@ class _MainDashboardState extends State<MainDashboard> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    "Hello! 👋",
-                    "I Love You! ❤️",
-                    "Good Morning! ☀️",
-                    "Battery Low! 🔋",
-                    "Meeting Started! 💼",
+                    "Hello!",
+                    "I Love You!",
+                    "Good Morning!",
+                    "Battery Low!",
+                    "Meeting Started!",
                   ].map((preset) {
                     return Padding(
                       padding: const EdgeInsets.only(right: 8.0),
@@ -4331,39 +4252,47 @@ class _MainDashboardState extends State<MainDashboard> {
                 onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
               ),
               const Divider(color: Colors.white12, height: 24),
-              Text(
-                "Filter Applications",
-                style: GoogleFonts.outfit(
-                  color: textColor,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                "Select which apps are allowed to send notifications to Mario Hardware",
-                style: GoogleFonts.outfit(
-                  color: textColor60,
-                  fontSize: 11,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildAppFilterChip(db, 'whatsapp', 'WhatsApp', Icons.message),
-                  _buildAppFilterChip(db, 'whatsapp_business', 'WA Business', Icons.business),
-                  _buildAppFilterChip(db, 'instagram', 'Instagram', Icons.camera_alt),
-                  _buildAppFilterChip(db, 'snapchat', 'Snapchat', Icons.chat_bubble),
-                  _buildAppFilterChip(db, 'telegram', 'Telegram', Icons.send),
-                  _buildAppFilterChip(db, 'messenger', 'Messenger', Icons.chat),
-                  _buildAppFilterChip(db, 'google_maps', 'Google Maps', Icons.map),
-                  _buildAppFilterChip(db, 'gmail', 'Gmail', Icons.email),
-                  _buildAppFilterChip(db, 'youtube', 'YouTube', Icons.play_circle),
-                  _buildAppFilterChip(db, 'sms', 'SMS / Messages', Icons.sms),
-                  _buildAppFilterChip(db, 'phone', 'Phone Calls', Icons.phone),
-                  _buildAppFilterChip(db, 'other_apps', 'Other Apps', Icons.apps),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Filter Applications",
+                          style: GoogleFonts.outfit(
+                            color: textColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Choose which apps can forward notifications to your robot.",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAppSelectionDialog(db),
+                    icon: const Icon(Icons.apps, size: 16),
+                    label: Text(
+                      "${db.allowedNotificationApps.length} Apps",
+                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accentColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      elevation: 2,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -4375,33 +4304,10 @@ class _MainDashboardState extends State<MainDashboard> {
 
   Widget _buildAppFilterChip(DatabaseService db, String appKey, String label, IconData icon) {
     final isSelected = db.allowedNotificationApps.contains(appKey);
-    return FilterChip(
-      avatar: Icon(
-        icon,
-        size: 14,
-        color: isSelected ? Colors.white : textColor60,
-      ),
-      label: Text(
-        label,
-        style: GoogleFonts.outfit(
-          color: isSelected ? Colors.white : textColor,
-          fontSize: 12,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
-      selected: isSelected,
-      selectedColor: _accentColor,
-      backgroundColor: Colors.white.withOpacity(0.05),
-      checkmarkColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: isSelected ? _accentColor.withOpacity(0.5) : Colors.white10,
-        ),
-      ),
-      onSelected: (selected) async {
+    return GestureDetector(
+      onTap: () async {
         final List<String> updated = List.from(db.allowedNotificationApps);
-        if (selected) {
+        if (!isSelected) {
           if (!updated.contains(appKey)) {
             updated.add(appKey);
           }
@@ -4409,6 +4315,418 @@ class _MainDashboardState extends State<MainDashboard> {
           updated.remove(appKey);
         }
         await db.updateAllowedNotificationApps(updated);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? _accentColor : Colors.black.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: isSelected ? _accentColor : Colors.black.withOpacity(0.08),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildAppIconWithCheck(icon, isSelected),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                color: isSelected ? Colors.white : textColor,
+                fontSize: 12.5,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppIconWithCheck(IconData icon, bool isSelected) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isSelected ? Colors.white24 : Colors.black.withOpacity(0.05),
+            border: Border.all(
+              color: isSelected ? Colors.white : Colors.black26,
+              width: 1.2,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 11,
+            color: isSelected ? Colors.white : textColor60,
+          ),
+        ),
+        if (isSelected)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 9,
+              height: 9,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.check,
+                  size: 7,
+                  color: _accentColor,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _loadInstalledApps() async {
+    if (_isLoadingApps) return;
+    setState(() {
+      _isLoadingApps = true;
+    });
+    try {
+      const channel = MethodChannel('com.mrmario/notifications');
+      final List<dynamic>? apps = await channel.invokeMethod<List<dynamic>>('getInstalledApps');
+      if (apps != null) {
+        final List<Map<String, String>> loaded = apps.map((item) {
+          final map = item as Map<dynamic, dynamic>;
+          return {
+            'name': (map['name'] ?? '').toString(),
+            'packageName': (map['packageName'] ?? '').toString(),
+          };
+        }).toList();
+        setState(() {
+          _installedApps = loaded;
+        });
+      }
+    } catch (e) {
+      debugPrint("Failed to load installed apps: $e");
+    } finally {
+      setState(() {
+        _isLoadingApps = false;
+      });
+    }
+  }
+
+  IconData _getAppIcon(String packageName) {
+    final pkg = packageName.toLowerCase();
+    if (pkg.contains('whatsapp')) return Icons.message;
+    if (pkg.contains('instagram')) return Icons.camera_alt;
+    if (pkg.contains('snapchat')) return Icons.chat_bubble_outline;
+    if (pkg.contains('telegram')) return Icons.send;
+    if (pkg.contains('messenger')) return Icons.chat;
+    if (pkg.contains('maps')) return Icons.map;
+    if (pkg.contains('gmail') || pkg.contains('email') || pkg.contains('mail')) return Icons.email;
+    if (pkg.contains('youtube')) return Icons.play_circle;
+    if (pkg.contains('sms') || pkg.contains('mms') || pkg.contains('message')) return Icons.sms;
+    if (pkg.contains('phone') || pkg.contains('dialer') || pkg.contains('call')) return Icons.phone;
+    if (pkg.contains('calendar')) return Icons.calendar_month;
+    if (pkg.contains('clock') || pkg.contains('alarm')) return Icons.alarm;
+    if (pkg.contains('camera')) return Icons.camera;
+    if (pkg.contains('gallery') || pkg.contains('photos')) return Icons.photo;
+    if (pkg.contains('music') || pkg.contains('spotify')) return Icons.music_note;
+    if (pkg.contains('chrome') || pkg.contains('browser')) return Icons.web;
+    if (pkg.contains('settings')) return Icons.settings;
+    return Icons.apps;
+  }
+
+  void _showAppSelectionDialog(DatabaseService db) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "App Selection",
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, anim1, anim2) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final searchQuery = _appSearchController.text.trim().toLowerCase();
+            final filteredApps = _installedApps.where((app) {
+              final name = app['name']?.toLowerCase() ?? '';
+              final pkg = app['packageName']?.toLowerCase() ?? '';
+              return name.contains(searchQuery) || pkg.contains(searchQuery);
+            }).toList();
+
+            // Sort: selected apps first, then alphabetical by name
+            filteredApps.sort((a, b) {
+              final aSelected = db.allowedNotificationApps.contains(a['packageName']);
+              final bSelected = db.allowedNotificationApps.contains(b['packageName']);
+              if (aSelected && !bSelected) return -1;
+              if (!aSelected && bSelected) return 1;
+              final aName = a['name']?.toLowerCase() ?? '';
+              final bName = b['name']?.toLowerCase() ?? '';
+              return aName.compareTo(bName);
+            });
+
+            return Align(
+              alignment: Alignment.center,
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.9,
+                height: MediaQuery.of(context).size.height * 0.8,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Scaffold(
+                  backgroundColor: Colors.transparent,
+                  body: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Filter Applications",
+                              style: GoogleFonts.outfit(
+                                color: textColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 20),
+                              color: textColor54,
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Configure which applications are permitted to send notifications to Mr. Mario.",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Search bar & Refresh
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _appSearchController,
+                                style: GoogleFonts.outfit(color: textColor, fontSize: 13),
+                                decoration: InputDecoration(
+                                  hintText: "Search installed apps...",
+                                  hintStyle: GoogleFonts.outfit(color: textColor38, fontSize: 13),
+                                  prefixIcon: const Icon(Icons.search, color: textColor38, size: 18),
+                                  filled: true,
+                                  fillColor: Colors.black.withOpacity(0.04),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                onChanged: (val) {
+                                  setModalState(() {});
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.refresh, size: 18),
+                              color: _accentColor,
+                              onPressed: () async {
+                                await _loadInstalledApps();
+                                setModalState(() {});
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Select All / Clear All
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Showing ${filteredApps.length} apps",
+                              style: GoogleFonts.outfit(color: textColor54, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            Row(
+                              children: [
+                                TextButton(
+                                  onPressed: () async {
+                                    final List<String> allPkgs = _installedApps.map((a) => a['packageName']!).toList();
+                                    await db.updateAllowedNotificationApps(allPkgs);
+                                    setModalState(() {});
+                                    setState(() {});
+                                  },
+                                  child: Text("Select All", style: GoogleFonts.outfit(color: _accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  onPressed: () async {
+                                    await db.updateAllowedNotificationApps([]);
+                                    setModalState(() {});
+                                    setState(() {});
+                                  },
+                                  child: Text("Clear All", style: GoogleFonts.outfit(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const Divider(color: Colors.black12, height: 16),
+                        
+                        // Scrollable List
+                        Expanded(
+                          child: _isLoadingApps
+                              ? Center(
+                                  child: CircularProgressIndicator(color: _accentColor),
+                                )
+                              : filteredApps.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                        _installedApps.isEmpty ? "No apps loaded. Tap refresh." : "No apps matching search.",
+                                        style: GoogleFonts.outfit(color: textColor38, fontSize: 13),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: filteredApps.length,
+                                      itemBuilder: (context, index) {
+                                        final app = filteredApps[index];
+                                        final appKey = app['packageName']!;
+                                        final label = app['name']!;
+                                        final icon = _getAppIcon(appKey);
+                                        final isSelected = db.allowedNotificationApps.contains(appKey);
+                                        return GestureDetector(
+                                          onTap: () async {
+                                            final List<String> updated = List.from(db.allowedNotificationApps);
+                                            if (!isSelected) {
+                                              if (!updated.contains(appKey)) {
+                                                updated.add(appKey);
+                                              }
+                                            } else {
+                                              updated.remove(appKey);
+                                            }
+                                            await db.updateAllowedNotificationApps(updated);
+                                            setModalState(() {});
+                                            setState(() {});
+                                          },
+                                          child: Container(
+                                            margin: const EdgeInsets.symmetric(vertical: 4),
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                            decoration: BoxDecoration(
+                                              color: isSelected ? _accentColor.withOpacity(0.06) : Colors.transparent,
+                                              borderRadius: BorderRadius.circular(16),
+                                              border: Border.all(
+                                                color: isSelected ? _accentColor.withOpacity(0.15) : Colors.black.withOpacity(0.03),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                // App Icon Circle
+                                                Container(
+                                                  width: 38,
+                                                  height: 38,
+                                                  decoration: BoxDecoration(
+                                                    color: isSelected ? _accentColor : Colors.black.withOpacity(0.04),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: Icon(
+                                                    icon,
+                                                    size: 18,
+                                                    color: isSelected ? Colors.white : textColor60,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 14),
+                                                // App Name & Package
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        label,
+                                                        style: GoogleFonts.outfit(
+                                                          color: textColor,
+                                                          fontSize: 14,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        appKey,
+                                                        style: GoogleFonts.outfit(
+                                                          color: textColor38,
+                                                          fontSize: 10.5,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                // Selection State Indicator
+                                                Checkbox(
+                                                  value: isSelected,
+                                                  activeColor: _accentColor,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  onChanged: (val) async {
+                                                    final List<String> updated = List.from(db.allowedNotificationApps);
+                                                    if (val == true) {
+                                                      if (!updated.contains(appKey)) {
+                                                        updated.add(appKey);
+                                                      }
+                                                    } else {
+                                                      updated.remove(appKey);
+                                                    }
+                                                    await db.updateAllowedNotificationApps(updated);
+                                                    setModalState(() {});
+                                                    setState(() {});
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+          child: FadeTransition(
+            opacity: anim1,
+            child: child,
+          ),
+        );
       },
     );
   }

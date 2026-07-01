@@ -56,6 +56,7 @@ int notificationDurationMs = 5000; // default 5 seconds
 int reminderDurationMs = 10000; // default 10 seconds
 int birthdayDurationMs = 15000; // default 15 seconds
 int activeNotificationDurationMs = 5000;
+bool mapsActive = false;
 
 // Software Real-Time Clock variables
 int rtcHour = 12;
@@ -313,6 +314,7 @@ void handleRobotCommand(String text) {
     String payload = text.substring(4);
     payload.trim();
     if (payload == "EXIT") {
+      mapsActive = false;
       face.setExpression(EXPR_IDLE);
       lastExpressionCycleTime = millis() - activeNotificationDurationMs;
       Serial.println("Maps Navigation Exited.");
@@ -345,6 +347,7 @@ void handleRobotCommand(String text) {
     
     Serial.println("[MAP] direction='" + dirUpper + "' distance='" + distance + "' desc='" + description + "'");
     
+    mapsActive = true;
     face.setMapNavigation(dirUpper, distance, description);
     // No chirp sound for navigation updates (removed)
     activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
@@ -738,6 +741,9 @@ void loop() {
         Serial.println(" frames)");
       }
       Serial.println("=============================");
+    } else {
+      // Fallback: forward generic commands (e.g. MAP:, NOTIF:, EXPR:, AUDIO:) to the robot command handler
+      handleRobotCommand(cmd);
     }
   }
 
@@ -905,7 +911,10 @@ void loop() {
       if (face.getExpression() == EXPR_ALL_GIF) {
         if (face.isGifFinished()) {
           face.clearGifFinished();
-          if (isCycleMode) {
+          if (mapsActive) {
+            face.setExpression(EXPR_MAP);
+            lastExpressionCycleTime = now;
+          } else if (isCycleMode) {
             // Only switch to a different random GIF if at least 8 seconds has elapsed since last cycle!
             if (now - lastExpressionCycleTime >= 8000) {
               cycleExpression();
@@ -916,7 +925,9 @@ void loop() {
       } else {
         // Return to random emoji cycling/default expression after notification duration
         if (face.getExpression() != EXPR_MAP && !isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
-          if (isCycleMode) {
+          if (mapsActive) {
+            face.setExpression(EXPR_MAP);
+          } else if (isCycleMode) {
             cycleExpression();
           } else {
             if (defaultGif >= 100) {

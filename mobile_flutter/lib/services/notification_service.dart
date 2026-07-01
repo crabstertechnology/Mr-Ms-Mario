@@ -29,35 +29,49 @@ class PhoneNotificationService {
         if (title.isEmpty && text.isEmpty && subText.isEmpty && bigText.isEmpty) return;
 
         // Check if the notification's app is allowed by user settings
-        String matchedAppKey = 'other_apps';
         final pkgLower = packageName.toLowerCase();
-        if (pkgLower == 'com.whatsapp') {
-          matchedAppKey = 'whatsapp';
-        } else if (pkgLower == 'com.whatsapp.w4b') {
-          matchedAppKey = 'whatsapp_business';
-        } else if (pkgLower == 'com.instagram.android') {
-          matchedAppKey = 'instagram';
-        } else if (pkgLower == 'com.snapchat.android') {
-          matchedAppKey = 'snapchat';
-        } else if (pkgLower == 'org.telegram.messenger') {
-          matchedAppKey = 'telegram';
-        } else if (pkgLower == 'com.facebook.orca') {
-          matchedAppKey = 'messenger';
-        } else if (pkgLower == 'com.google.android.apps.maps') {
-          matchedAppKey = 'google_maps';
-        } else if (pkgLower == 'com.google.android.gm') {
-          matchedAppKey = 'gmail';
-        } else if (pkgLower == 'com.google.android.youtube') {
-          matchedAppKey = 'youtube';
-        } else if (pkgLower.contains('messaging') || pkgLower.contains('sms') || pkgLower.contains('mms')) {
-          matchedAppKey = 'sms';
-        } else if (pkgLower.contains('dialer') || pkgLower.contains('telecom') || pkgLower.contains('phone') || pkgLower.contains('incallui')) {
-          matchedAppKey = 'phone';
+        bool isAllowed = _dbService.allowedNotificationApps.contains(pkgLower);
+
+        // Also check preset mapping for backward compatibility and convenience
+        if (!isAllowed) {
+          String matchedAppKey = '';
+          if (pkgLower == 'com.whatsapp') {
+            matchedAppKey = 'whatsapp';
+          } else if (pkgLower == 'com.whatsapp.w4b') {
+            matchedAppKey = 'whatsapp_business';
+          } else if (pkgLower == 'com.instagram.android') {
+            matchedAppKey = 'instagram';
+          } else if (pkgLower == 'com.snapchat.android') {
+            matchedAppKey = 'snapchat';
+          } else if (pkgLower == 'org.telegram.messenger') {
+            matchedAppKey = 'telegram';
+          } else if (pkgLower == 'com.facebook.orca') {
+            matchedAppKey = 'messenger';
+          } else if (pkgLower == 'com.google.android.apps.maps') {
+            matchedAppKey = 'google_maps';
+          } else if (pkgLower == 'com.google.android.gm') {
+            matchedAppKey = 'gmail';
+          } else if (pkgLower == 'com.google.android.youtube') {
+            matchedAppKey = 'youtube';
+          } else if (pkgLower.contains('messaging') || pkgLower.contains('sms') || pkgLower.contains('mms')) {
+            matchedAppKey = 'sms';
+          } else if (pkgLower.contains('dialer') || pkgLower.contains('telecom') || pkgLower.contains('phone') || pkgLower.contains('incallui')) {
+            matchedAppKey = 'phone';
+          }
+
+          if (matchedAppKey.isNotEmpty && _dbService.allowedNotificationApps.contains(matchedAppKey)) {
+            isAllowed = true;
+          }
         }
 
-        _bleService.addLog("Checking if app key '$matchedAppKey' is allowed by user settings...", "NOTIF");
-        if (!_dbService.allowedNotificationApps.contains(matchedAppKey)) {
-          _bleService.addLog("App key '$matchedAppKey' is NOT allowed in settings.", "NOTIF");
+        // Support fallback to 'other_apps' if specified
+        if (!isAllowed && _dbService.allowedNotificationApps.contains('other_apps')) {
+          isAllowed = true;
+        }
+
+        _bleService.addLog("Checking if app '$pkgLower' is allowed by user settings: $isAllowed", "NOTIF");
+        if (!isAllowed) {
+          _bleService.addLog("App '$pkgLower' is NOT allowed in settings.", "NOTIF");
           return;
         }
 
@@ -137,13 +151,24 @@ class PhoneNotificationService {
       direction = "UTURN";
     } else if (RegExp(r'\b(roundabout|rotary|rond.point)\b').hasMatch(cleanedText)) {
       direction = "ROUNDABOUT";
-    } else if (RegExp(r'\bright\b').hasMatch(cleanedText)) {
-      // Check RIGHT before LEFT to avoid false positives
-      direction = "RIGHT";
-    } else if (RegExp(r'\bleft\b').hasMatch(cleanedText)) {
-      direction = "LEFT";
-    } else if (RegExp(r'\b(straight|continue|head\s+(north|south|east|west))\b').hasMatch(cleanedText)) {
-      direction = "STRAIGHT";
+    } else {
+      // Compare keyword indices to find the actual action direction (e.g. "Turn left on Right St.")
+      final int leftIdx = cleanedText.indexOf('left');
+      final int rightIdx = cleanedText.indexOf('right');
+      
+      if (leftIdx != -1 && rightIdx != -1) {
+        if (leftIdx < rightIdx) {
+          direction = "LEFT";
+        } else {
+          direction = "RIGHT";
+        }
+      } else if (leftIdx != -1) {
+        direction = "LEFT";
+      } else if (rightIdx != -1) {
+        direction = "RIGHT";
+      } else if (RegExp(r'\b(straight|continue|head\s+(north|south|east|west))\b').hasMatch(cleanedText)) {
+        direction = "STRAIGHT";
+      }
     }
 
     _bleService.addLog("Maps dir: '$direction' from: '$cleanedText'", "NOTIF");

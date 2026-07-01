@@ -15,7 +15,7 @@ class DatabaseService with ChangeNotifier {
 
   // Settings cached values
   bool _is12HourFormat = false;
-  bool _notificationSyncEnabled = false;
+  bool _notificationSyncEnabled = true;
   double _gifSpeed = 100.0;
   double _gifDelay = 0.0;
   double _gifIntroSpeed = 100.0;
@@ -35,7 +35,20 @@ class DatabaseService with ChangeNotifier {
   double _birthdayDuration = 15.0;
   double _bleSleepTime = 45.0;
   String _bleName = 'Mr. Mario Robot';
-  List<String> _allowedNotificationApps = [];
+  List<String> _allowedNotificationApps = [
+    'whatsapp',
+    'whatsapp_business',
+    'instagram',
+    'snapchat',
+    'telegram',
+    'messenger',
+    'google_maps',
+    'gmail',
+    'youtube',
+    'sms',
+    'phone',
+    'other_apps'
+  ];
 
   List<GifModel> get gifs => _gifs;
   List<RobotProfile> get robots => _robots;

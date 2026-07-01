@@ -134,6 +134,8 @@ public:
     BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
+    pAdvertising->setMinInterval(0x20);  // 20ms advertising interval (32 * 0.625ms)
+    pAdvertising->setMaxInterval(0x40);  // 40ms advertising interval (64 * 0.625ms)
     pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
     pAdvertising->setMinPreferred(0x12);
     BLEDevice::startAdvertising();
@@ -181,9 +183,9 @@ public:
     bool currentConnected = isConnected();
     // Disconnecting
     if (!currentConnected && oldDeviceConnected) {
-      delay(500); // give the bluetooth stack the chance to get things ready
-      if (pServer && advertising) {
-        pServer->startAdvertising(); // restart advertising
+      delay(200); // reduced delay for faster reconnection!
+      if (advertising) {
+        BLEDevice::startAdvertising(); // restart advertising cleanly
       }
       oldDeviceConnected = currentConnected;
     }

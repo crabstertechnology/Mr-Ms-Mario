@@ -98,6 +98,26 @@ class MainActivity: FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "getInstalledApps" -> {
+                    try {
+                        val appsList = ArrayList<Map<String, String>>()
+                        val pm = packageManager
+                        val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                        for (packageInfo in packages) {
+                            val label = packageInfo.loadLabel(pm).toString()
+                            val packageName = packageInfo.packageName
+                            
+                            val appMap = HashMap<String, String>()
+                            appMap["name"] = label
+                            appMap["packageName"] = packageName
+                            appsList.add(appMap)
+                        }
+                        appsList.sortBy { it["name"]?.lowercase() ?: "" }
+                        result.success(appsList)
+                    } catch (e: Exception) {
+                        result.error("ERROR", e.message, null)
+                    }
+                }
                 else -> result.notImplemented()
         }
     }

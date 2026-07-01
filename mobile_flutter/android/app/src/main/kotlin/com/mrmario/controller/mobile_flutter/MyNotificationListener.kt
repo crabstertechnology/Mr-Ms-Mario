@@ -16,13 +16,24 @@ class MyNotificationListener : NotificationListenerService() {
         if (sbn == null) return
 
         val extras = sbn.notification.extras
-        val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
         val packageName = sbn.packageName ?: ""
 
         println("MyNotificationListener - Posted: pkg=$packageName, title=$title, text=$text")
+
+        if (packageName == "com.google.android.apps.maps") {
+            for (key in extras.keySet()) {
+                try {
+                    val value = extras.get(key)
+                    println("MapsExtra - $key: $value")
+                } catch (e: Exception) {
+                    println("MapsExtra - $key: <Error: ${e.message}>")
+                }
+            }
+        }
 
         // Only process if there's actual content
         if (title.isNotEmpty() || text.isNotEmpty() || subText.isNotEmpty() || bigText.isNotEmpty()) {

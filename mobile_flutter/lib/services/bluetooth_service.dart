@@ -25,6 +25,7 @@ class BLEService with ChangeNotifier {
   bool _isConnecting = false;
   Timer? _reconnectTimer;
   int _lastReconnectLogTime = 0;
+  bool _isReconnecting = false;
 
   // Subscriptions
   StreamSubscription? _scanSub;
@@ -104,7 +105,9 @@ class BLEService with ChangeNotifier {
 
   BLEService() {
     _initBLE();
-    _loadPairedDevice();
+    _loadPairedDevice().then((_) {
+      triggerReconnection();
+    });
     _startReconnectTimer();
     
     // Periodically sync connection status with background service
@@ -132,10 +135,84 @@ class BLEService with ChangeNotifier {
     }
   }
 
+  Future<void> triggerReconnection() async {
+    if (_pairedDeviceId == null || _isConnected || _isConnecting || _isScanning || _isReconnecting) {
+      return;
+    }
+    _isReconnecting = true;
+    try {
+      if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
+        _isReconnecting = false;
+        return;
+      }
+      addLog("Starting fast reconnection flow...", "BLE");
+      // 1. Check system devices
+      List<BluetoothDevice> systemDevices = await FlutterBluePlus.systemDevices([Guid(serviceUuid)]);
+      for (var d in systemDevices) {
+        if (d.remoteId.str == _pairedDeviceId) {
+          addLog("Found in system cache during fast reconnect. Connecting...", "BLE");
+          await connect(d);
+          _isReconnecting = false;
+          return;
+        }
+      }
+
+      // 2. Scan immediately
+      _isScanning = true;
+      notifyListeners();
+
+      StreamSubscription? tempSub;
+      tempSub = FlutterBluePlus.scanResults.listen((results) async {
+        for (var r in results) {
+          if (r.device.remoteId.str == _pairedDeviceId) {
+            addLog("Paired robot located during fast scan! Connecting...", "BLE");
+            tempSub?.cancel();
+            await FlutterBluePlus.stopScan();
+            _isScanning = false;
+            await connect(r.device);
+            break;
+          }
+        }
+      });
+
+      await FlutterBluePlus.startScan(
+        timeout: const Duration(seconds: 4),
+        androidUsesFineLocation: true,
+      );
+      await Future.delayed(const Duration(seconds: 4));
+      tempSub?.cancel();
+    } catch (e) {
+      print("Fast reconnect failed: $e");
+    } finally {
+      _isScanning = false;
+      _isReconnecting = false;
+      notifyListeners();
+    }
+  }
+
   void _startReconnectTimer() {
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (_pairedDeviceId != null && !_isConnected && !_isConnecting && !_isScanning) {
+    _reconnectTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      // Proactively verify connection state to prevent getting stuck in a fake connected state
+      if (_isConnected && _connectedDevice != null) {
+        try {
+          final state = await _connectedDevice!.connectionState.first.timeout(const Duration(milliseconds: 500));
+          if (state != BluetoothConnectionState.connected) {
+            addLog("Device connection verified as LOST. Cleaning up state.", "BLE");
+            _handleDisconnect();
+          }
+        } catch (e) {
+          addLog("Connection verification failed: $e. Cleaning up state.", "WARNING");
+          _handleDisconnect();
+        }
+      }
+
+      if (_pairedDeviceId == null || _isConnected || _isConnecting || _isScanning || _isReconnecting) {
+        return;
+      }
+      
+      _isReconnecting = true;
+      try {
         if (await FlutterBluePlus.adapterState.first == BluetoothAdapterState.on) {
           final now = DateTime.now().millisecondsSinceEpoch;
           if (now - _lastReconnectLogTime > 15000) {
@@ -143,6 +220,7 @@ class BLEService with ChangeNotifier {
             addLog("Checking connection status for paired robot...", "BLE");
           }
 
+          // 1. Try to find in system/cached devices first
           List<BluetoothDevice> systemDevices = await FlutterBluePlus.systemDevices([Guid(serviceUuid)]);
           BluetoothDevice? targetDevice;
           for (var d in systemDevices) {
@@ -155,7 +233,8 @@ class BLEService with ChangeNotifier {
           if (targetDevice != null) {
             _lastReconnectLogTime = now;
             addLog("Paired robot found in system cache. Connecting...", "BLE");
-            connect(targetDevice);
+            await connect(targetDevice);
+            _isReconnecting = false;
             return;
           }
 
@@ -166,14 +245,14 @@ class BLEService with ChangeNotifier {
           notifyListeners();
 
           StreamSubscription? tempSub;
-          tempSub = FlutterBluePlus.scanResults.listen((results) {
+          tempSub = FlutterBluePlus.scanResults.listen((results) async {
             for (var r in results) {
               if (r.device.remoteId.str == _pairedDeviceId) {
                 addLog("Paired robot located! Connecting...", "BLE");
                 tempSub?.cancel();
-                FlutterBluePlus.stopScan();
+                await FlutterBluePlus.stopScan();
                 _isScanning = false;
-                connect(r.device);
+                await connect(r.device);
                 break;
               }
             }
@@ -181,17 +260,22 @@ class BLEService with ChangeNotifier {
 
           try {
             await FlutterBluePlus.startScan(
-              timeout: const Duration(seconds: 3),
+              timeout: const Duration(seconds: 4),
+              androidUsesFineLocation: true,
             );
           } catch (e) {
             print("Auto-reconnect scan failed: $e");
           }
 
-          await Future.delayed(const Duration(seconds: 3));
+          await Future.delayed(const Duration(seconds: 4));
           tempSub?.cancel();
-          _isScanning = false;
-          notifyListeners();
         }
+      } catch (e) {
+        print("Error during reconnection tick: $e");
+      } finally {
+        _isScanning = false;
+        _isReconnecting = false;
+        notifyListeners();
       }
     });
   }
@@ -279,6 +363,13 @@ class BLEService with ChangeNotifier {
     }
 
     try {
+      // Check if already connected
+      final startState = await device.connectionState.first;
+      if (startState == BluetoothConnectionState.connected) {
+        _handleConnected(device);
+        return;
+      }
+
       _connectionStateSub?.cancel();
       _connectionStateSub = device.connectionState.listen((state) {
         if (state == BluetoothConnectionState.connected) {
@@ -288,8 +379,8 @@ class BLEService with ChangeNotifier {
         }
       });
 
-      // Connect directly with standard timeout
-      await device.connect(autoConnect: false, timeout: const Duration(seconds: 10));
+      // Connect directly with shorter timeout (5 seconds)
+      await device.connect(autoConnect: false, timeout: const Duration(seconds: 5));
 
       // Synchronously verify if it's already connected (or completed immediately)
       final currentState = await device.connectionState.first.timeout(
@@ -300,6 +391,7 @@ class BLEService with ChangeNotifier {
         _handleConnected(device);
       }
     } catch (e) {
+      addLog("Connection attempt failed: $e", "WARNING");
       _isConnecting = false;
       _handleDisconnect();
     }
@@ -329,6 +421,13 @@ class BLEService with ChangeNotifier {
     });
     addLog("Connected to Mr. Mario successfully!", "BLE");
     _setupServices(device);
+    
+    // Request high connection priority for faster communication and reconnection stability
+    try {
+      device.requestConnectionPriority(connectionPriorityRequest: ConnectionPriority.high);
+    } catch (e) {
+      addLog("Failed to request high connection priority: $e", "WARNING");
+    }
     
     // Update background service immediately
     const MethodChannel('com.mrmario/notifications').invokeMethod('updateConnectionStatus', {'connected': true});
@@ -423,6 +522,9 @@ class BLEService with ChangeNotifier {
     const MethodChannel('com.mrmario/notifications').invokeMethod('updateConnectionStatus', {'connected': false});
     
     notifyListeners();
+
+    // Trigger fast reconnection immediately when disconnected!
+    Future.delayed(const Duration(milliseconds: 500), () => triggerReconnection());
   }
 
   Future<void> disconnect() async {
