@@ -8,6 +8,8 @@ class GlassCard extends StatelessWidget {
   final Border? border;
   final Color? backgroundColor;
 
+  final bool hasTexture;
+
   const GlassCard({
     Key? key,
     required this.child,
@@ -15,12 +17,12 @@ class GlassCard extends StatelessWidget {
     this.borderRadius = 18,
     this.border,
     this.backgroundColor,
+    this.hasTexture = true,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding,
       decoration: BoxDecoration(
         color: backgroundColor ?? Colors.white,
         borderRadius: BorderRadius.circular(borderRadius),
@@ -43,7 +45,57 @@ class GlassCard extends StatelessWidget {
           ),
         ],
       ),
-      child: child,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: Stack(
+          children: [
+            if (hasTexture)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: GridTexturePainter(
+                    color: const Color(0xFF0F172A).withOpacity(0.02),
+                    spacing: 12.0,
+                    strokeWidth: 0.5,
+                  ),
+                ),
+              ),
+            Padding(
+              padding: padding,
+              child: child,
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
+
+class GridTexturePainter extends CustomPainter {
+  final Color color;
+  final double spacing;
+  final double strokeWidth;
+
+  GridTexturePainter({
+    required this.color,
+    this.spacing = 12.0,
+    this.strokeWidth = 0.5,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    for (double x = 0; x < size.width; x += spacing) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += spacing) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -26,6 +26,7 @@ class MrMarioBackgroundService : Service() {
                 val subText = intent.getStringExtra("subText") ?: ""
                 val bigText = intent.getStringExtra("bigText") ?: ""
                 val packageName = intent.getStringExtra("package") ?: ""
+                val smallIcon = intent.getStringExtra("smallIcon") ?: ""
 
                 // Forward to Flutter engine if it's alive
                 val engine = MainActivity.flutterEngine
@@ -37,7 +38,8 @@ class MrMarioBackgroundService : Service() {
                         "text" to text,
                         "subText" to subText,
                         "bigText" to bigText,
-                        "package" to packageName
+                        "package" to packageName,
+                        "smallIcon" to smallIcon
                     ))
                 }
             } else if (action == "com.mrmario.NOTIFICATION_REMOVED") {

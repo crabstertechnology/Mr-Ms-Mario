@@ -583,20 +583,20 @@ private:
     }
 
     // 2. Draw Bottom Status Info (Left: Distance, Right: Remaining Time)
-    display.setTextSize(1);
+    display.setTextSize(2);
     
     // Left side: Distance
-    display.setCursor(4, 55);
+    display.setCursor(2, 48);
     if (mapDistance != "" && mapDistance != "--") {
       display.print(mapDistance);
     }
 
     // Right side: Remaining Time (stored in mapDescription)
     if (mapDescription != "") {
-      int timeWidth = mapDescription.length() * 6;
-      int startX = SCREEN_WIDTH - timeWidth - 4;
-      if (startX < 60) startX = 60; // Keep on right half
-      display.setCursor(startX, 55);
+      int timeWidth = mapDescription.length() * 12; // 12 pixels per character at size 2 (10 width + 2 spacing)
+      int startX = SCREEN_WIDTH - timeWidth - 2;
+      if (startX < 64) startX = 64; // Keep on right half
+      display.setCursor(startX, 48);
       display.print(mapDescription);
     }
   }

@@ -2357,7 +2357,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    colors: isMiss ? [const Color(0xFFEC4899), const Color(0xFFF472B6)] : [const Color(0xFFE53935), const Color(0xFFFFB300)],
+                    colors: isMiss ? [const Color(0xFFEC4899), const Color(0xFFF472B6)] : [const Color(0xFF0284C7), const Color(0xFF38BDF8)],
                   ),
                 ),
                 child: const Icon(Icons.face, color: textColor, size: 28),
@@ -2508,12 +2508,36 @@ class _MainDashboardState extends State<MainDashboard> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accentColor,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
+                      elevation: 2,
                     ),
-                    child: const Icon(Icons.send, size: 18),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: ButtonStripePainter(
+                                  color: Colors.white.withOpacity(0.15),
+                                  stripeWidth: 3,
+                                  gapWidth: 6,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.send, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -5075,5 +5099,37 @@ class _GifCardWidgetState extends State<_GifCardWidget>
       ),
     );
   }
+}
+
+class ButtonStripePainter extends CustomPainter {
+  final Color color;
+  final double stripeWidth;
+  final double gapWidth;
+
+  ButtonStripePainter({
+    required this.color,
+    this.stripeWidth = 3,
+    this.gapWidth = 6,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = stripeWidth
+      ..style = PaintingStyle.stroke;
+
+    final double step = stripeWidth + gapWidth;
+    for (double i = -size.height; i < size.width; i += step) {
+      canvas.drawLine(
+        Offset(i, 0),
+        Offset(i + size.height, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 

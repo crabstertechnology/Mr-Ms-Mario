@@ -20,8 +20,9 @@ class PhoneNotificationService {
         final String subText = data['subText'] ?? '';
         final String bigText = data['bigText'] ?? '';
         final String packageName = data['package'] ?? '';
+        final String smallIcon = data['smallIcon'] ?? '';
 
-        _bleService.addLog("Recv Notif: pkg=$packageName, title='$title', text='$text', subText='$subText', bigText='$bigText', syncEnabled=${_dbService.notificationSyncEnabled}", "NOTIF");
+        _bleService.addLog("Recv Notif: pkg=$packageName, title='$title', text='$text', subText='$subText', bigText='$bigText', smallIcon='$smallIcon', syncEnabled=${_dbService.notificationSyncEnabled}", "NOTIF");
 
         if (!_dbService.notificationSyncEnabled) return;
         
@@ -78,7 +79,7 @@ class PhoneNotificationService {
         // Google Maps Navigation Notification
         if (pkgLower == 'com.google.android.apps.maps') {
           _bleService.addLog("Parsing Google Maps navigation payload...", "NOTIF");
-          final mapInfo = _parseGoogleMapsNotification(title, text, subText, bigText);
+          final mapInfo = _parseGoogleMapsNotification(title, text, subText, bigText, smallIcon);
           if (mapInfo != null) {
             final String direction = mapInfo['direction']!;
             final String distance = mapInfo['distance']!;
@@ -112,7 +113,7 @@ class PhoneNotificationService {
     }
   }
 
-  Map<String, String>? _parseGoogleMapsNotification(String title, String text, String subText, String bigText) {
+  Map<String, String>? _parseGoogleMapsNotification(String title, String text, String subText, String bigText, String smallIcon) {
     // From live logs: Google Maps sends text='Turn right', text='Turn left', text='Head west'
     // subText='19 min · 8.2 km · 4:18 pm ETA'
     // title is often empty during navigation
@@ -146,32 +147,48 @@ class PhoneNotificationService {
         .replaceAll(RegExp(r'\bleft\b(?=\s*[·•])', caseSensitive: false), '');
 
     String direction = "STRAIGHT";
+    final smallIconLower = smallIcon.toLowerCase();
+    _bleService.addLog("Maps parsed smallIcon: '$smallIconLower'", "NOTIF");
 
-    if (RegExp(r'\bu.?turn\b').hasMatch(cleanedText)) {
+    // First check smallIcon resource name for explicit direction hints (extremely reliable)
+    if (smallIconLower.contains("left") && !smallIconLower.contains("right")) {
+      direction = "LEFT";
+    } else if (smallIconLower.contains("right") && !smallIconLower.contains("left")) {
+      direction = "RIGHT";
+    } else if (smallIconLower.contains("uturn") || smallIconLower.contains("u_turn")) {
       direction = "UTURN";
-    } else if (RegExp(r'\b(roundabout|rotary|rond.point)\b').hasMatch(cleanedText)) {
+    } else if (smallIconLower.contains("roundabout")) {
       direction = "ROUNDABOUT";
+    } else if (smallIconLower.contains("straight") || smallIconLower.contains("continue") || smallIconLower.contains("keep_ahead") || smallIconLower.contains("keep_straight")) {
+      direction = "STRAIGHT";
     } else {
-      // Compare keyword indices to find the actual action direction (e.g. "Turn left on Right St.")
-      final int leftIdx = cleanedText.indexOf('left');
-      final int rightIdx = cleanedText.indexOf('right');
-      
-      if (leftIdx != -1 && rightIdx != -1) {
-        if (leftIdx < rightIdx) {
+      // Fallback to text parsing if smallIcon name doesn't contain a clear direction keyword
+      if (RegExp(r'\bu.?turn\b').hasMatch(cleanedText)) {
+        direction = "UTURN";
+      } else if (RegExp(r'\b(roundabout|rotary|rond.point)\b').hasMatch(cleanedText)) {
+        direction = "ROUNDABOUT";
+      } else {
+        // Compare keyword indices to find the actual action direction (e.g. "Turn left on Right St.")
+        final int leftIdx = cleanedText.indexOf('left');
+        final int rightIdx = cleanedText.indexOf('right');
+        
+        if (leftIdx != -1 && rightIdx != -1) {
+          if (leftIdx < rightIdx) {
+            direction = "LEFT";
+          } else {
+            direction = "RIGHT";
+          }
+        } else if (leftIdx != -1) {
           direction = "LEFT";
-        } else {
+        } else if (rightIdx != -1) {
           direction = "RIGHT";
+        } else if (RegExp(r'\b(straight|continue|head\s+(north|south|east|west))\b').hasMatch(cleanedText)) {
+          direction = "STRAIGHT";
         }
-      } else if (leftIdx != -1) {
-        direction = "LEFT";
-      } else if (rightIdx != -1) {
-        direction = "RIGHT";
-      } else if (RegExp(r'\b(straight|continue|head\s+(north|south|east|west))\b').hasMatch(cleanedText)) {
-        direction = "STRAIGHT";
       }
     }
 
-    _bleService.addLog("Maps dir: '$direction' from: '$cleanedText'", "NOTIF");
+    _bleService.addLog("Maps dir: '$direction' from: '$cleanedText' and smallIcon: '$smallIcon'", "NOTIF");
 
     // ── 3. REMAINING TIME ────────────────────────────────────────────────────
     final timeRegex = RegExp(

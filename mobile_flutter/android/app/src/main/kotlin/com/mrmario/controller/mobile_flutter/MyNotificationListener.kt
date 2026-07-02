@@ -22,7 +22,24 @@ class MyNotificationListener : NotificationListenerService() {
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
         val packageName = sbn.packageName ?: ""
 
-        println("MyNotificationListener - Posted: pkg=$packageName, title=$title, text=$text")
+        var smallIconName = ""
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                val smallIcon = sbn.notification.smallIcon
+                if (smallIcon != null && smallIcon.type == android.graphics.drawable.Icon.TYPE_RESOURCE) {
+                    val resPackage = smallIcon.resPackage ?: packageName
+                    val resId = smallIcon.resId
+                    if (resId != 0) {
+                        val res = packageManager.getResourcesForApplication(resPackage)
+                        smallIconName = res.getResourceEntryName(resId)
+                    }
+                }
+            } catch (e: Exception) {
+                println("Error getting small icon name: ${e.message}")
+            }
+        }
+
+        println("MyNotificationListener - Posted: pkg=$packageName, title=$title, text=$text, smallIconName=$smallIconName")
 
         if (packageName == "com.google.android.apps.maps") {
             for (key in extras.keySet()) {
@@ -36,7 +53,7 @@ class MyNotificationListener : NotificationListenerService() {
         }
 
         // Only process if there's actual content
-        if (title.isNotEmpty() || text.isNotEmpty() || subText.isNotEmpty() || bigText.isNotEmpty()) {
+        if (title.isNotEmpty() || text.isNotEmpty() || subText.isNotEmpty() || bigText.isNotEmpty() || smallIconName.isNotEmpty()) {
             val intent = Intent("com.mrmario.NOTIFICATION_RECEIVED")
             intent.setPackage(this.packageName)
             intent.putExtra("title", title)
@@ -44,6 +61,7 @@ class MyNotificationListener : NotificationListenerService() {
             intent.putExtra("subText", subText)
             intent.putExtra("bigText", bigText)
             intent.putExtra("package", packageName)
+            intent.putExtra("smallIcon", smallIconName)
             sendBroadcast(intent)
         }
     }
