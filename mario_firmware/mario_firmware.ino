@@ -167,6 +167,19 @@ void handleRobotCommand(String text) {
   lastInteractionTime = millis();
   lastExpressionCycleTime = millis(); // Reset cycle timer on interaction
   
+  String ackId = "";
+  if (text.startsWith("ACK_ID:")) {
+    int sep = text.indexOf('|');
+    if (sep > 0) {
+      ackId = text.substring(7, sep);
+      text = text.substring(sep + 1);
+    }
+  }
+
+  if (ackId.length() > 0) {
+    ble.sendLog("ACK:" + ackId);
+  }
+
   if (text == "WAKE") {
     isAsleep = false;
     face.setExpression(EXPR_IDLE);
