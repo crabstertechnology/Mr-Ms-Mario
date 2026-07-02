@@ -538,6 +538,42 @@ private:
     }
   }
 
+  int getMixedSizeTextWidth(String text) {
+    int w = 0;
+    for (unsigned int i = 0; i < text.length(); i++) {
+      char c = text.charAt(i);
+      if (c == ' ') {
+        w += 6;
+      } else if ((c >= '0' && c <= '9') || c == '.' || c == ':') {
+        w += 12;
+      } else {
+        w += 6;
+      }
+    }
+    return w;
+  }
+
+  void drawMixedSizeText(String text, int startX, int y2, int y1) {
+    int currentX = startX;
+    for (unsigned int i = 0; i < text.length(); i++) {
+      char c = text.charAt(i);
+      if (c == ' ') {
+        currentX += 6;
+      } else if ((c >= '0' && c <= '9') || c == '.' || c == ':') {
+        display.setTextSize(2);
+        display.setCursor(currentX, y2);
+        display.print(c);
+        currentX += 12;
+      } else {
+        display.setTextSize(1);
+        display.setCursor(currentX, y1);
+        display.print(c);
+        currentX += 6;
+      }
+    }
+    display.setTextSize(1); // Restore default text size
+  }
+
   void drawMapScreen(int hour, int minute, bool is12Hour) {
     display.setTextColor(SSD1306_WHITE);
     display.setTextWrap(false);
@@ -583,21 +619,18 @@ private:
     }
 
     // 2. Draw Bottom Status Info (Left: Distance, Right: Remaining Time)
-    display.setTextSize(2);
     
     // Left side: Distance
-    display.setCursor(2, 48);
     if (mapDistance != "" && mapDistance != "--") {
-      display.print(mapDistance);
+      drawMixedSizeText(mapDistance, 2, 48, 55);
     }
 
     // Right side: Remaining Time (stored in mapDescription)
     if (mapDescription != "") {
-      int timeWidth = mapDescription.length() * 12; // 12 pixels per character at size 2 (10 width + 2 spacing)
+      int timeWidth = getMixedSizeTextWidth(mapDescription);
       int startX = SCREEN_WIDTH - timeWidth - 2;
       if (startX < 64) startX = 64; // Keep on right half
-      display.setCursor(startX, 48);
-      display.print(mapDescription);
+      drawMixedSizeText(mapDescription, startX, 48, 55);
     }
   }
 };

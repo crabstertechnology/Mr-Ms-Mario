@@ -21,8 +21,9 @@ class PhoneNotificationService {
         final String bigText = data['bigText'] ?? '';
         final String packageName = data['package'] ?? '';
         final String smallIcon = data['smallIcon'] ?? '';
+        final String directionFromIcon = data['directionFromIcon'] ?? '';
 
-        _bleService.addLog("Recv Notif: pkg=$packageName, title='$title', text='$text', subText='$subText', bigText='$bigText', smallIcon='$smallIcon', syncEnabled=${_dbService.notificationSyncEnabled}", "NOTIF");
+        _bleService.addLog("Recv Notif: pkg=$packageName, title='$title', text='$text', subText='$subText', bigText='$bigText', smallIcon='$smallIcon', directionFromIcon='$directionFromIcon', syncEnabled=${_dbService.notificationSyncEnabled}", "NOTIF");
 
         if (!_dbService.notificationSyncEnabled) return;
         
@@ -79,7 +80,7 @@ class PhoneNotificationService {
         // Google Maps Navigation Notification
         if (pkgLower == 'com.google.android.apps.maps') {
           _bleService.addLog("Parsing Google Maps navigation payload...", "NOTIF");
-          final mapInfo = _parseGoogleMapsNotification(title, text, subText, bigText, smallIcon);
+          final mapInfo = _parseGoogleMapsNotification(title, text, subText, bigText, smallIcon, directionFromIcon);
           if (mapInfo != null) {
             final String direction = mapInfo['direction']!;
             final String distance = mapInfo['distance']!;
@@ -113,7 +114,7 @@ class PhoneNotificationService {
     }
   }
 
-  Map<String, String>? _parseGoogleMapsNotification(String title, String text, String subText, String bigText, String smallIcon) {
+  Map<String, String>? _parseGoogleMapsNotification(String title, String text, String subText, String bigText, String smallIcon, String directionFromIcon) {
     // From live logs: Google Maps sends text='Turn right', text='Turn left', text='Head west'
     // subText='19 min · 8.2 km · 4:18 pm ETA'
     // title is often empty during navigation
@@ -148,10 +149,12 @@ class PhoneNotificationService {
 
     String direction = "STRAIGHT";
     final smallIconLower = smallIcon.toLowerCase();
-    _bleService.addLog("Maps parsed smallIcon: '$smallIconLower'", "NOTIF");
+    _bleService.addLog("Maps parsed smallIcon: '$smallIconLower', directionFromIcon: '$directionFromIcon'", "NOTIF");
 
-    // First check smallIcon resource name for explicit direction hints (extremely reliable)
-    if (smallIconLower.contains("left") && !smallIconLower.contains("right")) {
+    // Try using directionFromIcon first for explicit turns (determined via largeIcon bitmap)
+    if (directionFromIcon == "LEFT" || directionFromIcon == "RIGHT") {
+      direction = directionFromIcon;
+    } else if (smallIconLower.contains("left") && !smallIconLower.contains("right")) {
       direction = "LEFT";
     } else if (smallIconLower.contains("right") && !smallIconLower.contains("left")) {
       direction = "RIGHT";
@@ -184,6 +187,8 @@ class PhoneNotificationService {
           direction = "RIGHT";
         } else if (RegExp(r'\b(straight|continue|head\s+(north|south|east|west))\b').hasMatch(cleanedText)) {
           direction = "STRAIGHT";
+        } else if (directionFromIcon.isNotEmpty) {
+          direction = directionFromIcon;
         }
       }
     }
