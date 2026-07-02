@@ -347,9 +347,15 @@ void handleRobotCommand(String text) {
     
     Serial.println("[MAP] direction='" + dirUpper + "' distance='" + distance + "' desc='" + description + "'");
     
+    bool shouldBeep = (!mapsActive) || (dirUpper != face.getMapDirection());
+    
     mapsActive = true;
     face.setMapNavigation(dirUpper, distance, description);
-    // No chirp sound for navigation updates (removed)
+    
+    if (shouldBeep) {
+      audio.playSound(SOUND_CHIRP);
+    }
+    
     activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
   } else if (text.startsWith("NOTIF:")) {
     // Command format: NOTIF:Title|Body
