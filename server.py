@@ -235,7 +235,7 @@ async def ws_handler(websocket):
     params = urllib.parse.parse_qs(parsed_url.query)
     
     mac = params.get('mac', [None])[0]
-    variant = params.get('variant', ['mr_mario'])[0]
+    variant = params.get('variant', ['mr_luna'])[0]
     
     if not mac:
         print("[WS Server] Closed connection: Missing 'mac' parameter.")
@@ -291,10 +291,10 @@ def start_udp_discovery():
         try:
             data, addr = udp_socket.recvfrom(1024)
             message = data.decode('utf-8', errors='ignore').strip()
-            if message == "MR_MARIO_DISCOVER":
+            if message == "MR_LUNA_DISCOVER":
                 print(f"[UDP Discovery] Discover ping from {addr}")
                 # Respond to indicate discovery server presence
-                udp_socket.sendto(b"MR_MARIO_SERVER_HERE", addr)
+                udp_socket.sendto(b"MR_LUNA_SERVER_HERE", addr)
         except Exception as e:
             print(f"[UDP Discovery] Error: {e}")
 
@@ -302,7 +302,7 @@ def start_udp_discovery():
 # ----------------- MAIN RUNNER -----------------
 if __name__ == '__main__':
     print(f"==================================================")
-    print(f"Starting Mr. Mario Cloud & Dev Server Stack")
+    print(f"Starting Mr.&Ms Luna Cloud & Dev Server Stack")
     print(f"Serving static files from: {os.path.join(DIRECTORY, 'mobile_app')}")
     print(f"API endpoints: http://localhost:{PORT}")
     print(f"WebSocket broker: ws://localhost:8001")

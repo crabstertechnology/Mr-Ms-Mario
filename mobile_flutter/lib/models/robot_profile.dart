@@ -1,7 +1,7 @@
 class RobotProfile {
   final String id;
   final String name;
-  final String variant; // 'mr_mario' or 'miss_mario'
+  final String variant; // 'mr_luna' or 'ms_luna'
   final String remoteId; // BLE Remote ID/MAC Address
   final String wifiSSID;
   final String cloudStatus; // 'online' or 'offline'
@@ -68,7 +68,7 @@ class RobotProfile {
     return RobotProfile(
       id: json['id'] as String,
       name: json['name'] as String,
-      variant: json['variant'] as String? ?? 'mr_mario',
+      variant: json['variant'] as String? ?? 'mr_luna',
       remoteId: json['remoteId'] as String? ?? '',
       wifiSSID: json['wifiSSID'] as String? ?? '',
       cloudStatus: json['cloudStatus'] as String? ?? 'offline',

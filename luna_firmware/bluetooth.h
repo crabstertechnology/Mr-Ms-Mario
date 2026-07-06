@@ -13,7 +13,9 @@ extern void handleBLEExpressionWithLabel(Expression expr, String label);
 extern void handleBLEAudio(SoundEffect sound);
 extern void handleBLEText(String text);
 
-class MarioBLE {
+extern bool negativeDisplay;
+
+class LunaBLE {
 private:
   BLEServer* pServer;
   BLECharacteristic* pExpressionChar;
@@ -27,9 +29,9 @@ private:
 
   class ServerCallbacks : public BLEServerCallbacks {
   private:
-    MarioBLE& ble;
+    LunaBLE& ble;
   public:
-    ServerCallbacks(MarioBLE& instance) : ble(instance) {}
+    ServerCallbacks(LunaBLE& instance) : ble(instance) {}
     void onConnect(BLEServer* pServer) override {
       ble.deviceConnected = true;
     }
@@ -86,13 +88,13 @@ private:
   };
 
 public:
-  MarioBLE() : pServer(nullptr), deviceConnected(false), oldDeviceConnected(false), isInitialized(false), advertising(false) {}
+  LunaBLE() : pServer(nullptr), deviceConnected(false), oldDeviceConnected(false), isInitialized(false), advertising(false) {}
 
   void init() {
     if (isInitialized) return;
 
     // Initialize BLE Device
-    BLEDevice::init("Mr. Mario Robot");
+    BLEDevice::init(negativeDisplay ? "Ms. Luna Robot" : "Mr. Luna Robot");
 
     // Create BLE Server
     pServer = BLEDevice::createServer();

@@ -115,7 +115,7 @@ class BLEService with ChangeNotifier {
     
     // Periodically sync connection status with background service
     Timer.periodic(const Duration(seconds: 5), (timer) {
-      const MethodChannel('com.mrmario/notifications').invokeMethod('updateConnectionStatus', {'connected': _isConnected});
+      const MethodChannel('com.mrmsluna/notifications').invokeMethod('updateConnectionStatus', {'connected': _isConnected});
     });
   }
 
@@ -319,7 +319,7 @@ class BLEService with ChangeNotifier {
   Future<void> startScan() async {
     if (_isScanning) return;
     _scanResults.clear();
-    addLog("Scanning for Mr. Mario companion robot...", "BLE");
+    addLog("Scanning for Mr.&Ms Luna companion robot...", "BLE");
     notifyListeners();
 
     bool hasPermissions = await _requestPermissions();
@@ -331,7 +331,7 @@ class BLEService with ChangeNotifier {
 
     try {
       _scanSub = FlutterBluePlus.scanResults.listen((results) {
-        _scanResults = results.where((r) => r.device.platformName == 'Mr. Mario Robot' || r.advertisementData.serviceUuids.contains(Guid(serviceUuid))).toList();
+        _scanResults = results.where((r) => r.device.platformName.contains('Luna') || r.advertisementData.serviceUuids.contains(Guid(serviceUuid))).toList();
         notifyListeners();
       });
 
@@ -422,7 +422,7 @@ class BLEService with ChangeNotifier {
     SharedPreferences.getInstance().then((prefs) {
       prefs.setString("paired_device_id", _pairedDeviceId!);
     });
-    addLog("Connected to Mr. Mario successfully!", "BLE");
+    addLog("Connected to Mr.&Ms Luna successfully!", "BLE");
     _setupServices(device);
     
     // Request high connection priority for faster communication and reconnection stability
@@ -433,7 +433,7 @@ class BLEService with ChangeNotifier {
     }
     
     // Update background service immediately
-    const MethodChannel('com.mrmario/notifications').invokeMethod('updateConnectionStatus', {'connected': true});
+    const MethodChannel('com.mrmsluna/notifications').invokeMethod('updateConnectionStatus', {'connected': true});
     
     notifyListeners();
   }
@@ -525,10 +525,10 @@ class BLEService with ChangeNotifier {
     _connectionStateSub?.cancel();
     _statusNotificationSub?.cancel();
     
-    addLog("Disconnected from Mr. Mario companion robot.", "BLE");
+    addLog("Disconnected from Mr.&Ms Luna companion robot.", "BLE");
     
     // Update background service immediately
-    const MethodChannel('com.mrmario/notifications').invokeMethod('updateConnectionStatus', {'connected': false});
+    const MethodChannel('com.mrmsluna/notifications').invokeMethod('updateConnectionStatus', {'connected': false});
     
     notifyListeners();
 

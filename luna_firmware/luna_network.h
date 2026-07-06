@@ -1,5 +1,5 @@
-#ifndef MARIO_NETWORK_H
-#define MARIO_NETWORK_H
+#ifndef LUNA_NETWORK_H
+#define LUNA_NETWORK_H
 
 #include <WiFi.h>
 #include <WiFiUdp.h>
@@ -12,10 +12,10 @@
 // Extern references from main sketch to process commands
 extern void handleRobotCommand(String cmd);
 extern bool negativeDisplay;
-class MarioBLE;
-extern MarioBLE ble;
+class LunaBLE;
+extern LunaBLE ble;
 
-class MarioNetwork {
+class LunaNetwork {
 private:
   WiFiUDP udp;
   websockets::WebsocketsClient wsClient;
@@ -34,7 +34,7 @@ private:
   String macStr;
   
 public:
-  MarioNetwork() 
+  LunaNetwork() 
     : localServer(8000),
       wifiConnected(false), 
       wsConnected(false), 
@@ -50,7 +50,7 @@ public:
     
     // Load persisted settings from NVS Preferences
     Preferences prefs;
-    prefs.begin("mario", true); // Read-only
+    prefs.begin("luna", true); // Read-only
     savedSSID = prefs.getString("wifi_ssid", "");
     savedPass = prefs.getString("wifi_pass", "");
     prefs.end();
@@ -88,7 +88,7 @@ public:
     // Configure local web server routes on port 8000
     localServer.on("/api/robots", HTTP_GET, [this]() {
       localServer.sendHeader("Access-Control-Allow-Origin", "*");
-      String variantStr = negativeDisplay ? "miss_mario" : "mr_mario";
+      String variantStr = negativeDisplay ? "ms_luna" : "mr_luna";
       String json = "[{\"mac\":\"" + macStr + "\",\"variant\":\"" + variantStr + "\",\"status\":\"online\"}]";
       localServer.send(200, "application/json", json);
     });
@@ -164,7 +164,7 @@ public:
     broadcastIP[3] = 255; // Subnet broadcast address
     
     udp.beginPacket(broadcastIP, 8002);
-    udp.print("MR_MARIO_DISCOVER");
+    udp.print("MR_LUNA_DISCOVER");
     udp.endPacket();
     
     // Await response with timeout
@@ -178,7 +178,7 @@ public:
           packetBuffer[len] = 0;
         }
         String reply = String(packetBuffer);
-        if (reply == "MR_MARIO_SERVER_HERE") {
+        if (reply == "MR_LUNA_SERVER_HERE") {
           serverIP = udp.remoteIP();
           serverDiscovered = true;
           Serial.print("[Network] Server discovered at IP: ");
@@ -194,7 +194,7 @@ public:
   void connectWebSocket() {
     if (!wifiConnected || !serverDiscovered) return;
     
-    String url = "ws://" + serverIP.toString() + ":8001/ws?mac=" + macStr + "&variant=" + (negativeDisplay ? "miss_mario" : "mr_mario");
+    String url = "ws://" + serverIP.toString() + ":8001/ws?mac=" + macStr + "&variant=" + (negativeDisplay ? "ms_luna" : "mr_luna");
     Serial.print("[Network] Connecting WebSocket client to: ");
     Serial.println(url);
     ble.sendLog("Connecting to Cloud WebSocket: " + serverIP.toString() + ":8001...");
@@ -234,10 +234,10 @@ public:
           packetBuffer[len] = 0;
         }
         String msg = String(packetBuffer);
-        if (msg == "MR_MARIO_DISCOVER" && udp.remoteIP() != WiFi.localIP()) {
+        if (msg == "MR_LUNA_DISCOVER" && udp.remoteIP() != WiFi.localIP()) {
           // Reply to the phone that we are the active endpoint (direct control mode)
           udp.beginPacket(udp.remoteIP(), udp.remotePort());
-          udp.print("MR_MARIO_SERVER_HERE");
+          udp.print("MR_LUNA_SERVER_HERE");
           udp.endPacket();
           Serial.print("[Network] Replied to phone UDP discovery from IP: ");
           Serial.println(udp.remoteIP());
@@ -295,4 +295,4 @@ public:
   String getMAC() const { return macStr; }
 };
 
-#endif // MARIO_NETWORK_H
+#endif // LUNA_NETWORK_H

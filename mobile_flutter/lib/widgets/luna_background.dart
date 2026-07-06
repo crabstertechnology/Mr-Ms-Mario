@@ -1,25 +1,25 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
-/// Mario-themed animated background — ultra-light, white-dominant.
-/// Mr. Mario: white + blue + red accents.
-/// Ms. Mario: white + pink accents.
+/// Luna-themed animated background — ultra-light, white-dominant.
+/// Mr. Luna: white + blue + red accents.
+/// Ms. Luna: white + pink accents.
 /// Floating pixel elements are very subtle (low opacity) so content remains clear.
-class MarioBackground extends StatefulWidget {
+class LunaBackground extends StatefulWidget {
   final Widget child;
-  final bool isMsMario;
+  final bool isMsLuna;
 
-  const MarioBackground({
+  const LunaBackground({
     Key? key,
     required this.child,
-    this.isMsMario = false,
+    this.isMsLuna = false,
   }) : super(key: key);
 
   @override
-  State<MarioBackground> createState() => _MarioBackgroundState();
+  State<LunaBackground> createState() => _LunaBackgroundState();
 }
 
-class _MarioBackgroundState extends State<MarioBackground>
+class _LunaBackgroundState extends State<LunaBackground>
     with TickerProviderStateMixin {
   late AnimationController _cloudController;
   late AnimationController _floatController;
@@ -98,11 +98,11 @@ class _MarioBackgroundState extends State<MarioBackground>
 
     // Color palette per variant
     final Color primaryAccent =
-        widget.isMsMario ? const Color(0xFFE91E8C) : const Color(0xFF0284C7);
+        widget.isMsLuna ? const Color(0xFFE91E8C) : const Color(0xFF0284C7);
     final Color secondaryAccent =
-        widget.isMsMario ? const Color(0xFFF48FB1) : const Color(0xFFE53935);
+        widget.isMsLuna ? const Color(0xFFF48FB1) : const Color(0xFFE53935);
     final Color bgEnd =
-        widget.isMsMario ? const Color(0xFFFCE4EC) : const Color(0xFFE3F2FD);
+        widget.isMsLuna ? const Color(0xFFFCE4EC) : const Color(0xFFE3F2FD);
 
     return AnimatedBuilder(
       animation: Listenable.merge(

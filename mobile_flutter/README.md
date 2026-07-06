@@ -1,6 +1,6 @@
-# Mr. Mario Mobile Controller (Flutter Native App)
+# Mr.&Ms Luna Mobile Controller (Flutter Native App)
 
-This is the native **Flutter companion mobile application** for the **Mr. Mario Smart Toy Robot**. It is a direct port of the custom Web Bluetooth dashboard, rebuilt from scratch with a premium mobile-first UI, responsive glassmorphism, offline square-wave synthesizer, and native Bluetooth low energy drivers.
+This is the native **Flutter companion mobile application** for the **Mr.&Ms Luna Smart Toy Robot**. It is a direct port of the custom Web Bluetooth dashboard, rebuilt from scratch with a premium mobile-first UI, responsive glassmorphism, offline square-wave synthesizer, and native Bluetooth low energy drivers.
 
 ---
 
@@ -18,7 +18,7 @@ This is the native **Flutter companion mobile application** for the **Mr. Mario 
    - Synthesizer composer note writer parsing standard frequency duration notation.
    - **Local Square-Wave Synth**: Generates custom PCM WAV audio streams dynamically in pure Dart to preview melodies offline without lagging.
    - AI Music Composer mapping user prompts (coin, jump, victory, death) to custom note configurations.
-   - Tap board triggering nostalgic Mario audio sound effects.
+   - Tap board triggering nostalgic Luna audio sound effects.
 
 3. **Chronos RTC Sync**:
    - One-tap RTC synchronization alignment matching your smartphone's system clock.
@@ -41,7 +41,7 @@ To compile and launch the application on a physical device:
 ### 1. Initialize Platforms
 Run the standard Flutter generator command in this folder. It will parse the existing `pubspec.yaml` and `lib/` directory to generate the platform-specific native configuration envelopes (Android / iOS):
 ```bash
-flutter create --org com.mrmario.controller .
+flutter create --org com.mrmsluna.controller .
 ```
 
 ### 2. Configure Native Permissions
@@ -60,9 +60,9 @@ Add the following Bluetooth permissions inside the `<manifest>` tag:
 Add the following descriptions inside the main `<dict>` block:
 ```xml
 <key>NSBluetoothAlwaysUsageDescription</key>
-<string>This app requires Bluetooth access to connect and control the Mr. Mario toy robot.</string>
+<string>This app requires Bluetooth access to connect and control the Mr.&Ms Luna toy robot.</string>
 <key>NSBluetoothPeripheralUsageDescription</key>
-<string>This app requires Bluetooth access to control the Mr. Mario toy robot.</string>
+<string>This app requires Bluetooth access to control the Mr.&Ms Luna toy robot.</string>
 ```
 
 ### 3. Fetch Dependencies & Run

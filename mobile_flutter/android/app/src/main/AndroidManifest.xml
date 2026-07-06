@@ -19,7 +19,7 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
-        android:label="Mr&amp;Ms Mario"
+        android:label="Mr&amp;Ms Luna"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -50,14 +50,14 @@
             android:name="flutterEmbedding"
             android:value="2" />
         <service android:name=".MyNotificationListener"
-                 android:label="Mr. Mario Notification Listener"
+                 android:label="Mr.&amp;Ms Luna Notification Listener"
                  android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
                  android:exported="true">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
-        <service android:name=".MrMarioBackgroundService"
+        <service android:name=".LunaBackgroundService"
                  android:enabled="true"
                  android:exported="false"
                  android:foregroundServiceType="connectedDevice" />

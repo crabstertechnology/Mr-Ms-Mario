@@ -1,4 +1,4 @@
-package com.mrmario.controller.mobile_flutter
+package com.mrmsluna.controller.mobile_flutter
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -12,7 +12,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.mrmario/notifications"
+    private val CHANNEL = "com.mrmsluna/notifications"
     private var methodChannel: MethodChannel? = null
 
     companion object {
@@ -48,7 +48,7 @@ class MainActivity: FlutterActivity() {
         
         // Start background service only if permissions are already granted to prevent SecurityException
         if (hasConnectedDevicePermissions()) {
-            val serviceIntent = Intent(this, MrMarioBackgroundService::class.java)
+            val serviceIntent = Intent(this, LunaBackgroundService::class.java)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
             } else {
@@ -81,7 +81,7 @@ class MainActivity: FlutterActivity() {
                 }
                 "startBackgroundService" -> {
                     if (hasConnectedDevicePermissions()) {
-                        val serviceIntent = Intent(this, MrMarioBackgroundService::class.java)
+                        val serviceIntent = Intent(this, LunaBackgroundService::class.java)
                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                             startForegroundService(serviceIntent)
                         } else {
@@ -95,7 +95,7 @@ class MainActivity: FlutterActivity() {
                 "updateConnectionStatus" -> {
                     val connected = call.argument<Boolean>("connected") ?: false
                     if (hasConnectedDevicePermissions()) {
-                        val serviceIntent = Intent(this, MrMarioBackgroundService::class.java).apply {
+                        val serviceIntent = Intent(this, LunaBackgroundService::class.java).apply {
                             putExtra("connected", connected)
                         }
                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {

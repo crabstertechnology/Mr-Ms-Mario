@@ -12,7 +12,7 @@ enum TouchEvent {
   TOUCH_LONG_PRESS
 };
 
-class MarioInteraction {
+class LunaInteraction {
 private:
   int touchPin;
   bool lastButtonState;
@@ -31,7 +31,7 @@ private:
   unsigned long doubleTapTimeout;
 
 public:
-  MarioInteraction(int pin) : touchPin(pin) {
+  LunaInteraction(int pin) : touchPin(pin) {
     lastButtonState = false;
     debouncedState = false;
     lastDebounceTime = 0;

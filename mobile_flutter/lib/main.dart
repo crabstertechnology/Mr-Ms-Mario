@@ -24,26 +24,26 @@ void main() {
           lazy: false,
         ),
       ],
-      child: const MrMarioControllerApp(),
+      child: const LunaControllerApp(),
     ),
   );
 }
 
-class MrMarioControllerApp extends StatelessWidget {
-  const MrMarioControllerApp({Key? key}) : super(key: key);
+class LunaControllerApp extends StatelessWidget {
+  const LunaControllerApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final db = Provider.of<DatabaseService>(context);
-    final isMissMario = db.primaryRobot?.variant == 'miss_mario';
+    final isMsLuna = db.primaryRobot?.variant == 'ms_luna';
 
     // Accent Colors
-    final Color accentColor = isMissMario ? const Color(0xFFEC4899) : const Color(0xFF0074D9);
-    final Color accentColorLight = isMissMario ? const Color(0x1FEC4899) : const Color(0x1F0074D9);
-    final Color accentTextColor = isMissMario ? const Color(0xFFDB2777) : const Color(0xFF1D4ED8);
+    final Color accentColor = isMsLuna ? const Color(0xFFEC4899) : const Color(0xFF0074D9);
+    final Color accentColorLight = isMsLuna ? const Color(0x1FEC4899) : const Color(0x1F0074D9);
+    final Color accentTextColor = isMsLuna ? const Color(0xFFDB2777) : const Color(0xFF1D4ED8);
 
     return MaterialApp(
-      title: 'Mr. Mario',
+      title: 'Mr.&Ms Luna',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.light,

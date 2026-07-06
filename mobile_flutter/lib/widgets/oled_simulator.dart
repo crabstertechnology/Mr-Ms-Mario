@@ -142,7 +142,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
     final invertVal = widget.invertColor ?? db.oledInvert;
     final rotationVal = db.oledRotation; // in degrees (0, 90, 180, 270)
 
-    final isMiss = db.primaryRobot?.variant == 'miss_mario';
+    final isMiss = db.primaryRobot?.variant == 'ms_luna';
     final oledThemeColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFF00F0FF);
     final oledColor = invertVal ? Colors.black : oledThemeColor;
     final oledBgColor = invertVal ? oledThemeColor : const Color(0xFF000000);

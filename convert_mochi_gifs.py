@@ -16,7 +16,7 @@ ALL_GIFS = [
     "weeping", "wink", "yawn"
 ]
 
-output_path = "mario_firmware/mochi_bitmaps.h"
+output_path = "luna_firmware/mochi_bitmaps.h"
 gif_dir = "watcher-mochi/sd_content"
 
 print(f"Starting conversion of {len(ALL_GIFS)} GIFs...")

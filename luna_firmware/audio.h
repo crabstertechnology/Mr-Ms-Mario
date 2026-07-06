@@ -9,7 +9,7 @@ struct Note {
   uint16_t duration;
 };
 
-class MarioAudio {
+class LunaAudio {
 private:
   int buzzerPin;
   Note noteQueue[100];
@@ -41,7 +41,7 @@ private:
   }
 
 public:
-  MarioAudio(int pin) : buzzerPin(pin) {
+  LunaAudio(int pin) : buzzerPin(pin) {
     queueHead = 0;
     queueTail = 0;
     queueCount = 0;

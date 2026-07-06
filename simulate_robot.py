@@ -4,9 +4,9 @@ import sys
 
 async def simulate():
     # Mocking a robot with MAC address A1B2C3D4E5F6 and variant 'mr_mario'
-    uri = "ws://localhost:8001/ws?mac=A1B2C3D4E5F6&variant=mr_mario"
+    uri = "ws://localhost:8001/ws?mac=A1B2C3D4E5F6&variant=mr_luna"
     print(f"==================================================")
-    print(f"Starting Mr. Mario Companion Simulator")
+    print(f"Starting Mr.&Ms Luna Companion Simulator")
     print(f"Connecting to cloud server: {uri}")
     print(f"==================================================")
     

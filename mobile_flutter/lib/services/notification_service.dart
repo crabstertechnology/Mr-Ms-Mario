@@ -3,7 +3,7 @@ import 'bluetooth_service.dart';
 import 'database_service.dart';
 
 class PhoneNotificationService {
-  static const MethodChannel _channel = MethodChannel('com.mrmario/notifications');
+  static const MethodChannel _channel = MethodChannel('com.mrmsluna/notifications');
   final BLEService _bleService;
   final DatabaseService _dbService;
 

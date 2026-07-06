@@ -15,15 +15,15 @@
 // Forward declaration for network callbacks
 void handleRobotCommand(String cmd);
 
-#include "mario_network.h"
+#include "luna_network.h"
 
 // Hardware Interface Objects
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-MarioFace face(display);
-MarioAudio audio(BUZZER_PIN);
-MarioBLE ble;
-MarioInteraction interaction(TOUCH_PIN);
-MarioNetwork network;
+LunaFace face(display);
+LunaAudio audio(BUZZER_PIN);
+LunaBLE ble;
+LunaInteraction interaction(TOUCH_PIN);
+LunaNetwork network;
 
 // NVS Settings Persistence
 Preferences preferences;
@@ -194,7 +194,7 @@ void handleRobotCommand(String text) {
     // Factory reset: clear NVS and reboot
     audio.playSound(SOUND_GAMEOVER);
     delay(800);
-    preferences.begin("mario", false);
+    preferences.begin("luna", false);
     preferences.clear();
     preferences.end();
     Serial.println("OK:FactoryReset");
@@ -228,7 +228,7 @@ void handleRobotCommand(String text) {
     }
   } else if (text.startsWith("12HR:")) {
     is12HourFormat = (text.substring(5).toInt() == 1);
-    preferences.begin("mario", false);
+    preferences.begin("luna", false);
     preferences.putBool("is12H", is12HourFormat);
     preferences.end();
     Serial.println("OK:12HourUpdated");
@@ -246,7 +246,7 @@ void handleRobotCommand(String text) {
       pass.trim();
       
       // Save credentials persistently in NVS Preferences
-      preferences.begin("mario", false);
+      preferences.begin("luna", false);
       preferences.putString("wifi_ssid", ssid);
       preferences.putString("wifi_pass", pass);
       preferences.end();
@@ -262,7 +262,7 @@ void handleRobotCommand(String text) {
       String companionMac = payload.substring(0, comma);
       String relationType = payload.substring(comma + 1);
       
-      preferences.begin("mario", false);
+      preferences.begin("luna", false);
       preferences.putString("comp_mac", companionMac);
       preferences.putString("rel_type", relationType);
       preferences.end();
@@ -273,7 +273,7 @@ void handleRobotCommand(String text) {
   } else if (text.startsWith("RELATION:")) {
     // Command format: RELATION:type (friends, couple)
     String relationType = text.substring(9);
-    preferences.begin("mario", false);
+    preferences.begin("luna", false);
     preferences.putString("rel_type", relationType);
     preferences.end();
     
@@ -473,7 +473,7 @@ void applySettings(String payload) {
   Serial.println(negativeDisplay ? "ON" : "OFF");
 
   // Save all settings to NVS flash
-  preferences.begin("mario", false);
+  preferences.begin("luna", false);
   preferences.putBool("ble", bleActive);
   preferences.putInt("speed", gifSpeed);
   preferences.putInt("defGif", defaultGif);
@@ -495,11 +495,11 @@ void applySettings(String payload) {
 void setup() {
   Serial.begin(115200);
   delay(100); // Faster boot!
-  Serial.print("Mr. Mario Robot Booting Up... Version: ");
+  Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
   Serial.println(FIRMWARE_VERSION);
 
   // Load persistence settings from NVS Preferences
-  preferences.begin("mario", false);
+  preferences.begin("luna", false);
   bleActive = preferences.getBool("ble", true);
   gifSpeed = preferences.getInt("speed", 100);
   defaultGif = preferences.getInt("defGif", 99);
@@ -552,13 +552,13 @@ void setup() {
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(15, 25);
-  display.print("Loading Mr. Mario...");
+  display.print(negativeDisplay ? "Loading Ms. Luna..." : "Loading Mr. Luna...");
   display.display();
   
   // Start Bluetooth BLE Server if active
   if (bleActive) {
     ble.init();
-    Serial.println("BLE Server Started as 'Mr. Mario Robot'.");
+    Serial.println(negativeDisplay ? "BLE Server Started as 'Ms. Luna Robot'." : "BLE Server Started as 'Mr. Luna Robot'.");
   } else {
     Serial.println("BLE Server disabled by startup settings.");
   }
@@ -646,7 +646,7 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
       // isAsleep = true; // Sleep mode disabled
       face.setExpression(EXPR_SLEEPING);
       audio.playSound(SOUND_POWERDOWN);
-      Serial.println("Mr. Mario entered Sleep Mode (animation only, stays awake)!");
+      Serial.println(negativeDisplay ? "Ms. Luna entered Sleep Mode (animation only, stays awake)!" : "Mr. Luna entered Sleep Mode (animation only, stays awake)!");
     }
   } else {
     // Custom actions
@@ -721,7 +721,7 @@ void loop() {
     if (cmd == "RESET") {
       audio.playSound(SOUND_GAMEOVER);
       delay(800);
-      preferences.begin("mario", false);
+      preferences.begin("luna", false);
       preferences.clear();
       preferences.end();
       Serial.println("OK:FactoryReset");
@@ -793,7 +793,7 @@ void loop() {
       isAsleep = false;
       face.setExpression(EXPR_IDLE);
       audio.playSound(SOUND_CHIRP);
-      Serial.println("Mr. Mario Woke Up!");
+      Serial.println(negativeDisplay ? "Ms. Luna Woke Up!" : "Mr. Luna Woke Up!");
     } else if (face.getExpression() == EXPR_CLOCK) {
       // Any touch exits clock mode
       face.setExpression(EXPR_IDLE);
@@ -831,7 +831,7 @@ void loop() {
           } else if (touchEvent == TOUCH_LONG_PRESS) {
             // Long press selects options
             if (menuOption == 2) { // SAVE
-              preferences.begin("mario", false);
+              preferences.begin("luna", false);
               preferences.putBool("ble", bleActive);
               preferences.putInt("speed", gifSpeed);
               preferences.putInt("defGif", defaultGif);

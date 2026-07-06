@@ -1,6 +1,6 @@
-# Mr. Mario Mobile Controller — Developer Run & Setup Guide
+# Mr.&Ms Luna Mobile Controller — Developer Run & Setup Guide
 
-This guide details the step-by-step process to set up, build, and run the Mr. Mario Flutter controller app on a mobile device (Android or iOS) after cloning the repository.
+This guide details the step-by-step process to set up, build, and run the Mr.&Ms Luna Flutter controller app on a mobile device (Android or iOS) after cloning the repository.
 
 ---
 
@@ -61,7 +61,7 @@ flutter pub get
 ### Step 2: Generate Platform Configuration (If missing)
 If the `android` or `ios` directories are not generated yet, run the standard generator:
 ```bash
-flutter create --org com.mrmario.controller .
+flutter create --org com.mrmsluna.controller .
 ```
 
 ### Step 3: Configure Permissions
@@ -84,9 +84,9 @@ Add the following lines inside the main `<manifest>` tags:
 Add the following description keys inside the `<dict>` block:
 ```xml
 <key>NSBluetoothAlwaysUsageDescription</key>
-<string>This app requires Bluetooth access to connect and control the Mr. Mario toy robot.</string>
+<string>This app requires Bluetooth access to connect and control the Mr.&Ms Luna toy robot.</string>
 <key>NSBluetoothPeripheralUsageDescription</key>
-<string>This app requires Bluetooth access to control the Mr. Mario toy robot.</string>
+<string>This app requires Bluetooth access to control the Mr.&Ms Luna toy robot.</string>
 ```
 
 ### Step 4: Run the Application

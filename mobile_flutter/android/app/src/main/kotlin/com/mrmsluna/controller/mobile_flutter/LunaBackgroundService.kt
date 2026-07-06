@@ -1,4 +1,4 @@
-package com.mrmario.controller.mobile_flutter
+package com.mrmsluna.controller.mobile_flutter
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -13,14 +13,14 @@ import android.os.Build
 import android.os.IBinder
 import io.flutter.plugin.common.MethodChannel
 
-class MrMarioBackgroundService : Service() {
-    private val CHANNEL_ID = "MrMarioBackgroundChannel"
+class LunaBackgroundService : Service() {
+    private val CHANNEL_ID = "LunaBackgroundChannel"
     private val NOTIFICATION_ID = 99182
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val action = intent?.action
-            if (action == "com.mrmario.NOTIFICATION_RECEIVED") {
+            if (action == "com.mrmsluna.NOTIFICATION_RECEIVED") {
                 val title = intent.getStringExtra("title") ?: ""
                 val text = intent.getStringExtra("text") ?: ""
                 val subText = intent.getStringExtra("subText") ?: ""
@@ -32,7 +32,7 @@ class MrMarioBackgroundService : Service() {
                 // Forward to Flutter engine if it's alive
                 val engine = MainActivity.flutterEngine
                 if (engine != null) {
-                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.mrmario/notifications")
+                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.mrmsluna/notifications")
                     // Invoke on main thread
                     channel.invokeMethod("onNotification", mapOf(
                         "title" to title,
@@ -44,11 +44,11 @@ class MrMarioBackgroundService : Service() {
                         "directionFromIcon" to directionFromIcon
                     ))
                 }
-            } else if (action == "com.mrmario.NOTIFICATION_REMOVED") {
+            } else if (action == "com.mrmsluna.NOTIFICATION_REMOVED") {
                 val packageName = intent.getStringExtra("package") ?: ""
                 val engine = MainActivity.flutterEngine
                 if (engine != null) {
-                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.mrmario/notifications")
+                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.mrmsluna/notifications")
                     channel.invokeMethod("onNotificationRemoved", mapOf(
                         "package" to packageName
                     ))
@@ -76,8 +76,8 @@ class MrMarioBackgroundService : Service() {
 
         // Register broadcast receiver to intercept notifications in the background service itself
         val filter = IntentFilter()
-        filter.addAction("com.mrmario.NOTIFICATION_RECEIVED")
-        filter.addAction("com.mrmario.NOTIFICATION_REMOVED")
+        filter.addAction("com.mrmsluna.NOTIFICATION_RECEIVED")
+        filter.addAction("com.mrmsluna.NOTIFICATION_REMOVED")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -113,8 +113,8 @@ class MrMarioBackgroundService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Mr. Mario Controller"
-            val descriptionText = "Keeps Mr. Mario background sync active"
+            val name = "Mr.&Ms Luna Controller"
+            val descriptionText = "Keeps Mr.&Ms Luna background sync active"
             val importance = NotificationManager.IMPORTANCE_DEFAULT
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
@@ -150,7 +150,7 @@ class MrMarioBackgroundService : Service() {
 
         val notification: Notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("Mr. Mario Controller")
+                .setContentTitle("Mr.&Ms Luna Controller")
                 .setContentText(statusText)
                 .setSmallIcon(smallIcon)
                 .setContentIntent(pendingIntent)
@@ -160,7 +160,7 @@ class MrMarioBackgroundService : Service() {
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
-                .setContentTitle("Mr. Mario Controller")
+                .setContentTitle("Mr.&Ms Luna Controller")
                 .setContentText(statusText)
                 .setSmallIcon(smallIcon)
                 .setContentIntent(pendingIntent)

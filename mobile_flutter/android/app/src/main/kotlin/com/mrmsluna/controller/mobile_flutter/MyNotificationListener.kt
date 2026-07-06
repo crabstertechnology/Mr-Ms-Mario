@@ -1,4 +1,4 @@
-package com.mrmario.controller.mobile_flutter
+package com.mrmsluna.controller.mobile_flutter
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -69,7 +69,7 @@ class MyNotificationListener : NotificationListenerService() {
 
         // Only process if there's actual content
         if (title.isNotEmpty() || text.isNotEmpty() || subText.isNotEmpty() || bigText.isNotEmpty() || smallIconName.isNotEmpty()) {
-            val intent = Intent("com.mrmario.NOTIFICATION_RECEIVED")
+            val intent = Intent("com.mrmsluna.NOTIFICATION_RECEIVED")
             intent.setPackage(this.packageName)
             intent.putExtra("title", title)
             intent.putExtra("text", text)
@@ -105,14 +105,14 @@ class MyNotificationListener : NotificationListenerService() {
                 } catch (e: Exception) {}
 
                 if (!hasMapsNotif) {
-                    val intent = Intent("com.mrmario.NOTIFICATION_REMOVED")
+                    val intent = Intent("com.mrmsluna.NOTIFICATION_REMOVED")
                     intent.setPackage(this.packageName)
                     intent.putExtra("package", packageName)
                     sendBroadcast(intent)
                 }
             }, 1500)
         } else {
-            val intent = Intent("com.mrmario.NOTIFICATION_REMOVED")
+            val intent = Intent("com.mrmsluna.NOTIFICATION_REMOVED")
             intent.setPackage(this.packageName)
             intent.putExtra("package", packageName)
             sendBroadcast(intent)

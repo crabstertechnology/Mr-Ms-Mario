@@ -8,10 +8,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:mr_mario_controller/main.dart';
+import 'package:mr_ms_luna_controller/main.dart';
 import 'package:provider/provider.dart';
-import 'package:mr_mario_controller/services/bluetooth_service.dart';
-import 'package:mr_mario_controller/services/database_service.dart';
+import 'package:mr_ms_luna_controller/services/bluetooth_service.dart';
+import 'package:mr_ms_luna_controller/services/database_service.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
@@ -21,7 +21,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => DatabaseService()),
         ChangeNotifierProvider(create: (_) => BLEService()),
       ],
-      child: const MrMarioControllerApp(),
+      child: const LunaControllerApp(),
     ));
 
     // Verify that our counter starts at 0.

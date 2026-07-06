@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mr. Mario & Ms. Mario - Firmware Station</title>
+  <title>Mr.&Ms Luna - Firmware Station</title>
   
   <!-- SEO Tags -->
-  <meta name="description" content="Official developer console for compiling and flashing firmware to Mr. Mario and Ms. Mario interactive smart desktop robots.">
+  <meta name="description" content="Official developer console for compiling and flashing firmware to Mr.&Ms Luna interactive smart desktop robots.">
   
   <!-- Premium Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,12 +21,12 @@
       --bg-dark: #f8fafc;
       --bg-card: #ffffff;
       --border-color: rgba(15, 23, 42, 0.08);
-      --mario-blue: #0284c7;
-      --mario-blue-glow: rgba(2, 132, 199, 0.15);
-      --ms-mario-pink: #db2777;
-      --ms-mario-pink-glow: rgba(219, 39, 119, 0.15);
-      --mario-purple: #0f62fe;
-      --mario-purple-glow: rgba(15, 98, 254, 0.15);
+      --luna-blue: #0284c7;
+      --luna-blue-glow: rgba(2, 132, 199, 0.15);
+      --ms-luna-pink: #db2777;
+      --ms-luna-pink-glow: rgba(219, 39, 119, 0.15);
+      --luna-purple: #0f62fe;
+      --luna-purple-glow: rgba(15, 98, 254, 0.15);
       --text-main: #0f172a;
       --text-muted: #475569;
       --transition-fast: 0.2s;
@@ -148,7 +148,7 @@
       font-size: 1.3rem;
       font-weight: 700;
       color: var(--text-main);
-      border-left: 4px solid var(--mario-purple);
+      border-left: 4px solid var(--luna-purple);
       padding-left: 12px;
       margin-bottom: 4px;
     }
@@ -175,12 +175,12 @@
       transform: translateY(-2px);
     }
 
-    .char-profile.mario {
-      border-left: 4px solid var(--mario-blue);
+    .char-profile.mr-luna {
+      border-left: 4px solid var(--luna-blue);
     }
 
-    .char-profile.ms-mario {
-      border-left: 4px solid var(--ms-mario-pink);
+    .char-profile.ms-luna {
+      border-left: 4px solid var(--ms-luna-pink);
     }
 
     .char-avatar-wrapper {
@@ -208,11 +208,11 @@
       margin-bottom: 4px;
     }
 
-    .char-desc.mario h3 {
+    .char-desc.mr-luna h3 {
       color: #0284c7;
     }
 
-    .char-desc.ms-mario h3 {
+    .char-desc.ms-luna h3 {
       color: #db2777;
     }
 
@@ -245,7 +245,7 @@
     .feature-item svg {
       width: 16px;
       height: 16px;
-      fill: var(--mario-purple);
+      fill: var(--luna-purple);
       flex-shrink: 0;
     }
 
@@ -469,7 +469,7 @@
 
     .tech-group li::before {
       content: "✦";
-      color: var(--mario-blue);
+      color: var(--luna-blue);
       font-size: 0.8rem;
       margin-top: 2px;
       flex-shrink: 0;
@@ -493,9 +493,9 @@
     <!-- Top Header Bar -->
     <header>
       <div class="brand-logo-container">
-        <img src="logo.png" alt="Mr. Mario Logo" class="brand-logo" id="logoImg">
+        <img src="logo.png" alt="Mr.&Ms Luna Logo" class="brand-logo" id="logoImg">
         <div class="brand-info">
-          <h1>Mr. Mario & Ms. Mario</h1>
+          <h1>Mr.&Ms Luna</h1>
           <p>Hardware Firmware Control Center</p>
         </div>
       </div>
@@ -512,28 +512,26 @@
         <div>
           <h2 class="card-heading">Meet the Companions</h2>
           <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 6px;">Learn about the intelligent desktop robot siblings, customizable over high-speed USB.</p>
-        </div>
-
-        <div class="character-showcase">
-          <!-- Mr. Mario Profile -->
-          <div class="char-profile mario">
+        </div>        <div class="character-showcase">
+          <!-- Mr. Luna Profile -->
+          <div class="char-profile mr-luna">
             <div class="char-avatar-wrapper">
-              <img src="logo.png" alt="Mr. Mario Profile">
+              <img src="logo.png" alt="Mr. Luna Profile">
             </div>
-            <div class="char-desc mario">
-              <h3>Mr. Mario</h3>
+            <div class="char-desc mr-luna">
+              <h3>Mr. Luna</h3>
               <p>The iconic gentleman desktop robot buddy. Dressed in blue accent theme, he provides real-time notifications, interactive touch responses, dynamic clock screen layouts, and a dedicated sound melody synthesizer.</p>
             </div>
           </div>
-
-          <!-- Ms. Mario Profile -->
-          <div class="char-profile ms-mario">
+ 
+          <!-- Ms. Luna Profile -->
+          <div class="char-profile ms-luna">
             <div class="char-avatar-wrapper" style="border-color: rgba(236, 72, 153, 0.3);">
-              <img src="logo.png" alt="Ms. Mario Profile" style="filter: hue-rotate(120deg);">
+              <img src="logo.png" alt="Ms. Luna Profile" style="filter: hue-rotate(120deg);">
             </div>
-            <div class="char-desc ms-mario">
-              <h3>Ms. Mario</h3>
-              <p>The elegant lady variant of the Mario companion line. Outfitted in pink accent theme, she features unique customized OLED expressions, playful interactive audio feedback, and works in tandem with the mobile companion app.</p>
+            <div class="char-desc ms-luna">
+              <h3>Ms. Luna</h3>
+              <p>The elegant lady variant of the Luna companion line. Outfitted in pink accent theme, she features unique customized OLED expressions, playful interactive audio feedback, and works in tandem with the mobile companion app.</p>
             </div>
           </div>
         </div>
@@ -567,7 +565,7 @@
         <div>
           <h2 class="card-heading">Technical Reference</h2>
           <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 6px;">
-            Comprehensive hardware pinout mapping and software runtime features for Mr. Mario companions.
+            Comprehensive hardware pinout mapping and software runtime features for Mr.&Ms Luna companions.
           </p>
         </div>
         
@@ -652,7 +650,7 @@
 
     <!-- Footer -->
     <footer>
-      &copy; 2026 Mr. Mario Ecosystem. All rights reserved. Powered by Crabster Technology.
+      &copy; 2026 Mr.&Ms Luna Ecosystem. All rights reserved. Powered by Crabster Technology.
     </footer>
 
   </div>

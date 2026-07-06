@@ -34,7 +34,7 @@ class DatabaseService with ChangeNotifier {
   double _reminderDuration = 10.0;
   double _birthdayDuration = 15.0;
   double _bleSleepTime = 45.0;
-  String _bleName = 'Mr. Mario Robot';
+  String _bleName = 'Mr. Luna Robot';
   List<String> _allowedNotificationApps = [
     'whatsapp',
     'whatsapp_business',
@@ -188,7 +188,7 @@ class DatabaseService with ChangeNotifier {
     _reminderDuration = _prefs!.getDouble('reminderDuration') ?? 10.0;
     _birthdayDuration = _prefs!.getDouble('birthdayDuration') ?? 15.0;
     _bleSleepTime = _prefs!.getDouble('bleSleepTime') ?? 45.0;
-    _bleName = _prefs!.getString('bleName') ?? 'Mr. Mario Robot';
+    _bleName = _prefs!.getString('bleName') ?? 'Mr. Luna Robot';
     _allowedNotificationApps = _prefs!.getStringList('allowedNotificationApps') ?? [
       'whatsapp',
       'whatsapp_business',
@@ -487,7 +487,7 @@ class DatabaseService with ChangeNotifier {
     _reminderDuration = 10.0;
     _birthdayDuration = 15.0;
     _bleSleepTime = 45.0;
-    _bleName = 'Mr. Mario Robot';
+    _bleName = 'Mr. Luna Robot';
 
     await _prefs?.clear();
     _seedDefaultGifs();

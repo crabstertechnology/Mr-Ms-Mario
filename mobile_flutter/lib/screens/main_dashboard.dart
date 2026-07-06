@@ -20,7 +20,7 @@ import '../services/notification_service.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/oled_simulator.dart';
 import '../widgets/pixel_editor.dart';
-import '../widgets/mario_background.dart';
+import '../widgets/luna_background.dart';
 import 'package:gif/gif.dart';
 
 class MainDashboard extends StatefulWidget {
@@ -35,7 +35,7 @@ class _MainDashboardState extends State<MainDashboard> {
   String _currentSettingsSection = 'categories';
   final AudioSynthService _audioSynth = AudioSynthService();
 
-  late bool _isMissMario;
+  late bool _isMsLuna;
   late Color _accentColor;
   late Color _accentColorLight;
   
@@ -255,7 +255,7 @@ class _MainDashboardState extends State<MainDashboard> {
         setState(() {});
       }
     });
-    // Default melody notation (Mario Power-up)
+    // Default melody notation (Luna Power-up)
     _customMelodyController.text =
         "E5 50 10\nE5 50 10\nE5 50 30\nC5 50 10\nE5 50 30\nG5 50 50\nG4 50 50\nC5 50 10\nG4 50 30\nE4 50 10\nA4 50 10\nB4 50 10\nAS4 50 10\nA4 50 30\nG4 50 20\nE5 50 10\nG5 50 10\nA5 50 10\nF5 50 10\nG5 50 10\nE5 50 10\nC5 50 10\nD5 50 10\nB4 50 50";
     
@@ -379,14 +379,14 @@ class _MainDashboardState extends State<MainDashboard> {
       final ble = Provider.of<BLEService>(context, listen: false);
       final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
       socket.broadcastEnabled = true;
-      socket.send(utf8.encode("MR_MARIO_DISCOVER"), InternetAddress("255.255.255.255"), 8002);
+      socket.send(utf8.encode("MR_LUNA_DISCOVER"), InternetAddress("255.255.255.255"), 8002);
       
       await for (final event in socket.timeout(const Duration(seconds: 2), onTimeout: (sink) => sink.close())) {
         if (event == RawSocketEvent.read) {
           final datagram = socket.receive();
           if (datagram != null) {
             final response = utf8.decode(datagram.data);
-            if (response == "MR_MARIO_SERVER_HERE") {
+            if (response == "MR_LUNA_SERVER_HERE") {
               final ip = datagram.address.address;
               ble.setServerIp(ip);
               break;
@@ -567,7 +567,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           alignment: Alignment.center,
                           child: Text(
                             bleState.isScanning
-                                ? "Searching for Mr. Mario companion robot..."
+                                ? "Searching for Mr.&Ms Luna companion robot..."
                                 : "No devices found.",
                             style: GoogleFonts.outfit(color: textColor60),
                           ),
@@ -606,12 +606,12 @@ class _MainDashboardState extends State<MainDashboard> {
                                       final id = result.device.remoteId.str;
                                       final name = result.device.platformName.isNotEmpty
                                           ? result.device.platformName
-                                          : "Mr. Mario Robot";
-                                      final isMiss = name.toLowerCase().contains("miss");
+                                          : "Mr. Luna Robot";
+                                      final isMiss = name.toLowerCase().contains("ms") || name.toLowerCase().contains("miss");
                                       final newRobot = RobotProfile(
                                         id: id,
                                         name: name,
-                                        variant: isMiss ? 'miss_mario' : 'mr_mario',
+                                        variant: isMiss ? 'ms_luna' : 'mr_luna',
                                         remoteId: id,
                                         lastConnected: DateTime.now(),
                                       );
@@ -656,12 +656,12 @@ class _MainDashboardState extends State<MainDashboard> {
     final db = Provider.of<DatabaseService>(context);
     final ble = Provider.of<BLEService>(context);
 
-    // Dynamic theme: Ms Mario = pink, Mr Mario = blue
-    final isMsMario = db.primaryRobot?.variant == 'miss_mario';
-    _accentColor = isMsMario ? const Color(0xFFE91E8C) : const Color(0xFF0284C7);
-    _accentColorLight = isMsMario ? const Color(0x1FE91E8C) : const Color(0x1F0284C7);
-    // Secondary accent (red for Mr Mario, rose for Ms Mario)
-    final Color _secondaryColor = isMsMario ? const Color(0xFFEC4899) : const Color(0xFFE53935);
+    // Dynamic theme: Ms. Luna = pink, Mr. Luna = blue
+    final isMsLuna = db.primaryRobot?.variant == 'ms_luna';
+    _accentColor = isMsLuna ? const Color(0xFFE91E8C) : const Color(0xFF0284C7);
+    _accentColorLight = isMsLuna ? const Color(0x1FE91E8C) : const Color(0x1F0284C7);
+    // Secondary accent (red for Mr. Luna, rose for Ms. Luna)
+    final Color _secondaryColor = isMsLuna ? const Color(0xFFEC4899) : const Color(0xFFE53935);
 
     // â”€â”€ Resolve the active GIF to show in the simulator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Priority: BLE label (exact match) â†’ BLE exprId fallback â†’ local state
@@ -718,8 +718,8 @@ class _MainDashboardState extends State<MainDashboard> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: MarioBackground(
-        isMsMario: isMsMario,
+      body: LunaBackground(
+        isMsLuna: isMsLuna,
         child: Stack(
           children: [
           SafeArea(
@@ -835,7 +835,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
   // Top header navbar
   Widget _buildTopNavigation(BLEService ble) {
-    _isMissMario = Provider.of<DatabaseService>(context, listen: false).primaryRobot?.variant == 'miss_mario';
+    _isMsLuna = Provider.of<DatabaseService>(context, listen: false).primaryRobot?.variant == 'ms_luna';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: BoxDecoration(
@@ -879,7 +879,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _isMissMario ? "Ms. Mario" : "Mr. Mario",
+                    _isMsLuna ? "Ms. Luna" : "Mr. Luna",
                     style: GoogleFonts.outfit(
                       color: _accentColor,
                       fontSize: 17,
@@ -2034,7 +2034,7 @@ class _MainDashboardState extends State<MainDashboard> {
             const SizedBox(height: 12),
             Center(
               child: Text(
-                "Syncs local smartphone time to Mr. Mario's OLED display module clock.",
+                "Syncs local smartphone time to Mr.&Ms Luna's OLED display module clock.",
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
               ),
@@ -2333,14 +2333,14 @@ class _MainDashboardState extends State<MainDashboard> {
   // ================= NEW TAB 0: HOME DASHBOARD PANEL =================
   Widget _buildHomeDashboardPanel(DatabaseService db, BLEService ble, String activeGifId, String activeLabel) {
     final primary = db.primaryRobot ?? RobotProfile(
-      id: 'mr_mario',
-      name: 'Mr. Mario',
-      variant: 'mr_mario',
+      id: 'mr_luna',
+      name: 'Mr. Luna',
+      variant: 'mr_luna',
       remoteId: '',
       lastConnected: DateTime.now(),
     );
     
-    final isMiss = primary.variant == 'miss_mario';
+    final isMiss = primary.variant == 'ms_luna';
     final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
     final personality = isMiss ? "Softer & Calmer Personality" : "Friendly & Energetic Personality";
     
@@ -2386,7 +2386,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  isMiss ? "MISS MARIO" : "MR. MARIO",
+                  isMiss ? "MS. LUNA" : "MR. LUNA",
                   style: GoogleFonts.outfit(color: accentColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                 ),
               ),
@@ -2449,7 +2449,7 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   Widget _buildSendMessageSection(BLEService ble) {
-    final isMiss = _isMissMario;
+    final isMiss = _isMsLuna;
     final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3037,7 +3037,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     ),
                     child: SingleChildScrollView(
                       child: Text(
-                        "Mr. Mario: Hello! How is your day going? Let's write some code together!",
+                        "Mr. Luna: Hello! How is your day going? Let's write some code together!",
                         style: GoogleFonts.outfit(color: textColor70, fontSize: 13),
                       ),
                     ),
@@ -3148,7 +3148,7 @@ class _MainDashboardState extends State<MainDashboard> {
             itemBuilder: (context, index) {
               final robot = db.robots[index];
               final isPrimary = robot.isPrimary;
-              final isMiss = robot.variant == 'miss_mario';
+              final isMiss = robot.variant == 'ms_luna';
               final accent = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
 
               return Card(
@@ -3194,7 +3194,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     ],
                   ),
                   subtitle: Text(
-                    isMiss ? "Miss Mario variant" : "Mr. Mario variant",
+                    isMiss ? "Ms. Luna variant" : "Mr. Luna variant",
                     style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
                   ),
                   trailing: Row(
@@ -3288,7 +3288,7 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(height: 6),
               Text(
-                "Manage relationship status (Friends ðŸ¤ vs Couple â¤ï¸) between Mr. Mario and Miss Mario companions.",
+                "Manage relationship status (Friends ðŸ¤ vs Couple â¤ï¸) between Mr. Luna and Ms. Luna companions.",
                 style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
               ),
               const SizedBox(height: 16),
@@ -3350,10 +3350,10 @@ class _MainDashboardState extends State<MainDashboard> {
                     children: [
                       Expanded(
                         child: ChoiceChip(
-                          label: const Text("Mr. Mario"),
-                          selected: selectedVariant == 'mr_mario',
+                          label: const Text("Mr. Luna"),
+                          selected: selectedVariant == 'mr_luna',
                           onSelected: (val) {
-                            if (val) setModalState(() => selectedVariant = 'mr_mario');
+                            if (val) setModalState(() => selectedVariant = 'mr_luna');
                           },
                           selectedColor: _accentColor.withOpacity(0.2),
                           checkmarkColor: _accentColor,
@@ -3362,10 +3362,10 @@ class _MainDashboardState extends State<MainDashboard> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: ChoiceChip(
-                          label: const Text("Ms. Mario"),
-                          selected: selectedVariant == 'miss_mario',
+                          label: const Text("Ms. Luna"),
+                          selected: selectedVariant == 'ms_luna',
                           onSelected: (val) {
-                            if (val) setModalState(() => selectedVariant = 'miss_mario');
+                            if (val) setModalState(() => selectedVariant = 'ms_luna');
                           },
                           selectedColor: _accentColor.withOpacity(0.2),
                           checkmarkColor: _accentColor,
@@ -3689,7 +3689,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   labelStyle: GoogleFonts.outfit(color: textColor38),
                   hintText: _selectedEventType == 'meeting'
                       ? "e.g., Team Sync"
-                      : "e.g., Mr. Mario's Birthday",
+                      : "e.g., Mr. Luna's Birthday",
                   hintStyle: GoogleFonts.outfit(color: textColor24, fontSize: 13),
                   filled: true,
                   fillColor: Colors.white.withOpacity(0.03),
@@ -4454,7 +4454,7 @@ class _MainDashboardState extends State<MainDashboard> {
       _isLoadingApps = true;
     });
     try {
-      const channel = MethodChannel('com.mrmario/notifications');
+      const channel = MethodChannel('com.mrmsluna/notifications');
       final List<dynamic>? apps = await channel.invokeMethod<List<dynamic>>('getInstalledApps');
       if (apps != null) {
         final List<Map<String, String>> loaded = apps.map((item) {
@@ -4571,7 +4571,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          "Configure which applications are permitted to send notifications to Mr. Mario.",
+                          "Configure which applications are permitted to send notifications to Mr.&Ms Luna.",
                           style: GoogleFonts.outfit(
                             color: textColor60,
                             fontSize: 12,
@@ -4957,7 +4957,7 @@ class _GifCardWidgetState extends State<_GifCardWidget>
     final isFav = gif.favorite;
     final isSelected = gif.selected;
     final isHidden = gif.hidden;
-    final isMiss = db.primaryRobot?.variant == 'miss_mario';
+    final isMiss = db.primaryRobot?.variant == 'ms_luna';
     final previewColor =
         isMiss ? const Color(0xFFEC4899) : const Color(0xFF00F0FF);
 

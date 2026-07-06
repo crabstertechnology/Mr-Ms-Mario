@@ -6,7 +6,7 @@
 #include "config.h"
 #include "mochi_bitmaps.h"
 
-class MarioFace {
+class LunaFace {
 private:
   Adafruit_SSD1306& display;
   Expression currentExpr;
@@ -34,7 +34,7 @@ private:
   String mapDescription;
 
 public:
-  MarioFace(Adafruit_SSD1306& disp) 
+  LunaFace(Adafruit_SSD1306& disp) 
     : display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
     currentFrame = 0;
     currentGifIndex = 0;
