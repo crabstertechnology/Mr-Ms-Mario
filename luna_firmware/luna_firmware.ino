@@ -62,8 +62,32 @@ bool mapsActive = false;
 int rtcHour = 12;
 int rtcMinute = 0;
 int rtcSecond = 0;
+String rtcDay = "Mon";
+String rtcDate = "06 Jul";
 unsigned long lastRtcMillis = 0;
 bool is12HourFormat = false;
+
+void parseAndSyncTime(String timeStr) {
+  int firstColon = timeStr.indexOf(':');
+  int secondColon = timeStr.lastIndexOf(':');
+  if (firstColon > 0 && secondColon > firstColon) {
+    rtcHour = timeStr.substring(0, firstColon).toInt();
+    rtcMinute = timeStr.substring(firstColon + 1, secondColon).toInt();
+    
+    int commaIdx = timeStr.indexOf(',', secondColon);
+    if (commaIdx > 0) {
+      rtcSecond = timeStr.substring(secondColon + 1, commaIdx).toInt();
+      int secondCommaIdx = timeStr.indexOf(',', commaIdx + 1);
+      if (secondCommaIdx > 0) {
+        rtcDay = timeStr.substring(commaIdx + 1, secondCommaIdx);
+        rtcDate = timeStr.substring(secondCommaIdx + 1);
+      }
+    } else {
+      rtcSecond = timeStr.substring(secondColon + 1).toInt();
+    }
+    lastRtcMillis = millis(); // Align RTC base to right now
+  }
+}
 
 // Periodic expression cycling — all 7 available face expressions
 const Expression cycleExpressions[] = {
@@ -216,16 +240,9 @@ void handleRobotCommand(String text) {
     handleBLEAudio((SoundEffect)soundVal);
     Serial.println("OK:AudioPlayed");
   } else if (text.startsWith("TIME:")) {
-    String timeStr = text.substring(5);
-    int firstColon = timeStr.indexOf(':');
-    int secondColon = timeStr.lastIndexOf(':');
-    if (firstColon > 0 && secondColon > firstColon) {
-      rtcHour = timeStr.substring(0, firstColon).toInt();
-      rtcMinute = timeStr.substring(firstColon + 1, secondColon).toInt();
-      rtcSecond = timeStr.substring(secondColon + 1).toInt();
-      lastRtcMillis = millis(); // Align RTC base to right now
-      Serial.println("OK:TimeSynced");
-    }
+    parseAndSyncTime(text.substring(5));
+    Serial.println("OK:TimeSynced");
+
   } else if (text.startsWith("12HR:")) {
     is12HourFormat = (text.substring(5).toInt() == 1);
     preferences.begin("luna", false);
@@ -730,16 +747,9 @@ void loop() {
       applySettings(cmd.substring(4));
       Serial.println("OK:SettingsSaved");
     } else if (cmd.startsWith("TIME:")) {
-      String timeStr = cmd.substring(5);
-      int firstColon = timeStr.indexOf(':');
-      int secondColon = timeStr.lastIndexOf(':');
-      if (firstColon > 0 && secondColon > firstColon) {
-        rtcHour = timeStr.substring(0, firstColon).toInt();
-        rtcMinute = timeStr.substring(firstColon + 1, secondColon).toInt();
-        rtcSecond = timeStr.substring(secondColon + 1).toInt();
-        lastRtcMillis = millis(); // align RTC base
-        Serial.println("OK:TimeSynced");
-      }
+      parseAndSyncTime(cmd.substring(5));
+      Serial.println("OK:TimeSynced");
+
     } else if (cmd == "GET") {
       Serial.println("SETTINGS:" + String(bleActive ? "1" : "0") + "," + String(gifSpeed) + "," + String(defaultGif) + "," + String(gifIntro) + "," + String(touchSingle) + "," + String(touchDouble) + "," + String(touchLong) + "," + String(negativeDisplay ? "1" : "0"));
     } else if (cmd == "LIST") {
@@ -1016,6 +1026,6 @@ void loop() {
   } else if (faceChanged || ((face.getExpression() == EXPR_CLOCK || face.getExpression() == EXPR_MAP) && timeUpdated) || forceRedraw) {
     lastDisplayDrawTime = now;
     lastDrawnSecond = rtcSecond;
-    face.draw(rtcHour, rtcMinute, rtcSecond, is12HourFormat);
+    face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, is12HourFormat);
   }
 }

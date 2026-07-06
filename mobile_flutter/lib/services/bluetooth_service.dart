@@ -606,7 +606,14 @@ class BLEService with ChangeNotifier {
     final hh = now.hour.toString().padLeft(2, '0');
     final mm = now.minute.toString().padLeft(2, '0');
     final ss = now.second.toString().padLeft(2, '0');
-    final payloadStr = 'TIME:$hh:$mm:$ss';
+    
+    final List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final List<String> months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final weekday = weekdays[now.weekday - 1];
+    final month = months[now.month - 1];
+    final dateStr = "${now.day.toString().padLeft(2, '0')} $month";
+    
+    final payloadStr = 'TIME:$hh:$mm:$ss,$weekday,$dateStr';
     await _writeTextWithAck(payloadStr, "Clock Sync");
   }
 

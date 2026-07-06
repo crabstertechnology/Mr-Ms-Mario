@@ -153,37 +153,53 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
     Widget screenContent;
     if (widget.activeGifId == 'clock') {
       final now = DateTime.now();
-      final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
+      String timeStr;
+      if (db.is12HourFormat) {
+        int hour = now.hour % 12;
+        if (hour == 0) hour = 12;
+        final ampm = now.hour >= 12 ? 'PM' : 'AM';
+        final mm = now.minute.toString().padLeft(2, '0');
+        timeStr = "$hour:$mm $ampm";
+      } else {
+        final hh = now.hour.toString().padLeft(2, '0');
+        final mm = now.minute.toString().padLeft(2, '0');
+        final ss = now.second.toString().padLeft(2, '0');
+        timeStr = "$hh:$mm:$ss";
+      }
+      
+      final List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      final List<String> months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final weekday = weekdays[now.weekday - 1];
+      final month = months[now.month - 1];
+      final dateStr = "${now.day.toString().padLeft(2, '0')} $month";
+      final dayDateStr = "$weekday, $dateStr";
+
       screenContent = Center(
         child: Container(
           width: 128,
           height: 64,
           alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border.all(color: oledColor, width: 1.2),
+            borderRadius: BorderRadius.circular(4),
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                "- CLOCK -",
-                style: GoogleFonts.pressStart2p(
-                  color: oledColor,
-                  fontSize: 7,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
                 timeStr,
                 style: GoogleFonts.pressStart2p(
                   color: oledColor,
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
-                "[Tap to close clock]",
+                dayDateStr,
                 style: GoogleFonts.pressStart2p(
                   color: oledColor,
-                  fontSize: 5,
+                  fontSize: 6,
                 ),
               ),
             ],

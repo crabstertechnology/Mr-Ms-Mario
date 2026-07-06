@@ -391,14 +391,14 @@ public:
     display.display();
   }
 
-  void draw(int hour, int minute, int second, bool is12Hour = false) {
+  void draw(int hour, int minute, int second, String day, String date, bool is12Hour = false) {
     display.clearDisplay();
 
     // 1. Draw Text Screen if active
     if (currentExpr == EXPR_TEXT) {
       drawTextScreen();
     } else if (currentExpr == EXPR_CLOCK) {
-      drawClockScreen(hour, minute, second, is12Hour);
+      drawClockScreen(hour, minute, second, day, date, is12Hour);
     } else if (currentExpr == EXPR_MAP) {
       drawMapScreen(hour, minute, is12Hour);
     } else if (currentExpr == EXPR_ALL_GIF) {
@@ -465,36 +465,35 @@ public:
   }
 
 private:
-  void drawClockScreen(int hour, int minute, int second, bool is12Hour) {
+  void drawClockScreen(int hour, int minute, int second, String day, String date, bool is12Hour) {
     // Sleek premium border
     display.drawRoundRect(0, 0, 128, 64, 4, SSD1306_WHITE);
     display.drawRoundRect(2, 2, 124, 60, 2, SSD1306_WHITE);
     
-    // Header
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(38, 8);
-    display.print("- CLOCK -");
-    
     // Time
     display.setTextSize(2);
+    display.setTextColor(SSD1306_WHITE);
     char timeStr[12];
     if (is12Hour) {
       int dispHour = hour % 12;
       if (dispHour == 0) dispHour = 12;
       const char* ampm = (hour >= 12) ? "PM" : "AM";
-      snprintf(timeStr, sizeof(timeStr), "%2d:%02d %s", dispHour, minute, ampm);
-      display.setCursor(14, 24);
+      snprintf(timeStr, sizeof(timeStr), "%d:%02d %s", dispHour, minute, ampm);
     } else {
       snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hour, minute, second);
-      display.setCursor(16, 24);
     }
+    int timeWidth = strlen(timeStr) * 12;
+    int cursorX = (128 - timeWidth) / 2;
+    display.setCursor(cursorX, 15);
     display.print(timeStr);
     
-    // Bottom status
+    // Date & Day
     display.setTextSize(1);
-    display.setCursor(10, 46);
-    display.print("[Tap to close clock]");
+    String dayDateStr = day + ", " + date;
+    int dateWidth = dayDateStr.length() * 6;
+    int dateX = (128 - dateWidth) / 2;
+    display.setCursor(dateX, 39);
+    display.print(dayDateStr);
   }
   void drawTextScreen() {
     display.setTextWrap(false);
