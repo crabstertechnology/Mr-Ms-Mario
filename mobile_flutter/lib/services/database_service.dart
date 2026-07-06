@@ -230,6 +230,7 @@ class DatabaseService with ChangeNotifier {
               hidden: false,
               size: sizeBytes,
               flashSize: flashKb,
+              soundId: val['sound'] as int? ?? 0,
             ));
             modified = true;
           }
@@ -263,6 +264,7 @@ class DatabaseService with ChangeNotifier {
         hidden: false,
         size: sizeBytes,
         flashSize: flashKb,
+        soundId: val['sound'] as int? ?? 0,
       ));
     });
     _saveGifsToDisk();
@@ -426,6 +428,15 @@ class DatabaseService with ChangeNotifier {
     }
     _saveGifsToDisk();
     notifyListeners();
+  }
+
+  void updateGifSound(String id, int soundId) {
+    final idx = _gifs.indexWhere((g) => g.id == id);
+    if (idx != -1) {
+      _gifs[idx] = _gifs[idx].copyWith(soundId: soundId);
+      _saveGifsToDisk();
+      notifyListeners();
+    }
   }
 
   void deleteCustomGif(String id) {

@@ -8,6 +8,7 @@ class GifModel {
   final int size;
   final String flashSize;
   final String? customData; // Base64 data or custom path if uploaded
+  final int? soundId; // Custom associated SFX soundtrack ID
 
   GifModel({
     required this.id,
@@ -19,6 +20,7 @@ class GifModel {
     required this.size,
     required this.flashSize,
     this.customData,
+    this.soundId,
   });
 
   Map<String, dynamic> toJson() {
@@ -32,6 +34,7 @@ class GifModel {
       'size': size,
       'flashSize': flashSize,
       'customData': customData,
+      'soundId': soundId,
     };
   }
 
@@ -46,6 +49,7 @@ class GifModel {
       size: json['size'] as int? ?? 0,
       flashSize: json['flashSize'] as String? ?? '0.0KB',
       customData: json['customData'] as String?,
+      soundId: json['soundId'] as int?,
     );
   }
 
@@ -59,6 +63,7 @@ class GifModel {
     int? size,
     String? flashSize,
     String? customData,
+    int? soundId,
   }) {
     return GifModel(
       id: id ?? this.id,
@@ -70,6 +75,7 @@ class GifModel {
       size: size ?? this.size,
       flashSize: flashSize ?? this.flashSize,
       customData: customData ?? this.customData,
+      soundId: soundId ?? this.soundId,
     );
   }
 }

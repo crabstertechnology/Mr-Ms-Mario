@@ -1746,7 +1746,6 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  // Individual Card widget representing GIF â€” delegates to StatefulWidget for GifController
   Widget _buildGifCard(DatabaseService db, BLEService ble, GifModel gif) {
     return _GifCardWidget(
       gif: gif,
@@ -1756,7 +1755,7 @@ class _MainDashboardState extends State<MainDashboard> {
         final mapping = DatabaseService.animMapping[gif.id] ??
             {'expr': 0, 'sound': 0, 'label': gif.name};
         final exprVal = mapping['expr'] as int;
-        final soundVal = mapping['sound'] as int;
+        final soundVal = gif.soundId ?? (mapping['sound'] as int? ?? 0);
 
         setState(() {
           _localActiveGifId = gif.id;
@@ -4950,6 +4949,106 @@ class _GifCardWidgetState extends State<_GifCardWidget>
     super.dispose();
   }
 
+  void _showSoundSelectionDialog(BuildContext context, DatabaseService db, GifModel gif) {
+    final sfxList = [
+      {'id': 0, 'name': 'None (Muted)', 'color': Colors.grey},
+      {'id': 1, 'name': 'Coin Collect', 'color': const Color(0xFFFFDC00)},
+      {'id': 2, 'name': 'Super Mushroom', 'color': const Color(0xFF2ECC40)},
+      {'id': 3, 'name': '1-Up Melody', 'color': const Color(0xFF0074D9)},
+      {'id': 4, 'name': 'Stomp SFX', 'color': const Color(0xFFFFA500)},
+      {'id': 5, 'name': 'Player Shrink', 'color': const Color(0xFFFF4136)},
+      {'id': 6, 'name': 'Surprise Warp', 'color': const Color(0xFFE53935)},
+      {'id': 8, 'name': 'Castle Theme', 'color': const Color(0xFFE11D48)},
+      {'id': 9, 'name': 'Underworld Theme', 'color': const Color(0xFF7C3AED)},
+      {'id': 10, 'name': 'Theme Toggle SFX', 'color': const Color(0xFF0EA5E9)},
+    ];
+
+    final mapping = DatabaseService.animMapping[gif.id] ?? {'sound': 0};
+    final currentSoundId = gif.soundId ?? (mapping['sound'] as int? ?? 0);
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Theme(
+          data: ThemeData.dark(),
+          child: AlertDialog(
+            backgroundColor: const Color(0xFF1E1D30),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.white.withOpacity(0.08)),
+            ),
+            title: Text(
+              "Select SFX Soundtrack",
+              style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: sfxList.length,
+                itemBuilder: (context, index) {
+                  final sfx = sfxList[index];
+                  final sfxId = sfx['id'] as int;
+                  final sfxName = sfx['name'] as String;
+                  final sfxColor = sfx['color'] as Color;
+                  final isSelected = currentSoundId == sfxId;
+
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isSelected ? sfxColor.withOpacity(0.12) : const Color(0x0AFFFFFF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected ? sfxColor : Colors.transparent,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(
+                        sfxId == 0 ? Icons.volume_mute : Icons.music_note,
+                        color: sfxColor,
+                        size: 16,
+                      ),
+                      title: Text(
+                        sfxName,
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? Icon(Icons.check_circle, color: sfxColor, size: 16)
+                          : null,
+                      onTap: () {
+                        db.updateGifSound(gif.id, sfxId);
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  "Close",
+                  style: GoogleFonts.outfit(color: Colors.white70),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final gif = widget.gif;
@@ -5044,6 +5143,22 @@ class _GifCardWidgetState extends State<_GifCardWidget>
                             child: Icon(
                               isHidden ? Icons.visibility_off : Icons.visibility,
                               color: Colors.white60,
+                              size: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () => _showSoundSelectionDialog(context, db, gif),
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Icon(
+                              gif.soundId != null && gif.soundId! > 0
+                                  ? Icons.volume_up
+                                  : Icons.volume_mute,
+                              color: gif.soundId != null && gif.soundId! > 0
+                                  ? const Color(0xFF00F0FF)
+                                  : Colors.white38,
                               size: 12,
                             ),
                           ),
