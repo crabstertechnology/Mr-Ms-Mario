@@ -153,20 +153,6 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
     Widget screenContent;
     if (widget.activeGifId == 'clock') {
       final now = DateTime.now();
-      String timeStr;
-      if (db.is12HourFormat) {
-        int hour = now.hour % 12;
-        if (hour == 0) hour = 12;
-        final ampm = now.hour >= 12 ? 'PM' : 'AM';
-        final mm = now.minute.toString().padLeft(2, '0');
-        timeStr = "$hour:$mm $ampm";
-      } else {
-        final hh = now.hour.toString().padLeft(2, '0');
-        final mm = now.minute.toString().padLeft(2, '0');
-        final ss = now.second.toString().padLeft(2, '0');
-        timeStr = "$hh:$mm:$ss";
-      }
-      
       final List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       final List<String> months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       final weekday = weekdays[now.weekday - 1];
@@ -174,38 +160,254 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
       final dateStr = "${now.day.toString().padLeft(2, '0')} $month";
       final dayDateStr = "$weekday, $dateStr";
 
-      screenContent = Center(
-        child: Container(
-          width: 128,
-          height: 64,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border.all(color: oledColor, width: 1.2),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                timeStr,
-                style: GoogleFonts.pressStart2p(
-                  color: oledColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+      if (db.clockStyle == 1) {
+        // STYLE 1: Minimalist
+        String timeNoSec;
+        int hour = now.hour;
+        if (db.is12HourFormat) {
+          hour = now.hour % 12;
+          if (hour == 0) hour = 12;
+        }
+        timeNoSec = "${hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+        final suffix = db.is12HourFormat
+            ? (now.hour >= 12 ? 'PM' : 'AM')
+            : now.second.toString().padLeft(2, '0');
+
+        screenContent = Center(
+          child: SizedBox(
+            width: 128,
+            height: 64,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 10,
+                  top: 12,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        timeNoSec,
+                        style: GoogleFonts.pressStart2p(
+                          color: oledColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        suffix,
+                        style: GoogleFonts.pressStart2p(
+                          color: oledColor,
+                          fontSize: 6,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                dayDateStr,
-                style: GoogleFonts.pressStart2p(
-                  color: oledColor,
-                  fontSize: 6,
+                Positioned(
+                  left: 10,
+                  bottom: 12,
+                  child: Text(
+                    dayDateStr,
+                    style: GoogleFonts.pressStart2p(
+                      color: oledColor,
+                      fontSize: 6,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
+        );
+      } else if (db.clockStyle == 2) {
+        // STYLE 2: Analog Split
+        String digitalTime;
+        int hour = now.hour;
+        if (db.is12HourFormat) {
+          hour = now.hour % 12;
+          if (hour == 0) hour = 12;
+          digitalTime = "${hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+        } else {
+          digitalTime = "${hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+        }
+
+        screenContent = Center(
+          child: SizedBox(
+            width: 128,
+            height: 64,
+            child: Row(
+              children: [
+                const SizedBox(width: 8),
+                CustomPaint(
+                  size: const Size(44, 44),
+                  painter: AnalogClockPainter(now, oledColor),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        digitalTime,
+                        style: GoogleFonts.pressStart2p(
+                          color: oledColor,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        weekday,
+                        style: GoogleFonts.pressStart2p(
+                          color: oledColor,
+                          fontSize: 6,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        dateStr,
+                        style: GoogleFonts.pressStart2p(
+                          color: oledColor,
+                          fontSize: 5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else if (db.clockStyle == 3) {
+        // STYLE 3: Retro Grid
+        String timeStr;
+        if (db.is12HourFormat) {
+          int hour = now.hour % 12;
+          if (hour == 0) hour = 12;
+          final ampm = now.hour >= 12 ? 'PM' : 'AM';
+          final mm = now.minute.toString().padLeft(2, '0');
+          timeStr = "$hour:$mm $ampm";
+        } else {
+          final hh = now.hour.toString().padLeft(2, '0');
+          final mm = now.minute.toString().padLeft(2, '0');
+          final ss = now.second.toString().padLeft(2, '0');
+          timeStr = "$hh:$mm:$ss";
+        }
+
+        final progressWidth = (now.second * 110) / 60;
+
+        screenContent = Center(
+          child: Container(
+            width: 128,
+            height: 64,
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: oledColor, width: 1),
+                bottom: BorderSide(color: oledColor, width: 1),
+              ),
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 6,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Text(
+                      timeStr,
+                      style: GoogleFonts.pressStart2p(
+                        color: oledColor,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 22,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Text(
+                      dayDateStr,
+                      style: GoogleFonts.pressStart2p(
+                        color: oledColor,
+                        fontSize: 6,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 6,
+                  left: 9,
+                  child: Container(
+                    width: 110,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: oledColor, width: 1),
+                    ),
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      width: progressWidth,
+                      color: oledColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        // STYLE 0: Classic Border
+        String timeStr;
+        if (db.is12HourFormat) {
+          int hour = now.hour % 12;
+          if (hour == 0) hour = 12;
+          final ampm = now.hour >= 12 ? 'PM' : 'AM';
+          final mm = now.minute.toString().padLeft(2, '0');
+          timeStr = "$hour:$mm $ampm";
+        } else {
+          final hh = now.hour.toString().padLeft(2, '0');
+          final mm = now.minute.toString().padLeft(2, '0');
+          final ss = now.second.toString().padLeft(2, '0');
+          timeStr = "$hh:$mm:$ss";
+        }
+
+        screenContent = Center(
+          child: Container(
+            width: 128,
+            height: 64,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border.all(color: oledColor, width: 1.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  timeStr,
+                  style: GoogleFonts.pressStart2p(
+                    color: oledColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  dayDateStr,
+                  style: GoogleFonts.pressStart2p(
+                    color: oledColor,
+                    fontSize: 6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
     } else if (_isMarqueeActive && widget.marqueeText != null) {
       screenContent = LayoutBuilder(
         builder: (context, constraints) {
@@ -410,4 +612,65 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
       ],
     );
   }
+}
+
+class AnalogClockPainter extends CustomPainter {
+  final DateTime time;
+  final Color color;
+  AnalogClockPainter(this.time, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    // Draw outer circle
+    canvas.drawCircle(center, radius, paint);
+    
+    // Draw center dot
+    final dotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 1.5, dotPaint);
+
+    // Calculate angles
+    final double angleHour = (time.hour % 12 + time.minute / 60.0) * 30.0 * 3.14159 / 180.0;
+    final double angleMin = (time.minute + time.second / 60.0) * 6.0 * 3.14159 / 180.0;
+    final double angleSec = time.second * 6.0 * 3.14159 / 180.0;
+
+    // Hour hand
+    final hourLength = radius * 0.5;
+    canvas.drawLine(
+      center,
+      Offset(center.dx + hourLength * sin(angleHour), center.dy - hourLength * cos(angleHour)),
+      paint..strokeWidth = 1.5,
+    );
+
+    // Minute hand
+    final minLength = radius * 0.75;
+    canvas.drawLine(
+      center,
+      Offset(center.dx + minLength * sin(angleMin), center.dy - minLength * cos(angleMin)),
+      paint..strokeWidth = 1.0,
+    );
+
+    // Second hand
+    final secLength = radius * 0.85;
+    final secPaint = Paint()
+      ..color = color
+      ..strokeWidth = 0.5;
+    canvas.drawLine(
+      center,
+      Offset(center.dx + secLength * sin(angleSec), center.dy - secLength * cos(angleSec)),
+      secPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

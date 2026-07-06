@@ -38,8 +38,10 @@ int touchSingle = 2;     // action for single tap: 0=default, 1=clock, 2=skip_an
 int touchDouble = 0;     // action for double tap
 int touchLong = 0;       // action for long press
 bool negativeDisplay = false; // SSD1306 display color inversion
+int clockStyle = 0; // clock style selector (0 to 3)
+int oledBrightness = 2; // screen brightness (1: Low, 2: Med, 3: High)
 bool inSettingsMenu = false;
-int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Save, 3: Exit
+int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
 bool optionSelected = false;
 
 // System State Variables
@@ -412,11 +414,11 @@ void handleRobotCommand(String text) {
 
 void applySettings(String payload) {
   // Robust CSV parsing — split by commas into an array
-  // Expected format: ble,speed,defaultGif,gifIntro,touchSingle,touchDouble,touchLong,negative,introSpeed,introSoundSpeed,notifDur,remDur,birthDur
-  String parts[13];
+  // Expected format: ble,speed,defaultGif,gifIntro,touchSingle,touchDouble,touchLong,negative,introSpeed,introSoundSpeed,notifDur,remDur,birthDur,clkStyle,oledBright
+  String parts[15];
   int partCount = 0;
   int startIdx = 0;
-  for (int i = 0; i <= payload.length() && partCount < 13; i++) {
+  for (int i = 0; i <= payload.length() && partCount < 15; i++) {
     if (i == (int)payload.length() || payload[i] == ',') {
       String part = payload.substring(startIdx, i);
       part.trim();
@@ -460,6 +462,12 @@ void applySettings(String payload) {
     birthdayDurationMs = parts[12].toInt() * 1000;
     if (birthdayDurationMs < 1000) birthdayDurationMs = 1000;
   }
+  if (partCount > 13) {
+    clockStyle = parts[13].toInt();
+  }
+  if (partCount > 14) {
+    oledBrightness = parts[14].toInt();
+  }
 
   // Apply settings immediately
   face.setFrameDelay(gifSpeed);
@@ -486,8 +494,18 @@ void applySettings(String payload) {
 
   ble.setBLEActive(bleActive);
   display.invertDisplay(negativeDisplay);
+  
+  display.ssd1306_command(0x81);
+  if (oledBrightness == 1) display.ssd1306_command(10);
+  else if (oledBrightness == 2) display.ssd1306_command(127);
+  else display.ssd1306_command(255);
+  
   Serial.print("NegativeDisplay set to: ");
   Serial.println(negativeDisplay ? "ON" : "OFF");
+  Serial.print("ClockStyle set to: ");
+  Serial.println(clockStyle);
+  Serial.print("OledBrightness set to: ");
+  Serial.println(oledBrightness);
 
   // Save all settings to NVS flash
   preferences.begin("luna", false);
@@ -499,6 +517,8 @@ void applySettings(String payload) {
   preferences.putInt("tchDoub", touchDouble);
   preferences.putInt("tchLong", touchLong);
   preferences.putBool("neg", negativeDisplay);
+  preferences.putInt("clkStyle", clockStyle);
+  preferences.putInt("oledBright", oledBrightness);
   preferences.putInt("intSpeed", gifIntroSpeed);
   preferences.putInt("sndSpeed", introSoundSpeed);
   preferences.putInt("notifDur", notificationDurationMs);
@@ -525,6 +545,8 @@ void setup() {
   touchDouble = preferences.getInt("tchDoub", 0);
   touchLong = preferences.getInt("tchLong", 0);
   negativeDisplay = preferences.getBool("neg", false);
+  clockStyle = preferences.getInt("clkStyle", 0);
+  oledBrightness = preferences.getInt("oledBright", 2);
   gifIntroSpeed = preferences.getInt("intSpeed", 100);
   introSoundSpeed = preferences.getInt("sndSpeed", 100);
   is12HourFormat = preferences.getBool("is12H", false);
@@ -563,6 +585,12 @@ void setup() {
   }
   // Apply saved invert setting immediately after display init
   display.invertDisplay(negativeDisplay);
+
+  // Apply saved brightness setting
+  display.ssd1306_command(0x81);
+  if (oledBrightness == 1) display.ssd1306_command(10);
+  else if (oledBrightness == 2) display.ssd1306_command(127);
+  else display.ssd1306_command(255);
 
   // Display initial loading face
   display.clearDisplay();
@@ -819,12 +847,26 @@ void loop() {
               bleActive = !bleActive;
               ble.setBLEActive(bleActive);
               audio.playSound(SOUND_CHIRP);
-            } else if (menuOption == 1) { // GIF speed control in numbers
+            } else if (menuOption == 1) { // GIF speed control
               gifSpeed += 20;
               if (gifSpeed > 300) {
                 gifSpeed = 20;
               }
               face.setFrameDelay(gifSpeed);
+              audio.playSound(SOUND_CHIRP);
+            } else if (menuOption == 2) { // Clock Style
+              clockStyle = (clockStyle + 1) % 4;
+              audio.playSound(SOUND_CHIRP);
+            } else if (menuOption == 3) { // Invert/Negative display
+              negativeDisplay = !negativeDisplay;
+              display.invertDisplay(negativeDisplay);
+              audio.playSound(SOUND_CHIRP);
+            } else if (menuOption == 4) { // Brightness
+              oledBrightness = (oledBrightness % 3) + 1;
+              display.ssd1306_command(0x81);
+              if (oledBrightness == 1) display.ssd1306_command(10);
+              else if (oledBrightness == 2) display.ssd1306_command(127);
+              else display.ssd1306_command(255);
               audio.playSound(SOUND_CHIRP);
             }
           } else if (touchEvent == TOUCH_LONG_PRESS) {
@@ -836,11 +878,11 @@ void loop() {
           // Navigating the menu options
           if (touchEvent == TOUCH_TAP) {
             // Single tap cycles options
-            menuOption = (menuOption + 1) % 4;
+            menuOption = (menuOption + 1) % 7;
             audio.playSound(SOUND_CHIRP);
           } else if (touchEvent == TOUCH_LONG_PRESS) {
             // Long press selects options
-            if (menuOption == 2) { // SAVE
+            if (menuOption == 5) { // SAVE
               preferences.begin("luna", false);
               preferences.putBool("ble", bleActive);
               preferences.putInt("speed", gifSpeed);
@@ -850,14 +892,23 @@ void loop() {
               preferences.putInt("tchDoub", touchDouble);
               preferences.putInt("tchLong", touchLong);
               preferences.putBool("neg", negativeDisplay);
+              preferences.putInt("clkStyle", clockStyle);
+              preferences.putInt("oledBright", oledBrightness);
               preferences.end();
+              
+              // Apply settings immediately
+              display.ssd1306_command(0x81);
+              if (oledBrightness == 1) display.ssd1306_command(10);
+              else if (oledBrightness == 2) display.ssd1306_command(127);
+              else display.ssd1306_command(255);
+              
               audio.playSound(SOUND_POWERUP);
               optionSelected = false; // deselect
-            } else if (menuOption == 3) { // EXIT
+            } else if (menuOption == 6) { // EXIT
               inSettingsMenu = false;
               audio.playSound(SOUND_POWERDOWN);
             } else {
-              // BLE or Speed option select
+              // Option select (0 to 4)
               optionSelected = true;
               audio.playSound(SOUND_COIN);
             }
@@ -1021,11 +1072,11 @@ void loop() {
     // Redraw settings menu at ~40fps
     if (now - lastDisplayDrawTime >= 25) {
       lastDisplayDrawTime = now;
-      face.drawSettingsMenu(menuOption, optionSelected, bleActive, gifSpeed);
+      face.drawSettingsMenu(menuOption, optionSelected, bleActive, gifSpeed, clockStyle, negativeDisplay, oledBrightness);
     }
   } else if (faceChanged || ((face.getExpression() == EXPR_CLOCK || face.getExpression() == EXPR_MAP) && timeUpdated) || forceRedraw) {
     lastDisplayDrawTime = now;
     lastDrawnSecond = rtcSecond;
-    face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, is12HourFormat);
+    face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
   }
 }

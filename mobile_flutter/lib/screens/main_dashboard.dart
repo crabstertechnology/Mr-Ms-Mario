@@ -498,6 +498,8 @@ class _MainDashboardState extends State<MainDashboard> {
       notificationDurationSec: db.notificationDuration.round(),
       reminderDurationSec: db.reminderDuration.round(),
       birthdayDurationSec: db.birthdayDuration.round(),
+      clockStyle: db.clockStyle,
+      oledBrightness: db.oledBrightness.round(),
     );
 
     setState(() {
@@ -2205,6 +2207,81 @@ class _MainDashboardState extends State<MainDashboard> {
                         await ble.transmitAudio(10);
                       }
                     },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Clock Face Style
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Clock Face Style", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
+                  Container(
+                    width: 140,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: db.clockStyle,
+                        dropdownColor: const Color(0xFF1E1D30),
+                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 12),
+                        icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        isExpanded: true,
+                        items: const [
+                          DropdownMenuItem(value: 0, child: Text("Classic Border")),
+                          DropdownMenuItem(value: 1, child: Text("Minimalist")),
+                          DropdownMenuItem(value: 2, child: Text("Analog Split")),
+                          DropdownMenuItem(value: 3, child: Text("Retro Grid")),
+                        ],
+                        onChanged: (val) async {
+                          if (val != null) {
+                            await db.updateClockStyle(val);
+                            _syncSettingsToRobot(db, ble);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // OLED Brightness level
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Screen Brightness Level", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
+                  Container(
+                    width: 140,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: db.oledBrightness.round(),
+                        dropdownColor: const Color(0xFF1E1D30),
+                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 12),
+                        icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        isExpanded: true,
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text("Dim / Low")),
+                          DropdownMenuItem(value: 2, child: Text("Medium")),
+                          DropdownMenuItem(value: 3, child: Text("Bright / High")),
+                        ],
+                        onChanged: (val) async {
+                          if (val != null) {
+                            await db.updateOledBrightness(val.toDouble());
+                            _syncSettingsToRobot(db, ble);
+                          }
+                        },
+                      ),
+                    ),
                   ),
                 ],
               ),

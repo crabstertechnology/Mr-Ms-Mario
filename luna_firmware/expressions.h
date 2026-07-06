@@ -328,9 +328,9 @@ public:
 
     // 2. Scroll text logic
     if (currentExpr == EXPR_TEXT) {
-      if (now - lastScrollTime > 30) {
+      if (now - lastScrollTime > 15) {
         lastScrollTime = now;
-        scrollPos -= 2;
+        scrollPos -= 1;
         int textLength = notificationText.length() * 12; // size-2 font: ~12px per char
         
         // Loop scrolling until duration timeout in main loop
@@ -343,7 +343,7 @@ public:
     return changed;
   }
 
-  void drawSettingsMenu(int option, bool selected, bool bleOn, int speed) {
+  void drawSettingsMenu(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
     
@@ -353,52 +353,70 @@ public:
     display.print("--- SETTINGS ---");
     display.drawFastHLine(0, 12, SCREEN_WIDTH, SSD1306_WHITE);
     
-    // Draw BLE option
-    display.setCursor(15, 18);
-    if (option == 0) {
-      display.print(selected ? ">> BLE: " : "> BLE: ");
-    } else {
-      display.print("   BLE: ");
+    // Scrolling menu window calculation (displays 4 items)
+    int startOpt = 0;
+    if (option >= 3) {
+      startOpt = option - 3;
     }
-    display.print(bleOn ? "ON" : "OFF");
+    if (startOpt > 3) startOpt = 3; // total 7 options, so max start index is 7 - 4 = 3
     
-    // Draw Speed option
-    display.setCursor(15, 30);
-    if (option == 1) {
-      display.print(selected ? ">> SPEED: " : "> SPEED: ");
-    } else {
-      display.print("   SPEED: ");
+    for (int i = 0; i < 4; i++) {
+      int optIdx = startOpt + i;
+      if (optIdx >= 7) break;
+      
+      int yPos = 16 + i * 12;
+      display.setCursor(5, yPos);
+      
+      bool isCurrent = (option == optIdx);
+      if (isCurrent) {
+        display.print(selected ? ">> " : "> ");
+      } else {
+        display.print("   ");
+      }
+      
+      switch (optIdx) {
+        case 0:
+          display.print("BLE: ");
+          display.print(bleOn ? "ON" : "OFF");
+          break;
+        case 1:
+          display.print("SPEED: ");
+          display.print(speed);
+          display.print("ms");
+          break;
+        case 2:
+          display.print("CLOCK: STYLE ");
+          display.print(clockStyle);
+          break;
+        case 3:
+          display.print("INVERT: ");
+          display.print(invertOn ? "ON" : "OFF");
+          break;
+        case 4:
+          display.print("BRIGHT: ");
+          if (brightness == 1) display.print("LOW");
+          else if (brightness == 2) display.print("MED");
+          else display.print("HIGH");
+          break;
+        case 5:
+          display.print("[ SAVE ]");
+          break;
+        case 6:
+          display.print("[ EXIT ]");
+          break;
+      }
     }
-    display.print(speed);
-    display.print("ms");
-    
-    // Draw Save option
-    display.setCursor(15, 42);
-    if (option == 2) {
-      display.print(selected ? ">> [ SAVE ]" : "> [ SAVE ]");
-    } else {
-      display.print("   [ SAVE ]");
-    }
-    
-    // Draw Exit option
-    display.setCursor(15, 54);
-    if (option == 3) {
-      display.print(selected ? ">> [ EXIT ]" : "> [ EXIT ]");
-    } else {
-      display.print("   [ EXIT ]");
-    }
-    
     display.display();
   }
 
-  void draw(int hour, int minute, int second, String day, String date, bool is12Hour = false) {
+  void draw(int hour, int minute, int second, String day, String date, int style = 0, bool is12Hour = false) {
     display.clearDisplay();
 
     // 1. Draw Text Screen if active
     if (currentExpr == EXPR_TEXT) {
       drawTextScreen();
     } else if (currentExpr == EXPR_CLOCK) {
-      drawClockScreen(hour, minute, second, day, date, is12Hour);
+      drawClockScreen(hour, minute, second, day, date, style, is12Hour);
     } else if (currentExpr == EXPR_MAP) {
       drawMapScreen(hour, minute, is12Hour);
     } else if (currentExpr == EXPR_ALL_GIF) {
@@ -465,35 +483,152 @@ public:
   }
 
 private:
-  void drawClockScreen(int hour, int minute, int second, String day, String date, bool is12Hour) {
-    // Sleek premium border
-    display.drawRoundRect(0, 0, 128, 64, 4, SSD1306_WHITE);
-    display.drawRoundRect(2, 2, 124, 60, 2, SSD1306_WHITE);
-    
-    // Time
-    display.setTextSize(2);
+  void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour) {
     display.setTextColor(SSD1306_WHITE);
-    char timeStr[12];
-    if (is12Hour) {
-      int dispHour = hour % 12;
-      if (dispHour == 0) dispHour = 12;
-      const char* ampm = (hour >= 12) ? "PM" : "AM";
-      snprintf(timeStr, sizeof(timeStr), "%d:%02d %s", dispHour, minute, ampm);
+
+    if (style == 1) {
+      // Style 1: Minimalist
+      display.setTextSize(3);
+      char timeNoSec[6];
+      int dispHour = hour;
+      if (is12Hour) {
+        dispHour = hour % 12;
+        if (dispHour == 0) dispHour = 12;
+      }
+      snprintf(timeNoSec, sizeof(timeNoSec), "%02d:%02d", dispHour, minute);
+      display.setCursor(15, 12);
+      display.print(timeNoSec);
+
+      // Suffix (AM/PM or seconds) in size 1
+      display.setTextSize(1);
+      if (is12Hour) {
+        const char* ampm = (hour >= 12) ? "PM" : "AM";
+        display.setCursor(108, 12);
+        display.print(ampm);
+      } else {
+        char secStr[3];
+        snprintf(secStr, sizeof(secStr), "%02d", second);
+        display.setCursor(108, 28);
+        display.print(secStr);
+      }
+
+      // Date & Day at bottom
+      display.setCursor(15, 48);
+      String dayDateStr = day + ", " + date;
+      display.print(dayDateStr);
+
+    } else if (style == 2) {
+      // Style 2: Analog Split Face
+      // Left side: Analog Clock. Center (28, 32), Radius 24
+      display.drawCircle(28, 32, 24, SSD1306_WHITE);
+      display.fillCircle(28, 32, 1, SSD1306_WHITE);
+
+      // Calculate hand angles
+      float angleHour = (hour % 12 + minute / 60.0) * 30.0 * PI / 180.0;
+      float angleMin = (minute + second / 60.0) * 6.0 * PI / 180.0;
+      float angleSec = second * 6.0 * PI / 180.0;
+
+      // Hour hand (length 11)
+      int hx = 28 + (int)(11.0 * sin(angleHour));
+      int hy = 32 - (int)(11.0 * cos(angleHour));
+      display.drawLine(28, 32, hx, hy, SSD1306_WHITE);
+
+      // Minute hand (length 17)
+      int mx = 28 + (int)(17.0 * sin(angleMin));
+      int my = 32 - (int)(17.0 * cos(angleMin));
+      display.drawLine(28, 32, mx, my, SSD1306_WHITE);
+
+      // Second hand (length 20)
+      int sx = 28 + (int)(20.0 * sin(angleSec));
+      int sy = 32 - (int)(20.0 * cos(angleSec));
+      display.drawLine(28, 32, sx, sy, SSD1306_WHITE);
+
+      // Right side: Digital Time & Date
+      // Time
+      display.setTextSize(1);
+      char timeNoSec[6];
+      int dispHour = hour;
+      if (is12Hour) {
+        dispHour = hour % 12;
+        if (dispHour == 0) dispHour = 12;
+      }
+      snprintf(timeNoSec, sizeof(timeNoSec), "%02d:%02d", dispHour, minute);
+      display.setCursor(68, 12);
+      display.print(timeNoSec);
+
+      if (is12Hour) {
+        const char* ampm = (hour >= 12) ? "PM" : "AM";
+        display.setCursor(102, 12);
+        display.print(ampm);
+      }
+
+      // Weekday
+      display.setCursor(68, 28);
+      display.print(day);
+
+      // Date
+      display.setCursor(68, 42);
+      display.print(date);
+
+    } else if (style == 3) {
+      // Style 3: Retro Grid (Grid borders and a progress bar)
+      display.drawFastHLine(0, 0, 128, SSD1306_WHITE);
+      display.drawFastHLine(0, 63, 128, SSD1306_WHITE);
+
+      // Time
+      display.setTextSize(2);
+      char timeStr[12];
+      if (is12Hour) {
+        int dispHour = hour % 12;
+        if (dispHour == 0) dispHour = 12;
+        const char* ampm = (hour >= 12) ? "PM" : "AM";
+        snprintf(timeStr, sizeof(timeStr), "%d:%02d %s", dispHour, minute, ampm);
+      } else {
+        snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hour, minute, second);
+      }
+      int timeWidth = strlen(timeStr) * 12;
+      display.setCursor((128 - timeWidth) / 2, 8);
+      display.print(timeStr);
+
+      // Date
+      display.setTextSize(1);
+      String dayDateStr = day + ", " + date;
+      int dateWidth = dayDateStr.length() * 6;
+      display.setCursor((128 - dateWidth) / 2, 32);
+      display.print(dayDateStr);
+
+      // Progress bar representing seconds (0 to 59)
+      int progressWidth = (second * 110) / 60;
+      display.drawRect(9, 48, 110, 6, SSD1306_WHITE);
+      display.fillRect(11, 50, progressWidth, 2, SSD1306_WHITE);
+
     } else {
-      snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hour, minute, second);
+      // Style 0: Classic Border
+      display.drawRoundRect(0, 0, 128, 64, 4, SSD1306_WHITE);
+      display.drawRoundRect(2, 2, 124, 60, 2, SSD1306_WHITE);
+
+      // Time
+      display.setTextSize(2);
+      char timeStr[12];
+      if (is12Hour) {
+        int dispHour = hour % 12;
+        if (dispHour == 0) dispHour = 12;
+        const char* ampm = (hour >= 12) ? "PM" : "AM";
+        snprintf(timeStr, sizeof(timeStr), "%d:%02d %s", dispHour, minute, ampm);
+      } else {
+        snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hour, minute, second);
+      }
+      int timeWidth = strlen(timeStr) * 12;
+      display.setCursor((128 - timeWidth) / 2, 15);
+      display.print(timeStr);
+
+      // Date & Day
+      display.setTextSize(1);
+      String dayDateStr = day + ", " + date;
+      int dateWidth = dayDateStr.length() * 6;
+      display.setCursor((128 - dateWidth) / 2, 39);
+      display.print(dayDateStr);
     }
-    int timeWidth = strlen(timeStr) * 12;
-    int cursorX = (128 - timeWidth) / 2;
-    display.setCursor(cursorX, 15);
-    display.print(timeStr);
-    
-    // Date & Day
-    display.setTextSize(1);
-    String dayDateStr = day + ", " + date;
-    int dateWidth = dayDateStr.length() * 6;
-    int dateX = (128 - dateWidth) / 2;
-    display.setCursor(dateX, 39);
-    display.print(dayDateStr);
   }
   void drawTextScreen() {
     display.setTextWrap(false);

@@ -30,6 +30,7 @@ class DatabaseService with ChangeNotifier {
   double _oledContrast = 1.0;
   bool _oledInvert = false;
   double _oledRotation = 0.0;
+  int _clockStyle = 0;
   double _notificationDuration = 5.0;
   double _reminderDuration = 10.0;
   double _birthdayDuration = 15.0;
@@ -80,6 +81,7 @@ class DatabaseService with ChangeNotifier {
   double get oledContrast => _oledContrast;
   bool get oledInvert => _oledInvert;
   double get oledRotation => _oledRotation;
+  int get clockStyle => _clockStyle;
   double get notificationDuration => _notificationDuration;
   double get reminderDuration => _reminderDuration;
   double get birthdayDuration => _birthdayDuration;
@@ -184,6 +186,7 @@ class DatabaseService with ChangeNotifier {
     _oledContrast = _prefs!.getDouble('oledContrast') ?? 1.0;
     _oledInvert = _prefs!.getBool('oledInvert') ?? false;
     _oledRotation = _prefs!.getDouble('oledRotation') ?? 0.0;
+    _clockStyle = _prefs!.getInt('clockStyle') ?? 0;
     _notificationDuration = _prefs!.getDouble('notificationDuration') ?? 5.0;
     _reminderDuration = _prefs!.getDouble('reminderDuration') ?? 10.0;
     _birthdayDuration = _prefs!.getDouble('birthdayDuration') ?? 15.0;
@@ -334,6 +337,12 @@ class DatabaseService with ChangeNotifier {
   Future<void> updateTouchLong(String val) async {
     _touchLong = val;
     await _prefs?.setString('touchLong', val);
+    notifyListeners();
+  }
+
+  Future<void> updateClockStyle(int val) async {
+    _clockStyle = val;
+    await _prefs?.setInt('clockStyle', val);
     notifyListeners();
   }
 
@@ -494,6 +503,7 @@ class DatabaseService with ChangeNotifier {
     _oledContrast = 1.0;
     _oledInvert = false;
     _oledRotation = 0.0;
+    _clockStyle = 0;
     _notificationDuration = 5.0;
     _reminderDuration = 10.0;
     _birthdayDuration = 15.0;

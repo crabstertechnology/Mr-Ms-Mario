@@ -641,10 +641,12 @@ class BLEService with ChangeNotifier {
     required int notificationDurationSec,
     required int reminderDurationSec,
     required int birthdayDurationSec,
+    required int clockStyle,
+    required int oledBrightness,
   }) async {
     final bleVal = bleEnabled ? "1" : "0";
     final negVal = negativeEnabled ? "1" : "0";
-    final payloadStr = 'SET:$bleVal,$speedMs,$defaultGif,$introGif,$touchSingle,$touchDouble,$touchLong,$negVal,$introSpeedMs,$introSoundSpeed,$notificationDurationSec,$reminderDurationSec,$birthdayDurationSec';
+    final payloadStr = 'SET:$bleVal,$speedMs,$defaultGif,$introGif,$touchSingle,$touchDouble,$touchLong,$negVal,$introSpeedMs,$introSoundSpeed,$notificationDurationSec,$reminderDurationSec,$birthdayDurationSec,$clockStyle,$oledBrightness';
     await _writeTextWithAck(payloadStr, "Settings Sync");
   }
 
