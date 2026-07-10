@@ -5,6 +5,7 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <WiFi.h>
 #include "config.h"
 
 // Forward declaration of handlers implemented in the main sketch
@@ -15,6 +16,9 @@ extern void handleBLEText(String text);
 
 extern bool negativeDisplay;
 
+class LunaAudio;
+extern LunaAudio audio;
+
 class LunaBLE {
 private:
   BLEServer* pServer;
@@ -22,6 +26,7 @@ private:
   BLECharacteristic* pAudioChar;
   BLECharacteristic* pTextChar;
   BLECharacteristic* pStatusChar;
+  BLECharacteristic* pAudioStreamChar;
   bool deviceConnected;
   bool oldDeviceConnected;
   bool isInitialized;
@@ -34,9 +39,11 @@ private:
     ServerCallbacks(LunaBLE& instance) : ble(instance) {}
     void onConnect(BLEServer* pServer) override {
       ble.deviceConnected = true;
+      Serial.println("[BLE] Client Connected");
     }
     void onDisconnect(BLEServer* pServer) override {
       ble.deviceConnected = false;
+      Serial.println("[BLE] Client Disconnected");
     }
   };
 
@@ -87,6 +94,16 @@ private:
     }
   };
 
+  class AudioStreamCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pChar) override {
+      uint8_t* data = pChar->getData();
+      size_t len = pChar->getLength();
+      if (len > 0) {
+        audio.writeTxStream(data, len);
+      }
+    }
+  };
+
 public:
   LunaBLE() : pServer(nullptr), deviceConnected(false), oldDeviceConnected(false), isInitialized(false), advertising(false) {}
 
@@ -129,6 +146,13 @@ public:
                   );
     pStatusChar->addDescriptor(new BLE2902());
 
+    pAudioStreamChar = pService->createCharacteristic(
+                         AUDIO_STREAM_CHAR_UUID,
+                         BLECharacteristic::PROPERTY_WRITE |
+                         BLECharacteristic::PROPERTY_WRITE_NR
+                       );
+    pAudioStreamChar->setCallbacks(new AudioStreamCallbacks());
+
     // Start Service
     pService->start();
 
@@ -168,8 +192,13 @@ public:
   void updateStatus(unsigned long uptimeSeconds, unsigned int touchCount, float batteryEst, Expression currentExpr, String currentLabel) {
     if (!isConnected()) return;
 
-    // Create comma-separated status payload: uptime_sec,touch_cnt,battery_val,expr_val,label_val
-    String payload = String(uptimeSeconds) + "," + String(touchCount) + "," + String(batteryEst, 2) + "," + String((int)currentExpr) + "," + currentLabel;
+    String ip = "0.0.0.0";
+    if (WiFi.status() == WL_CONNECTED) {
+      ip = WiFi.localIP().toString();
+    }
+
+    // Create comma-separated status payload: uptime_sec,touch_cnt,battery_val,expr_val,label_val,wifi_ip
+    String payload = String(uptimeSeconds) + "," + String(touchCount) + "," + String(batteryEst, 2) + "," + String((int)currentExpr) + "," + currentLabel + "," + ip;
     pStatusChar->setValue(payload.c_str());
     pStatusChar->notify();
   }

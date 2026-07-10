@@ -14,20 +14,19 @@ extern void handleRobotCommand(String cmd);
 extern bool negativeDisplay;
 class LunaBLE;
 extern LunaBLE ble;
+class LunaAudio;
+extern LunaAudio audio;
 
 class LunaNetwork {
 private:
   WiFiUDP udp;
-  websockets::WebsocketsClient wsClient;
+  websockets::WebsocketsServer wsServer;
+  websockets::WebsocketsClient activeClient;
   WebServer localServer;
   bool wifiConnected;
-  bool wsConnected;
-  IPAddress serverIP;
-  bool serverDiscovered;
+  bool clientConnected;
   
   unsigned long lastWifiRetry;
-  unsigned long lastDiscoveryAttempt;
-  unsigned long lastWsRetry;
   
   String savedSSID;
   String savedPass;
@@ -37,11 +36,8 @@ public:
   LunaNetwork() 
     : localServer(8000),
       wifiConnected(false), 
-      wsConnected(false), 
-      serverDiscovered(false),
-      lastWifiRetry(0), 
-      lastDiscoveryAttempt(0), 
-      lastWsRetry(0) {}
+      clientConnected(false),
+      lastWifiRetry(0) {}
                     
   void init() {
     macStr = WiFi.macAddress();
@@ -66,25 +62,6 @@ public:
       Serial.println("[Network] No saved Wi-Fi credentials.");
     }
     
-    // Configure WebSocket Client callbacks
-    wsClient.onMessage([this](websockets::WebsocketsMessage message) {
-      Serial.print("[Network] WS Message: ");
-      Serial.println(message.data());
-      handleRobotCommand(message.data());
-    });
-    
-    wsClient.onEvent([this](websockets::WebsocketsEvent event, String data) {
-      if (event == websockets::WebsocketsEvent::ConnectionOpened) {
-        Serial.println("[Network] WebSocket connected!");
-        wsConnected = true;
-        ble.sendLog("Cloud WebSocket Connected!");
-      } else if (event == websockets::WebsocketsEvent::ConnectionClosed) {
-        Serial.println("[Network] WebSocket disconnected.");
-        wsConnected = false;
-        ble.sendLog("Cloud WebSocket Disconnected.");
-      }
-    });
-
     // Configure local web server routes on port 8000
     localServer.on("/api/robots", HTTP_GET, [this]() {
       localServer.sendHeader("Access-Control-Allow-Origin", "*");
@@ -149,61 +126,8 @@ public:
     WiFi.begin(savedSSID.c_str(), savedPass.c_str());
     
     wifiConnected = false;
-    serverDiscovered = false;
-    wsConnected = false;
+    clientConnected = false;
     lastWifiRetry = millis();
-  }
-  
-  void discoverServer() {
-    if (!wifiConnected) return;
-    
-    Serial.println("[Network] Sending UDP server discovery broadcast on port 8002...");
-    
-    // Send broadcast packet to subnet
-    IPAddress broadcastIP = WiFi.localIP();
-    broadcastIP[3] = 255; // Subnet broadcast address
-    
-    udp.beginPacket(broadcastIP, 8002);
-    udp.print("MR_LUNA_DISCOVER");
-    udp.endPacket();
-    
-    // Await response with timeout
-    unsigned long startWait = millis();
-    while (millis() - startWait < 1200) {
-      int packetSize = udp.parsePacket();
-      if (packetSize) {
-        char packetBuffer[128];
-        int len = udp.read(packetBuffer, 127);
-        if (len > 0) {
-          packetBuffer[len] = 0;
-        }
-        String reply = String(packetBuffer);
-        if (reply == "MR_LUNA_SERVER_HERE") {
-          serverIP = udp.remoteIP();
-          serverDiscovered = true;
-          Serial.print("[Network] Server discovered at IP: ");
-          Serial.println(serverIP);
-          ble.sendLog("Server discovered at IP: " + serverIP.toString());
-          break;
-        }
-      }
-      delay(10);
-    }
-  }
-  
-  void connectWebSocket() {
-    if (!wifiConnected || !serverDiscovered) return;
-    
-    String url = "ws://" + serverIP.toString() + ":8001/ws?mac=" + macStr + "&variant=" + (negativeDisplay ? "ms_luna" : "mr_luna");
-    Serial.print("[Network] Connecting WebSocket client to: ");
-    Serial.println(url);
-    ble.sendLog("Connecting to Cloud WebSocket: " + serverIP.toString() + ":8001...");
-    
-    bool ok = wsClient.connect(url);
-    if (!ok) {
-      Serial.println("[Network] WebSocket connection failed.");
-      ble.sendLog("Cloud WebSocket Connection Failed!");
-    }
   }
   
   void update() {
@@ -217,13 +141,60 @@ public:
         Serial.println(WiFi.localIP());
         udp.begin(8002); // Bind UDP to port 8002
         localServer.begin(); // Start HTTP Server only after we have an IP!
+        wsServer.listen(8001); // Start WebSocket Server on port 8001!
         Serial.println("[Network] Local WebServer started on port 8000");
+        Serial.println("[Network] WebSocket Server started on port 8001");
         ble.sendLog("Wi-Fi Connected! IP: " + WiFi.localIP().toString());
-        discoverServer();
       }
       
       // Handle client requests on the web server
       localServer.handleClient();
+      
+      // Accept incoming WebSocket connections from phone
+      if (wsServer.available()) {
+        if (clientConnected) {
+          activeClient.close();
+        }
+        activeClient = wsServer.accept();
+        clientConnected = true;
+        Serial.println("[Network] Phone connected directly!");
+        ble.sendLog("Phone Connected Directly!");
+
+        activeClient.onMessage([this](websockets::WebsocketsMessage message) {
+          if (message.isBinary()) {
+            const std::string& raw = message.rawData();
+            audio.writeTxStream((const uint8_t*)raw.data(), raw.length());
+          } else {
+            Serial.print("[Network] WS Message: ");
+            Serial.println(message.data());
+            handleRobotCommand(message.data());
+          }
+        });
+
+        activeClient.onEvent([this](websockets::WebsocketsEvent event, String data) {
+          if (event == websockets::WebsocketsEvent::ConnectionClosed) {
+            Serial.println("[Network] Phone disconnected.");
+            clientConnected = false;
+            ble.sendLog("Phone Disconnected.");
+          }
+        });
+      }
+
+      // Handle active client communication
+      if (clientConnected && activeClient.available()) {
+        activeClient.poll();
+        
+        // If microphone streaming is active, fetch data from rxRingBuffer and send via WebSocket
+        if (audio.micStreaming) {
+          uint8_t buffer[256];
+          size_t size = 0;
+          while (audio.getRxItem(buffer, &size)) {
+            activeClient.sendBinary((const char*)buffer, size);
+          }
+        }
+      } else if (clientConnected) {
+        clientConnected = false;
+      }
       
       // Listen for UDP discovery pings from the phone
       int packetSize = udp.parsePacket();
@@ -247,8 +218,7 @@ public:
     } else {
       if (wifiConnected) {
         wifiConnected = false;
-        wsConnected = false;
-        serverDiscovered = false;
+        clientConnected = false;
         localServer.close(); // Close HTTP Server safely
         udp.stop(); // Close UDP socket
         Serial.println("[Network] Wi-Fi disconnected!");
@@ -264,33 +234,11 @@ public:
         delay(100);
         WiFi.begin(savedSSID.c_str(), savedPass.c_str());
       }
-      return;
-    }
-    
-    // 2. Discover server if IP unknown
-    if (wifiConnected && !serverDiscovered) {
-      if (now - lastDiscoveryAttempt > 15000) {
-        lastDiscoveryAttempt = now;
-        discoverServer();
-      }
-      return;
-    }
-    
-    // 3. Connect/maintain WebSocket connection
-    if (wifiConnected && serverDiscovered) {
-      if (wsConnected) {
-        wsClient.poll();
-      } else {
-        if (now - lastWsRetry > 20000) {
-          lastWsRetry = now;
-          connectWebSocket();
-        }
-      }
     }
   }
   
   bool isWifiConnected() const { return wifiConnected; }
-  bool isCloudConnected() const { return wsConnected; }
+  bool isCloudConnected() const { return clientConnected; }
   String getSSID() const { return savedSSID; }
   String getMAC() const { return macStr; }
 };

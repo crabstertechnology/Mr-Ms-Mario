@@ -2,13 +2,16 @@
 #define EXPRESSIONS_H
 
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <Adafruit_ST7789.h>
+#define SSD1306_WHITE ST77XX_CYAN
+#define SSD1306_BLACK ST77XX_BLACK
 #include "config.h"
 #include "mochi_bitmaps.h"
 
 class LunaFace {
 private:
-  Adafruit_SSD1306& display;
+  Adafruit_ST7789& display;
+  GFXcanvas16 canvas;
   Expression currentExpr;
   Expression targetExpr;
   Expression defaultExpr; // Custom default expression for Idle state
@@ -33,9 +36,40 @@ private:
   String mapDistance;
   String mapDescription;
 
+  uint16_t getExpressionColor(Expression expr) {
+    Expression actual = expr;
+    if (actual == EXPR_IDLE) actual = defaultExpr;
+    switch (actual) {
+      case EXPR_HAPPY:      return ST77XX_GREEN;
+      case EXPR_SAD:        return ST77XX_BLUE;
+      case EXPR_ANGRY:      return ST77XX_RED;
+      case EXPR_SURPRISED:   return ST77XX_YELLOW;
+      case EXPR_SLEEPING:   return ST77XX_MAGENTA;
+      case EXPR_WINK:       return ST77XX_CYAN;
+      default:              return ST77XX_CYAN;
+    }
+  }
+
+  void drawBitmap2x(const unsigned char *bitmap, int16_t w, int16_t h, uint16_t color, uint16_t bg) {
+    int16_t byteWidth = (w + 7) / 8;
+    for (int16_t j = 0; j < h; j++) {
+      for (int16_t rowRepeat = 0; rowRepeat < 2; rowRepeat++) {
+        int16_t canvasY = 56 + j * 2 + rowRepeat;
+        for (int16_t i = 4; i < 124; i++) {
+          uint8_t byteVal = pgm_read_byte(&bitmap[j * byteWidth + i / 8]);
+          bool bitSet = byteVal & (128 >> (i & 7));
+          uint16_t pixelColor = bitSet ? color : bg;
+          int16_t canvasX = (i - 4) * 2;
+          canvas.drawPixel(canvasX, canvasY, pixelColor);
+          canvas.drawPixel(canvasX + 1, canvasY, pixelColor);
+        }
+      }
+    }
+  }
+
 public:
-  LunaFace(Adafruit_SSD1306& disp) 
-    : display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
+  LunaFace(Adafruit_ST7789& disp) 
+    : display(disp), canvas(240, 240), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
     currentFrame = 0;
     currentGifIndex = 0;
     lastFrameTime = 0;
@@ -328,99 +362,102 @@ public:
 
     // 2. Scroll text logic
     if (currentExpr == EXPR_TEXT) {
-      if (now - lastScrollTime > 15) {
-        lastScrollTime = now;
-        scrollPos -= 1;
-        int textLength = notificationText.length() * 12; // size-2 font: ~12px per char
-        
-        // Loop scrolling until duration timeout in main loop
-        if (scrollPos < -textLength) {
-          scrollPos = SCREEN_WIDTH;
+      if (notificationText.length() > 10) { // Only scroll if it doesn't fit statically
+        if (now - lastScrollTime > 15) {
+          lastScrollTime = now;
+          scrollPos -= 1;
+          int textLength = notificationText.length() * 12; // size-2 font: ~12px per char
+          
+          // Loop scrolling until duration timeout in main loop
+          if (scrollPos < -textLength) {
+            scrollPos = SCREEN_WIDTH;
+          }
+          changed = true;
         }
-        changed = true;
       }
     }
     return changed;
   }
 
   void drawSettingsMenu(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
+    canvas.fillScreen(ST77XX_BLACK);
+    canvas.setTextColor(ST77XX_WHITE);
     
     // Draw Title
-    display.setTextSize(1);
-    display.setCursor(20, 2);
-    display.print("--- SETTINGS ---");
-    display.drawFastHLine(0, 12, SCREEN_WIDTH, SSD1306_WHITE);
+    canvas.setTextSize(2);
+    canvas.setCursor(40, 20);
+    canvas.print("--- SETTINGS ---");
+    canvas.drawFastHLine(0, 45, SCREEN_WIDTH, ST77XX_WHITE);
     
     // Scrolling menu window calculation (displays 4 items)
     int startOpt = 0;
     if (option >= 3) {
       startOpt = option - 3;
     }
-    if (startOpt > 3) startOpt = 3; // total 7 options, so max start index is 7 - 4 = 3
+    if (startOpt > 3) startOpt = 3;
     
     for (int i = 0; i < 4; i++) {
       int optIdx = startOpt + i;
       if (optIdx >= 7) break;
       
-      int yPos = 16 + i * 12;
-      display.setCursor(5, yPos);
+      int yPos = 65 + i * 35;
+      canvas.setCursor(15, yPos);
+      canvas.setTextSize(2);
       
       bool isCurrent = (option == optIdx);
       if (isCurrent) {
-        display.print(selected ? ">> " : "> ");
+        canvas.print(selected ? ">> " : "> ");
       } else {
-        display.print("   ");
+        canvas.print("   ");
       }
       
       switch (optIdx) {
         case 0:
-          display.print("BLE: ");
-          display.print(bleOn ? "ON" : "OFF");
+          canvas.print("BLE: ");
+          canvas.print(bleOn ? "ON" : "OFF");
           break;
         case 1:
-          display.print("SPEED: ");
-          display.print(speed);
-          display.print("ms");
+          canvas.print("SPEED: ");
+          canvas.print(speed);
+          canvas.print("ms");
           break;
         case 2:
-          display.print("CLOCK: STYLE ");
-          display.print(clockStyle);
+          canvas.print("CLOCK: STYLE ");
+          canvas.print(clockStyle);
           break;
         case 3:
-          display.print("INVERT: ");
-          display.print(invertOn ? "ON" : "OFF");
+          canvas.print("INVERT: ");
+          canvas.print(invertOn ? "ON" : "OFF");
           break;
         case 4:
-          display.print("BRIGHT: ");
-          if (brightness == 1) display.print("LOW");
-          else if (brightness == 2) display.print("MED");
-          else display.print("HIGH");
+          canvas.print("BRIGHT: ");
+          if (brightness == 1) canvas.print("LOW");
+          else if (brightness == 2) canvas.print("MED");
+          else canvas.print("HIGH");
           break;
         case 5:
-          display.print("[ SAVE ]");
+          canvas.print("[ SAVE ]");
           break;
         case 6:
-          display.print("[ EXIT ]");
+          canvas.print("[ EXIT ]");
           break;
       }
     }
-    display.display();
-  }
+  
+    display.drawRGBBitmap(0, 0, canvas.getBuffer(), SCREEN_WIDTH, SCREEN_HEIGHT);}
 
-  void draw(int hour, int minute, int second, String day, String date, int style = 0, bool is12Hour = false) {
-    display.clearDisplay();
+    void draw(int hour, int minute, int second, String day, String date, int style = 0, bool is12Hour = false) {
+    canvas.fillScreen(ST77XX_BLACK);
 
     // 1. Draw Text Screen if active
     if (currentExpr == EXPR_TEXT) {
-      drawTextScreen();
+      drawTextScreen(true); // Draw static header
+      drawTextScreen(false); // Draw scrolling text
     } else if (currentExpr == EXPR_CLOCK) {
       drawClockScreen(hour, minute, second, day, date, style, is12Hour);
     } else if (currentExpr == EXPR_MAP) {
       drawMapScreen(hour, minute, is12Hour);
     } else if (currentExpr == EXPR_ALL_GIF) {
-      // ── All-GIF mode: render from the PROGMEM master table ──
       if (currentGifIndex < ALL_GIFS_COUNT) {
         const unsigned char* const* frames =
           (const unsigned char* const*)pgm_read_ptr(&ALL_GIFS_TABLE[currentGifIndex].frames);
@@ -429,11 +466,10 @@ public:
         const unsigned char* frameData =
           (const unsigned char*)pgm_read_ptr(&frames[safeFrame]);
         if (frameData) {
-          display.drawBitmap(0, 0, frameData, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
+          drawBitmap2x(frameData, 128, 64, getExpressionColor(currentExpr), ST77XX_BLACK);
         }
       }
     } else {
-      // ── Standard 7-expression mode (also used for BLE-triggered expressions) ──
       const unsigned char* frameData = nullptr;
       int frameIdx = currentFrame;
       Expression exprToDraw = currentExpr;
@@ -442,7 +478,7 @@ public:
       }
 
       switch (exprToDraw) {
-        case EXPR_IDLE:     // relaxed.gif
+        case EXPR_IDLE:
           if (frameIdx < ep_relaxed_frame_count)
             frameData = (const unsigned char*)pgm_read_ptr(&ep_relaxed_frames[frameIdx]);
           break;
@@ -450,7 +486,7 @@ public:
           if (frameIdx < ep_happy_frame_count)
             frameData = (const unsigned char*)pgm_read_ptr(&ep_happy_frames[frameIdx]);
           break;
-        case EXPR_SAD:      // crying.gif
+        case EXPR_SAD:
           if (frameIdx < ep_crying_frame_count)
             frameData = (const unsigned char*)pgm_read_ptr(&ep_crying_frames[frameIdx]);
           break;
@@ -462,7 +498,7 @@ public:
           if (frameIdx < ep_surprised_frame_count)
             frameData = (const unsigned char*)pgm_read_ptr(&ep_surprised_frames[frameIdx]);
           break;
-        case EXPR_SLEEPING: // sleepy.gif
+        case EXPR_SLEEPING:
           if (frameIdx < ep_sleepy_frame_count)
             frameData = (const unsigned char*)pgm_read_ptr(&ep_sleepy_frames[frameIdx]);
           break;
@@ -475,20 +511,22 @@ public:
       }
 
       if (frameData != nullptr) {
-        display.drawBitmap(0, 0, frameData, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
+        drawBitmap2x(frameData, 128, 64, getExpressionColor(exprToDraw), ST77XX_BLACK);
       }
     }
 
-    display.display();
+    display.drawRGBBitmap(0, 0, canvas.getBuffer(), SCREEN_WIDTH, SCREEN_HEIGHT);
   }
 
 private:
   void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour) {
-    display.setTextColor(SSD1306_WHITE);
-
     if (style == 1) {
-      // Style 1: Minimalist
-      display.setTextSize(3);
+      // Clear previous text regions to avoid overlapping
+      canvas.fillRect(40, 60, 155, 40, ST77XX_BLACK);
+      canvas.fillRect(200, 60, 35, 45, ST77XX_BLACK);
+      canvas.fillRect(40, 140, 195, 20, ST77XX_BLACK);
+
+      canvas.setTextSize(5);
       char timeNoSec[6];
       int dispHour = hour;
       if (is12Hour) {
@@ -496,56 +534,53 @@ private:
         if (dispHour == 0) dispHour = 12;
       }
       snprintf(timeNoSec, sizeof(timeNoSec), "%02d:%02d", dispHour, minute);
-      display.setCursor(15, 12);
-      display.print(timeNoSec);
+      canvas.setCursor(45, 60);
+      canvas.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+      canvas.print(timeNoSec);
 
-      // Suffix (AM/PM or seconds) in size 1
-      display.setTextSize(1);
+      canvas.setTextSize(2);
+      canvas.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
       if (is12Hour) {
         const char* ampm = (hour >= 12) ? "PM" : "AM";
-        display.setCursor(108, 12);
-        display.print(ampm);
+        canvas.setCursor(200, 60);
+        canvas.print(ampm);
       } else {
         char secStr[3];
         snprintf(secStr, sizeof(secStr), "%02d", second);
-        display.setCursor(108, 28);
-        display.print(secStr);
+        canvas.setCursor(200, 85);
+        canvas.print(secStr);
       }
 
-      // Date & Day at bottom
-      display.setCursor(15, 48);
+      canvas.setCursor(45, 140);
+      canvas.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
       String dayDateStr = day + ", " + date;
-      display.print(dayDateStr);
+      canvas.print(dayDateStr);
 
     } else if (style == 2) {
-      // Style 2: Analog Split Face
-      // Left side: Analog Clock. Center (28, 32), Radius 24
-      display.drawCircle(28, 32, 24, SSD1306_WHITE);
-      display.fillCircle(28, 32, 1, SSD1306_WHITE);
+      canvas.fillCircle(70, 120, 56, ST77XX_BLACK);
+      canvas.drawCircle(70, 120, 55, ST77XX_YELLOW);
+      canvas.fillCircle(70, 120, 3, ST77XX_YELLOW);
 
-      // Calculate hand angles
       float angleHour = (hour % 12 + minute / 60.0) * 30.0 * PI / 180.0;
       float angleMin = (minute + second / 60.0) * 6.0 * PI / 180.0;
       float angleSec = second * 6.0 * PI / 180.0;
 
-      // Hour hand (length 11)
-      int hx = 28 + (int)(11.0 * sin(angleHour));
-      int hy = 32 - (int)(11.0 * cos(angleHour));
-      display.drawLine(28, 32, hx, hy, SSD1306_WHITE);
+      int hx = 70 + (int)(30.0 * sin(angleHour));
+      int hy = 120 - (int)(30.0 * cos(angleHour));
+      canvas.drawLine(70, 120, hx, hy, ST77XX_CYAN);
 
-      // Minute hand (length 17)
-      int mx = 28 + (int)(17.0 * sin(angleMin));
-      int my = 32 - (int)(17.0 * cos(angleMin));
-      display.drawLine(28, 32, mx, my, SSD1306_WHITE);
+      int mx = 70 + (int)(45.0 * sin(angleMin));
+      int my = 120 - (int)(45.0 * cos(angleMin));
+      canvas.drawLine(70, 120, mx, my, ST77XX_GREEN);
 
-      // Second hand (length 20)
-      int sx = 28 + (int)(20.0 * sin(angleSec));
-      int sy = 32 - (int)(20.0 * cos(angleSec));
-      display.drawLine(28, 32, sx, sy, SSD1306_WHITE);
+      int sx = 70 + (int)(50.0 * sin(angleSec));
+      int sy = 120 - (int)(50.0 * cos(angleSec));
+      canvas.drawLine(70, 120, sx, sy, ST77XX_RED);
 
-      // Right side: Digital Time & Date
-      // Time
-      display.setTextSize(1);
+      // Clear text areas on the right side
+      canvas.fillRect(135, 80, 105, 85, ST77XX_BLACK);
+
+      canvas.setTextSize(2);
       char timeNoSec[6];
       int dispHour = hour;
       if (is12Hour) {
@@ -553,30 +588,34 @@ private:
         if (dispHour == 0) dispHour = 12;
       }
       snprintf(timeNoSec, sizeof(timeNoSec), "%02d:%02d", dispHour, minute);
-      display.setCursor(68, 12);
-      display.print(timeNoSec);
+      canvas.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+      canvas.setCursor(140, 85);
+      canvas.print(timeNoSec);
 
+      canvas.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
       if (is12Hour) {
         const char* ampm = (hour >= 12) ? "PM" : "AM";
-        display.setCursor(102, 12);
-        display.print(ampm);
+        canvas.setCursor(140, 110);
+        canvas.print(ampm);
       }
 
-      // Weekday
-      display.setCursor(68, 28);
-      display.print(day);
+      canvas.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+      canvas.setTextSize(1);
+      canvas.setCursor(140, 135);
+      canvas.print(day);
 
-      // Date
-      display.setCursor(68, 42);
-      display.print(date);
+      canvas.setCursor(140, 150);
+      canvas.print(date);
 
     } else if (style == 3) {
-      // Style 3: Retro Grid (Grid borders and a progress bar)
-      display.drawFastHLine(0, 0, 128, SSD1306_WHITE);
-      display.drawFastHLine(0, 63, 128, SSD1306_WHITE);
+      // Clear time and date regions
+      canvas.fillRect(0, 55, 240, 35, ST77XX_BLACK);
+      canvas.fillRect(0, 110, 240, 25, ST77XX_BLACK);
 
-      // Time
-      display.setTextSize(2);
+      canvas.drawFastHLine(0, 10, 240, ST77XX_MAGENTA);
+      canvas.drawFastHLine(0, 230, 240, ST77XX_MAGENTA);
+
+      canvas.setTextSize(3);
       char timeStr[12];
       if (is12Hour) {
         int dispHour = hour % 12;
@@ -586,29 +625,32 @@ private:
       } else {
         snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hour, minute, second);
       }
-      int timeWidth = strlen(timeStr) * 12;
-      display.setCursor((128 - timeWidth) / 2, 8);
-      display.print(timeStr);
+      int timeWidth = strlen(timeStr) * 18;
+      canvas.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
+      canvas.setCursor((240 - timeWidth) / 2, 60);
+      canvas.print(timeStr);
 
-      // Date
-      display.setTextSize(1);
+      canvas.setTextSize(2);
+      canvas.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
       String dayDateStr = day + ", " + date;
-      int dateWidth = dayDateStr.length() * 6;
-      display.setCursor((128 - dateWidth) / 2, 32);
-      display.print(dayDateStr);
+      int dateWidth = dayDateStr.length() * 12;
+      canvas.setCursor((240 - dateWidth) / 2, 115);
+      canvas.print(dayDateStr);
 
-      // Progress bar representing seconds (0 to 59)
-      int progressWidth = (second * 110) / 60;
-      display.drawRect(9, 48, 110, 6, SSD1306_WHITE);
-      display.fillRect(11, 50, progressWidth, 2, SSD1306_WHITE);
+      int progressWidth = (second * 200) / 60;
+      canvas.fillRect(22, 172, 196, 8, ST77XX_BLACK);
+      canvas.drawRect(20, 170, 200, 12, ST77XX_YELLOW);
+      canvas.fillRect(22, 172, progressWidth, 8, ST77XX_GREEN);
 
     } else {
-      // Style 0: Classic Border
-      display.drawRoundRect(0, 0, 128, 64, 4, SSD1306_WHITE);
-      display.drawRoundRect(2, 2, 124, 60, 2, SSD1306_WHITE);
+      // Clear time and date regions
+      canvas.fillRect(12, 65, 216, 45, ST77XX_BLACK);
+      canvas.fillRect(12, 135, 216, 25, ST77XX_BLACK);
 
-      // Time
-      display.setTextSize(2);
+      canvas.drawRoundRect(4, 4, 232, 232, 12, ST77XX_MAGENTA);
+      canvas.drawRoundRect(8, 8, 224, 224, 8, ST77XX_MAGENTA);
+
+      canvas.setTextSize(4);
       char timeStr[12];
       if (is12Hour) {
         int dispHour = hour % 12;
@@ -618,61 +660,60 @@ private:
       } else {
         snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hour, minute, second);
       }
-      int timeWidth = strlen(timeStr) * 12;
-      display.setCursor((128 - timeWidth) / 2, 15);
-      display.print(timeStr);
+      int timeWidth = strlen(timeStr) * 24;
+      canvas.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
+      canvas.setCursor((240 - timeWidth) / 2, 70);
+      canvas.print(timeStr);
 
-      // Date & Day
-      display.setTextSize(1);
+      canvas.setTextSize(2);
+      canvas.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
       String dayDateStr = day + ", " + date;
-      int dateWidth = dayDateStr.length() * 6;
-      display.setCursor((128 - dateWidth) / 2, 39);
-      display.print(dayDateStr);
+      int dateWidth = dayDateStr.length() * 12;
+      canvas.setCursor((240 - dateWidth) / 2, 140);
+      canvas.print(dayDateStr);
     }
   }
-  void drawTextScreen() {
-    display.setTextWrap(false);
-    
-    // 1. Draw header background and small animated face
-    display.fillRoundRect(4, 2, 14, 10, 2, SSD1306_WHITE);
-    display.fillCircle(7, 6, 1, SSD1306_BLACK); // Left eye
-    display.fillCircle(14, 6, 1, SSD1306_BLACK); // Right eye
-    display.drawFastHLine(9, 9, 3, SSD1306_BLACK); // Smile
 
-    // 2. Draw notification title (truncated to fit screen size)
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(24, 3);
+  void drawTextScreen(bool drawHeaderOnly = false) {
+    canvas.setTextWrap(false);
     
-    String displayTitle = notificationTitle;
-    if (displayTitle.length() == 0) {
-      displayTitle = "Notification";
-    }
-    // Truncate title if too long (max ~16 chars at size 1 to fit next to face)
-    if (displayTitle.length() > 16) {
-      displayTitle = displayTitle.substring(0, 13) + "...";
-    }
-    display.print(displayTitle);
-    
-    // Draw divider line separating header from body
-    display.drawFastHLine(0, 14, SCREEN_WIDTH, SSD1306_WHITE);
+    if (drawHeaderOnly) {
+      canvas.fillRoundRect(10, 8, 30, 20, 4, ST77XX_YELLOW);
+      canvas.fillCircle(17, 16, 2, ST77XX_BLACK);
+      canvas.fillCircle(31, 16, 2, ST77XX_BLACK);
+      canvas.drawFastHLine(20, 22, 6, ST77XX_BLACK);
 
-    // 3. Draw Body Text
-    // Center vertically in the remaining space (y=15 to 64, height=49)
-    // Size 2 text is 16px high, so centered y = 15 + (49 - 16)/2 = 31
-    display.setTextSize(2);
+      canvas.setTextSize(2);
+      canvas.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
+      canvas.setCursor(50, 10);
+      
+      String displayTitle = notificationTitle;
+      if (displayTitle.length() == 0) {
+        displayTitle = "Notification";
+      }
+      if (displayTitle.length() > 14) {
+        displayTitle = displayTitle.substring(0, 11) + "...";
+      }
+      canvas.print(displayTitle);
+      
+      canvas.drawFastHLine(0, 36, SCREEN_WIDTH, ST77XX_YELLOW);
+      return;
+    }
+
+    // Clear dynamic text area to prevent scroll trace artifacts
+    canvas.fillRect(0, 80, 240, 60, ST77XX_BLACK);
+
+    canvas.setTextSize(3);
+    canvas.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
     
-    // If text is short, center it statically instead of scrolling!
-    // Max characters that can fit statically on screen in size 2 is 10 chars (10 * 12 = 120px)
     if (notificationText.length() <= 10) {
-      int textW = notificationText.length() * 12;
+      int textW = notificationText.length() * 18;
       int startX = (SCREEN_WIDTH - textW) / 2;
-      display.setCursor(startX, 31);
-      display.print(notificationText);
+      canvas.setCursor(startX, 110);
+      canvas.print(notificationText);
     } else {
-      // Scroll long text
-      display.setCursor(scrollPos, 31);
-      display.print(notificationText);
+      canvas.setCursor(scrollPos, 110);
+      canvas.print(notificationText);
     }
   }
 
@@ -681,11 +722,11 @@ private:
     for (unsigned int i = 0; i < text.length(); i++) {
       char c = text.charAt(i);
       if (c == ' ') {
-        w += 6;
-      } else if ((c >= '0' && c <= '9') || c == '.' || c == ':') {
         w += 12;
+      } else if ((c >= '0' && c <= '9') || c == '.' || c == ':') {
+        w += 24;
       } else {
-        w += 6;
+        w += 12;
       }
     }
     return w;
@@ -696,79 +737,65 @@ private:
     for (unsigned int i = 0; i < text.length(); i++) {
       char c = text.charAt(i);
       if (c == ' ') {
-        currentX += 6;
-      } else if ((c >= '0' && c <= '9') || c == '.' || c == ':') {
-        display.setTextSize(2);
-        display.setCursor(currentX, y2);
-        display.print(c);
         currentX += 12;
+      } else if ((c >= '0' && c <= '9') || c == '.' || c == ':') {
+        canvas.setTextSize(3);
+        canvas.setCursor(currentX, y2);
+        canvas.print(c);
+        currentX += 24;
       } else {
-        display.setTextSize(1);
-        display.setCursor(currentX, y1);
-        display.print(c);
-        currentX += 6;
+        canvas.setTextSize(2);
+        canvas.setCursor(currentX, y1);
+        canvas.print(c);
+        currentX += 12;
       }
     }
-    display.setTextSize(1); // Restore default text size
+    canvas.setTextSize(1);
   }
 
   void drawMapScreen(int hour, int minute, bool is12Hour) {
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextWrap(false);
+    canvas.fillRect(0, 40, 240, 200, ST77XX_BLACK);
+    canvas.setTextWrap(false);
 
-    // 1. Draw Giant Arrow in the upper/middle area (centered around x=64, y=25)
     if (mapDirection.indexOf("LEFT") >= 0) {
-      // Bold LEFT Turn Arrow (up and left)
-      display.fillTriangle(32, 22, 48, 6, 48, 38, SSD1306_WHITE); // Arrowhead pointing left
-      display.fillRect(48, 16, 24, 12, SSD1306_WHITE); // Horizontal shaft (x: 48 to 72, y: 16 to 28)
-      display.fillRect(60, 28, 12, 20, SSD1306_WHITE); // Vertical shaft (x: 60 to 72, y: 28 to 48)
+      canvas.fillTriangle(60, 90, 90, 60, 90, 120, ST77XX_GREEN);
+      canvas.fillRect(90, 80, 50, 20, ST77XX_GREEN);
+      canvas.fillRect(120, 100, 20, 40, ST77XX_GREEN);
     } else if (mapDirection.indexOf("RIGHT") >= 0) {
-      // Bold RIGHT Turn Arrow (up and right)
-      display.fillTriangle(96, 22, 80, 6, 80, 38, SSD1306_WHITE); // Arrowhead pointing right
-      display.fillRect(56, 16, 24, 12, SSD1306_WHITE); // Horizontal shaft (x: 56 to 80, y: 16 to 28)
-      display.fillRect(56, 28, 12, 20, SSD1306_WHITE); // Vertical shaft (x: 56 to 68, y: 28 to 48)
+      canvas.fillTriangle(180, 90, 150, 60, 150, 120, ST77XX_GREEN);
+      canvas.fillRect(100, 80, 50, 20, ST77XX_GREEN);
+      canvas.fillRect(100, 100, 20, 40, ST77XX_GREEN);
     } else if (mapDirection.indexOf("UTURN") >= 0 || mapDirection.indexOf("U-TURN") >= 0) {
-      // Bold U-Turn
-      display.drawCircle(64, 26, 16, SSD1306_WHITE);
-      display.drawCircle(64, 26, 15, SSD1306_WHITE);
-      display.drawCircle(64, 26, 14, SSD1306_WHITE);
-      display.drawCircle(64, 26, 13, SSD1306_WHITE);
-      display.drawCircle(64, 26, 12, SSD1306_WHITE);
-      display.fillRect(44, 26, 40, 24, SSD1306_BLACK); // clear bottom half of circles
-      display.fillRect(48, 26, 5, 12, SSD1306_WHITE); // left leg down
-      display.fillRect(75, 26, 5, 22, SSD1306_WHITE); // right leg down
-      display.fillTriangle(50, 48, 42, 38, 58, 38, SSD1306_WHITE); // arrowhead pointing down on left leg
+      canvas.drawCircle(120, 90, 32, ST77XX_GREEN);
+      canvas.drawCircle(120, 90, 30, ST77XX_GREEN);
+      canvas.drawCircle(120, 90, 28, ST77XX_GREEN);
+      canvas.fillRect(80, 90, 80, 50, ST77XX_BLACK);
+      canvas.fillRect(88, 90, 10, 30, ST77XX_GREEN);
+      canvas.fillRect(142, 90, 10, 30, ST77XX_GREEN);
+      canvas.fillTriangle(93, 130, 78, 115, 108, 115, ST77XX_GREEN);
     } else if (mapDirection.indexOf("ROUNDABOUT") >= 0 || mapDirection.indexOf("ROUND") >= 0 || mapDirection.indexOf("ROTARY") >= 0) {
-      // Bold Roundabout
-      display.drawCircle(64, 24, 14, SSD1306_WHITE);
-      display.drawCircle(64, 24, 13, SSD1306_WHITE);
-      display.drawCircle(64, 24, 12, SSD1306_WHITE);
-      display.drawCircle(64, 24, 11, SSD1306_WHITE);
-      display.drawCircle(64, 24, 10, SSD1306_WHITE);
-      display.drawCircle(64, 24, 9, SSD1306_WHITE);
-      display.fillRect(59, 19, 10, 10, SSD1306_BLACK); // clear center
-      display.fillRect(60, 34, 8, 14, SSD1306_BLACK); // clear bottom entrance
-      display.fillRect(74, 20, 8, 8, SSD1306_WHITE); // shaft connecting to the circle
-      display.fillTriangle(94, 24, 80, 14, 80, 34, SSD1306_WHITE); // exit arrowhead pointing right
-    } else { // STRAIGHT / default
-      // Bold Straight Arrow
-      display.fillRect(56, 22, 16, 26, SSD1306_WHITE); // thick vertical shaft
-      display.fillTriangle(64, 2, 44, 22, 84, 22, SSD1306_WHITE); // giant filled arrowhead
+      canvas.drawCircle(120, 90, 28, ST77XX_GREEN);
+      canvas.drawCircle(120, 90, 26, ST77XX_GREEN);
+      canvas.fillRect(110, 80, 20, 20, ST77XX_BLACK);
+      canvas.fillRect(112, 110, 16, 28, ST77XX_BLACK);
+      canvas.fillRect(140, 82, 16, 16, ST77XX_GREEN);
+      canvas.fillTriangle(170, 90, 150, 75, 150, 105, ST77XX_GREEN);
+    } else {
+      canvas.fillRect(110, 80, 20, 50, ST77XX_GREEN);
+      canvas.fillTriangle(120, 40, 90, 80, 150, 80, ST77XX_GREEN);
     }
 
-    // 2. Draw Bottom Status Info (Left: Distance, Right: Remaining Time)
-    
-    // Left side: Distance
+    canvas.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
     if (mapDistance != "" && mapDistance != "--") {
-      drawMixedSizeText(mapDistance, 2, 48, 55);
+      drawMixedSizeText(mapDistance, 10, 180, 190);
     }
 
-    // Right side: Remaining Time (stored in mapDescription)
+    canvas.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
     if (mapDescription != "") {
       int timeWidth = getMixedSizeTextWidth(mapDescription);
-      int startX = SCREEN_WIDTH - timeWidth - 2;
-      if (startX < 64) startX = 64; // Keep on right half
-      drawMixedSizeText(mapDescription, startX, 48, 55);
+      int startX = SCREEN_WIDTH - timeWidth - 10;
+      if (startX < 120) startX = 120;
+      drawMixedSizeText(mapDescription, startX, 180, 190);
     }
   }
 };

@@ -3,18 +3,25 @@
 
 #define FIRMWARE_VERSION "1.0.1"
 
-// Pin Configurations for ESP32-S3 Mini
-#define SDA_PIN 8
-#define SCL_PIN 9
+// Capacitive Touch Pin
 #define TOUCH_PIN 1
-#define BUZZER_PIN 2
 
+// ST7789 TFT Display Pins (SPI)
+#define TFT_SCL 12
+#define TFT_SDA 11
+#define TFT_RST 10
+#define TFT_DC  13
+#define TFT_BL  3
 
-// SSD1306 Display Settings
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-#define SCREEN_ADDRESS 0x3C
+// I2S Pins (MAX98357 DAC & INMP441 Microphone sharing clocks)
+#define I2S_BCLK 4
+#define I2S_WS   5
+#define I2S_DOUT 6 // Audio out to MAX98357 DIN
+#define I2S_DIN  7 // Audio in from INMP441 SD
+
+// Screen Dimensions (ST7789 240x240)
+#define SCREEN_WIDTH 240
+#define SCREEN_HEIGHT 240
 
 // BLE Service & Characteristic UUIDs
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -22,6 +29,7 @@
 #define AUDIO_CHAR_UUID        "d90e0c03-51ee-4c31-893c-cf572db85700"
 #define TEXT_CHAR_UUID         "c8a00d04-62ff-4b32-843d-0f1c6db8a101"
 #define STATUS_CHAR_UUID       "fb2f0e05-73ee-4f32-833d-1f2c6db8a102"
+#define AUDIO_STREAM_CHAR_UUID "a823e50b-71ee-48c5-9276-2e8c6db8a103"
 
 // Robot Expression States
 enum Expression {

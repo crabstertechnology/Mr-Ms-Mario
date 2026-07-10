@@ -1,9 +1,9 @@
 #include <WiFi.h>
 #include <Network.h>
 #include <WiFiUdp.h>
-#include <Wire.h>
+#include <SPI.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <Adafruit_ST7789.h>
 #include <Preferences.h>
 
 #include "config.h"
@@ -18,9 +18,18 @@ void handleRobotCommand(String cmd);
 #include "luna_network.h"
 
 // Hardware Interface Objects
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+SPIClass mySPI(HSPI);
+Adafruit_ST7789 display(&mySPI, -1, TFT_DC, TFT_RST);
 LunaFace face(display);
-LunaAudio audio(BUZZER_PIN);
+LunaAudio audio;
+volatile int micAmplitude = 0;
+
+void setBacklightBrightness(int brightnessLevel) {
+  int duty = 255;
+  if (brightnessLevel == 1) duty = 50;
+  else if (brightnessLevel == 2) duty = 150;
+  analogWrite(TFT_BL, duty);
+}
 LunaBLE ble;
 LunaInteraction interaction(TOUCH_PIN);
 LunaNetwork network;
@@ -389,6 +398,33 @@ void handleRobotCommand(String text) {
     }
     
     activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
+  } else if (text == "CALL:START") {
+    audio.micStreaming = true;
+    audio.audioMode = LunaAudio::AUDIO_MODE_STREAM;
+    face.setStateLabel("CALL");
+    Serial.println("VoIP Call started");
+  } else if (text == "CALL:STOP") {
+    audio.micStreaming = false;
+    audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+    face.setStateLabel("IDLE");
+    Serial.println("VoIP Call stopped");
+  } else if (text == "MUSIC:START") {
+    audio.micStreaming = false;
+    audio.startMusicStream();
+    face.setStateLabel("MUSIC");
+    Serial.println("Music mode started");
+  } else if (text == "MUSIC:STOP") {
+    audio.stopMusicStream();
+    face.setStateLabel("IDLE");
+    Serial.println("Music mode stopped");
+  } else if (text.startsWith("AUDIO_MODE:")) {
+    String mode = text.substring(11);
+    if (mode == "STREAM") {
+      audio.audioMode = LunaAudio::AUDIO_MODE_STREAM;
+    } else {
+      audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+    }
+    Serial.println("Audio mode set to: " + mode);
   } else if (text.startsWith("NOTIF:")) {
     // Command format: NOTIF:Title|Body
     String payload = text.substring(6);
@@ -494,11 +530,7 @@ void applySettings(String payload) {
 
   ble.setBLEActive(bleActive);
   display.invertDisplay(negativeDisplay);
-  
-  display.ssd1306_command(0x81);
-  if (oledBrightness == 1) display.ssd1306_command(10);
-  else if (oledBrightness == 2) display.ssd1306_command(127);
-  else display.ssd1306_command(255);
+  setBacklightBrightness(oledBrightness);
   
   Serial.print("NegativeDisplay set to: ");
   Serial.println(negativeDisplay ? "ON" : "OFF");
@@ -541,12 +573,12 @@ void setup() {
   gifSpeed = preferences.getInt("speed", 100);
   defaultGif = preferences.getInt("defGif", 99);
   gifIntro = preferences.getInt("intGif", 1);
-  touchSingle = preferences.getInt("tchSing", 2);  // default: skip animation
+  touchSingle = preferences.getInt("tchSing", 1);  // default: 1 (Toggle Clock)
   touchDouble = preferences.getInt("tchDoub", 0);
   touchLong = preferences.getInt("tchLong", 0);
-  negativeDisplay = preferences.getBool("neg", false);
+  negativeDisplay = false; // Always start with invert off on reboot!
   clockStyle = preferences.getInt("clkStyle", 0);
-  oledBrightness = preferences.getInt("oledBright", 2);
+  oledBrightness = 3;      // Always start with high brightness on reboot!
   gifIntroSpeed = preferences.getInt("intSpeed", 100);
   introSoundSpeed = preferences.getInt("sndSpeed", 100);
   is12HourFormat = preferences.getBool("is12H", false);
@@ -574,31 +606,27 @@ void setup() {
     }
   }
 
-  // Initialize I2C Communication
-  Wire.begin(SDA_PIN, SCL_PIN);
-  Wire.setClock(800000); // 800kHz high-speed I2C for smooth rendering
-  
-  // Initialize SSD1306 Display
-  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed. Check connections!"));
-    for (;;); // Stop execution
-  }
-  // Apply saved invert setting immediately after display init
-  display.invertDisplay(negativeDisplay);
+  // Initialize SPI & ST7789 Display
+  mySPI.begin(TFT_SCL, -1, TFT_SDA, -1);
+  display.init(240, 240, SPI_MODE3);
+  display.setSPISpeed(40000000); // High-speed 40MHz SPI to eliminate flickering!
+  display.setRotation(0);
+  display.invertDisplay(negativeDisplay); // Apply saved inversion state immediately!
+  display.fillScreen(ST77XX_BLACK);
+  pinMode(TFT_BL, OUTPUT);
+  digitalWrite(TFT_BL, HIGH); // Turn on Backlight
 
   // Apply saved brightness setting
-  display.ssd1306_command(0x81);
-  if (oledBrightness == 1) display.ssd1306_command(10);
-  else if (oledBrightness == 2) display.ssd1306_command(127);
-  else display.ssd1306_command(255);
+  setBacklightBrightness(oledBrightness);
+
+  // Initialize I2S for DAC and Mic
+  audio.init();
 
   // Display initial loading face
-  display.clearDisplay();
-  display.setTextSize(1);
+  display.setTextSize(2);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(15, 25);
+  display.setCursor(10, 110);
   display.print(negativeDisplay ? "Loading Ms. Luna..." : "Loading Mr. Luna...");
-  display.display();
   
   // Start Bluetooth BLE Server if active
   if (bleActive) {
@@ -863,10 +891,7 @@ void loop() {
               audio.playSound(SOUND_CHIRP);
             } else if (menuOption == 4) { // Brightness
               oledBrightness = (oledBrightness % 3) + 1;
-              display.ssd1306_command(0x81);
-              if (oledBrightness == 1) display.ssd1306_command(10);
-              else if (oledBrightness == 2) display.ssd1306_command(127);
-              else display.ssd1306_command(255);
+              setBacklightBrightness(oledBrightness);
               audio.playSound(SOUND_CHIRP);
             }
           } else if (touchEvent == TOUCH_LONG_PRESS) {
@@ -897,10 +922,7 @@ void loop() {
               preferences.end();
               
               // Apply settings immediately
-              display.ssd1306_command(0x81);
-              if (oledBrightness == 1) display.ssd1306_command(10);
-              else if (oledBrightness == 2) display.ssd1306_command(127);
-              else display.ssd1306_command(255);
+              setBacklightBrightness(oledBrightness);
               
               audio.playSound(SOUND_POWERUP);
               optionSelected = false; // deselect
@@ -1068,15 +1090,28 @@ void loop() {
   static unsigned long lastDisplayDrawTime = 0;
   bool forceRedraw = (now - lastDisplayDrawTime >= 500);
 
+  static bool wasInSettingsMenu = false;
+  bool settingsMenuEntered = (inSettingsMenu && !wasInSettingsMenu);
+  wasInSettingsMenu = inSettingsMenu;
+
   if (inSettingsMenu) {
-    // Redraw settings menu at ~40fps
-    if (now - lastDisplayDrawTime >= 25) {
+    if (touchEvent != TOUCH_NONE || settingsMenuEntered) {
       lastDisplayDrawTime = now;
       face.drawSettingsMenu(menuOption, optionSelected, bleActive, gifSpeed, clockStyle, negativeDisplay, oledBrightness);
     }
-  } else if (faceChanged || ((face.getExpression() == EXPR_CLOCK || face.getExpression() == EXPR_MAP) && timeUpdated) || forceRedraw) {
-    lastDisplayDrawTime = now;
-    lastDrawnSecond = rtcSecond;
-    face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+  } else {
+    bool isClockOrMap = (face.getExpression() == EXPR_CLOCK || face.getExpression() == EXPR_MAP);
+    bool shouldDraw = false;
+    if (isClockOrMap) {
+      shouldDraw = timeUpdated;
+    } else {
+      shouldDraw = faceChanged;
+    }
+    
+    if (shouldDraw) {
+      lastDisplayDrawTime = now;
+      lastDrawnSecond = rtcSecond;
+      face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+    }
   }
 }

@@ -14,6 +14,7 @@ class BLEService with ChangeNotifier {
   static const String audioCharUuid = 'd90e0c03-51ee-4c31-893c-cf572db85700';
   static const String textCharUuid = 'c8a00d04-62ff-4b32-843d-0f1c6db8a101';
   static const String statusCharUuid = 'fb2f0e05-73ee-4f32-833d-1f2c6db8a102';
+  static const String audioStreamCharUuid = 'a823e50b-71ee-48c5-9276-2e8c6db8a103';
 
   BluetoothDevice? _connectedDevice;
   bool _isConnected = false;
@@ -37,6 +38,7 @@ class BLEService with ChangeNotifier {
   BluetoothCharacteristic? _audioChar;
   BluetoothCharacteristic? _textChar;
   BluetoothCharacteristic? _statusChar;
+  BluetoothCharacteristic? _audioStreamChar;
 
   // Diagnostics variables
   int _uptimeSeconds = 0;
@@ -102,6 +104,29 @@ class BLEService with ChangeNotifier {
       }
     } catch (e) {
       addLog("Wi-Fi transmission failed: $e", "ERROR");
+      return false;
+    }
+  }
+
+  Future<bool> transmitAudioChunk(List<int> chunk) async {
+    if (_audioStreamChar == null) {
+      addLog("Audio stream char not found — reconnect to Luna", "WARNING");
+      return false;
+    }
+    try {
+      // Split into 220-byte packets — safe BLE max write size
+      // Fire without await so the timer is never blocked
+      const int maxPacket = 220;
+      int offset = 0;
+      while (offset < chunk.length) {
+        final end = (offset + maxPacket < chunk.length) ? offset + maxPacket : chunk.length;
+        // ignore: unawaited_futures
+        _audioStreamChar!.write(chunk.sublist(offset, end), withoutResponse: true);
+        offset = end;
+      }
+      return true;
+    } catch (e) {
+      addLog("BLE audio write error: $e", "ERROR");
       return false;
     }
   }
@@ -432,6 +457,13 @@ class BLEService with ChangeNotifier {
       addLog("Failed to request high connection priority: $e", "WARNING");
     }
     
+    // Request high MTU size for high audio throughput
+    try {
+      device.requestMtu(512);
+    } catch (e) {
+      addLog("Failed to request MTU 512: $e", "WARNING");
+    }
+    
     // Update background service immediately
     const MethodChannel('com.mrmsluna/notifications').invokeMethod('updateConnectionStatus', {'connected': true});
     
@@ -440,7 +472,23 @@ class BLEService with ChangeNotifier {
 
   Future<void> _setupServices(BluetoothDevice device) async {
     try {
-      List<BluetoothService> services = await device.discoverServices();
+      addLog("Waiting for BLE connection to settle...", "BLE");
+      await Future.delayed(const Duration(milliseconds: 1000));
+
+      List<BluetoothService> services = [];
+      int retries = 3;
+      while (retries > 0) {
+        try {
+          services = await device.discoverServices();
+          break;
+        } catch (e) {
+          retries--;
+          addLog("Discover services failed: $e. Retries left: $retries", "WARNING");
+          if (retries == 0) rethrow;
+          await Future.delayed(const Duration(milliseconds: 1000));
+        }
+      }
+
       BluetoothService? targetService = services.firstWhere(
         (s) => s.uuid == Guid(serviceUuid),
       );
@@ -450,6 +498,7 @@ class BLEService with ChangeNotifier {
         if (c.uuid == Guid(audioCharUuid)) _audioChar = c;
         if (c.uuid == Guid(textCharUuid)) _textChar = c;
         if (c.uuid == Guid(statusCharUuid)) _statusChar = c;
+        if (c.uuid == Guid(audioStreamCharUuid)) _audioStreamChar = c;
       }
 
       if (_statusChar != null) {
@@ -499,6 +548,12 @@ class BLEService with ChangeNotifier {
         }
         if (parts.length >= 5) {
           _activeExpressionLabel = parts[4].trim();
+        }
+        if (parts.length >= 6) {
+          final ip = parts[5].trim();
+          if (ip.isNotEmpty && ip != "0.0.0.0" && ip != "localhost") {
+            setServerIp(ip);
+          }
         }
         notifyListeners();
       }
@@ -675,6 +730,22 @@ class BLEService with ChangeNotifier {
 
   Future<void> transmitSleep( ) async {
     await _writeTextWithAck('SLEEP', "Sleep Robot");
+  }
+
+  Future<void> transmitStartCall() async {
+    await _writeTextWithAck('CALL:START', "Start Call");
+  }
+
+  Future<void> transmitStopCall() async {
+    await _writeTextWithAck('CALL:STOP', "Stop Call");
+  }
+
+  Future<void> transmitStartMusic() async {
+    await _writeTextWithAck('MUSIC:START', "Start Music");
+  }
+
+  Future<void> transmitStopMusic() async {
+    await _writeTextWithAck('MUSIC:STOP', "Stop Music");
   }
 
   @override

@@ -100,9 +100,11 @@ class DualStackServer(http.server.SimpleHTTPRequestHandler):
             print("[SERVER] Received compile request...")
             try:
                 powershell_path = "powershell.exe"
-                script_path = os.path.join(DIRECTORY, "compile.ps1")
+                script_path = os.path.join(DIRECTORY, "compile_s3.ps1")
+                if not os.path.exists(script_path):
+                    script_path = os.path.join(DIRECTORY, "compile.ps1")
                 
-                # Execute powershell compile.ps1
+                # Execute powershell compile script
                 process = subprocess.Popen(
                     [powershell_path, "-ExecutionPolicy", "Bypass", "-File", script_path],
                     cwd=DIRECTORY,
@@ -195,8 +197,8 @@ class DualStackServer(http.server.SimpleHTTPRequestHandler):
                 success = False
                 with robots_lock:
                     if mac in connected_robots:
-                        ws_client = connected_robots[mac]["socket"]
-                        if ws_loop:
+                        ws_client = connected_robots[mac].get("robot") or connected_robots[mac].get("socket")
+                        if ws_client and ws_loop:
                             # Send command via the active WebSocket connection
                             asyncio.run_coroutine_threadsafe(ws_client.send(command), ws_loop)
                             success = True
@@ -243,25 +245,59 @@ async def ws_handler(websocket):
         return
         
     mac = mac.upper()
-    print(f"[WS Server] Robot {mac} ({variant}) connected!")
+    is_phone = (variant == 'phone')
+    print(f"[WS Server] { 'Phone' if is_phone else 'Robot' } {mac} ({variant}) connected!")
     
     with robots_lock:
-        connected_robots[mac] = {
-            "socket": websocket,
-            "variant": variant,
-            "status": "online"
-        }
+        if mac not in connected_robots:
+            connected_robots[mac] = {
+                "socket": None,
+                "robot": None,
+                "phone": None,
+                "variant": variant,
+                "status": "online"
+            }
+        
+        if is_phone:
+            connected_robots[mac]["phone"] = websocket
+        else:
+            connected_robots[mac]["robot"] = websocket
+            connected_robots[mac]["socket"] = websocket
+            connected_robots[mac]["variant"] = variant
+            connected_robots[mac]["status"] = "online"
         
     try:
         async for message in websocket:
-            print(f"[WS Server] Received from {mac}: {message}")
+            # Forward the message to the companion client if available
+            with robots_lock:
+                target = None
+                if mac in connected_robots:
+                    if is_phone:
+                        target = connected_robots[mac]["robot"] or connected_robots[mac]["socket"]
+                    else:
+                        target = connected_robots[mac]["phone"]
+            
+            if target:
+                try:
+                    await target.send(message)
+                except Exception as e:
+                    print(f"[WS Server] Forwarding error: {e}")
     except websockets.ConnectionClosed:
         pass
     finally:
-        print(f"[WS Server] Robot {mac} disconnected.")
+        print(f"[WS Server] { 'Phone' if is_phone else 'Robot' } {mac} disconnected.")
         with robots_lock:
             if mac in connected_robots:
-                del connected_robots[mac]
+                if is_phone:
+                    connected_robots[mac]["phone"] = None
+                else:
+                    connected_robots[mac]["robot"] = None
+                    connected_robots[mac]["socket"] = None
+                    connected_robots[mac]["status"] = "offline"
+                
+                # Cleanup if both disconnected
+                if connected_robots[mac]["robot"] is None and connected_robots[mac]["phone"] is None:
+                    del connected_robots[mac]
 
 async def ws_server_main():
     global ws_loop

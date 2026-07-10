@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/bluetooth_service.dart';
 import '../services/database_service.dart';
 import '../services/audio_synth_service.dart';
+import '../services/audio_stream_service.dart';
 import '../models/gif_model.dart';
 import '../models/robot_profile.dart';
 import '../models/calendar_event.dart';
@@ -66,6 +68,12 @@ class _MainDashboardState extends State<MainDashboard> {
   bool _isCompiling = false;
   String _localActiveGifId = 'relaxed';
   String _localActiveLabel = 'Idle';
+
+  List<Map<String, String>> _localAudioFiles = [];
+  bool _isLoadingAudioFiles = false;
+  Map<String, String>? _currentlyPlayingFile;
+  String _audioSearchQuery = "";
+  final TextEditingController _audioSearchController = TextEditingController();
 
   void _checkAlarms(DatabaseService db, BLEService ble) {
     final now = DateTime.now();
@@ -275,6 +283,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
     // Discover the server IP immediately
     _discoverServer();
+    _scanLocalAudioFiles();
 
     // Periodically run UDP discovery every 10 seconds to detect server IP changes
     _udpDiscoveryTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
@@ -309,6 +318,7 @@ class _MainDashboardState extends State<MainDashboard> {
     _aiPromptController.dispose();
     _searchController.dispose();
     _appSearchController.dispose();
+    _audioSearchController.dispose();
     _audioSynth.stop();
     super.dispose();
   }
@@ -398,6 +408,140 @@ class _MainDashboardState extends State<MainDashboard> {
     } catch (e) {
       // Quietly ignore UDP binding/network errors
     }
+  }
+
+  Future<void> _scanLocalAudioFiles() async {
+    if (_isLoadingAudioFiles) return;
+    setState(() {
+      _isLoadingAudioFiles = true;
+    });
+
+    try {
+      if (Platform.isAndroid) {
+        if (await Permission.audio.request().isGranted || await Permission.storage.request().isGranted) {
+          const channel = MethodChannel('com.mrmsluna/notifications');
+          final List<dynamic>? files = await channel.invokeMethod<List<dynamic>>('getLocalAudioFiles');
+          if (files != null) {
+            final List<Map<String, String>> list = files.map((f) => Map<String, String>.from(f as Map)).toList();
+            setState(() {
+              _localAudioFiles = list;
+              _isLoadingAudioFiles = false;
+            });
+            return;
+          }
+        }
+      }
+
+      // Fallback/Legacy directory listing
+      final List<Map<String, String>> files = [];
+      final searchPaths = [
+        '/sdcard/Music',
+        '/sdcard/Download',
+        '/storage/emulated/0/Music',
+        '/storage/emulated/0/Download',
+      ];
+
+      for (final path in searchPaths) {
+        final dir = Directory(path);
+        if (await dir.exists()) {
+          try {
+            final entities = dir.listSync(recursive: true, followLinks: false);
+            for (final entity in entities) {
+              if (entity is File) {
+                final ext = entity.path.split('.').last.toLowerCase();
+                if (ext == 'mp3' || ext == 'wav') {
+                  files.add({
+                    'path': entity.path,
+                    'name': entity.path.split('/').last,
+                    'title': entity.path.split('/').last.split('.').first,
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            // Ignore directory errors
+          }
+        }
+      }
+
+      setState(() {
+        _localAudioFiles = files;
+        _isLoadingAudioFiles = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingAudioFiles = false;
+      });
+    }
+  }
+
+  Future<bool> _ensureServerIpConfigured(BLEService ble) async {
+    if (ble.serverIp != 'localhost' && ble.serverIp.isNotEmpty) {
+      return true;
+    }
+    
+    // Attempt UDP discovery immediately
+    _discoverServer();
+    
+    // Give it a brief delay to receive response
+    await Future.delayed(const Duration(milliseconds: 1200));
+    
+    if (ble.serverIp != 'localhost' && ble.serverIp.isNotEmpty) {
+      return true;
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Robot IP not found. Ensure both Phone and Robot are connected to the same Wi-Fi network."),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+    return false;
+  }
+
+  Future<void> _playLocalAudioFile(Map<String, String> fileMap, BLEService ble, AudioStreamService audioStream) async {
+    final path = fileMap['path'] ?? '';
+    if (path.isEmpty) return;
+
+    // If already playing, stop first
+    if (audioStream.isStreamingMusic) {
+      await _stopMusic(audioStream, ble);
+      if (_currentlyPlayingFile == fileMap) return; // toggle off
+    }
+
+    setState(() => _currentlyPlayingFile = fileMap);
+    audioStream.statusMessage = "Starting...";
+
+    try {
+      // Stream-decode + BLE-send simultaneously. No full-file decode wait.
+      final success = await audioStream.startMusicStreamBLEFromPath(ble, path);
+      if (!success) setState(() => _currentlyPlayingFile = null);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Playback error: $e")),
+      );
+      setState(() => _currentlyPlayingFile = null);
+      audioStream.statusMessage = "Error: $e";
+    }
+  }
+
+
+  Future<void> _stopMusic(AudioStreamService audioStream, BLEService ble) async {
+    if (audioStream.isBleStreaming) {
+      await audioStream.stopMusicStreamBLEFromPath();
+      await audioStream.stopMusicStreamBLE();
+    } else {
+      await audioStream.stopMusicStream();
+    }
+    await ble.transmitStopMusic();
+    setState(() => _currentlyPlayingFile = null);
+  }
+
+  String _formatPcmDuration(int bytes) {
+    final seconds = bytes ~/ 32000;
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
   }
 
   // Pick GIF from local phone storage
@@ -1161,6 +1305,8 @@ class _MainDashboardState extends State<MainDashboard> {
                   fontSize: 13,
                 ),
               ),
+              const SizedBox(height: 20),
+              _buildIntercomAndMusicSection(ble),
               const SizedBox(height: 20),
               _buildSoundBoardPanel(db, ble),
             ],
@@ -2098,6 +2244,39 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(height: 12),
 
+              // Server IP Address
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Server IP Address", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
+                  GestureDetector(
+                    onTap: _discoverServer,
+                    child: Text(
+                      "DISCOVER",
+                      style: GoogleFonts.outfit(color: const Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                key: const ValueKey("server_ip_field"),
+                style: GoogleFonts.outfit(color: textColor, fontSize: 14),
+                controller: TextEditingController(text: ble.serverIp),
+                onSubmitted: (val) {
+                  ble.setServerIp(val);
+                },
+                decoration: const InputDecoration(
+                  filled: true,
+                  fillColor: Colors.black26,
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                  hintText: "192.168.x.x or localhost",
+                  hintStyle: TextStyle(color: Colors.white24),
+                ),
+              ),
+              const SizedBox(height: 16),
+
               // BLE Device Name
               Text("BLE Server Broadcast Name", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
               const SizedBox(height: 6),
@@ -2220,16 +2399,16 @@ class _MainDashboardState extends State<MainDashboard> {
                     width: 140,
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.black.withOpacity(0.06)),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         value: db.clockStyle,
-                        dropdownColor: const Color(0xFF1E1D30),
-                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 12),
-                        icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        dropdownColor: Colors.white,
+                        style: GoogleFonts.outfit(color: textColor, fontSize: 12),
+                        icon: const Icon(Icons.arrow_drop_down, color: textColor60),
                         isExpanded: true,
                         items: const [
                           DropdownMenuItem(value: 0, child: Text("Classic Border")),
@@ -2258,16 +2437,16 @@ class _MainDashboardState extends State<MainDashboard> {
                     width: 140,
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.black.withOpacity(0.06)),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         value: db.oledBrightness.round(),
-                        dropdownColor: const Color(0xFF1E1D30),
-                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 12),
-                        icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        dropdownColor: Colors.white,
+                        style: GoogleFonts.outfit(color: textColor, fontSize: 12),
+                        icon: const Icon(Icons.arrow_drop_down, color: textColor60),
                         isExpanded: true,
                         items: const [
                           DropdownMenuItem(value: 1, child: Text("Dim / Low")),
@@ -2493,7 +2672,7 @@ class _MainDashboardState extends State<MainDashboard> {
           GestureDetector(
             onTap: () {
               setState(() {
-                _activeTabIdx = 3; // Settings tab
+                _activeTabIdx = 4; // Settings tab
                 _currentSettingsSection = 'companions';
               });
             },
@@ -2656,6 +2835,399 @@ class _MainDashboardState extends State<MainDashboard> {
                   }).toList(),
                 ),
               ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIntercomAndMusicSection(BLEService ble) {
+    final audioStream = Provider.of<AudioStreamService>(context);
+    final isMiss = _isMsLuna;
+    final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionHeader("Intercom & MP3 Music Player", Icons.settings_voice, accentColor),
+        const SizedBox(height: 12),
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (audioStream.statusMessage != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        audioStream.isCalling 
+                            ? Icons.phone_in_talk 
+                            : audioStream.isStreamingMusic 
+                                ? Icons.music_note 
+                                : Icons.info_outline,
+                        color: accentColor,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          audioStream.statusMessage!,
+                          style: GoogleFonts.outfit(color: textColor, fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              
+              Row(
+                children: [
+                  // VoIP Call Button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        if (audioStream.isCalling) {
+                          await audioStream.stopCall();
+                          await ble.transmitStopCall();
+                        } else {
+                          if (!await _ensureServerIpConfigured(ble)) return;
+                          final serverIp = ble.serverIp;
+                          final cleanMac = ble.pairedDeviceId!.replaceAll(':', '').toUpperCase();
+                          
+                          await ble.transmitStartCall();
+                          final success = await audioStream.startCall(serverIp, cleanMac);
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("VoIP Call Connected!")),
+                            );
+                          }
+                        }
+                      },
+                      icon: Icon(audioStream.isCalling ? Icons.call_end : Icons.call, size: 18),
+                      label: Text(audioStream.isCalling ? "End Call" : "Voice Call"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: audioStream.isCalling ? Colors.red.shade700 : const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Custom WAV / Audio Picker Button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        if (audioStream.isStreamingMusic) {
+                          await _stopMusic(audioStream, ble);
+                        } else {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: ['wav', 'mp3'],
+                          );
+                          if (result != null && result.files.single.path != null) {
+                            final path = result.files.single.path!;
+                            final name = path.split('/').last;
+                            _playLocalAudioFile({
+                              'path': path,
+                              'name': name,
+                              'title': name.split('.').first,
+                            }, ble, audioStream);
+                          }
+                        }
+                      },
+                      icon: Icon(audioStream.isStreamingMusic ? Icons.stop : Icons.folder_open, size: 18),
+                      label: Text(audioStream.isStreamingMusic ? "Stop Music" : "Pick Audio"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: audioStream.isStreamingMusic ? Colors.red.shade700 : const Color(0xFF3B82F6),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (audioStream.isStreamingMusic) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.03),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        _currentlyPlayingFile?['name'] ?? "Streaming audio...",
+                        style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            _formatPcmDuration(audioStream.musicStreamOffset),
+                            style: GoogleFonts.firaCode(color: textColor60, fontSize: 11),
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: audioStream.musicStreamOffset.toDouble(),
+                              min: 0,
+                              max: audioStream.musicStreamTotalSize.toDouble() > 0 
+                                  ? audioStream.musicStreamTotalSize.toDouble() 
+                                  : 1.0,
+                              activeColor: accentColor,
+                              inactiveColor: textColor24,
+                              onChanged: (val) {
+                                audioStream.seekMusic(val.toInt());
+                              },
+                            ),
+                          ),
+                          Text(
+                            _formatPcmDuration(audioStream.musicStreamTotalSize),
+                            style: GoogleFonts.firaCode(color: textColor60, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              audioStream.isMusicPaused ? Icons.play_arrow : Icons.pause,
+                              color: textColor,
+                              size: 28,
+                            ),
+                            onPressed: () {
+                              if (audioStream.isMusicPaused) {
+                                audioStream.resumeMusic();
+                              } else {
+                                audioStream.pauseMusic();
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 20),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.stop,
+                              color: Colors.red,
+                              size: 28,
+                            ),
+                            onPressed: () async {
+                              await _stopMusic(audioStream, ble);
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "LOCAL AUDIO FILES",
+                    style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.refresh, color: accentColor, size: 20),
+                    onPressed: _scanLocalAudioFiles,
+                    tooltip: "Scan files",
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Spotify-style search bar
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.search, color: Colors.white38, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _audioSearchController,
+                        style: GoogleFonts.outfit(color: textColor, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: "Search local files...",
+                          hintStyle: GoogleFonts.outfit(color: Colors.white24, fontSize: 13),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        onChanged: (val) {
+                          setState(() {
+                            _audioSearchQuery = val.trim().toLowerCase();
+                          });
+                        },
+                      ),
+                    ),
+                    if (_audioSearchQuery.isNotEmpty)
+                      GestureDetector(
+                        onTap: () {
+                          _audioSearchController.clear();
+                          setState(() {
+                            _audioSearchQuery = "";
+                          });
+                        },
+                        child: const Icon(Icons.close, color: Colors.white38, size: 16),
+                      ),
+                  ],
+                ),
+              ),
+              if (_isLoadingAudioFiles)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else ...[
+                (() {
+                  final filteredFiles = _localAudioFiles.where((file) {
+                    final name = (file['name'] ?? '').toLowerCase();
+                    final title = (file['title'] ?? '').toLowerCase();
+                    return name.contains(_audioSearchQuery) || title.contains(_audioSearchQuery);
+                  }).toList();
+
+                  if (filteredFiles.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.02),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.black.withOpacity(0.04)),
+                      ),
+                      child: Center(
+                        child: Text(
+                          _audioSearchQuery.isNotEmpty
+                              ? "No matching tracks found."
+                              : "No MP3 or WAV files found on phone.\nPlace files in /sdcard/Music or /sdcard/Download.",
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(color: textColor60, fontSize: 12),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Container(
+                    constraints: const BoxConstraints(maxHeight: 280),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.02),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    ),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      physics: const ClampingScrollPhysics(),
+                      itemCount: filteredFiles.length,
+                      itemBuilder: (ctx, idx) {
+                        final file = filteredFiles[idx];
+                        final filename = file['name'] ?? '';
+                        final cleanTitle = file['title'] ?? filename.split('.').first;
+                        final isWav = (file['path'] ?? '').endsWith('.wav');
+                        final isCurrent = _currentlyPlayingFile == file && audioStream.isStreamingMusic;
+
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _playLocalAudioFile(file, ble, audioStream),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: isCurrent
+                                            ? [accentColor.withOpacity(0.8), accentColor.withOpacity(0.4)]
+                                            : [Colors.purple.shade700.withOpacity(0.2), Colors.blue.shade700.withOpacity(0.2)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: isCurrent ? accentColor.withOpacity(0.5) : Colors.white.withOpacity(0.05),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Icon(
+                                        isCurrent
+                                            ? (audioStream.isMusicPaused ? Icons.play_arrow : Icons.equalizer)
+                                            : (isWav ? Icons.audiotrack : Icons.music_note),
+                                        color: isCurrent ? Colors.white : Colors.white70,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          cleanTitle,
+                                          style: GoogleFonts.outfit(
+                                            color: isCurrent ? accentColor : textColor,
+                                            fontSize: 14,
+                                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          "${isWav ? 'WAV Audio' : 'MP3 Audio'} • ${file['path']?.split('/').last ?? ''}",
+                                          style: GoogleFonts.outfit(
+                                            color: isCurrent ? accentColor.withOpacity(0.7) : textColor60,
+                                            fontSize: 11,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    isCurrent
+                                        ? (audioStream.isMusicPaused ? Icons.play_arrow : Icons.pause_circle_filled)
+                                        : Icons.play_circle_filled,
+                                    color: isCurrent ? accentColor : Colors.white30,
+                                    size: 28,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                })(),
+              ],
             ],
           ),
         ),

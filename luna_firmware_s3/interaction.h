@@ -50,7 +50,7 @@ public:
   }
 
   TouchEvent update() {
-    bool rawState = digitalRead(touchPin) == HIGH; // TTP233 outputs HIGH on touch
+    bool rawState = digitalRead(touchPin) == HIGH; // Active-HIGH capacitive touch sensor
     TouchEvent event = TOUCH_NONE;
     unsigned long now = millis();
 
@@ -71,10 +71,12 @@ public:
           touchStartTime = now;
           isHolding = false;
           holdReported = false;
+          Serial.println("[TOUCH] Pressed (HIGH on pin 1)");
         } else {
           // Touch release (falling edge)
           isPressed = false;
           touchEndTime = now;
+          Serial.println("[TOUCH] Released (LOW on pin 1)");
           
           if (!isHolding) {
             tapCount++;
