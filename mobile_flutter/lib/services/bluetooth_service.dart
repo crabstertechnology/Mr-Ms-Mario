@@ -112,12 +112,18 @@ class BLEService with ChangeNotifier {
   Future<bool> transmitAudioChunk(List<int> chunk) async {
     if (_audioStreamChar == null) return false;
     try {
-      // Caller guarantees chunk ≤ 250 bytes (1 BLE packet). Fire-and-forget for minimum latency.
-      // ignore: unawaited_futures
-      _audioStreamChar!.write(
-        chunk is Uint8List ? chunk : Uint8List.fromList(chunk),
-        withoutResponse: true,
-      );
+      const int maxPacket = 240;
+      int offset = 0;
+      while (offset < chunk.length) {
+        final end = (offset + maxPacket < chunk.length) ? offset + maxPacket : chunk.length;
+        final sub = chunk.sublist(offset, end);
+        // ignore: unawaited_futures
+        _audioStreamChar!.write(
+          sub is Uint8List ? sub : Uint8List.fromList(sub),
+          withoutResponse: true,
+        );
+        offset = end;
+      }
       return true;
     } catch (_) {
       return false;
