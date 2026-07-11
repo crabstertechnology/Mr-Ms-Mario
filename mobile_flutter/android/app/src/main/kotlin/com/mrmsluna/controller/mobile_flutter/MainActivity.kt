@@ -46,10 +46,11 @@ class MainActivity: FlutterActivity() {
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
                     val path = (arguments as? Map<*, *>)?.get("path") as? String ?: return
+                    val targetSampleRate = (arguments as? Map<*, *>)?.get("targetSampleRate") as? Int ?: 16000
                     stopStreamRequested = false
                     audioStreamThread?.interrupt()
                     audioStreamThread = Thread {
-                        streamAudioChunks(path, events)
+                        streamAudioChunks(path, targetSampleRate, events)
                     }.also { it.start() }
                 }
                 override fun onCancel(arguments: Any?) {
@@ -252,7 +253,7 @@ class MainActivity: FlutterActivity() {
      * Each event is a ByteArray chunk ready to send over BLE.
      * Playback can begin after the very first chunk (~50ms of audio).
      */
-    private fun streamAudioChunks(filePath: String, sink: EventChannel.EventSink) {
+    private fun streamAudioChunks(filePath: String, targetSampleRate: Int, sink: EventChannel.EventSink) {
         val file = File(filePath)
         if (!file.exists()) {
             runOnUiThread { sink.error("FILE_NOT_FOUND", "File not found: $filePath", null) }
@@ -285,7 +286,7 @@ class MainActivity: FlutterActivity() {
         val srcRate = if (inputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE) else 44100
         val srcCh   = if (inputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else 2
 
-        android.util.Log.d("AudioStream", "Decoding: srcRate=$srcRate srcCh=$srcCh -> 16000Hz mono")
+        android.util.Log.d("AudioStream", "Decoding: srcRate=$srcRate srcCh=$srcCh -> ${targetSampleRate}Hz mono")
 
         val codec = MediaCodec.createDecoderByType(mime)
         codec.configure(inputFormat, null, null, 0)
@@ -294,6 +295,8 @@ class MainActivity: FlutterActivity() {
         val info = MediaCodec.BufferInfo()
         var inputEOS = false
         var outputEOS = false
+
+        val accum = ByteArrayOutputStream()
 
         try {
             while (!outputEOS && !stopStreamRequested && !Thread.currentThread().isInterrupted) {
@@ -313,8 +316,7 @@ class MainActivity: FlutterActivity() {
                     }
                 }
 
-                // Pull decoded PCM from codec — emit via runOnUiThread (Flutter EventSink REQUIRES main thread).
-                // Audio quality fix is handled by the rate-controlled timer on the Flutter side (960 bytes/30ms).
+                // Pull decoded PCM from codec — emit via runOnUiThread in larger blocks to avoid UI thread bottleneck.
                 var outIdx = codec.dequeueOutputBuffer(info, 5000)
                 while (outIdx >= 0) {
                     if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) outputEOS = true
@@ -322,14 +324,24 @@ class MainActivity: FlutterActivity() {
                     if (outBuf != null && info.size > 0) {
                         outBuf.position(info.offset); outBuf.limit(info.offset + info.size)
                         val raw = ByteArray(info.size); outBuf.get(raw)
-                        val chunk = resampleTo16kMono(raw, srcRate, srcCh)
-                        runOnUiThread { if (!stopStreamRequested) sink.success(chunk) }
+                        val chunk = resampleToMono(raw, srcRate, targetSampleRate, srcCh)
+                        accum.write(chunk)
+                        
+                        if (accum.size() >= 9600 || outputEOS) {
+                            val toSend = accum.toByteArray()
+                            accum.reset()
+                            runOnUiThread { if (!stopStreamRequested) sink.success(toSend) }
+                        }
                     }
                     codec.releaseOutputBuffer(outIdx, false)
                     if (outputEOS) break
                     outIdx = codec.dequeueOutputBuffer(info, 0)
                 }
                 if (outIdx == MediaCodec.INFO_TRY_AGAIN_LATER && inputEOS) outputEOS = true
+            }
+            if (accum.size() > 0) {
+                val toSend = accum.toByteArray()
+                runOnUiThread { if (!stopStreamRequested) sink.success(toSend) }
             }
         } catch (e: Exception) {
             android.util.Log.e("MainActivity", "streamAudioChunks error: ", e)
@@ -464,10 +476,10 @@ class MainActivity: FlutterActivity() {
         extractor.release()
 
         val rawPcm = rawPcmStream.toByteArray()
-        return resampleTo16kMono(rawPcm, inputSampleRate, inputChannels)
+        return resampleToMono(rawPcm, inputSampleRate, 16000, inputChannels)
     }
 
-    private fun resampleTo16kMono(rawPcm: ByteArray, sourceSampleRate: Int, channels: Int): ByteArray {
+    private fun resampleToMono(rawPcm: ByteArray, sourceSampleRate: Int, targetSampleRate: Int, channels: Int): ByteArray {
         val numSamples = rawPcm.size / 2
         val shorts = ShortArray(numSamples)
         ByteBuffer.wrap(rawPcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shorts)
@@ -486,7 +498,6 @@ class MainActivity: FlutterActivity() {
             mixed
         } else shorts
 
-        val targetSampleRate = 16000
         if (sourceSampleRate == targetSampleRate) {
             val resultBytes = ByteArray(monoShorts.size * 2)
             ByteBuffer.wrap(resultBytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(monoShorts)

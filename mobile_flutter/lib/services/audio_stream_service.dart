@@ -95,7 +95,10 @@ class AudioStreamService with ChangeNotifier {
     const eventChannel = EventChannel('com.mrmsluna/audio_stream');
     _pcmEventSub?.cancel();
     _pcmEventSub = eventChannel
-        .receiveBroadcastStream({'path': filePath})
+        .receiveBroadcastStream({
+          'path': filePath,
+          'targetSampleRate': 16000, // 16kHz for normal speed playback
+        })
         .listen(
       (dynamic data) {
         if (data is Uint8List) {
