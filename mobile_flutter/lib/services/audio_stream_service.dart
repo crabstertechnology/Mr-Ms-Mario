@@ -102,9 +102,9 @@ class AudioStreamService with ChangeNotifier {
           _pcmAccumulator.addAll(data);
           _musicStreamTotalSize = _pcmAccumulator.length;
 
-          // Start rate-controlled sender once we have ~250ms of audio buffered (8000 bytes).
-          // Was 32000 bytes (1s) which caused a slow-sounding start for first ~10 seconds.
-          if (!_musicTimerRunning && _pcmAccumulator.length >= 8000) {
+          // Start rate-controlled sender once we have ~375ms of audio buffered (12000 bytes)
+          // to align with the hardware's 12000-byte prebuffer threshold.
+          if (!_musicTimerRunning && _pcmAccumulator.length >= 12000) {
             _startRateTimer(ble);
           }
           notifyListeners();
@@ -155,8 +155,8 @@ class AudioStreamService with ChangeNotifier {
     // — still too slow! So we use 250 bytes per 7ms = 35,714 bytes/sec (12% over).
     // The 16KB ring buffer absorbs the 12% excess (fills in ~4s then drops 1 packet,
     // inaudible compared to consistent 91%-speed playback).
-    const int bytesPerTick = 300;  // 300/7ms ≈ 42,857 bytes/sec — slightly over 32kB/s to absorb timer jitter
-    const int timerMs = 7;
+    const int bytesPerTick = 1200; // 1200 bytes every 30ms ≈ 40,000 bytes/sec (prevents slow-motion/underrun)
+    const int timerMs = 30;
     _musicTimer?.cancel();
     _musicTimer = Timer.periodic(const Duration(milliseconds: timerMs), (timer) {
       if (!_isStreamingMusic) {

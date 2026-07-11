@@ -98,9 +98,19 @@ public:
 
   void writeTxStream(const uint8_t* data, size_t len) {
     if (txRingBuffer == NULL) return;
-    // NON-BLOCKING write: drop data if buffer full rather than stalling the BLE callback.
-    // Stalling the BLE callback blocks the BLE stack causing slow-motion / connection drops.
-    xRingbufferSend(txRingBuffer, data, len, 0);
+    static uint32_t totalBytesReceived = 0;
+    static uint32_t totalBytesDropped = 0;
+    totalBytesReceived += len;
+    
+    BaseType_t ret = xRingbufferSend(txRingBuffer, data, len, 0);
+    if (ret != pdTRUE) {
+      totalBytesDropped += len;
+    }
+    
+    if (totalBytesReceived % 8000 < len) {
+      Serial.printf("[AUDIO] BLE rx: %u bytes, dropped: %u bytes, prebuffering: %s\n", 
+                    totalBytesReceived, totalBytesDropped, prebuffering ? "true" : "false");
+    }
   }
 
   void startMusicStream() {
@@ -315,9 +325,9 @@ public:
     //   Larger DMA buffers = smoother playback under BLE burst delivery
     i2s_config_t i2s_config = {
       .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_RX),
-      .sample_rate = 16000,
+      .sample_rate = 18000,
       .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-      .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
+      .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT, // Stereo format (req by DAC clocking)
       .communication_format = I2S_COMM_FORMAT_STAND_I2S,
       .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
       .dma_buf_count = 8,
@@ -348,12 +358,12 @@ public:
   static void txAudioTask(void* pvParameters) {
     LunaAudio* self = (LunaAudio*)pvParameters;
 
-    // ── Synth oscillator state ────────────────────────────────────────────────
-    int16_t synthBuf[256];   // 256 samples × 2 bytes = 512 bytes per I2S write
+    // ── Synth oscillator state (stereo) ──────────────────────────────────────
+    int16_t synthBuf[512];   // 256 samples × 2 channels × 2 bytes = 1024 bytes per I2S write
     double  phase = 0;
 
-    // ── Silence block for prebuffer/underrun fill ─────────────────────────────
-    static const int16_t SILENCE[256] = {};
+    // ── Silence block for prebuffer/underrun fill (stereo) ────────────────────
+    static const int16_t SILENCE[512] = {};
     size_t bytes_written;
 
     while (true) {
@@ -366,8 +376,8 @@ public:
         if (self->prebuffering && self->txRingBuffer != NULL) {
           size_t freeBytes = xRingbufferGetCurFreeSize(self->txRingBuffer);
           size_t filledBytes = 16384 - freeBytes;
-          // Wait for 3200 bytes (~100ms of audio) before starting — fast start, still absorbs BLE jitter
-          if (filledBytes >= 3200) {
+          // Wait for 12000 bytes (~166ms of audio) before starting — absorbs BLE scheduling jitter perfectly
+          if (filledBytes >= 12000) {
             self->prebuffering = false;
             Serial.printf("[AUDIO] Prebuffer done, filled=%u bytes. Starting playback.\n", filledBytes);
           } else {
@@ -404,13 +414,22 @@ public:
             item[i] = (int16_t)s;
           }
 
-          i2s_write(I2S_NUM_0, item, item_size, &bytes_written, portMAX_DELAY);
+          // Duplicate mono samples to stereo buffer for I2S output (2 channels L/R)
+          int16_t stereoBuf[512];
+          int stereoSamples = samples;
+          if (stereoSamples > 256) stereoSamples = 256;
+          for (int i = 0; i < stereoSamples; i++) {
+            int16_t val = item[i];
+            stereoBuf[2 * i]     = val; // Left
+            stereoBuf[2 * i + 1] = val; // Right
+          }
+
+          i2s_write(I2S_NUM_0, stereoBuf, stereoSamples * 4, &bytes_written, portMAX_DELAY);
           vRingbufferReturnItem(self->txRingBuffer, (void*)item);
 
         } else {
-          // Underrun: output silence to keep I2S clock running
-          // (DO NOT re-enable prebuffering — a brief gap is tolerable)
-          i2s_write(I2S_NUM_0, SILENCE, sizeof(SILENCE), &bytes_written, portMAX_DELAY);
+          // Underrun: just wait a tiny bit for more data (DMA auto-clears)
+          vTaskDelay(pdMS_TO_TICKS(2));
         }
 
       // ── SYNTH MODE ───────────────────────────────────────────────────────────
@@ -418,9 +437,11 @@ public:
         int freq = self->currentFrequency;
         if (freq > 0) {
           for (int i = 0; i < 256; i++) {
-            phase += (2.0 * M_PI * freq) / 16000.0;
+            phase += (2.0 * M_PI * freq) / 18000.0;
             if (phase >= 2.0 * M_PI) phase -= 2.0 * M_PI;
-            synthBuf[i] = (int16_t)(sin(phase) * self->currentVolume);
+            int16_t val = (int16_t)(sin(phase) * self->currentVolume);
+            synthBuf[2 * i]     = val; // Left
+            synthBuf[2 * i + 1] = val; // Right
           }
           i2s_write(I2S_NUM_0, synthBuf, sizeof(synthBuf), &bytes_written, portMAX_DELAY);
         } else {
