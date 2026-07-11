@@ -366,8 +366,8 @@ public:
         if (self->prebuffering && self->txRingBuffer != NULL) {
           size_t freeBytes = xRingbufferGetCurFreeSize(self->txRingBuffer);
           size_t filledBytes = 16384 - freeBytes;
-          // Wait for 8192 bytes (~256ms of audio) before starting — absorbs BLE jitter
-          if (filledBytes >= 8192) {
+          // Wait for 3200 bytes (~100ms of audio) before starting — fast start, still absorbs BLE jitter
+          if (filledBytes >= 3200) {
             self->prebuffering = false;
             Serial.printf("[AUDIO] Prebuffer done, filled=%u bytes. Starting playback.\n", filledBytes);
           } else {

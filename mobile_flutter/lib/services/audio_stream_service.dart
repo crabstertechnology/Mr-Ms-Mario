@@ -68,7 +68,18 @@ class AudioStreamService with ChangeNotifier {
   // Phase 1: EventChannel decodes into _pcmAccumulator (fast, background)
   // Phase 2: Timer drains accumulator at 32000 bytes/sec (16kHz 16-bit mono)
   Future<bool> startMusicStreamBLEFromPath(BLEService ble, String filePath) async {
-    if (_isCalling || _isStreamingMusic) return false;
+    if (_isCalling) return false;
+    // If already streaming, stop instantly before switching song
+    if (_isStreamingMusic) {
+      _musicTimer?.cancel();
+      _musicTimerRunning = false;
+      _pcmEventSub?.cancel();
+      _pcmAccumulator.clear();
+      _decodeComplete = false;
+      _isStreamingMusic = false;
+      await ble.transmitStopMusicInstant();
+      await Future.delayed(const Duration(milliseconds: 80));
+    }
 
     _isStreamingMusic = true;
     _isBleStreaming = true;
@@ -91,8 +102,9 @@ class AudioStreamService with ChangeNotifier {
           _pcmAccumulator.addAll(data);
           _musicStreamTotalSize = _pcmAccumulator.length;
 
-          // Start rate-controlled sender once we have ~1s of audio decoded
-          if (!_musicTimerRunning && _pcmAccumulator.length >= 32000) {
+          // Start rate-controlled sender once we have ~250ms of audio buffered (8000 bytes).
+          // Was 32000 bytes (1s) which caused a slow-sounding start for first ~10 seconds.
+          if (!_musicTimerRunning && _pcmAccumulator.length >= 8000) {
             _startRateTimer(ble);
           }
           notifyListeners();
@@ -143,8 +155,8 @@ class AudioStreamService with ChangeNotifier {
     // — still too slow! So we use 250 bytes per 7ms = 35,714 bytes/sec (12% over).
     // The 16KB ring buffer absorbs the 12% excess (fills in ~4s then drops 1 packet,
     // inaudible compared to consistent 91%-speed playback).
-    const int bytesPerTick = 250;  // 250/7ms ≈ 35,714 bytes/sec (slightly over to absorb timer jitter)
-    const int timerMs = 7;         // short interval = less jitter impact
+    const int bytesPerTick = 300;  // 300/7ms ≈ 42,857 bytes/sec — slightly over 32kB/s to absorb timer jitter
+    const int timerMs = 7;
     _musicTimer?.cancel();
     _musicTimer = Timer.periodic(const Duration(milliseconds: timerMs), (timer) {
       if (!_isStreamingMusic) {
@@ -187,21 +199,25 @@ class AudioStreamService with ChangeNotifier {
     });
   }
 
-  Future<void> stopMusicStreamBLEFromPath() async {
-    _pcmEventSub?.cancel();
-    _pcmEventSub = null;
+  // Stop music immediately. Sends MUSIC:STOP without ACK so ESP32 reacts in <10ms.
+  Future<void> stopMusicStreamBLEFromPath(BLEService ble) async {
+    // Cancel Dart-side timer and decode stream instantly
     _musicTimer?.cancel();
     _musicTimer = null;
     _musicTimerRunning = false;
+    _pcmEventSub?.cancel();
+    _pcmEventSub = null;
+    _pcmAccumulator.clear();
+    _decodeComplete = false;
     _isStreamingMusic = false;
     _isBleStreaming = false;
     _isMusicPaused = false;
     _musicStreamOffset = 0;
     _musicStreamTotalSize = 0;
-    _pcmAccumulator.clear();
-    _decodeComplete = false;
     _statusMessage = "Stopped.";
     notifyListeners();
+    // Send stop to ESP32 immediately (fire-and-forget, no ACK wait)
+    await ble.transmitStopMusicInstant();
   }
 
   void pauseMusic() {

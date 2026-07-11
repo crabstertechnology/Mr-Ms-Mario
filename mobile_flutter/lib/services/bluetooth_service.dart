@@ -746,6 +746,17 @@ class BLEService with ChangeNotifier {
     await _writeTextWithAck('CALL:STOP', "Stop Call");
   }
 
+  /// Instantly stops music on hardware with no ACK wait.
+  /// Used for stop button and song switching — hardware reacts in <10ms.
+  Future<void> transmitStopMusicInstant() async {
+    if (_textChar == null) return;
+    try {
+      final payload = utf8.encode('MUSIC:STOP');
+      // ignore: unawaited_futures
+      _textChar!.write(payload, withoutResponse: true);
+    } catch (_) {}
+  }
+
   Future<void> transmitStartMusic() async {
     await _writeTextWithAck('MUSIC:START', "Start Music");
   }

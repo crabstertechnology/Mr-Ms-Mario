@@ -528,12 +528,12 @@ class _MainDashboardState extends State<MainDashboard> {
 
   Future<void> _stopMusic(AudioStreamService audioStream, BLEService ble) async {
     if (audioStream.isBleStreaming) {
-      await audioStream.stopMusicStreamBLEFromPath();
+      await audioStream.stopMusicStreamBLEFromPath(ble); // sends MUSIC:STOP instantly
       await audioStream.stopMusicStreamBLE();
     } else {
       await audioStream.stopMusicStream();
+      await ble.transmitStopMusic(); // ACK-based stop for non-BLE-stream path
     }
-    await ble.transmitStopMusic();
     setState(() => _currentlyPlayingFile = null);
   }
 
