@@ -325,7 +325,7 @@ public:
     //   Larger DMA buffers = smoother playback under BLE burst delivery
     i2s_config_t i2s_config = {
       .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_RX),
-      .sample_rate = 18000,
+      .sample_rate = 16000,
       .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
       .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT, // Stereo format (req by DAC clocking)
       .communication_format = I2S_COMM_FORMAT_STAND_I2S,
@@ -437,7 +437,7 @@ public:
         int freq = self->currentFrequency;
         if (freq > 0) {
           for (int i = 0; i < 256; i++) {
-            phase += (2.0 * M_PI * freq) / 18000.0;
+            phase += (2.0 * M_PI * freq) / 16000.0;
             if (phase >= 2.0 * M_PI) phase -= 2.0 * M_PI;
             int16_t val = (int16_t)(sin(phase) * self->currentVolume);
             synthBuf[2 * i]     = val; // Left

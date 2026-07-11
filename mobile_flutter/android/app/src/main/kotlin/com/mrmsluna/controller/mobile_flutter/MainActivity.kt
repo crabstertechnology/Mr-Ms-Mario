@@ -296,6 +296,7 @@ class MainActivity: FlutterActivity() {
         var inputEOS = false
         var outputEOS = false
 
+        resamplePhase = 0.0
         val accum = ByteArrayOutputStream()
 
         try {
@@ -378,6 +379,8 @@ class MainActivity: FlutterActivity() {
         }
         return true
     }
+
+    private var resamplePhase = 0.0
 
     private fun decodeAudioToPcm16kMono(filePath: String): ByteArray? {
         val file = File(filePath)
@@ -475,6 +478,7 @@ class MainActivity: FlutterActivity() {
         codec.release()
         extractor.release()
 
+        resamplePhase = 0.0
         val rawPcm = rawPcmStream.toByteArray()
         return resampleToMono(rawPcm, inputSampleRate, 16000, inputChannels)
     }
@@ -504,23 +508,25 @@ class MainActivity: FlutterActivity() {
             return resultBytes
         }
 
-        // Step 2: Anti-aliased decimation using box filter (moving average)
-        // For each output sample, average ALL input samples that fall in that window.
-        // This is a proper low-pass filter that prevents aliasing noise.
-        val ratio = sourceSampleRate.toDouble() / targetSampleRate.toDouble()
-        val targetSize = (monoShorts.size / ratio).toInt()
-        val resampled = ShortArray(targetSize)
+        // Step 2: Linear interpolation with running phase
+        val resampledList = ArrayList<Short>()
+        val step = sourceSampleRate.toDouble() / targetSampleRate.toDouble()
+        
+        while (resamplePhase < monoShorts.size) {
+            val idx = resamplePhase.toInt()
+            val frac = resamplePhase - idx
+            val val1 = monoShorts[idx]
+            val val2 = if (idx + 1 < monoShorts.size) monoShorts[idx + 1] else val1
+            val interp = (val1 * (1.0 - frac) + val2 * frac).toInt().toShort()
+            resampledList.add(interp)
+            resamplePhase += step
+        }
+        
+        resamplePhase -= monoShorts.size
 
-        for (i in 0 until targetSize) {
-            val srcStart = (i * ratio).toInt()
-            val srcEnd = ((i + 1) * ratio).toInt().coerceAtMost(monoShorts.size)
-            var sum = 0L
-            var count = 0
-            for (j in srcStart until srcEnd) {
-                sum += monoShorts[j].toLong()
-                count++
-            }
-            resampled[i] = if (count > 0) (sum / count).toShort() else 0
+        val resampled = ShortArray(resampledList.size)
+        for (i in resampled.indices) {
+            resampled[i] = resampledList[i]
         }
 
         val resultBytes = ByteArray(resampled.size * 2)
