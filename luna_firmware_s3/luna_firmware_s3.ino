@@ -417,6 +417,20 @@ void handleRobotCommand(String text) {
     audio.stopMusicStream();
     face.setStateLabel("IDLE");
     Serial.println("Music mode stopped");
+  } else if (text.startsWith("VOL:")) {
+    // VOL:0-100  — set speaker output volume (0=mute, 100=max)
+    int vol = text.substring(4).toInt();
+    vol = constrain(vol, 0, 100);
+    audio.setVolume(vol);
+    Serial.print("Volume set to: ");
+    Serial.println(vol);
+  } else if (text.startsWith("BASS:")) {
+    // BASS:0-10  — set bass boost level (0=flat, 10=heavy bass)
+    int bass = text.substring(5).toInt();
+    bass = constrain(bass, 0, 10);
+    audio.setBassBoost(bass);
+    Serial.print("Bass boost set to: ");
+    Serial.println(bass);
   } else if (text.startsWith("AUDIO_MODE:")) {
     String mode = text.substring(11);
     if (mode == "STREAM") {

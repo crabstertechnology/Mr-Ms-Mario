@@ -3000,6 +3000,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         ],
                       ),
                       const SizedBox(height: 8),
+                      // ── Playback controls ─────────────────────────────────────────
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -3027,6 +3028,87 @@ class _MainDashboardState extends State<MainDashboard> {
                             onPressed: () async {
                               await _stopMusic(audioStream, ble);
                             },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Divider(color: Colors.black12, height: 1),
+                      const SizedBox(height: 10),
+                      // ── Volume slider ──────────────────────────────────────────
+                      Row(
+                        children: [
+                          Icon(Icons.volume_down, color: textColor60, size: 18),
+                          Expanded(
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 4.0,
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+                                activeTrackColor: accentColor,
+                                inactiveTrackColor: textColor24,
+                                thumbColor: accentColor,
+                                overlayColor: accentColor.withOpacity(0.18),
+                              ),
+                              child: Slider(
+                                value: audioStream.volume.toDouble(),
+                                min: 0,
+                                max: 100,
+                                divisions: 20,
+                                label: "Vol ${audioStream.volume}%",
+                                onChanged: (val) {
+                                  audioStream.setVolume(val.toInt());
+                                },
+                                // Send BLE command only when user releases finger
+                                onChangeEnd: (val) {
+                                  ble.transmitVolume(val.toInt());
+                                },
+                              ),
+                            ),
+                          ),
+                          Icon(Icons.volume_up, color: accentColor, size: 18),
+                          const SizedBox(width: 4),
+                          Text(
+                            "${audioStream.volume}%",
+                            style: GoogleFonts.firaCode(color: textColor60, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                      // ── Bass slider ────────────────────────────────────────────
+                      Row(
+                        children: [
+                          Icon(Icons.graphic_eq, color: textColor60, size: 18),
+                          Expanded(
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 4.0,
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+                                activeTrackColor: const Color(0xFF7C3AED),
+                                inactiveTrackColor: textColor24,
+                                thumbColor: const Color(0xFF7C3AED),
+                                overlayColor: const Color(0x287C3AED),
+                              ),
+                              child: Slider(
+                                value: audioStream.bass.toDouble(),
+                                min: 0,
+                                max: 10,
+                                divisions: 10,
+                                label: "Bass ${audioStream.bass}",
+                                onChanged: (val) {
+                                  audioStream.setBass(val.toInt());
+                                },
+                                // Send BLE command only when user releases finger
+                                onChangeEnd: (val) {
+                                  ble.transmitBass(val.toInt());
+                                },
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.speaker, color: Color(0xFF7C3AED), size: 18),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Bass ${audioStream.bass}",
+                            style: GoogleFonts.firaCode(color: textColor60, fontSize: 11),
                           ),
                         ],
                       ),

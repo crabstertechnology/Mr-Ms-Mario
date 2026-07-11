@@ -285,6 +285,8 @@ class MainActivity: FlutterActivity() {
         val srcRate = if (inputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE) else 44100
         val srcCh   = if (inputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else 2
 
+        android.util.Log.d("AudioStream", "Decoding: srcRate=$srcRate srcCh=$srcCh -> 16000Hz mono")
+
         val codec = MediaCodec.createDecoderByType(mime)
         codec.configure(inputFormat, null, null, 0)
         codec.start()
@@ -292,7 +294,6 @@ class MainActivity: FlutterActivity() {
         val info = MediaCodec.BufferInfo()
         var inputEOS = false
         var outputEOS = false
-        val ratio = srcRate.toDouble() / 16000.0
 
         try {
             while (!outputEOS && !stopStreamRequested && !Thread.currentThread().isInterrupted) {
@@ -312,7 +313,8 @@ class MainActivity: FlutterActivity() {
                     }
                 }
 
-                // Pull decoded PCM from codec
+                // Pull decoded PCM from codec — emit via runOnUiThread (Flutter EventSink REQUIRES main thread).
+                // Audio quality fix is handled by the rate-controlled timer on the Flutter side (960 bytes/30ms).
                 var outIdx = codec.dequeueOutputBuffer(info, 5000)
                 while (outIdx >= 0) {
                     if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) outputEOS = true
@@ -320,8 +322,6 @@ class MainActivity: FlutterActivity() {
                     if (outBuf != null && info.size > 0) {
                         outBuf.position(info.offset); outBuf.limit(info.offset + info.size)
                         val raw = ByteArray(info.size); outBuf.get(raw)
-
-                        // Resample + mono convert inline
                         val chunk = resampleTo16kMono(raw, srcRate, srcCh)
                         runOnUiThread { if (!stopStreamRequested) sink.success(chunk) }
                     }
@@ -331,7 +331,10 @@ class MainActivity: FlutterActivity() {
                 }
                 if (outIdx == MediaCodec.INFO_TRY_AGAIN_LATER && inputEOS) outputEOS = true
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "streamAudioChunks error: ", e)
+            runOnUiThread { if (!stopStreamRequested) sink.error("DECODE_ERROR", e.message ?: "Unknown decode error", null) }
+        }
         finally {
             try { codec.stop() } catch (_: Exception) {}
             codec.release()

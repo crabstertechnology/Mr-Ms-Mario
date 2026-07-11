@@ -23,6 +23,23 @@ class AudioStreamService with ChangeNotifier {
   Timer? _musicTimer;
   Uint8List? _pcmBytes;
 
+  // Volume (0–100) and bass boost (0–10) — sent to ESP32 via BLE text command
+  int _volume = 70;
+  int _bass = 3;
+
+  int get volume => _volume;
+  int get bass => _bass;
+
+  void setVolume(int v) {
+    _volume = v.clamp(0, 100);
+    notifyListeners();
+  }
+
+  void setBass(int b) {
+    _bass = b.clamp(0, 10);
+    notifyListeners();
+  }
+
   // Streaming path fields
   StreamSubscription? _pcmEventSub;
 
@@ -42,6 +59,10 @@ class AudioStreamService with ChangeNotifier {
   // ─── PCM accumulator (filled by codec, drained by timer at audio clock rate) ─
   final List<int> _pcmAccumulator = [];
   bool _decodeComplete = false;
+
+  // Notify UI only when offset advances by this many bytes (~250ms of audio)
+  // to avoid rebuilding the widget tree every 20ms tick.
+  static const int _notifyEveryBytes = 8000;
 
   // ─── Streaming BLE from file path ────────────────────────────────────────
   // Phase 1: EventChannel decodes into _pcmAccumulator (fast, background)
@@ -70,8 +91,8 @@ class AudioStreamService with ChangeNotifier {
           _pcmAccumulator.addAll(data);
           _musicStreamTotalSize = _pcmAccumulator.length;
 
-          // Start the rate-controlled sender once we have ~0.5s of audio buffered
-          if (!_musicTimerRunning && _pcmAccumulator.length >= 16000) {
+          // Start rate-controlled sender once we have ~1s of audio decoded
+          if (!_musicTimerRunning && _pcmAccumulator.length >= 32000) {
             _startRateTimer(ble);
           }
           notifyListeners();
@@ -99,19 +120,33 @@ class AudioStreamService with ChangeNotifier {
   }
 
   bool _musicTimerRunning = false;
+  int _lastNotifiedOffset = 0;
 
   // ── Phase 2: Rate-controlled sender ─────────────────────────────────────────
-  // Sends exactly 640 bytes every 20ms = 32000 bytes/sec = 16kHz 16-bit mono
-  // Timer is fully synchronous — no await — so it fires precisely every 20ms
+  // Sends PCM at EXACTLY the I2S playback rate: 16kHz × 16-bit × 1ch = 32,000 bytes/sec
+  // = 960 bytes every 30ms.
+  // Sending faster (e.g. 2×) fills the ESP32 ring buffer immediately, causing
+  // xRingbufferSend to block the BLE callback thread → slow-motion audio.
+  // The ESP32's 16KB ring buffer holds ~500ms of audio, providing enough jitter headroom.
   void _startRateTimer(BLEService ble) {
     if (_musicTimerRunning) return;
     _musicTimerRunning = true;
+    _lastNotifiedOffset = 0;
     _statusMessage = "Streaming Music...";
     notifyListeners();
 
-    const int bytesPerTick = 640; // 20ms × 32000 B/s = 640 bytes per tick
+    // ── Phase 2: Rate-controlled sender ─────────────────────────────────────────
+    // 224 bytes per 7ms = 224/0.007 = 32,000 bytes/sec = exact 16kHz 16-bit mono rate.
+    // WHY 7ms not 30ms? Android Timer.periodic(30ms) actually fires every 33–40ms due
+    // to OS jitter (±20% error). At 30ms target, 33ms actual = 960/33ms = 29,090 bytes/sec
+    // = 91% speed → audio sounds slow. At 7ms target, 8ms actual = 224/8ms = 28,000 bytes/sec
+    // — still too slow! So we use 250 bytes per 7ms = 35,714 bytes/sec (12% over).
+    // The 16KB ring buffer absorbs the 12% excess (fills in ~4s then drops 1 packet,
+    // inaudible compared to consistent 91%-speed playback).
+    const int bytesPerTick = 250;  // 250/7ms ≈ 35,714 bytes/sec (slightly over to absorb timer jitter)
+    const int timerMs = 7;         // short interval = less jitter impact
     _musicTimer?.cancel();
-    _musicTimer = Timer.periodic(const Duration(milliseconds: 20), (timer) {
+    _musicTimer = Timer.periodic(const Duration(milliseconds: timerMs), (timer) {
       if (!_isStreamingMusic) {
         timer.cancel();
         _musicTimerRunning = false;
@@ -131,6 +166,7 @@ class AudioStreamService with ChangeNotifier {
           _statusMessage = "Playback complete.";
           notifyListeners();
         }
+        // Not yet done: keep waiting for more decoded data (buffer underrun prevention)
         return;
       }
 
@@ -139,7 +175,12 @@ class AudioStreamService with ChangeNotifier {
         _pcmAccumulator.sublist(_musicStreamOffset, _musicStreamOffset + toSend),
       );
       _musicStreamOffset += toSend;
-      notifyListeners();
+
+      // Only notify UI every ~250ms (8000 bytes) to avoid rebuilding widget tree every tick
+      if (_musicStreamOffset - _lastNotifiedOffset >= _notifyEveryBytes) {
+        _lastNotifiedOffset = _musicStreamOffset;
+        notifyListeners();
+      }
 
       // Fire and forget — BLE stack queues the packets, no blocking
       ble.transmitAudioChunk(chunk);
