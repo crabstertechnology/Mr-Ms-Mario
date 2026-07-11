@@ -14,6 +14,7 @@ class BLEService with ChangeNotifier {
   static const String audioCharUuid = 'd90e0c03-51ee-4c31-893c-cf572db85700';
   static const String textCharUuid = 'c8a00d04-62ff-4b32-843d-0f1c6db8a101';
   static const String statusCharUuid = 'fb2f0e05-73ee-4f32-833d-1f2c6db8a102';
+  static const String audioStreamCharUuid = 'a823e50b-71ee-48c5-9276-2e8c6db8a103';
 
   BluetoothDevice? _connectedDevice;
   bool _isConnected = false;
@@ -26,6 +27,7 @@ class BLEService with ChangeNotifier {
   Timer? _reconnectTimer;
   int _lastReconnectLogTime = 0;
   bool _isReconnecting = false;
+  int _lastScanTime = 0;
 
   // Subscriptions
   StreamSubscription? _scanSub;
@@ -37,6 +39,7 @@ class BLEService with ChangeNotifier {
   BluetoothCharacteristic? _audioChar;
   BluetoothCharacteristic? _textChar;
   BluetoothCharacteristic? _statusChar;
+  BluetoothCharacteristic? _audioStreamChar;
 
   // Diagnostics variables
   int _uptimeSeconds = 0;
@@ -106,6 +109,21 @@ class BLEService with ChangeNotifier {
     }
   }
 
+  Future<bool> transmitAudioChunk(List<int> chunk) async {
+    if (_audioStreamChar == null) return false;
+    try {
+      // Caller guarantees chunk ≤ 250 bytes (1 BLE packet). Fire-and-forget for minimum latency.
+      // ignore: unawaited_futures
+      _audioStreamChar!.write(
+        chunk is Uint8List ? chunk : Uint8List.fromList(chunk),
+        withoutResponse: true,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   BLEService() {
     _initBLE();
     _loadPairedDevice().then((_) {
@@ -142,6 +160,12 @@ class BLEService with ChangeNotifier {
     if (_pairedDeviceId == null || _isConnected || _isConnecting || _isScanning || _isReconnecting) {
       return;
     }
+    
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (nowMs - _lastScanTime < 15000) {
+      return;
+    }
+
     _isReconnecting = true;
     try {
       if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
@@ -162,6 +186,7 @@ class BLEService with ChangeNotifier {
 
       // 2. Scan immediately
       _isScanning = true;
+      _lastScanTime = nowMs;
       notifyListeners();
 
       StreamSubscription? tempSub;
@@ -195,7 +220,7 @@ class BLEService with ChangeNotifier {
 
   void _startReconnectTimer() {
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+    _reconnectTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       // Proactively verify connection state to prevent getting stuck in a fake connected state
       if (_isConnected && _connectedDevice != null) {
         try {
@@ -214,12 +239,17 @@ class BLEService with ChangeNotifier {
         return;
       }
       
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      if (nowMs - _lastScanTime < 15000) {
+        return;
+      }
+      
       _isReconnecting = true;
       try {
         if (await FlutterBluePlus.adapterState.first == BluetoothAdapterState.on) {
-          final now = DateTime.now().millisecondsSinceEpoch;
-          if (now - _lastReconnectLogTime > 15000) {
-            _lastReconnectLogTime = now;
+          final logNow = DateTime.now().millisecondsSinceEpoch;
+          if (logNow - _lastReconnectLogTime > 15000) {
+            _lastReconnectLogTime = logNow;
             addLog("Checking connection status for paired robot...", "BLE");
           }
 
@@ -234,7 +264,7 @@ class BLEService with ChangeNotifier {
           }
 
           if (targetDevice != null) {
-            _lastReconnectLogTime = now;
+            _lastReconnectLogTime = logNow;
             addLog("Paired robot found in system cache. Connecting...", "BLE");
             await connect(targetDevice);
             _isReconnecting = false;
@@ -242,9 +272,10 @@ class BLEService with ChangeNotifier {
           }
 
           // 2. Perform a brief scan to discover if advertising
-          _lastReconnectLogTime = now;
+          _lastReconnectLogTime = logNow;
           addLog("Scanning to locate paired robot...", "BLE");
           _isScanning = true;
+          _lastScanTime = nowMs;
           notifyListeners();
 
           StreamSubscription? tempSub;
@@ -432,6 +463,13 @@ class BLEService with ChangeNotifier {
       addLog("Failed to request high connection priority: $e", "WARNING");
     }
     
+    // Request high MTU size for high audio throughput
+    try {
+      device.requestMtu(512);
+    } catch (e) {
+      addLog("Failed to request MTU 512: $e", "WARNING");
+    }
+    
     // Update background service immediately
     const MethodChannel('com.mrmsluna/notifications').invokeMethod('updateConnectionStatus', {'connected': true});
     
@@ -440,7 +478,23 @@ class BLEService with ChangeNotifier {
 
   Future<void> _setupServices(BluetoothDevice device) async {
     try {
-      List<BluetoothService> services = await device.discoverServices();
+      addLog("Waiting for BLE connection to settle...", "BLE");
+      await Future.delayed(const Duration(milliseconds: 1000));
+
+      List<BluetoothService> services = [];
+      int retries = 3;
+      while (retries > 0) {
+        try {
+          services = await device.discoverServices();
+          break;
+        } catch (e) {
+          retries--;
+          addLog("Discover services failed: $e. Retries left: $retries", "WARNING");
+          if (retries == 0) rethrow;
+          await Future.delayed(const Duration(milliseconds: 1000));
+        }
+      }
+
       BluetoothService? targetService = services.firstWhere(
         (s) => s.uuid == Guid(serviceUuid),
       );
@@ -450,6 +504,7 @@ class BLEService with ChangeNotifier {
         if (c.uuid == Guid(audioCharUuid)) _audioChar = c;
         if (c.uuid == Guid(textCharUuid)) _textChar = c;
         if (c.uuid == Guid(statusCharUuid)) _statusChar = c;
+        if (c.uuid == Guid(audioStreamCharUuid)) _audioStreamChar = c;
       }
 
       if (_statusChar != null) {
@@ -499,6 +554,12 @@ class BLEService with ChangeNotifier {
         }
         if (parts.length >= 5) {
           _activeExpressionLabel = parts[4].trim();
+        }
+        if (parts.length >= 6) {
+          final ip = parts[5].trim();
+          if (ip.isNotEmpty && ip != "0.0.0.0" && ip != "localhost") {
+            setServerIp(ip);
+          }
         }
         notifyListeners();
       }
@@ -675,6 +736,47 @@ class BLEService with ChangeNotifier {
 
   Future<void> transmitSleep( ) async {
     await _writeTextWithAck('SLEEP', "Sleep Robot");
+  }
+
+  Future<void> transmitStartCall() async {
+    await _writeTextWithAck('CALL:START', "Start Call");
+  }
+
+  Future<void> transmitStopCall() async {
+    await _writeTextWithAck('CALL:STOP', "Stop Call");
+  }
+
+  /// Instantly stops music on hardware with no ACK wait.
+  /// Used for stop button and song switching — hardware reacts in <10ms.
+  Future<void> transmitStopMusicInstant() async {
+    if (_textChar == null) return;
+    try {
+      final payload = utf8.encode('MUSIC:STOP');
+      // ignore: unawaited_futures
+      _textChar!.write(payload, withoutResponse: true);
+    } catch (_) {}
+  }
+
+  Future<void> transmitStartMusic() async {
+    await _writeTextWithAck('MUSIC:START', "Start Music");
+  }
+
+  Future<void> transmitStopMusic() async {
+    await _writeTextWithAck('MUSIC:STOP', "Stop Music");
+  }
+
+  /// Send volume level (0–100) to ESP32 speaker.
+  /// ESP32 firmware maps this to I2S DMA amplitude scaling.
+  Future<void> transmitVolume(int level) async {
+    final clamped = level.clamp(0, 100);
+    await _writeTextWithAck('VOL:$clamped', "Volume $clamped");
+  }
+
+  /// Send bass boost level (0–10) to ESP32 speaker.
+  /// ESP32 firmware applies a simple low-shelf EQ boost.
+  Future<void> transmitBass(int level) async {
+    final clamped = level.clamp(0, 10);
+    await _writeTextWithAck('BASS:$clamped', "Bass $clamped");
   }
 
   @override

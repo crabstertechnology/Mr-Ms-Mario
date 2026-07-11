@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Luna-Forge: Compiler & Serial Console</title>
+  <meta name="description" content="Web-based dashboard for compiling Arduino code, flashing ESP32 microcontrollers, and real-time serial monitoring.">
+  
+  <!-- Premium Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-deep: #070a13;
+      --bg-surface: rgba(15, 23, 42, 0.6);
+      --bg-surface-opaque: #0f172a;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(79, 172, 254, 0.4);
+      
+      --primary: #4facfe;
+      --primary-glow: rgba(79, 172, 254, 0.25);
+      --secondary: #00f2fe;
+      --secondary-glow: rgba(0, 242, 254, 0.2);
+      
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.2);
+      --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.2);
+      
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      
+      --font-sans: 'Outfit', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+      
+      --transition-fast: 0.2s;
+      --transition-normal: 0.3s;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-deep);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(79, 172, 254, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(161, 140, 209, 0.08) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 30px 20px;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1300px;
+      width: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 25px;
+      flex: 1;
+    }
+
+    /* Header Styling */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+
+    .brand-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: #000;
+    }
+
+    .brand-text h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff, #9ca3af);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-text p {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--danger);
+      box-shadow: 0 0 8px var(--danger-glow);
+    }
+
+    .status-dot.connected {
+      background-color: var(--success);
+      box-shadow: 0 0 8px var(--success-glow);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
+    }
+
+    /* Grid Layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 25px;
+      flex: 1;
+    }
+
+    @media (max-width: 950px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      transition: border-color var(--transition-fast);
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .card-title svg {
+      width: 18px;
+      height: 18px;
+      fill: var(--primary);
+    }
+
+    /* Form Fields */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-group label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+    }
+
+    select, input[type="text"] {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      transition: var(--transition-fast);
+      outline: none;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 10px rgba(79, 172, 254, 0.15);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Button styles */
+    .btn {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-family: var(--font-sans);
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: var(--transition-fast);
+    }
+
+    .btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), #3b82f6);
+      border: none;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #60b5ff, #4f46e5);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: none;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #34d399, #047857);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      border: none;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: linear-gradient(135deg, #f87171, #b91c1c);
+    }
+
+    .btn-refresh {
+      padding: 10px;
+      width: 40px;
+      flex-shrink: 0;
+    }
+
+    /* Switch Style */
+    .switch-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0, 0, 0, 0.15);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .switch-label {
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--text-main);
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 22px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.15);
+      transition: .3s;
+      border-radius: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--success);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+    }
+
+    /* Loader Spin */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid transparent;
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Console Tabs & Body */
+    .console-card {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 480px;
+    }
+
+    .tabs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+    }
+
+    .tab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      font-family: var(--font-sans);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: var(--transition-fast);
+      position: relative;
+    }
+
+    .tab:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .tab.active {
+      color: var(--primary);
+    }
+
+    .tab.active::after {
+      content: "";
+      position: absolute;
+      bottom: -9px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--primary);
+      box-shadow: 0 0 8px var(--primary);
+    }
+
+    .tab-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .tab-action-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px;
+      border-radius: 6px;
+      transition: var(--transition-fast);
+    }
+
+    .tab-action-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-action-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    .search-filter {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: #fff;
+      font-size: 0.8rem;
+      width: 150px;
+      outline: none;
+      font-family: var(--font-sans);
+      transition: var(--transition-fast);
+    }
+
+    .search-filter:focus {
+      width: 200px;
+      border-color: var(--border-focus);
+    }
+
+    /* Console Terminal Body */
+    .tab-content {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      gap: 12px;
+      height: 100%;
+    }
+
+    .tab-content.active {
+      display: flex;
+    }
+
+    .terminal-container {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      overflow-y: auto;
+      max-height: 480px;
+      min-height: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      scroll-behavior: smooth;
+    }
+
+    /* Custom Scrollbars */
+    .terminal-container::-webkit-scrollbar, select::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .terminal-container::-webkit-scrollbar-track, select::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    .terminal-container::-webkit-scrollbar-thumb, select::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    .terminal-container::-webkit-scrollbar-thumb:hover, select::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .log-line {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .log-line.info { color: #38bdf8; }
+    .log-line.success { color: #34d399; }
+    .log-line.error { color: #f87171; }
+    .log-line.warning { color: #fbbf24; }
+    .log-line.serial-in { color: #e2e8f0; }
+    .log-line.serial-out { color: #a855f7; font-weight: 500; }
+    .log-line.system { color: #94a3b8; font-style: italic; }
+
+    /* Serial Monitor Input */
+    .serial-input-bar {
+      display: flex;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .serial-input-bar input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      outline: none;
+    }
+
+    .serial-input-bar input:focus {
+      border-color: var(--border-focus);
+    }
+
+    .serial-input-bar select {
+      width: 110px;
+    }
+
+    .serial-input-bar button {
+      padding: 0 16px;
+    }
+
+    /* Footer styling */
+    footer {
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    /* Toast Notification */
+    #toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .toast {
+      background: rgba(22, 28, 45, 0.95);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      transform: translateX(120%);
+      transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toast.show {
+      transform: translateX(0);
+    }
+
+    .toast.success { border-left-color: var(--success); }
+    .toast.error { border-left-color: var(--danger); }
+    .toast.warning { border-left-color: var(--warning); }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z"/></svg>
+        </div>
+        <div class="brand-text">
+          <h1>Luna-Forge</h1>
+          <p>Real-time ESP32 Compiler, Flasher & Serial Monitor</p>
+        </div>
+      </div>
+      
+      <div class="connection-status">
+        <div class="status-dot" id="wsStatusDot"></div>
+        <span id="wsStatusText">Server Disconnected</span>
+      </div>
+    </header>
+
+    <!-- Main Dashboard Grid -->
+    <div class="dashboard-grid">
+      
+      <!-- Left Panel: Control Deck -->
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        
+        <!-- Serial Connection Card -->
+        <div class="card">
+          <h2 class="card-title">
+            <svg viewBox="0 0 24 24"><path d="M21,16H3V4H21M21,2H3C1.89,2 1,2.89 1,4V16A2,2 0 0,0 3,18H10V20H8V22H16V20H14V18H21A2,2 0 0,0 23,16V4C23,2.89 22.1,2 21,2Z"/></svg>
+            Serial Hardware Connection
+          </h2>
+          
+          <div class="form-group">
+            <label for="comPort">Select COM Port</label>
+            <div style="display: flex; gap: 8px;">
+              <select id="comPort">
+                <option value="">Scanning ports...</option>
+              </select>
+              <button class="btn btn-refresh" id="btnScanPorts" onclick="requestPorts()" title="Scan for available ports">
+                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg>
+              </button>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="baudRate">Baud Rate</label>
+              <select id="baudRate">
+                <option value="9600">9600</option>
+                <option value="19200">19200</option>
+                <option value="38400">38400</option>
+                <option value="57600">57600</option>
+                <option value="115200" selected>115200</option>
+                <option value="230400">230400</option>
+                <option value="460800">460800</option>
+                <option value="921600">921600</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="lineEnding">Line Ending</label>
+              <select id="lineEnding">
+                <option value="none">None</option>
+                <option value="lf" selected>LF (\n)</option>
+                <option value="cr">CR (\r)</option>
+                <option value="crlf">CR+LF (\r\n)</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="switch-container">
+            <span class="switch-label">Serial Monitor Stream</span>
+            <label class="switch">
+              <input type="checkbox" id="serialToggle" onchange="toggleSerialConnection()">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <button class="btn btn-danger" id="btnResetChip" onclick="resetChip()" disabled>
+            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12,4c-4.42,0-8,3.58-8,8c0,4.42,3.58,8,8,8c4.42,0,8-3.58,8-8C20,7.58,16.42,4,12,4z M12,18c-3.31,0-6-2.69-6-6c0-3.31,2.69-6,6-6s6,2.69,6,6C18,15.31,15.31,18,12,18z M12,8c-2.21,0-4,1.79-4,4c0,2.21,1.79,4,4,4s4-1.79,4-4C16,9.79,14.21,8,12,8z"/></svg>
+            Hard Reset Chip (RTS)
+          </button>
+        </div>
+
+        <!-- Build / Flash Card -->
+        <div class="card">
+          <h2 class="card-title">
+            <svg viewBox="0 0 24 24"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.47,5.34 14.86,5.08L14.48,2.42C14.44,2.18 14.24,2 14,2H10C9.76,2 9.56,2.18 9.52,2.42L9.14,5.08C8.53,5.34 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,13L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.53,18.66 9.14,18.92L9.52,21.58C9.56,21.82 9.76,22 10,22H14C14.24,22 14.44,21.82 14.48,21.58L14.86,18.92C15.47,18.66 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
+            Compiler & Flasher
+          </h2>
+
+          <div class="form-group">
+            <label for="sketchSelect">Target Sketch Folder</label>
+            <div style="display: flex; gap: 8px;">
+              <select id="sketchSelect">
+                <option value="">Scanning sketches...</option>
+              </select>
+              <button class="btn btn-refresh" id="btnScanSketches" onclick="requestSketches()" title="Rescan for sketches">
+                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="fqbnSelect" onchange="toggleCustomFqbnField()">Target Board (FQBN)</label>
+            <select id="fqbnSelect" onchange="toggleCustomFqbnField()">
+              <option value="esp32:esp32:esp32s3:PartitionScheme=huge_app,CDCOnBoot=cdc">ESP32-S3 Mini (USB CDC Boot, Huge App)</option>
+              <option value="esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc">ESP32-C3 SuperMini (Huge App)</option>
+              <option value="esp32:esp32:esp32c3">ESP32-C3 Standard</option>
+              <option value="custom">Custom FQBN...</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="customFqbnGroup" style="display: none;">
+            <label for="customFqbn">Custom FQBN string</label>
+            <input type="text" id="customFqbn" placeholder="e.g. esp32:esp32:esp32s3">
+          </div>
+
+          <div class="switch-container">
+            <span class="switch-label">Auto-Resume Serial After Flash</span>
+            <label class="switch">
+              <input type="checkbox" id="autoResumeToggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button class="btn btn-primary" id="btnCompile" onclick="startCompile()">
+              <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M12,6v3l4-4l-4-4v3c-4.42,0-8,3.58-8,8c0,1.57,0.46,3.03,1.24,4.26L6.7,14.8C6.25,13.97,6,13.01,6,12C6,8.69,8.69,6,12,6z M18.76,7.74L17.3,9.2c0.45,0.83,0.7,1.79,0.7,2.8c0,3.31-2.69,6-6,6v-3l-4,4l4,4v-3c4.42,0,8-3.58,8-8C20,10.43,19.54,8.97,18.76,7.74z"/></svg>
+              <span>COMPILE SKETCH</span>
+            </button>
+            <button class="btn btn-secondary" id="btnFlash" onclick="startFlash()">
+              <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M7,2V13H10V22L17,10H13L17,2H7Z"/></svg>
+              <span>FLASH TO HARDWARE</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Console Logs -->
+      <div class="card console-card">
+        
+        <div class="tabs-header">
+          <div class="tabs">
+            <button class="tab active" onclick="switchTab('serialTab', 'serialContent')">Serial Monitor</button>
+            <button class="tab" onclick="switchTab('buildTab', 'buildContent')">Build & Flash Logs</button>
+          </div>
+          
+          <div class="tab-actions">
+            <input type="text" class="search-filter" id="logFilter" placeholder="Filter console..." oninput="filterLogs()">
+            <label style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--text-muted); cursor: pointer;">
+              <input type="checkbox" id="autoscrollCheck" checked> Autoscroll
+            </label>
+            <button class="tab-action-btn" onclick="clearActiveConsole()" title="Clear logs">
+              <svg viewBox="0 0 24 24"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>
+            </button>
+            <button class="tab-action-btn" onclick="exportActiveConsole()" title="Export logs to file">
+              <svg viewBox="0 0 24 24"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Serial Content -->
+        <div class="tab-content active" id="serialContent">
+          <div class="terminal-container" id="serialTerminal">
+            <div class="log-line system">[System] Serial monitor console ready. Connect to start streaming.</div>
+          </div>
+          
+          <div class="serial-input-bar">
+            <input type="text" id="serialSendInput" placeholder="Type message/command to send..." onkeydown="if(event.key === 'Enter') sendSerialData()">
+            <button class="btn btn-primary" style="width: auto;" onclick="sendSerialData()">Send</button>
+          </div>
+        </div>
+
+        <!-- Build Content -->
+        <div class="tab-content" id="buildContent">
+          <div class="terminal-container" id="buildTerminal">
+            <div class="log-line system">[System] Build & Flash terminal output will appear here in real-time.</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      &copy; 2026 Luna-Forge Workspace. All rights reserved. Powered by Crabster Technology.
+    </footer>
+
+  </div>
+
+  <!-- Toast Containers -->
+  <div id="toast-container"></div>
+
+  <script>
+    // Constants and Global Variables
+    let ws;
+    let wsConnectInterval;
+    let activeTabId = 'serialContent';
+    let serialConnected = false;
+    let buildRunning = false;
+    let flashRunning = false;
+
+    // Toast Utility
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      
+      let icon = '';
+      if (type === 'success') icon = '✦';
+      else if (type === 'error') icon = '⚠';
+      else if (type === 'warning') icon = '⚡';
+      
+      toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+      container.appendChild(toast);
+      
+      setTimeout(() => toast.classList.add('show'), 50);
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Connect to WebSocket Server
+    function connectWS() {
+      const wsUrl = `ws://${window.location.hostname}:8301`;
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        document.getElementById('wsStatusDot').className = 'status-dot connected';
+        document.getElementById('wsStatusText').textContent = 'Server Connected';
+        showToast('Connected to compilation & serial server', 'success');
+        clearInterval(wsConnectInterval);
+        
+        // Fetch initial data
+        requestPorts();
+        requestSketches();
+      };
+      
+      ws.onclose = () => {
+        document.getElementById('wsStatusDot').className = 'status-dot';
+        document.getElementById('wsStatusText').textContent = 'Server Disconnected';
+        setSerialConnectedState(false);
+        
+        // Reset interactive inputs
+        document.getElementById('comPort').innerHTML = '<option value="">Server offline...</option>';
+        document.getElementById('sketchSelect').innerHTML = '<option value="">Server offline...</option>';
+        
+        // Attempt reconnection
+        if (!wsConnectInterval) {
+          wsConnectInterval = setInterval(connectWS, 3000);
+        }
+      };
+      
+      ws.onerror = (err) => {
+        console.error('WebSocket Error: ', err);
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleServerMessage(msg);
+        } catch (e) {
+          console.error('Failed to parse WebSocket message:', e);
+        }
+      };
+    }
+
+    // Handle WebSocket Messages
+    function handleServerMessage(msg) {
+      switch(msg.type) {
+        case 'ports_list':
+          updatePortsList(msg.ports);
+          break;
+        case 'sketches_list':
+          updateSketchesList(msg.sketches);
+          break;
+        case 'serial_status':
+          setSerialConnectedState(msg.connected);
+          if (msg.connected) {
+            appendLog('serialTerminal', `[System] Connected to serial port ${msg.port} at ${msg.baud} baud.`, 'success');
+          } else {
+            let reason = msg.reason ? ` Reason: ${msg.reason}` : '';
+            appendLog('serialTerminal', `[System] Disconnected from serial port.${reason}`, 'system');
+          }
+          break;
+        case 'serial_data':
+          appendLog('serialTerminal', msg.data, 'serial-in');
+          break;
+        case 'compile_output':
+          appendLog('buildTerminal', msg.data, getLogClass(msg.data));
+          break;
+        case 'compile_status':
+          handleCompileStatus(msg.status);
+          break;
+        case 'flash_output':
+          appendLog('buildTerminal', msg.data, getLogClass(msg.data));
+          break;
+        case 'flash_status':
+          handleFlashStatus(msg.status);
+          break;
+        case 'error':
+          showToast(msg.message, 'error');
+          break;
+      }
+    }
+
+    // Helpers
+    function getLogClass(text) {
+      const lower = text.toLowerCase();
+      if (lower.includes('error:') || lower.includes('failed') || lower.includes('fatal')) return 'error';
+      if (lower.includes('warning:') || lower.includes('warning')) return 'warning';
+      if (lower.includes('success') || lower.includes('successful') || lower.includes('uploaded')) return 'success';
+      return 'info';
+    }
+
+    function appendLog(terminalId, text, className = 'info') {
+      const term = document.getElementById(terminalId);
+      const isScrolledToBottom = term.scrollHeight - term.clientHeight <= term.scrollTop + 50;
+      
+      const line = document.createElement('div');
+      line.className = `log-line ${className}`;
+      line.textContent = text;
+      
+      term.appendChild(line);
+      
+      // Keep only last 1000 lines
+      while (term.childNodes.length > 1000) {
+        term.removeChild(term.firstChild);
+      }
+      
+      // Auto-scroll if enabled
+      const autoscroll = document.getElementById('autoscrollCheck').checked;
+      if (autoscroll && isScrolledToBottom) {
+        term.scrollTop = term.scrollHeight;
+      }
+      
+      // Trigger filtering check
+      filterSingleLine(line);
+    }
+
+    // Update Dropdowns
+    function updatePortsList(ports) {
+      const select = document.getElementById('comPort');
+      if (ports.length === 0) {
+        select.innerHTML = '<option value="">No COM Ports Found</option>';
+        return;
+      }
+      
+      select.innerHTML = '';
+      ports.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.port;
+        option.textContent = `${p.port} - ${p.description} ${p.is_esp ? '(ESP)' : ''}`;
+        if (p.is_esp && !select.value) {
+          option.selected = true; // Auto select ESP candidates
+        }
+        select.appendChild(option);
+      });
+    }
+
+    function updateSketchesList(sketches) {
+      const select = document.getElementById('sketchSelect');
+      if (sketches.length === 0) {
+        select.innerHTML = '<option value="">No sketches detected (.ino)</option>';
+        return;
+      }
+      
+      select.innerHTML = '';
+      sketches.forEach(s => {
+        const option = document.createElement('option');
+        option.value = s.path;
+        option.textContent = `${s.name} [${s.path}]`;
+        select.appendChild(option);
+      });
+    }
+
+    // Action Triggers (WS out)
+    function requestPorts() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'get_ports' }));
+      }
+    }
+
+    // Rescan sketches
+    function requestSketches() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'get_sketches' }));
+      }
+    }
+
+    function toggleSerialConnection() {
+      const toggle = document.getElementById('serialToggle');
+      const port = document.getElementById('comPort').value;
+      const baud = parseInt(document.getElementById('baudRate').value);
+      
+      if (!port) {
+        showToast('Please select a valid COM port first', 'warning');
+        toggle.checked = false;
+        return;
+      }
+      
+      if (toggle.checked) {
+        ws.send(JSON.stringify({
+          action: 'connect_serial',
+          port: port,
+          baud: baud
+        }));
+      } else {
+        ws.send(JSON.stringify({
+          action: 'disconnect_serial'
+        }));
+      }
+    }
+
+    function setSerialConnectedState(connected) {
+      serialConnected = connected;
+      document.getElementById('serialToggle').checked = connected;
+      document.getElementById('btnResetChip').disabled = !connected;
+      document.getElementById('comPort').disabled = connected;
+      document.getElementById('btnScanPorts').disabled = connected;
+    }
+
+    function resetChip() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'reset_chip' }));
+      }
+    }
+
+    function sendSerialData() {
+      const input = document.getElementById('serialSendInput');
+      const ending = document.getElementById('lineEnding').value;
+      let text = input.value;
+      if (!text) return;
+      
+      if (ending === 'lf') text += '\n';
+      else if (ending === 'cr') text += '\r';
+      else if (ending === 'crlf') text += '\r\n';
+      
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          action: 'send_serial',
+          data: text
+        }));
+        appendLog('serialTerminal', text.replace(/[\r\n]+$/, ''), 'serial-out');
+        input.value = '';
+      }
+    }
+
+    // Build Actions
+    function getSelectedFqbn() {
+      const select = document.getElementById('fqbnSelect').value;
+      if (select === 'custom') {
+        return document.getElementById('customFqbn').value.trim();
+      }
+      return select;
+    }
+
+    function toggleCustomFqbnField() {
+      const select = document.getElementById('fqbnSelect').value;
+      document.getElementById('customFqbnGroup').style.display = (select === 'custom') ? 'flex' : 'none';
+    }
+
+    function startCompile() {
+      const sketch = document.getElementById('sketchSelect').value;
+      const fqbn = getSelectedFqbn();
+      
+      if (!sketch) {
+        showToast('Please select a sketch folder to compile', 'warning');
+        return;
+      }
+      
+      if (!fqbn) {
+        showToast('Please specify a valid Board FQBN', 'warning');
+        return;
+      }
+      
+      // Auto-switch to logs tab
+      switchTab('buildTab', 'buildContent');
+      
+      appendLog('buildTerminal', `\n[System] Starting Compilation...`, 'system');
+      appendLog('buildTerminal', `[System] Sketch: ${sketch}`, 'system');
+      appendLog('buildTerminal', `[System] Board: ${fqbn}`, 'system');
+      
+      buildRunning = true;
+      updateControlButtons();
+      
+      ws.send(JSON.stringify({
+        action: 'start_compile',
+        sketch: sketch,
+        fqbn: fqbn
+      }));
+    }
+
+    function startFlash() {
+      const sketch = document.getElementById('sketchSelect').value;
+      const fqbn = getSelectedFqbn();
+      const port = document.getElementById('comPort').value;
+      
+      if (!sketch) {
+        showToast('Please select a sketch folder to flash', 'warning');
+        return;
+      }
+      if (!port) {
+        showToast('Please select a COM port to flash to', 'warning');
+        return;
+      }
+      
+      // Auto-switch to logs tab
+      switchTab('buildTab', 'buildContent');
+      
+      appendLog('buildTerminal', `\n[System] Starting Hardware Flash...`, 'system');
+      appendLog('buildTerminal', `[System] Sketch: ${sketch}`, 'system');
+      appendLog('buildTerminal', `[System] Port: ${port}`, 'system');
+      appendLog('buildTerminal', `[System] Board: ${fqbn}`, 'system');
+      
+      flashRunning = true;
+      updateControlButtons();
+      
+      ws.send(JSON.stringify({
+        action: 'start_flash',
+        sketch: sketch,
+        port: port,
+        fqbn: fqbn
+      }));
+    }
+
+    function handleCompileStatus(status) {
+      buildRunning = false;
+      updateControlButtons();
+      
+      if (status === 'success') {
+        showToast('Compilation completed successfully!', 'success');
+        appendLog('buildTerminal', `[System] COMPILATION SUCCESSFUL!`, 'success');
+      } else {
+        showToast('Compilation failed!', 'error');
+        appendLog('buildTerminal', `[System] COMPILATION FAILED! Check error logs.`, 'error');
+      }
+    }
+
+    function handleFlashStatus(status) {
+      flashRunning = false;
+      updateControlButtons();
+      
+      if (status === 'success') {
+        showToast('Hardware flash completed successfully!', 'success');
+        appendLog('buildTerminal', `[System] FLASH SUCCESSFUL!`, 'success');
+        
+        // Auto resume serial connection if checked
+        const autoResume = document.getElementById('autoResumeToggle').checked;
+        if (autoResume) {
+          setTimeout(() => {
+            document.getElementById('serialToggle').checked = true;
+            toggleSerialConnection();
+          }, 1500); // Wait a brief moment for chip reboot
+        }
+      } else {
+        showToast('Hardware flash failed!', 'error');
+        appendLog('buildTerminal', `[System] FLASH FAILED! Verify port and try manual reset bootloader.`, 'error');
+      }
+    }
+
+    function updateControlButtons() {
+      const isWorking = buildRunning || flashRunning;
+      document.getElementById('btnCompile').disabled = isWorking;
+      document.getElementById('btnFlash').disabled = isWorking;
+      
+      const compText = document.getElementById('btnCompile').querySelector('span');
+      const flashText = document.getElementById('btnFlash').querySelector('span');
+      
+      if (buildRunning) {
+        compText.textContent = 'COMPILING SKETCH...';
+        document.getElementById('btnCompile').querySelector('svg').style.display = 'none';
+        // Add loading spinner dynamically
+        if (!document.getElementById('compileSpinner')) {
+          const s = document.createElement('div');
+          s.className = 'spinner';
+          s.id = 'compileSpinner';
+          document.getElementById('btnCompile').prepend(s);
+        }
+      } else {
+        compText.textContent = 'COMPILE SKETCH';
+        document.getElementById('btnCompile').querySelector('svg').style.display = 'block';
+        const s = document.getElementById('compileSpinner');
+        if (s) s.remove();
+      }
+      
+      if (flashRunning) {
+        flashText.textContent = 'FLASHING TO BOARD...';
+        document.getElementById('btnFlash').querySelector('svg').style.display = 'none';
+        if (!document.getElementById('flashSpinner')) {
+          const s = document.createElement('div');
+          s.className = 'spinner';
+          s.id = 'flashSpinner';
+          document.getElementById('btnFlash').prepend(s);
+        }
+      } else {
+        flashText.textContent = 'FLASH TO HARDWARE';
+        document.getElementById('btnFlash').querySelector('svg').style.display = 'block';
+        const s = document.getElementById('flashSpinner');
+        if (s) s.remove();
+      }
+    }
+
+    // Tabs Manager
+    function switchTab(tabButtonId, contentId) {
+      // Deactivate all tabs
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      // Activate selected
+      event.target.classList.add('active');
+      document.getElementById(contentId).classList.add('active');
+      activeTabId = contentId;
+      
+      // Clear filter and re-apply
+      document.getElementById('logFilter').value = '';
+      filterLogs();
+    }
+
+    function clearActiveConsole() {
+      const termId = (activeTabId === 'serialContent') ? 'serialTerminal' : 'buildTerminal';
+      const term = document.getElementById(termId);
+      term.innerHTML = `<div class="log-line system">[System] Console cleared.</div>`;
+    }
+
+    function exportActiveConsole() {
+      const termId = (activeTabId === 'serialContent') ? 'serialTerminal' : 'buildTerminal';
+      const term = document.getElementById(termId);
+      let text = '';
+      term.querySelectorAll('.log-line').forEach(line => {
+        text += line.textContent + '\n';
+      });
+      
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `luna-forge-${termId}-${Date.now()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Console Filtering
+    function filterLogs() {
+      const query = document.getElementById('logFilter').value.toLowerCase();
+      const termId = (activeTabId === 'serialContent') ? 'serialTerminal' : 'buildTerminal';
+      const term = document.getElementById(termId);
+      
+      term.querySelectorAll('.log-line').forEach(line => {
+        if (!query || line.textContent.toLowerCase().includes(query)) {
+          line.style.display = 'block';
+        } else {
+          line.style.display = 'none';
+        }
+      });
+    }
+
+    function filterSingleLine(lineEl) {
+      const query = document.getElementById('logFilter').value.toLowerCase();
+      if (query && !lineEl.textContent.toLowerCase().includes(query)) {
+        lineEl.style.display = 'none';
+      }
+    }
+
+    // Init
+    window.onload = () => {
+      connectWS();
+      toggleCustomFqbnField();
+    };
+  </script>
+</body>
+</html>

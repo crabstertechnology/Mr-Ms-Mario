@@ -3,13 +3,13 @@ import sys
 import time
 
 def monitor():
-    port = "COM6"
+    port = "COM9"
     baud = 115200
     print(f"Monitoring ESP32 on {port} at {baud} baud. Press Ctrl+C to stop.\n")
     try:
         ser = serial.Serial(port, baud, timeout=1.0)
         ser.dtr = True
-        ser.rts = True
+        ser.rts = False
     except Exception as e:
         print(f"Error opening serial port: {e}")
         return
