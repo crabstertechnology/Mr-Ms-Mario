@@ -429,7 +429,7 @@ void applySettings(String payload) {
 
   if (partCount < 2) return; // Need at least ble,speed
 
-  bleActive   = (parts[0] == "1");
+  bleActive   = true; // Always ON
   gifSpeed    = parts[1].toInt();
   if (gifSpeed < 20)  gifSpeed = 20;
   if (gifSpeed > 500) gifSpeed = 500;
@@ -537,7 +537,7 @@ void setup() {
 
   // Load persistence settings from NVS Preferences
   preferences.begin("luna", false);
-  bleActive = preferences.getBool("ble", true);
+  bleActive = true; // Always ON
   gifSpeed = preferences.getInt("speed", 100);
   defaultGif = preferences.getInt("defGif", 99);
   gifIntro = preferences.getInt("intGif", 1);
@@ -600,13 +600,10 @@ void setup() {
   display.print(negativeDisplay ? "Loading Ms. Luna..." : "Loading Mr. Luna...");
   display.display();
   
-  // Start Bluetooth BLE Server if active
-  if (bleActive) {
-    ble.init();
-    Serial.println(negativeDisplay ? "BLE Server Started as 'Ms. Luna Robot'." : "BLE Server Started as 'Mr. Luna Robot'.");
-  } else {
-    Serial.println("BLE Server disabled by startup settings.");
-  }
+  // Start Bluetooth BLE Server (always on)
+  bleActive = true;
+  ble.init();
+  Serial.println(negativeDisplay ? "BLE Server Started as 'Ms. Luna Robot'." : "BLE Server Started as 'Mr. Luna Robot'.");
 
   // Boot sequence animation & sound
   delay(100); // Faster boot!
@@ -704,15 +701,10 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
       audio.playSound(SOUND_COIN);
       Serial.println("Skipped to next animation");
     } else if (actionType == 3) {
-      bleActive = !bleActive;
-      ble.setBLEActive(bleActive);
-      if (bleActive) {
-        audio.playSound(SOUND_POWERUP);
-      } else {
-        audio.playSound(SOUND_POWERDOWN);
-      }
-      Serial.print("Toggled BLE: ");
-      Serial.println(bleActive ? "ON" : "OFF");
+      // BLE is always ON, do not toggle
+      bleActive = true;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("BLE Toggle touch action ignored (BLE is always ON)");
     } else if (actionType >= 20) {
       // Specific GIF index: actionType = 20 + gifIndex
       int gifIdx = actionType - 20;
@@ -844,8 +836,8 @@ void loop() {
           // Adjusting an option value
           if (touchEvent == TOUCH_TAP) {
             if (menuOption == 0) { // BLE on/off toggle
-              bleActive = !bleActive;
-              ble.setBLEActive(bleActive);
+              // BLE is always ON, do not toggle
+              bleActive = true;
               audio.playSound(SOUND_CHIRP);
             } else if (menuOption == 1) { // GIF speed control
               gifSpeed += 20;

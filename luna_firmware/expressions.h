@@ -376,8 +376,7 @@ public:
       
       switch (optIdx) {
         case 0:
-          display.print("BLE: ");
-          display.print(bleOn ? "ON" : "OFF");
+          display.print("BLE: ALWAYS ON");
           break;
         case 1:
           display.print("SPEED: ");

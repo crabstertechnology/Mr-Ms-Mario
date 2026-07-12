@@ -21,7 +21,8 @@ void handleRobotCommand(String cmd);
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite display = TFT_eSprite(&tft);
 LunaFace face(display);
-LunaAudio audio(BUZZER_PIN);
+LunaAudio audio;
+volatile int micAmplitude = 0;
 LunaBLE ble;
 LunaInteraction interaction(TOUCH_PIN);
 LunaNetwork network;
@@ -44,6 +45,7 @@ int oledBrightness = 2; // screen brightness (1: Low, 2: Med, 3: High)
 bool inSettingsMenu = false;
 int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
 bool optionSelected = false;
+SmartwatchScreen currentScreen = SCREEN_FACE;
 
 // System State Variables
 unsigned int touchCount = 0;
@@ -316,6 +318,9 @@ void handleRobotCommand(String text) {
       
       Serial.println("Calendar Event: type=" + type + ", time=" + time + ", title=" + title);
       
+      // Save in calendar events list
+      face.addCalendarEvent(type, time, title);
+      
       String notificationText = "";
       if (type == "birthday") {
         notificationText = "Birthday: " + title;
@@ -326,7 +331,7 @@ void handleRobotCommand(String text) {
       }
       isReminderRinging = true;
       lastReminderSoundTime = millis();
-      face.setNotificationText(notificationText);
+      face.setNotificationText(notificationText, rtcHour, rtcMinute);
       audio.playSound(SOUND_POWERUP); // play alert sound
     }
   } else if (text.startsWith("ALARM:")) {
@@ -390,6 +395,45 @@ void handleRobotCommand(String text) {
     }
     
     activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
+  } else if (text == "CALL:START") {
+    audio.micStreaming = true;
+    audio.audioMode = LunaAudio::AUDIO_MODE_STREAM;
+    face.setStateLabel("CALL");
+    Serial.println("VoIP Call started");
+  } else if (text == "CALL:STOP") {
+    audio.micStreaming = false;
+    audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+    face.setStateLabel("IDLE");
+    Serial.println("VoIP Call stopped");
+  } else if (text == "MUSIC:START") {
+    audio.micStreaming = false;
+    audio.startMusicStream();
+    face.setStateLabel("MUSIC");
+    Serial.println("Music mode started");
+  } else if (text == "MUSIC:STOP") {
+    audio.stopMusicStream();
+    face.setStateLabel("IDLE");
+    Serial.println("Music mode stopped");
+  } else if (text.startsWith("VOL:")) {
+    int vol = text.substring(4).toInt();
+    vol = constrain(vol, 0, 100);
+    audio.setVolume(vol);
+    Serial.print("Volume set to: ");
+    Serial.println(vol);
+  } else if (text.startsWith("BASS:")) {
+    int bass = text.substring(5).toInt();
+    bass = constrain(bass, 0, 10);
+    audio.setBassBoost(bass);
+    Serial.print("Bass boost set to: ");
+    Serial.println(bass);
+  } else if (text.startsWith("AUDIO_MODE:")) {
+    String mode = text.substring(11);
+    if (mode == "STREAM") {
+      audio.audioMode = LunaAudio::AUDIO_MODE_STREAM;
+    } else {
+      audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+    }
+    Serial.println("Audio mode set to: " + mode);
   } else if (text.startsWith("NOTIF:")) {
     // Command format: NOTIF:Title|Body
     String payload = text.substring(6);
@@ -399,15 +443,15 @@ void handleRobotCommand(String text) {
       String notifBody = payload.substring(sep + 1);
       notifTitle.trim();
       notifBody.trim();
-      face.setDetailedNotification(notifTitle, notifBody);
+      face.setDetailedNotification(notifTitle, notifBody, rtcHour, rtcMinute);
     } else {
-      face.setNotificationText(payload);
+      face.setNotificationText(payload, rtcHour, rtcMinute);
     }
     audio.playSound(SOUND_CHIRP);
     activeNotificationDurationMs = notificationDurationMs;
   } else {
     // Normal text message notification
-    face.setNotificationText(text);
+    face.setNotificationText(text, rtcHour, rtcMinute);
     audio.playSound(SOUND_CHIRP); // alert user
     activeNotificationDurationMs = notificationDurationMs;
   }
@@ -430,7 +474,7 @@ void applySettings(String payload) {
 
   if (partCount < 2) return; // Need at least ble,speed
 
-  bleActive   = (parts[0] == "1");
+  bleActive   = true; // Always ON
   gifSpeed    = parts[1].toInt();
   if (gifSpeed < 20)  gifSpeed = 20;
   if (gifSpeed > 500) gifSpeed = 500;
@@ -544,7 +588,7 @@ void setup() {
 
   // Load persistence settings from NVS Preferences
   preferences.begin("luna", false);
-  bleActive = preferences.getBool("ble", true);
+  bleActive = true; // Always ON
   gifSpeed = preferences.getInt("speed", 100);
   defaultGif = preferences.getInt("defGif", 99);
   gifIntro = preferences.getInt("intGif", 1);
@@ -587,14 +631,14 @@ void setup() {
   
   // Initialize TFT_eSPI Display and Sprite Buffer
   tft.init();
-  tft.setRotation(0); // 0 = Portrait (128x160)
+  tft.setRotation(0); // Normal rotation
   tft.fillScreen(TFT_BLACK);
   
   display.createSprite(SCREEN_WIDTH, SCREEN_HEIGHT);
   display.fillSprite(TFT_BLACK);
   
-  // Apply saved invert setting immediately after display init
-  tft.invertDisplay(negativeDisplay);
+  // Make bootloading logo alone always invert
+  tft.invertDisplay(!negativeDisplay);
 
   // Apply saved brightness setting
   #ifdef TFT_BL
@@ -604,25 +648,29 @@ void setup() {
   else analogWrite(TFT_BL, 255);
   #endif
 
-  // Display initial loading face
+  // Display initial loading face / logo
   display.fillSprite(TFT_BLACK);
-  display.setTextSize(1);
-  display.setTextColor(TFT_WHITE, TFT_BLACK);
-  display.setCursor(8, 74);
-  display.print(negativeDisplay ? "Loading Ms. Luna..." : "Loading Mr. Luna...");
+  display.pushImage((SCREEN_WIDTH - LOGO_WIDTH)/2, (SCREEN_HEIGHT - LOGO_HEIGHT)/2, LOGO_WIDTH, LOGO_HEIGHT, image_logo_pixels);
   display.pushSprite(0, 0);
   
-  // Start Bluetooth BLE Server if active
-  if (bleActive) {
-    ble.init();
-    Serial.println(negativeDisplay ? "BLE Server Started as 'Ms. Luna Robot'." : "BLE Server Started as 'Mr. Luna Robot'.");
-  } else {
-    Serial.println("BLE Server disabled by startup settings.");
+  // Start Bluetooth BLE Server (always on)
+  bleActive = true;
+  ble.init();
+  Serial.println(negativeDisplay ? "BLE Server Started as 'Ms. Luna Robot'." : "BLE Server Started as 'Mr. Luna Robot'.");
+
+  // Play startup sound immediately so it plays while loading the logo
+  audio.playSound(SOUND_STARTUP, introSoundSpeed);
+
+  // Show logo for 3 seconds while playing the startup sound and ignoring/clearing touches
+  unsigned long bootStart = millis();
+  while (millis() - bootStart < 3000) {
+    audio.update();
+    interaction.update(); // read to clear/ignore early boot noise
+    delay(1);
   }
 
-  // Boot sequence animation & sound
-  delay(100); // Faster boot!
-  audio.playSound(SOUND_STARTUP, introSoundSpeed);
+  // Restore saved invert setting for standard operation
+  tft.invertDisplay(negativeDisplay);
   
   // Set intro speed
   face.setFrameDelay(gifIntroSpeed);
@@ -716,15 +764,10 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
       audio.playSound(SOUND_COIN);
       Serial.println("Skipped to next animation");
     } else if (actionType == 3) {
-      bleActive = !bleActive;
-      ble.setBLEActive(bleActive);
-      if (bleActive) {
-        audio.playSound(SOUND_POWERUP);
-      } else {
-        audio.playSound(SOUND_POWERDOWN);
-      }
-      Serial.print("Toggled BLE: ");
-      Serial.println(bleActive ? "ON" : "OFF");
+      // BLE is always ON, do not toggle
+      bleActive = true;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("BLE Toggle touch action ignored (BLE is always ON)");
     } else if (actionType >= 20) {
       // Specific GIF index: actionType = 20 + gifIndex
       int gifIdx = actionType - 20;
@@ -821,7 +864,11 @@ void loop() {
     lastInteractionTime = now; // reset inactivity clock
     lastExpressionCycleTime = now; // reset expression cycle timer
 
-    if (isAlarmRinging || isReminderRinging) {
+    if (face.isPopupActive()) {
+      face.setPopupDismiss();
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("Notification popup dismissed by touch.");
+    } else if (isAlarmRinging || isReminderRinging) {
       isAlarmRinging = false;
       isReminderRinging = false;
       audio.playSound(SOUND_COIN); // play coin sound to confirm dismissal
@@ -838,26 +885,22 @@ void loop() {
       face.setStateLabel("IDLE");
       ble.sendLog("ALARM:DISMISS");
       Serial.println("Alarm/Reminder dismissed by hardware touch button.");
-    } else if (isAsleep && !inSettingsMenu) {
+    } else if (isAsleep && currentScreen != SCREEN_SETTINGS) {
       // Any touch wakes the robot up
       isAsleep = false;
+      currentScreen = SCREEN_FACE;
       face.setExpression(EXPR_IDLE);
       audio.playSound(SOUND_CHIRP);
       Serial.println(negativeDisplay ? "Ms. Luna Woke Up!" : "Mr. Luna Woke Up!");
-    } else if (face.getExpression() == EXPR_CLOCK) {
-      // Any touch exits clock mode
-      face.setExpression(EXPR_IDLE);
-      audio.playSound(SOUND_CHIRP);
-      Serial.println("Exited clock mode");
     } else {
-      if (inSettingsMenu) {
+      if (currentScreen == SCREEN_SETTINGS) {
         // Settings Menu Touch Logic
         if (optionSelected) {
           // Adjusting an option value
           if (touchEvent == TOUCH_TAP) {
             if (menuOption == 0) { // BLE on/off toggle
-              bleActive = !bleActive;
-              ble.setBLEActive(bleActive);
+              // BLE is always ON, do not toggle
+              bleActive = true;
               audio.playSound(SOUND_CHIRP);
             } else if (menuOption == 1) { // GIF speed control
               gifSpeed += 20;
@@ -867,7 +910,7 @@ void loop() {
               face.setFrameDelay(gifSpeed);
               audio.playSound(SOUND_CHIRP);
             } else if (menuOption == 2) { // Clock Style
-              clockStyle = (clockStyle + 1) % 4;
+              clockStyle = (clockStyle + 1) % 5;
               audio.playSound(SOUND_CHIRP);
             } else if (menuOption == 3) { // Invert/Negative display
               negativeDisplay = !negativeDisplay;
@@ -919,43 +962,97 @@ void loop() {
               audio.playSound(SOUND_POWERUP);
               optionSelected = false; // deselect
             } else if (menuOption == 6) { // EXIT
-              inSettingsMenu = false;
+              currentScreen = SCREEN_FACE;
               audio.playSound(SOUND_POWERDOWN);
             } else {
               // Option select (0 to 4)
               optionSelected = true;
               audio.playSound(SOUND_COIN);
             }
+          } else if (touchEvent == TOUCH_DOUBLE_TAP) {
+            // Double tap cycles screen within UI modes
+            if (currentScreen >= SCREEN_CLOCK && currentScreen <= SCREEN_SETTINGS) {
+              currentScreen = (SmartwatchScreen)((currentScreen + 1) % 4);
+              if (currentScreen == SCREEN_SETTINGS) {
+                menuOption = 0;
+                optionSelected = false;
+              }
+            }
+            audio.playSound(SOUND_COIN);
+            Serial.print("Switched screen to: ");
+            Serial.println(currentScreen);
+          } else if (touchEvent == TOUCH_TRIPLE_TAP) {
+            currentScreen = SCREEN_FACE;
+            audio.playSound(SOUND_STARTUP);
           }
         }
       } else {
-        // Normal state controls
+        // Normal state controls (Smartwatch OS style navigation)
         switch (touchEvent) {
           case TOUCH_TAP:
-            touchCount++;
-            Serial.print("Touch count (Single Tap): ");
-            Serial.println(touchCount);
-            executeTouchAction(touchSingle, TOUCH_TAP);
+            if (currentScreen == SCREEN_CLOCK) {
+              clockStyle = (clockStyle + 1) % 5; // Cycle clock style
+              audio.playSound(SOUND_CHIRP);
+            } else if (currentScreen == SCREEN_NOTIFICATIONS) {
+              face.cycleNotificationView();
+              audio.playSound(SOUND_CHIRP);
+            } else if (currentScreen == SCREEN_CALENDAR) {
+              face.cycleCalendarView();
+              audio.playSound(SOUND_CHIRP);
+            } else if (currentScreen == SCREEN_FACE) {
+              cycleExpression();
+              audio.playSound(SOUND_CHIRP);
+            } else {
+              touchCount++;
+              executeTouchAction(touchSingle, TOUCH_TAP);
+            }
             break;
 
           case TOUCH_DOUBLE_TAP:
-            touchCount += 2;
-            Serial.print("Touch count (Double Tap): ");
-            Serial.println(touchCount);
-            executeTouchAction(touchDouble, TOUCH_DOUBLE_TAP);
+            // Switch to next smartwatch screen only when in UI mode
+            if (currentScreen >= SCREEN_CLOCK && currentScreen <= SCREEN_SETTINGS) {
+              currentScreen = (SmartwatchScreen)((currentScreen + 1) % 4);
+              if (currentScreen == SCREEN_SETTINGS) {
+                menuOption = 0;
+                optionSelected = false;
+              }
+              audio.playSound(SOUND_COIN);
+              Serial.print("Switched screen to: ");
+              Serial.println(currentScreen);
+            } else if (currentScreen == SCREEN_FACE) {
+              executeTouchAction(touchDouble, TOUCH_DOUBLE_TAP);
+            }
             break;
 
           case TOUCH_TRIPLE_TAP:
-            // Open local settings menu
-            inSettingsMenu = true;
-            menuOption = 0;
-            optionSelected = false;
-            audio.playSound(SOUND_POWERUP);
-            Serial.println("Local Settings Menu opened.");
+            if (currentScreen == SCREEN_FACE) {
+              currentScreen = SCREEN_CLOCK;
+              audio.playSound(SOUND_POWERUP);
+              Serial.println("Entered smartwatch UI mode.");
+            } else {
+              currentScreen = SCREEN_FACE;
+              audio.playSound(SOUND_STARTUP);
+              Serial.println("Exited UI, returned to Mochi expressions.");
+            }
             break;
 
           case TOUCH_LONG_PRESS:
-            executeTouchAction(touchLong, TOUCH_LONG_PRESS);
+            if (currentScreen == SCREEN_CLOCK) {
+              // BLE is always ON, do not toggle
+              audio.playSound(SOUND_CHIRP);
+            } else if (currentScreen == SCREEN_NOTIFICATIONS) {
+              face.clearNotifications();
+              audio.playSound(SOUND_GAMEOVER);
+            } else if (currentScreen == SCREEN_CALENDAR) {
+              face.toggleCalendarMode();
+              audio.playSound(SOUND_COIN);
+            } else if (currentScreen == SCREEN_FACE) {
+              isAsleep = !isAsleep;
+              face.setExpression(isAsleep ? EXPR_SLEEPING : EXPR_IDLE);
+              audio.playSound(isAsleep ? SOUND_POWERDOWN : SOUND_CHIRP);
+            } else {
+              executeTouchAction(touchLong, TOUCH_LONG_PRESS);
+            }
             break;
 
           default:
@@ -982,33 +1079,33 @@ void loop() {
     }
   }
 
-  // 3.6. Expression cycling and transitions (play once for all-gifs cycle, timeout for static reactions)
-  if (!inSettingsMenu && !isAsleep && face.getExpression() != EXPR_CLOCK) {
-    if (inIntroPhase) {
-      if (face.isGifFinished()) {
-        face.clearGifFinished();
-        inIntroPhase = false;
-        face.setFrameDelay(gifSpeed);
-        if (isCycleMode) {
-          cycleExpression();
+  // 3.6. Expression cycling and transitions
+  if (inIntroPhase) {
+    currentScreen = SCREEN_FACE; // Force face screen on boot for intro animation
+    if (face.isGifFinished()) {
+      face.clearGifFinished();
+      inIntroPhase = false;
+      face.setFrameDelay(gifSpeed);
+      currentScreen = SCREEN_FACE; // Switch to face after boot!
+      if (isCycleMode) {
+        cycleExpression();
+      } else {
+        if (defaultGif >= 100) {
+          face.setGifIndex(defaultGif - 100);
+          face.setExpression(EXPR_ALL_GIF);
         } else {
-          if (defaultGif >= 100) {
-            face.setGifIndex(defaultGif - 100);
-            face.setExpression(EXPR_ALL_GIF);
-          } else {
-            face.setExpression((Expression)defaultGif);
-          }
+          face.setExpression((Expression)defaultGif);
         }
-        lastExpressionCycleTime = now;
       }
-    } else {
+      lastExpressionCycleTime = now;
+    }
+  } else {
+    // Regular operation expression cycling (only when on SCREEN_FACE screen)
+    if (currentScreen == SCREEN_FACE && !isAsleep) {
       if (face.getExpression() == EXPR_ALL_GIF) {
         if (face.isGifFinished()) {
           face.clearGifFinished();
-          if (mapsActive) {
-            face.setExpression(EXPR_MAP);
-            lastExpressionCycleTime = now;
-          } else if (isCycleMode) {
+          if (isCycleMode) {
             // Only switch to a different random GIF if at least 8 seconds has elapsed since last cycle!
             if (now - lastExpressionCycleTime >= 8000) {
               cycleExpression();
@@ -1018,10 +1115,8 @@ void loop() {
         }
       } else {
         // Return to random emoji cycling/default expression after notification duration
-        if (face.getExpression() != EXPR_MAP && !isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
-          if (mapsActive) {
-            face.setExpression(EXPR_MAP);
-          } else if (isCycleMode) {
+        if (!isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
+          if (isCycleMode) {
             cycleExpression();
           } else {
             if (defaultGif >= 100) {
@@ -1053,8 +1148,14 @@ void loop() {
     }
   }
 
-  // 4. Inactivity Timer (Timeout to Sleep) - DISABLED
-  // (We do not automatically transition to EXPR_SLEEPING via inactivity timer)
+  // 4. Inactivity Timer: Auto-return to Face screen after 15 seconds of no interaction in UI modes
+  if (currentScreen != SCREEN_FACE && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive) {
+    if (now - lastInteractionTime >= 15000) {
+      currentScreen = SCREEN_FACE;
+      lastExpressionCycleTime = now;
+      Serial.println("Inactivity timeout: Returning to GIF expressions screen.");
+    }
+  }
 
   // 5. Periodic status updates to BLE client
   if (bleActive && ble.isConnected() && (now - lastStatusUpdateTime > STATUS_UPDATE_INTERVAL)) {
@@ -1065,30 +1166,13 @@ void loop() {
     ble.updateStatus(uptimeSec, touchCount, mockBatteryVolts, face.getExpression(), face.getStateLabel());
   }
 
-  // Update GIF frame states on every loop iteration for microsecond precision
-  bool faceChanged = false;
-  if (!inSettingsMenu) {
-    faceChanged = face.update();
-  }
+  // Update GIF frame states on every loop iteration
+  face.update();
 
-  // Draw the display under these conditions:
-  // 1. In settings menu (draw at 40fps rate / every 25ms)
-  // 2. Face changed (frame advanced or text scrolled)
-  // 3. Current clock second changed while on clock/map screens
-  // 4. Fallback redraw every 500ms
+  // Draw the display at ~30fps rate
   static int lastDrawnSecond = -1;
-  bool timeUpdated = (rtcSecond != lastDrawnSecond);
-
   static unsigned long lastDisplayDrawTime = 0;
-  bool forceRedraw = (now - lastDisplayDrawTime >= 500);
-
-  if (inSettingsMenu) {
-    // Redraw settings menu at ~40fps
-    if (now - lastDisplayDrawTime >= 25) {
-      lastDisplayDrawTime = now;
-      face.drawSettingsMenu(menuOption, optionSelected, bleActive, gifSpeed, clockStyle, negativeDisplay, oledBrightness);
-    }
-  } else if (faceChanged || ((face.getExpression() == EXPR_CLOCK || face.getExpression() == EXPR_MAP) && timeUpdated) || forceRedraw) {
+  if (now - lastDisplayDrawTime >= 33) {
     lastDisplayDrawTime = now;
     lastDrawnSecond = rtcSecond;
     face.setConnectivityStatus(ble.isConnected(), network.isWifiConnected());

@@ -15,6 +15,9 @@ extern void handleBLEText(String text);
 
 extern bool negativeDisplay;
 
+class LunaAudio;
+extern LunaAudio audio;
+
 class LunaBLE {
 private:
   BLEServer* pServer;
@@ -22,6 +25,7 @@ private:
   BLECharacteristic* pAudioChar;
   BLECharacteristic* pTextChar;
   BLECharacteristic* pStatusChar;
+  BLECharacteristic* pAudioStreamChar;
   bool deviceConnected;
   bool oldDeviceConnected;
   bool isInitialized;
@@ -87,6 +91,16 @@ private:
     }
   };
 
+  class AudioStreamCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pChar) override {
+      uint8_t* data = pChar->getData();
+      size_t len = pChar->getLength();
+      if (len > 0) {
+        audio.writeTxStream(data, len);
+      }
+    }
+  };
+
 public:
   LunaBLE() : pServer(nullptr), deviceConnected(false), oldDeviceConnected(false), isInitialized(false), advertising(false) {}
 
@@ -128,6 +142,13 @@ public:
                     BLECharacteristic::PROPERTY_NOTIFY
                   );
     pStatusChar->addDescriptor(new BLE2902());
+
+    pAudioStreamChar = pService->createCharacteristic(
+                         AUDIO_STREAM_CHAR_UUID,
+                         BLECharacteristic::PROPERTY_WRITE |
+                         BLECharacteristic::PROPERTY_WRITE_NR
+                       );
+    pAudioStreamChar->setCallbacks(new AudioStreamCallbacks());
 
     // Start Service
     pService->start();
