@@ -899,7 +899,7 @@ void handleButton2Press() {
         face.setFrameDelay(gifSpeed);
         audio.playSound(SOUND_CHIRP);
       } else if (menuOption == 2) { // Clock Style
-        clockStyle = (clockStyle + 1) % 5;
+        clockStyle = (clockStyle + 1) % 3;
         audio.playSound(SOUND_CHIRP);
       } else if (menuOption == 3) { // Invert Display
         negativeDisplay = !negativeDisplay;
@@ -1128,7 +1128,7 @@ void loop() {
           cycleExpression();
           audio.playSound(SOUND_CHIRP);
         } else if (currentScreen == SCREEN_CLOCK) {
-          clockStyle = (clockStyle + 1) % 5;
+          clockStyle = (clockStyle + 1) % 3;
           audio.playSound(SOUND_CHIRP);
         } else if (currentScreen == SCREEN_NOTIFICATIONS) {
           face.cycleNotificationView();
