@@ -2899,15 +2899,14 @@ class _MainDashboardState extends State<MainDashboard> {
                           await audioStream.stopCall();
                           await ble.transmitStopCall();
                         } else {
-                          if (!await _ensureServerIpConfigured(ble)) return;
                           final serverIp = ble.serverIp;
                           final cleanMac = ble.pairedDeviceId!.replaceAll(':', '').toUpperCase();
                           
                           await ble.transmitStartCall();
-                          final success = await audioStream.startCall(serverIp, cleanMac);
+                          final success = await audioStream.startCall(serverIp, cleanMac, ble: ble);
                           if (success) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("VoIP Call Connected!")),
+                              SnackBar(content: Text(serverIp == 'localhost' || serverIp.isEmpty ? "BLE Call Connected!" : "VoIP Call Connected!")),
                             );
                           }
                         }
@@ -2954,6 +2953,26 @@ class _MainDashboardState extends State<MainDashboard> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    if (audioStream.isLoopbackActive) {
+                      await audioStream.stopLoopback(ble);
+                    } else {
+                      await audioStream.startLoopback(ble);
+                    }
+                  },
+                  icon: Icon(audioStream.isLoopbackActive ? Icons.stop : Icons.loop, size: 18),
+                  label: Text(audioStream.isLoopbackActive ? "Stop Loopback Test" : "Hardware Loopback Test"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: audioStream.isLoopbackActive ? Colors.red.shade700 : const Color(0xFF8B5CF6),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
               ),
               if (audioStream.isStreamingMusic) ...[
                 const SizedBox(height: 16),

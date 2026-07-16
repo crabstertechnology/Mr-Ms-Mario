@@ -11,10 +11,12 @@ class AudioStreamService with ChangeNotifier {
   WebSocket? _socket;
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription<List<int>>? _recordSub;
+  StreamSubscription? _bleAudioSub;
   
   bool _isCalling = false;
   bool _isStreamingMusic = false;
   bool _isBleStreaming = false;
+  bool _isLoopbackActive = false;
   String? _statusMessage;
 
   bool _isMusicPaused = false;
@@ -46,6 +48,7 @@ class AudioStreamService with ChangeNotifier {
   bool get isCalling => _isCalling;
   bool get isStreamingMusic => _isStreamingMusic;
   bool get isBleStreaming => _isBleStreaming;
+  bool get isLoopbackActive => _isLoopbackActive;
   bool get isMusicPaused => _isMusicPaused;
   int get musicStreamOffset => _musicStreamOffset;
   int get musicStreamTotalSize => _musicStreamTotalSize;
@@ -261,45 +264,60 @@ class AudioStreamService with ChangeNotifier {
     );
   }
 
-  // Connect to the WebSocket broker
-  Future<bool> startCall(String serverIp, String robotMac) async {
+  // Connect to the WebSocket broker or direct BLE link
+  Future<bool> startCall(String serverIp, String robotMac, {BLEService? ble}) async {
     if (_isCalling || _isStreamingMusic) return false;
-    _statusMessage = "Connecting to VoIP broker...";
-    notifyListeners();
     
-    final cleanMac = robotMac.replaceAll(':', '').toUpperCase();
-    final urlStr = 'ws://$serverIp:8001/ws?mac=$cleanMac&variant=phone';
+    final bool useBle = (ble != null && (serverIp.isEmpty || serverIp == "localhost" || serverIp == "0.0.0.0"));
+    _statusMessage = useBle ? "Connecting Direct BLE Call..." : "Connecting to VoIP broker...";
+    notifyListeners();
     
     try {
       // 1. Initialize player
       await initPlayer();
       
-      // 2. Connect WebSocket
-      _socket = await WebSocket.connect(urlStr).timeout(const Duration(seconds: 5));
       _isCalling = true;
-      _statusMessage = "Call Connected!";
-      notifyListeners();
       
-      // 3. Listen to incoming audio from ESP32
-      _socket!.listen(
-        (data) async {
-          if (data is List<int>) {
-            // Write received audio bytes directly to the pcm player
+      if (useBle) {
+        _statusMessage = "BLE Call Connected!";
+        notifyListeners();
+        
+        // Listen to incoming audio from the watch via BLE notifications
+        _bleAudioSub = ble.audioStreamData.listen((data) async {
+          if (_isCalling) {
             final samples = bytesToInt16List(Uint8List.fromList(data));
             if (samples.isNotEmpty) {
               await FlutterPcmSound.feed(PcmArrayInt16.fromList(samples));
             }
           }
-        },
-        onError: (err) {
-          stopCall();
-        },
-        onDone: () {
-          stopCall();
-        },
-      );
+        });
+      } else {
+        final cleanMac = robotMac.replaceAll(':', '').toUpperCase();
+        final urlStr = 'ws://$serverIp:8001/ws?mac=$cleanMac&variant=phone';
+        
+        _socket = await WebSocket.connect(urlStr).timeout(const Duration(seconds: 5));
+        _statusMessage = "Call Connected!";
+        notifyListeners();
+        
+        _socket!.listen(
+          (data) async {
+            if (data is List<int> && _isCalling) {
+              final samples = bytesToInt16List(Uint8List.fromList(data));
+              if (samples.isNotEmpty) {
+                await FlutterPcmSound.feed(PcmArrayInt16.fromList(samples));
+              }
+            }
+          },
+          onError: (err) {
+            stopCall();
+          },
+          onDone: () {
+            stopCall();
+          },
+        );
+      }
       
-      // 4. Request mic permissions & Start Recording mic input
+      // 3. Request mic permissions & Start Recording mic input
       final hasPermission = await _recorder.hasPermission();
       if (!hasPermission) {
         _statusMessage = "Mic permission denied.";
@@ -316,8 +334,12 @@ class AudioStreamService with ChangeNotifier {
       final recordStream = await _recorder.startStream(recordConfig);
       _recordSub = recordStream.listen(
         (chunk) {
-          if (_socket != null && _isCalling) {
-            _socket!.add(chunk);
+          if (_isCalling) {
+            if (useBle) {
+              ble.transmitAudioChunk(chunk);
+            } else if (_socket != null) {
+              _socket!.add(chunk);
+            }
           }
         },
         onError: (err) {
@@ -342,11 +364,30 @@ class AudioStreamService with ChangeNotifier {
     await _recordSub?.cancel();
     _recordSub = null;
     
+    await _bleAudioSub?.cancel();
+    _bleAudioSub = null;
+    
     await _recorder.stop();
     await FlutterPcmSound.release();
     
     await _socket?.close();
     _socket = null;
+  }
+
+  Future<void> startLoopback(BLEService ble) async {
+    if (_isCalling || _isStreamingMusic || _isLoopbackActive) return;
+    _isLoopbackActive = true;
+    _statusMessage = "Loopback Test Active (Mic -> Speaker)";
+    notifyListeners();
+    await ble.transmitStartLoopback();
+  }
+
+  Future<void> stopLoopback(BLEService ble) async {
+    if (!_isLoopbackActive) return;
+    _isLoopbackActive = false;
+    _statusMessage = "Loopback Stopped";
+    notifyListeners();
+    await ble.transmitStopLoopback();
   }
 
   // Stream picked music (WAV / parsed PCM)

@@ -13,6 +13,7 @@ extern int gifSpeed;
 extern int clockStyle;
 extern int oledBrightness;
 extern bool negativeDisplay;
+extern volatile bool hardwareLoopbackActive;
 extern int menuOption;
 extern bool optionSelected;
 extern unsigned int touchCount;
@@ -499,7 +500,7 @@ public:
       if (now - lastScrollTime > 15) {
         lastScrollTime = now;
         scrollPos -= 2;
-        int textLength = notificationText.length() * 12;
+        int textLength = notificationText.length() * 18;
         if (scrollPos < -textLength) {
           scrollPos = SCREEN_WIDTH;
         }
@@ -512,12 +513,12 @@ public:
   // ------------------ Smartwatch UI Drawing Methods ------------------
   
   void drawStatusBar(int hour, int minute) {
-    display.fillRect(0, 0, SCREEN_WIDTH, 16, 0x10A2); // Slate grey/blue background
-    display.drawFastHLine(0, 16, SCREEN_WIDTH, TFT_DARKGREY);
+    display.fillRect(0, 0, SCREEN_WIDTH, 24, 0x10A2); // Slate grey/blue background
+    display.drawFastHLine(0, 24, SCREEN_WIDTH, TFT_DARKGREY);
 
     // Sleek digital clock on left
     display.setTextColor(TFT_WHITE, 0x10A2);
-    display.setTextSize(1);
+    display.setTextSize(2);
     display.setCursor(6, 4);
     char tBuf[6];
     snprintf(tBuf, sizeof(tBuf), "%02d:%02d", hour, minute);
@@ -535,36 +536,36 @@ public:
       case SCREEN_MAPS:          screenName = "MAPS"; break;
       default:                   screenName = "LUNA OS"; break;
     }
-    int centerTextX = (SCREEN_WIDTH - (screenName.length() * 6)) / 2;
+    int centerTextX = (SCREEN_WIDTH - (screenName.length() * 12)) / 2;
     display.setCursor(centerTextX, 4);
     display.print(screenName);
 
     // BLE status icon
     if (bleConnectedStatus) {
       display.setTextColor(0x5DFF, 0x10A2); // cyan
-      display.setCursor(SCREEN_WIDTH - 48, 4);
+      display.setCursor(SCREEN_WIDTH - 84, 4);
       display.print("B");
     } else {
       display.setTextColor(TFT_DARKGREY, 0x10A2);
-      display.setCursor(SCREEN_WIDTH - 48, 4);
+      display.setCursor(SCREEN_WIDTH - 84, 4);
       display.print("b");
     }
 
     // WiFi status icon
     if (wifiConnectedStatus) {
       display.setTextColor(TFT_GREEN, 0x10A2);
-      display.setCursor(SCREEN_WIDTH - 36, 4);
+      display.setCursor(SCREEN_WIDTH - 64, 4);
       display.print("W");
     } else {
       display.setTextColor(TFT_DARKGREY, 0x10A2);
-      display.setCursor(SCREEN_WIDTH - 36, 4);
+      display.setCursor(SCREEN_WIDTH - 64, 4);
       display.print("w");
     }
 
     // Battery icon
-    display.drawRect(SCREEN_WIDTH - 22, 4, 15, 8, TFT_LIGHTGREY);
-    display.fillRect(SCREEN_WIDTH - 7, 6, 2, 4, TFT_LIGHTGREY);
-    display.fillRect(SCREEN_WIDTH - 20, 6, 11, 4, TFT_GREEN);
+    display.drawRect(SCREEN_WIDTH - 32, 6, 22, 12, TFT_LIGHTGREY);
+    display.fillRect(SCREEN_WIDTH - 10, 9, 3, 6, TFT_LIGHTGREY);
+    display.fillRect(SCREEN_WIDTH - 29, 9, 16, 6, TFT_GREEN);
   }
 
   void drawPopup() {
@@ -572,31 +573,34 @@ public:
     display.drawRoundRect(6, 6, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 12, 6, 0x0821);
     
     display.setTextColor(TFT_YELLOW);
-    display.setTextSize(1);
-    display.setCursor(12, 12);
-    display.print("NEW NOTIFICATION");
-    display.drawFastHLine(10, 24, SCREEN_WIDTH - 20, TFT_DARKGREY);
+    display.setTextSize(2);
+    display.setCursor(12, 14);
+    display.print("NEW ALERT");
+    display.drawFastHLine(10, 34, SCREEN_WIDTH - 20, TFT_DARKGREY);
     
     display.setTextColor(TFT_WHITE);
-    display.setCursor(12, 30);
+    display.setTextSize(2);
+    display.setCursor(12, 42);
     display.print(popupTitle);
     
     display.setTextColor(TFT_LIGHTGREY);
-    int yStart = 44;
-    int charsPerLine = (SCREEN_WIDTH - 24) / 6;
+    display.setTextSize(2);
+    int yStart = 64;
+    int charsPerLine = (SCREEN_WIDTH - 24) / 12;
     int line = 0;
-    int maxLines = (SCREEN_HEIGHT - 64) / 10;
-    if (maxLines < 4) maxLines = 4;
+    int maxLines = (SCREEN_HEIGHT - 100) / 18;
+    if (maxLines < 3) maxLines = 3;
     for (unsigned int i = 0; i < popupBody.length() && line < maxLines; i += charsPerLine) {
       unsigned int endIdx = i + charsPerLine;
       if (endIdx > popupBody.length()) endIdx = popupBody.length();
       String lineStr = popupBody.substring(i, endIdx);
-      display.setCursor(12, yStart + line * 10);
+      display.setCursor(12, yStart + line * 18);
       display.print(lineStr);
       line++;
     }
     
     display.setTextColor(TFT_DARKGREY);
+    display.setTextSize(1);
     display.setCursor((SCREEN_WIDTH - 96) / 2, SCREEN_HEIGHT - 18);
     display.print("[Tap to Dismiss]");
   }
@@ -610,13 +614,14 @@ public:
       display.fillCircle(centerX, 63, 3, TFT_DARKGREY);
       
       display.setTextColor(TFT_LIGHTGREY);
-      display.setTextSize(1);
-      int lblW1 = 16 * 6;
+      display.setTextSize(2);
+      int lblW1 = 16 * 12;
       display.setCursor((SCREEN_WIDTH - lblW1) / 2, 76);
       display.print("No Notifications");
       display.setTextColor(TFT_DARKGREY);
+      display.setTextSize(1);
       int lblW2 = 18 * 6;
-      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 92);
+      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 100);
       display.print("History is empty");
       return;
     }
@@ -627,31 +632,35 @@ public:
     display.drawRoundRect(6, 22, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 28, 6, 0x5DFF);
     
     display.setTextColor(TFT_YELLOW);
+    display.setTextSize(2);
     display.setCursor(12, 28);
     display.print(notif.title);
     
     display.setTextColor(TFT_LIGHTGREY);
-    display.setCursor(SCREEN_WIDTH - 42, 28);
+    display.setTextSize(2);
+    display.setCursor(SCREEN_WIDTH - 76, 28);
     display.print(notif.timeStr);
     
-    display.drawFastHLine(10, 39, SCREEN_WIDTH - 20, TFT_DARKGREY);
+    display.drawFastHLine(10, 48, SCREEN_WIDTH - 20, TFT_DARKGREY);
     
     display.setTextColor(TFT_WHITE);
-    int yStart = 45;
-    int charsPerLine = (SCREEN_WIDTH - 24) / 6;
+    display.setTextSize(2);
+    int yStart = 58;
+    int charsPerLine = (SCREEN_WIDTH - 24) / 12;
     int line = 0;
-    int maxLines = (SCREEN_HEIGHT - 70) / 10;
+    int maxLines = (SCREEN_HEIGHT - 90) / 18;
     if (maxLines < 4) maxLines = 4;
     for (unsigned int i = 0; i < notif.body.length() && line < maxLines; i += charsPerLine) {
       unsigned int endIdx = i + charsPerLine;
       if (endIdx > notif.body.length()) endIdx = notif.body.length();
       String lineStr = notif.body.substring(i, endIdx);
-      display.setCursor(12, yStart + line * 10);
+      display.setCursor(12, yStart + line * 18);
       display.print(lineStr);
       line++;
     }
     
     display.setTextColor(TFT_DARKGREY);
+    display.setTextSize(1);
     char footerBuf[16];
     snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentNotifViewIdx + 1, notificationCount);
     int footerW = strlen(footerBuf) * 6;
@@ -662,49 +671,49 @@ public:
   void drawCalendarEvents() {
     if (calendarEventCount == 0) {
       int centerX = SCREEN_WIDTH / 2;
-      display.drawRect(centerX - 10, 36, 20, 20, TFT_DARKGREY);
-      display.drawFastHLine(centerX - 10, 42, 20, TFT_DARKGREY);
-      display.fillRect(centerX - 6, 32, 2, 6, TFT_DARKGREY);
-      display.fillRect(centerX + 4, 32, 2, 6, TFT_DARKGREY);
+      display.drawRect(centerX - 10, 42, 20, 20, TFT_DARKGREY);
+      display.drawFastHLine(centerX - 10, 48, 20, TFT_DARKGREY);
+      display.fillRect(centerX - 6, 38, 2, 6, TFT_DARKGREY);
+      display.fillRect(centerX + 4, 38, 2, 6, TFT_DARKGREY);
       
       display.setTextColor(TFT_LIGHTGREY);
       display.setTextSize(1);
       int lblW1 = 20 * 6;
-      display.setCursor((SCREEN_WIDTH - lblW1) / 2, 76);
+      display.setCursor((SCREEN_WIDTH - lblW1) / 2, 82);
       display.print("No Events Scheduled");
       display.setTextColor(TFT_DARKGREY);
       int lblW2 = 19 * 6;
-      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 92);
+      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 98);
       display.print("Sync events via BLE");
       return;
     }
     
     CalendarEventItem& ev = calendarEvents[currentCalViewIdx];
     
-    display.drawRoundRect(6, 22, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 28, 6, TFT_GREEN);
+    display.drawRoundRect(6, 28, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 34, 6, TFT_GREEN);
     
     display.setTextColor(TFT_BLACK);
     if (ev.type.indexOf("birthday") >= 0 || ev.type.indexOf("bday") >= 0) {
-      display.fillRoundRect(12, 28, 60, 14, 3, 0xF97F); // Pink label
-      display.setCursor(16, 31);
+      display.fillRoundRect(12, 34, 60, 14, 3, 0xF97F); // Pink label
+      display.setCursor(16, 37);
       display.print("BIRTHDAY");
     } else {
-      display.fillRoundRect(12, 28, 60, 14, 3, TFT_YELLOW); // Yellow label
-      display.setCursor(16, 31);
+      display.fillRoundRect(12, 34, 60, 14, 3, TFT_YELLOW); // Yellow label
+      display.setCursor(16, 37);
       display.print("MEETING");
     }
     
     display.setTextColor(TFT_GREEN);
-    display.setCursor(SCREEN_WIDTH - 80, 31);
+    display.setCursor(SCREEN_WIDTH - 80, 37);
     display.print(ev.timeStr);
     
-    display.drawFastHLine(10, 48, SCREEN_WIDTH - 20, TFT_DARKGREY);
+    display.drawFastHLine(10, 54, SCREEN_WIDTH - 20, TFT_DARKGREY);
     
     display.setTextColor(TFT_WHITE);
-    int yStart = 56;
+    int yStart = 62;
     int charsPerLine = (SCREEN_WIDTH - 24) / 6;
     int line = 0;
-    int maxLines = (SCREEN_HEIGHT - 80) / 10;
+    int maxLines = (SCREEN_HEIGHT - 86) / 10;
     if (maxLines < 4) maxLines = 4;
     for (unsigned int i = 0; i < ev.title.length() && line < maxLines; i += charsPerLine) {
       unsigned int endIdx = i + charsPerLine;
@@ -800,13 +809,13 @@ public:
     snprintf(headerBuf, sizeof(headerBuf), "%s %d", (curMonth >= 1 && curMonth <= 12) ? monthNames[curMonth] : "JULY", curYear);
     
     int headerW = strlen(headerBuf) * 6;
-    display.setCursor((SCREEN_WIDTH - headerW) / 2, 20);
+    display.setCursor((SCREEN_WIDTH - headerW) / 2, 28);
     display.print(headerBuf);
     
     display.setTextColor(0x5DFF, TFT_BLACK);
     int colWidth = (SCREEN_WIDTH - 24) / 7;
     int startX = (SCREEN_WIDTH - colWidth * 7) / 2 + 2;
-    int startY = 34;
+    int startY = 42;
     display.setCursor(startX, startY);
     display.print(" S   M   T   W   T   F   S");
     
@@ -838,20 +847,21 @@ public:
   }
 
   void drawSettingsMenuLandscape(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
+    display.setTextSize(2);
     int itemsPerPage = 5;
     int scrollOffset = 0;
     if (option >= itemsPerPage) {
       scrollOffset = option - itemsPerPage + 1;
     }
     
-    int itemHeight = (SCREEN_HEIGHT - 32) / itemsPerPage;
+    int itemHeight = (SCREEN_HEIGHT - 40) / itemsPerPage;
     if (itemHeight > 40) itemHeight = 40;
     
     for (int pageIdx = 0; pageIdx < itemsPerPage; pageIdx++) {
       int optIdx = pageIdx + scrollOffset;
-      if (optIdx >= 7) break;
+      if (optIdx >= 8) break;
       
-      int yPos = 24 + pageIdx * itemHeight + 4;
+      int yPos = 32 + pageIdx * itemHeight + 2;
       
       bool isCurrent = (option == optIdx);
       if (isCurrent) {
@@ -861,10 +871,10 @@ public:
         display.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
       }
       
-      display.setCursor(10, yPos + (itemHeight - 12) / 2);
+      display.setCursor(10, yPos + (itemHeight - 16) / 2);
       switch (optIdx) {
         case 0:
-          display.print("BLE Server: ALWAYS ON");
+          display.print("BLE: ALWAYS ON");
           break;
         case 1:
           display.print("Anim Speed: ");
@@ -886,25 +896,52 @@ public:
           else display.print("HIGH");
           break;
         case 5:
-          display.print("  [ SAVE SETTINGS ]");
+          display.print("Loopback Test: ");
+          display.print(hardwareLoopbackActive ? "ON" : "OFF");
           break;
         case 6:
+          display.print("  [ SAVE SETTINGS ]");
+          break;
+        case 7:
           display.print("  [ EXIT MENU ]");
           break;
       }
     }
   }
 
+  void drawBitmapScaled(int x, int y, const unsigned char* bitmap, int w, int h, int targetW, int targetH, uint16_t color) {
+    int lastSy = -1;
+    int rowOffset = 0;
+    int bytesPerRow = (w + 7) / 8;
+    for (int ty = 0; ty < targetH; ty++) {
+      int sy = (ty * h) / targetH;
+      if (sy != lastSy) {
+        lastSy = sy;
+        rowOffset = sy * bytesPerRow;
+      }
+      for (int tx = 0; tx < targetW; tx++) {
+        int sx = (tx * w) / targetW;
+        uint8_t byteVal = pgm_read_byte(&bitmap[rowOffset + (sx / 8)]);
+        if (byteVal & (128 >> (sx & 7))) {
+          display.drawPixel(x + tx, y + ty, color);
+        }
+      }
+    }
+  }
+
   void drawRobotFaceScreen() {
-    int xOffset = (SCREEN_WIDTH - 128) / 2;
-    int yOffset = (SCREEN_HEIGHT - 64) / 2;
-    
-    display.drawRoundRect(xOffset - 2, yOffset - 2, 132, 68, 4, TFT_DARKGREY);
-    
     Expression exprToDraw = currentExpr;
     if (exprToDraw == EXPR_IDLE) {
       exprToDraw = defaultExpr;
     }
+    
+    uint16_t color = getExpressionColor(currentExpr);
+
+    // Keep aspect ratio (2:1) and fit safely within circular smartwatch screen (210x105)
+    int targetW = 210;
+    int targetH = 105;
+    int xOffset = (SCREEN_WIDTH - targetW) / 2;
+    int yOffset = (SCREEN_HEIGHT - targetH) / 2;
     
     if (exprToDraw == EXPR_ALL_GIF) {
       if (currentGifIndex < ALL_GIFS_COUNT) {
@@ -915,7 +952,7 @@ public:
         const unsigned char* frameData =
           (const unsigned char*)pgm_read_ptr(&frames[safeFrame]);
         if (frameData) {
-          display.drawBitmap(xOffset, yOffset, frameData, 128, 64, getExpressionColor(currentExpr));
+          drawBitmapScaled(xOffset, yOffset, frameData, 128, 64, targetW, targetH, color);
         }
       }
     } else {
@@ -955,22 +992,16 @@ public:
       }
       
       if (frameData != nullptr) {
-        display.drawBitmap(xOffset, yOffset, frameData, 128, 64, getExpressionColor(currentExpr));
+        drawBitmapScaled(xOffset, yOffset, frameData, 128, 64, targetW, targetH, color);
       }
     }
-    
-    display.setTextColor(TFT_CYAN);
-    display.setTextSize(1);
-    int labelW = stateLabel.length() * 6;
-    display.setCursor((SCREEN_WIDTH - labelW) / 2, SCREEN_HEIGHT - 16);
-    display.print(stateLabel);
   }
 
   void drawMapScreenLandscape(int hour, int minute, bool is12Hour) {
     display.setTextColor(TFT_WHITE, TFT_BLACK);
     display.setTextWrap(false);
 
-    display.drawRoundRect(4, 20, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 48, 6, TFT_GREEN);
+    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 56, 6, TFT_GREEN);
     
     int arrowX = SCREEN_WIDTH / 2;
     int arrowY = (SCREEN_HEIGHT - 28) / 2;
@@ -1101,15 +1132,15 @@ public:
     } else if (style == 3) {
       int gridSpacing = SCREEN_WIDTH / 10;
       for (int x = gridSpacing; x < SCREEN_WIDTH; x += gridSpacing) {
-        display.drawFastVLine(x, 16, SCREEN_HEIGHT - 16, 0x0100);
+        display.drawFastVLine(x, 24, SCREEN_HEIGHT - 24, 0x0100);
       }
-      for (int y = 24; y < SCREEN_HEIGHT; y += gridSpacing) {
+      for (int y = 32; y < SCREEN_HEIGHT; y += gridSpacing) {
         display.drawFastHLine(0, y, SCREEN_WIDTH, 0x0100);
       }
 
       display.setTextSize(2);
       display.setTextColor(0x07E0, TFT_BLACK);
-      display.setCursor(14, 26);
+      display.setCursor(14, 32);
       display.print("WATCH OS v2.0");
 
       display.setTextSize(4);
@@ -1180,8 +1211,8 @@ public:
       display.print(date);
 
     } else {
-      display.drawRoundRect(4, 20, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 24, 8, 0x5DFF);
-      display.drawRoundRect(8, 24, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 32, 6, 0x0821);
+      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 8, 0x5DFF);
+      display.drawRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 6, 0x0821);
 
       display.setTextSize(5);
       display.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -1224,42 +1255,43 @@ public:
     display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 8, TFT_BLUE);
     display.drawRoundRect(6, 6, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 12, 6, TFT_NAVY);
     
-    display.fillRoundRect(12, 12, 16, 12, 3, TFT_WHITE);
-    display.fillCircle(16, 17, 1, TFT_BLACK);
-    display.fillCircle(24, 17, 1, TFT_BLACK);
-    display.drawFastHLine(18, 21, 4, TFT_BLACK);
+    display.fillRoundRect(12, 10, 24, 18, 4, TFT_WHITE);
+    display.fillCircle(18, 18, 2, TFT_BLACK);
+    display.fillCircle(30, 18, 2, TFT_BLACK);
+    display.drawFastHLine(20, 24, 8, TFT_BLACK);
 
-    display.setTextSize(1);
+    display.setTextSize(2);
     display.setTextColor(TFT_YELLOW, TFT_BLACK);
-    display.setCursor(34, 14);
+    display.setCursor(44, 12);
     
     String displayTitle = notificationTitle;
     if (displayTitle.length() == 0) {
       displayTitle = "Alert";
     }
-    if (displayTitle.length() > 22) {
-      displayTitle = displayTitle.substring(0, 19) + "...";
+    if (displayTitle.length() > 14) {
+      displayTitle = displayTitle.substring(0, 11) + "...";
     }
     display.print(displayTitle);
     
-    display.drawFastHLine(12, 28, SCREEN_WIDTH - 24, TFT_LIGHTGREY);
+    display.drawFastHLine(12, 36, SCREEN_WIDTH - 24, TFT_LIGHTGREY);
 
     display.setTextColor(TFT_WHITE, TFT_BLACK);
-    display.setTextSize(2);
+    display.setTextSize(3);
     
-    int textLength = notificationText.length() * 12;
+    int textLength = notificationText.length() * 18;
     if (textLength <= SCREEN_WIDTH - 24) {
       int startX = (SCREEN_WIDTH - textLength) / 2;
-      display.setCursor(startX, SCREEN_HEIGHT / 2 - 8);
+      display.setCursor(startX, SCREEN_HEIGHT / 2 - 12);
       display.print(notificationText);
     } else {
-      display.setCursor(scrollPos, SCREEN_HEIGHT / 2 - 8);
+      display.setCursor(scrollPos, SCREEN_HEIGHT / 2 - 12);
       display.print(notificationText);
     }
 
-    display.setTextSize(1);
+    display.setTextSize(2);
     display.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    display.setCursor((SCREEN_WIDTH - 60) / 2, SCREEN_HEIGHT - 20);
+    int footerW = 10 * 12;
+    display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 28);
     display.print("Luna Notif");
   }
 
@@ -1310,7 +1342,9 @@ public:
     if (popupActive) {
       drawPopup();
     } else {
-      drawStatusBar(hour, minute);
+      if (currentScreen != SCREEN_FACE) {
+        drawStatusBar(hour, minute);
+      }
       
       switch (currentScreen) {
         case SCREEN_CLOCK:

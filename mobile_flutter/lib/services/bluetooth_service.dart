@@ -33,6 +33,11 @@ class BLEService with ChangeNotifier {
   StreamSubscription? _scanSub;
   StreamSubscription? _connectionStateSub;
   StreamSubscription? _statusNotificationSub;
+  StreamSubscription? _audioStreamNotificationSub;
+
+  // Audio Stream controller
+  final StreamController<List<int>> _audioStreamController = StreamController<List<int>>.broadcast();
+  Stream<List<int>> get audioStreamData => _audioStreamController.stream;
 
   // Characteristics
   BluetoothCharacteristic? _exprChar;
@@ -521,6 +526,16 @@ class BLEService with ChangeNotifier {
         addLog("Status notifications enabled.", "BLE");
       }
 
+      if (_audioStreamChar != null) {
+        await _audioStreamChar!.setNotifyValue(true);
+        _audioStreamNotificationSub = _audioStreamChar!.lastValueStream.listen((value) {
+          if (value.isNotEmpty) {
+            _audioStreamController.add(value);
+          }
+        });
+        addLog("Audio stream notifications enabled.", "BLE");
+      }
+
       // Sync clock to hardware after successful connection
       Future.delayed(const Duration(milliseconds: 800), () => syncClockToHardware());
 
@@ -591,6 +606,8 @@ class BLEService with ChangeNotifier {
 
     _connectionStateSub?.cancel();
     _statusNotificationSub?.cancel();
+    _audioStreamNotificationSub?.cancel();
+    _audioStreamNotificationSub = null;
     
     addLog("Disconnected from Mr.&Ms Luna companion robot.", "BLE");
     
@@ -752,6 +769,14 @@ class BLEService with ChangeNotifier {
     await _writeTextWithAck('CALL:STOP', "Stop Call");
   }
 
+  Future<void> transmitStartLoopback() async {
+    await _writeTextWithAck('LOOPBACK:START', "Start Loopback");
+  }
+
+  Future<void> transmitStopLoopback() async {
+    await _writeTextWithAck('LOOPBACK:STOP', "Stop Loopback");
+  }
+
   /// Instantly stops music on hardware with no ACK wait.
   /// Used for stop button and song switching — hardware reacts in <10ms.
   Future<void> transmitStopMusicInstant() async {
@@ -790,6 +815,7 @@ class BLEService with ChangeNotifier {
     _scanSub?.cancel();
     _connectionStateSub?.cancel();
     _statusNotificationSub?.cancel();
+    _audioStreamNotificationSub?.cancel();
     for (var pending in _pendingAcks.values) {
       pending.timer?.cancel();
     }

@@ -44,6 +44,7 @@ int clockStyle = 0; // clock style selector (0 to 3)
 int oledBrightness = 2; // screen brightness (1: Low, 2: Med, 3: High)
 bool inSettingsMenu = false;
 int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
+volatile bool hardwareLoopbackActive = false;
 bool optionSelected = false;
 SmartwatchScreen currentScreen = SCREEN_FACE;
 
@@ -405,6 +406,22 @@ void handleRobotCommand(String text) {
     audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
     face.setStateLabel("IDLE");
     Serial.println("VoIP Call stopped");
+  } else if (text == "LOOPBACK:START") {
+    audio.directLoopback = true;
+    audio.micStreaming = false;     // BLE streaming off; direct i2s_write handles output
+    audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH; // Keep TX task silent
+    hardwareLoopbackActive = true;
+    face.setStateLabel("TEST");
+    audio.playSound(SOUND_POWERUP);
+    Serial.println("Loopback test started (direct i2s path)");
+  } else if (text == "LOOPBACK:STOP") {
+    audio.directLoopback = false;
+    audio.micStreaming = false;
+    audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+    hardwareLoopbackActive = false;
+    face.setStateLabel("IDLE");
+    audio.playSound(SOUND_POWERDOWN);
+    Serial.println("Loopback test stopped");
   } else if (text == "MUSIC:START") {
     audio.micStreaming = false;
     audio.startMusicStream();
@@ -811,6 +828,17 @@ void loop() {
   // 2. Refresh non-blocking audio synthesizer
   audio.update();
 
+  // 2.1. If BLE mic streaming is active, route mic audio to BLE (loopback uses direct i2s path, not this)
+  if (audio.micStreaming && !audio.directLoopback) {
+    uint8_t micBuf[256];
+    size_t micSize = 0;
+    while (audio.getRxItem(micBuf, &micSize)) {
+      if (micSize > 0) {
+        ble.sendAudioStream(micBuf, micSize);
+      }
+    }
+  }
+
   // 2.7. Poll companion network stack
   network.update();
 
@@ -924,6 +952,18 @@ void loop() {
               else analogWrite(TFT_BL, 255);
               #endif
               audio.playSound(SOUND_CHIRP);
+            } else if (menuOption == 5) { // Loopback Test
+              hardwareLoopbackActive = !hardwareLoopbackActive;
+              audio.directLoopback = hardwareLoopbackActive;
+              audio.micStreaming = false;  // BLE streaming off during loopback
+              audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH; // TX task stays silent
+              if (hardwareLoopbackActive) {
+                face.setStateLabel("TEST");
+                audio.playSound(SOUND_POWERUP);
+              } else {
+                face.setStateLabel("IDLE");
+                audio.playSound(SOUND_POWERDOWN);
+              }
             }
           } else if (touchEvent == TOUCH_LONG_PRESS) {
             // Long press deselecting option
@@ -934,11 +974,11 @@ void loop() {
           // Navigating the menu options
           if (touchEvent == TOUCH_TAP) {
             // Single tap cycles options
-            menuOption = (menuOption + 1) % 7;
+            menuOption = (menuOption + 1) % 8;
             audio.playSound(SOUND_CHIRP);
           } else if (touchEvent == TOUCH_LONG_PRESS) {
             // Long press selects options
-            if (menuOption == 5) { // SAVE
+            if (menuOption == 6) { // SAVE
               preferences.begin("luna", false);
               preferences.putBool("ble", bleActive);
               preferences.putInt("speed", gifSpeed);
@@ -961,11 +1001,16 @@ void loop() {
               
               audio.playSound(SOUND_POWERUP);
               optionSelected = false; // deselect
-            } else if (menuOption == 6) { // EXIT
+            } else if (menuOption == 7) { // EXIT
+              hardwareLoopbackActive = false;
+              audio.micStreaming = false;
+              audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+              audio.prebuffering = true;
+              face.setStateLabel("IDLE");
               currentScreen = SCREEN_FACE;
               audio.playSound(SOUND_POWERDOWN);
             } else {
-              // Option select (0 to 4)
+              // Option select (0 to 5)
               optionSelected = true;
               audio.playSound(SOUND_COIN);
             }
@@ -976,6 +1021,12 @@ void loop() {
               if (currentScreen == SCREEN_SETTINGS) {
                 menuOption = 0;
                 optionSelected = false;
+              } else {
+                hardwareLoopbackActive = false;
+                audio.micStreaming = false;
+                audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+                audio.prebuffering = true;
+                face.setStateLabel("IDLE");
               }
             }
             audio.playSound(SOUND_COIN);
@@ -1030,6 +1081,11 @@ void loop() {
               audio.playSound(SOUND_POWERUP);
               Serial.println("Entered smartwatch UI mode.");
             } else {
+              hardwareLoopbackActive = false;
+              audio.micStreaming = false;
+              audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+              audio.prebuffering = true;
+              face.setStateLabel("IDLE");
               currentScreen = SCREEN_FACE;
               audio.playSound(SOUND_STARTUP);
               Serial.println("Exited UI, returned to Mochi expressions.");

@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include "driver/i2s.h"
+#include "driver/gpio.h"
 #include <math.h>
 #include "config.h"
 #include "freertos/ringbuf.h"
@@ -38,6 +39,7 @@ public:
   volatile AudioMode audioMode;
   volatile bool micStreaming;
   volatile bool prebuffering;
+  volatile bool directLoopback; // When true, RX task writes mic audio directly to I2S (bypasses ring buffers)
   RingbufHandle_t txRingBuffer;
   RingbufHandle_t rxRingBuffer;
 
@@ -83,6 +85,7 @@ public:
     audioMode = AUDIO_MODE_SYNTH;
     micStreaming = false;
     prebuffering = true;
+    directLoopback = false;
   }
 
   /// Set speaker output volume (0 = mute, 100 = full scale)
@@ -322,11 +325,11 @@ public:
     txRingBuffer = xRingbufferCreate(16384, RINGBUF_TYPE_BYTEBUF);
     rxRingBuffer = xRingbufferCreate(2048,  RINGBUF_TYPE_BYTEBUF);
 
-    // I2S DMA config
+    // I2S DMA config: 32-bit sample width is required by the INMP441 microphone to correctly align 24-bit samples
     i2s_config_t i2s_config = {
       .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_RX),
       .sample_rate = 16000,
-      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
+      .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
       .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT, // Stereo format (req by DAC clocking)
       .communication_format = I2S_COMM_FORMAT_STAND_I2S,
       .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
@@ -350,30 +353,40 @@ public:
     esp_err_t err = i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
     if (err == ESP_OK) {
       i2s_set_pin(I2S_NUM_0, &pin_config);
-      Serial.println("[AUDIO] I2S driver OK (dma_buf=256*8).");
+      
+      // Enable internal pull-down on the SD pin to prevent massive floating noise during tri-stated phases
+      gpio_pulldown_en((gpio_num_t)I2S_DIN);
+      gpio_pullup_dis((gpio_num_t)I2S_DIN);
+      
+      Serial.println("[AUDIO] I2S driver OK (dma_buf=256*8, 32-bit duplex, pull-down enabled).");
     } else {
       Serial.printf("[AUDIO] I2S driver FAILED: %d\n", err);
     }
 
     xTaskCreatePinnedToCore(txAudioTask, "audio_tx", 4096, this, 5, &audioTxTaskHandle, 1);
-    xTaskCreatePinnedToCore(rxAudioTask, "audio_rx", 2048, this, 4, &audioRxTaskHandle, 0);
+    xTaskCreatePinnedToCore(rxAudioTask, "audio_rx", 6144, this, 4, &audioRxTaskHandle, 0);
   }
 
   static void txAudioTask(void* pvParameters) {
     LunaAudio* self = (LunaAudio*)pvParameters;
 
-    // Synth oscillator state (stereo)
-    int16_t synthBuf[512];   // 256 samples × 2 channels × 2 bytes = 1024 bytes per I2S write
+    // Synth oscillator state (stereo 32-bit, 128 samples to save stack space)
+    int32_t synthBuf[256];   // 128 samples × 2 channels × 4 bytes = 1024 bytes per I2S write
     double  phase = 0;
 
-    // Silence block for prebuffer/underrun fill (stereo)
-    static const int16_t SILENCE[512] = {};
+    // Silence block for prebuffer/underrun fill (stereo 32-bit, 128 samples)
+    static const int32_t SILENCE[256] = {};
     size_t bytes_written;
 
     while (true) {
       // STREAM MODE
       if (self->audioMode == AUDIO_MODE_STREAM) {
-        if (self->prebuffering && self->txRingBuffer != NULL) {
+        if (self->txRingBuffer == NULL) {
+          vTaskDelay(pdMS_TO_TICKS(10));
+          continue;
+        }
+
+        if (self->prebuffering) {
           size_t freeBytes = xRingbufferGetCurFreeSize(self->txRingBuffer);
           size_t filledBytes = 16384 - freeBytes;
           if (filledBytes >= 12000) {
@@ -409,16 +422,25 @@ public:
             item[i] = (int16_t)s;
           }
 
-          int16_t stereoBuf[512];
+          int32_t stereoBuf[256]; // 128 samples × 2 channels (1024 bytes)
           int stereoSamples = samples;
-          if (stereoSamples > 256) stereoSamples = 256;
+          if (stereoSamples > 128) stereoSamples = 128;
           for (int i = 0; i < stereoSamples; i++) {
-            int16_t val = item[i];
+            int32_t val = (int32_t)item[i] << 16; // Shift 16-bit to 32-bit for DAC
             stereoBuf[2 * i]     = val; // Left
             stereoBuf[2 * i + 1] = val; // Right
           }
 
-          i2s_write(I2S_NUM_0, stereoBuf, stereoSamples * 4, &bytes_written, portMAX_DELAY);
+          if (stereoSamples > 0) {
+            i2s_write(I2S_NUM_0, stereoBuf, stereoSamples * 8, &bytes_written, portMAX_DELAY);
+          }
+
+          static uint32_t last_print = 0;
+          if (millis() - last_print > 1000) {
+            last_print = millis();
+            Serial.printf("[AUDIO TX] item_size: %d, stereoSamples: %d, sample[0]: %d\n", (int)item_size, stereoSamples, (int)stereoBuf[0]);
+          }
+
           vRingbufferReturnItem(self->txRingBuffer, (void*)item);
 
         } else {
@@ -427,14 +449,21 @@ public:
 
       // SYNTH MODE
       } else {
+        // *** CRITICAL: During direct loopback the RX task owns i2s_write. ***
+        // If we also write silence here we overwrite the mic audio → user hears only noise.
+        if (self->directLoopback) {
+          vTaskDelay(pdMS_TO_TICKS(10));
+          continue;
+        }
+
         int freq = self->currentFrequency;
         if (freq > 0) {
-          for (int i = 0; i < 256; i++) {
+          for (int i = 0; i < 128; i++) {
             phase += (2.0 * M_PI * freq) / 16000.0;
             if (phase >= 2.0 * M_PI) phase -= 2.0 * M_PI;
-            int16_t val = (int16_t)(sin(phase) * self->currentVolume);
-            synthBuf[2 * i]     = val; // Left
-            synthBuf[2 * i + 1] = val; // Right
+            int32_t val = (int32_t)(sin(phase) * self->currentVolume) << 16;
+            synthBuf[2 * i]     = val;
+            synthBuf[2 * i + 1] = val;
           }
           i2s_write(I2S_NUM_0, synthBuf, sizeof(synthBuf), &bytes_written, portMAX_DELAY);
         } else {
@@ -447,25 +476,75 @@ public:
 
   static void rxAudioTask(void* pvParameters) {
     LunaAudio* self = (LunaAudio*)pvParameters;
-    int16_t read_buffer[128]; // 256 bytes
+    // Static buffers: live in DRAM, not on the FreeRTOS task stack (avoids stack overflow)
+    static int32_t read_buffer[512]; // 128 stereo 32-bit frames = 2048 bytes
+    static int32_t loopback_tx[256]; // 128 stereo 32-bit frames = 1024 bytes for direct i2s_write
+
+    // HPF state
+    float prev_in  = 0.0f;
+    float prev_out = 0.0f;
+    const float alpha = 0.98f; // ~100 Hz HPF @ 16 kHz
+
     while (true) {
-      size_t bytes_read;
-      esp_err_t err = i2s_read(I2S_NUM_0, read_buffer, sizeof(read_buffer), &bytes_read, portMAX_DELAY);
-      if (err == ESP_OK && bytes_read > 0) {
-        int32_t sum = 0;
-        int count = bytes_read / 2;
-        for (int i = 0; i < count; i++) {
-          sum += abs(read_buffer[i]);
+      size_t bytes_read = 0;
+      esp_err_t err = i2s_read(I2S_NUM_0, read_buffer, 128 * 2 * sizeof(int32_t), &bytes_read, portMAX_DELAY);
+      if (err != ESP_OK || bytes_read == 0) {
+        vTaskDelay(pdMS_TO_TICKS(2));
+        continue;
+      }
+
+      // Each I2S frame is two int32_t words (Left + Right channel)
+      int frames = bytes_read / (2 * sizeof(int32_t)); // stereo frames
+      if (frames > 128) frames = 128;
+
+      // ---- Amplitude monitor (1 Hz print) ----
+      int32_t sum = 0;
+      for (int i = 0; i < frames; i++) {
+        // >> 16 gives top 16 bits of the 24-bit audio sample — correct 16-bit amplitude metric
+        int16_t s = (int16_t)(read_buffer[2 * i] >> 16);
+        sum += abs(s);
+      }
+      micAmplitude = frames > 0 ? (sum / frames) : 0;
+
+      static uint32_t last_print = 0;
+      if (millis() - last_print > 1000) {
+        last_print = millis();
+        Serial.printf("[AUDIO RX] frames=%d amp=%d raw_L=0x%08X raw_R=0x%08X loopback=%d\n",
+                      frames, micAmplitude,
+                      (unsigned)read_buffer[0], (unsigned)read_buffer[1],
+                      (int)self->directLoopback);
+      }
+
+      // ---- DIRECT LOOPBACK: RAW passthrough with gain boost ----
+      if (self->directLoopback) {
+        size_t bytes_written = 0;
+        for (int i = 0; i < frames; i++) {
+          // Raw mic value is left-aligned 24-bit in a 32-bit word.
+          // Apply 50x gain to make quiet INMP441 signal audible through speaker.
+          int64_t raw = (int64_t)(int32_t)read_buffer[2 * i];
+          int64_t boosted = raw * 50LL;
+          if (boosted >  2147483647LL) boosted =  2147483647LL;
+          if (boosted < -2147483648LL) boosted = -2147483648LL;
+          loopback_tx[2 * i]     = (int32_t)boosted; // L
+          loopback_tx[2 * i + 1] = (int32_t)boosted; // R
         }
-        if (count > 0) {
-          micAmplitude = sum / count;
+        size_t want = frames * 2 * sizeof(int32_t);
+        i2s_write(I2S_NUM_0, loopback_tx, want, &bytes_written, 0);
+
+        static uint32_t lp_print = 0;
+        if (millis() - lp_print > 1000) {
+          lp_print = millis();
+          Serial.printf("[LOOPBACK] wrote %d/%d bytes, amp=%d\n", (int)bytes_written, (int)want, micAmplitude);
         }
 
-        if (self->micStreaming && self->rxRingBuffer != NULL) {
-          xRingbufferSend(self->rxRingBuffer, read_buffer, bytes_read, 0);
+      // ---- BLE STREAMING: mic → rxRingBuffer → main loop → BLE (16-bit PCM) ----
+      } else if (self->micStreaming && self->rxRingBuffer != NULL) {
+        int16_t mono_buf[128];
+        for (int i = 0; i < frames; i++) {
+          mono_buf[i] = (int16_t)(read_buffer[2 * i] >> 16);
         }
+        xRingbufferSend(self->rxRingBuffer, mono_buf, frames * sizeof(int16_t), 0);
       }
-      vTaskDelay(pdMS_TO_TICKS(5));
     }
   }
 };

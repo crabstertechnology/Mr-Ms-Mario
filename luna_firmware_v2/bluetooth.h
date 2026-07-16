@@ -146,9 +146,11 @@ public:
     pAudioStreamChar = pService->createCharacteristic(
                          AUDIO_STREAM_CHAR_UUID,
                          BLECharacteristic::PROPERTY_WRITE |
-                         BLECharacteristic::PROPERTY_WRITE_NR
+                         BLECharacteristic::PROPERTY_WRITE_NR |
+                         BLECharacteristic::PROPERTY_NOTIFY
                        );
     pAudioStreamChar->setCallbacks(new AudioStreamCallbacks());
+    pAudioStreamChar->addDescriptor(new BLE2902());
 
     // Start Service
     pService->start();
@@ -200,6 +202,12 @@ public:
     String payload = "LOG:" + logMsg;
     pStatusChar->setValue(payload.c_str());
     pStatusChar->notify();
+  }
+
+  void sendAudioStream(uint8_t* buffer, size_t size) {
+    if (!isConnected()) return;
+    pAudioStreamChar->setValue(buffer, size);
+    pAudioStreamChar->notify();
   }
 
   void handleConnectionState() {
