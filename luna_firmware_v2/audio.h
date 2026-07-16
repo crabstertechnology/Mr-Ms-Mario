@@ -8,6 +8,8 @@
 #include "config.h"
 #include "freertos/ringbuf.h"
 
+#define TX_RING_BUFFER_SIZE 65536
+
 struct Note {
   uint16_t frequency;
   uint16_t duration;
@@ -105,7 +107,7 @@ public:
     static uint32_t totalBytesDropped = 0;
     totalBytesReceived += len;
     
-    BaseType_t ret = xRingbufferSend(txRingBuffer, data, len, 0);
+    BaseType_t ret = xRingbufferSend(txRingBuffer, (void*)data, len, pdMS_TO_TICKS(20));
     if (ret != pdTRUE) {
       totalBytesDropped += len;
     }
@@ -321,8 +323,8 @@ public:
   }
 
   void init() {
-    // Ring buffer: 65536 bytes ≈ 2s of 16kHz 16-bit mono PCM
-    txRingBuffer = xRingbufferCreate(16384, RINGBUF_TYPE_BYTEBUF);
+    // Ring buffer: TX_RING_BUFFER_SIZE bytes
+    txRingBuffer = xRingbufferCreate(TX_RING_BUFFER_SIZE, RINGBUF_TYPE_BYTEBUF);
     rxRingBuffer = xRingbufferCreate(2048,  RINGBUF_TYPE_BYTEBUF);
 
     // I2S DMA config: 32-bit sample width is required by the INMP441 microphone to correctly align 24-bit samples
@@ -388,8 +390,8 @@ public:
 
         if (self->prebuffering) {
           size_t freeBytes = xRingbufferGetCurFreeSize(self->txRingBuffer);
-          size_t filledBytes = 16384 - freeBytes;
-          if (filledBytes >= 12000) {
+          size_t filledBytes = TX_RING_BUFFER_SIZE - freeBytes;
+          if (filledBytes >= 24000) {
             self->prebuffering = false;
             Serial.printf("[AUDIO] Prebuffer done, filled=%u bytes. Starting playback.\n", filledBytes);
           } else {
@@ -422,23 +424,26 @@ public:
             item[i] = (int16_t)s;
           }
 
-          int32_t stereoBuf[256]; // 128 samples × 2 channels (1024 bytes)
-          int stereoSamples = samples;
-          if (stereoSamples > 128) stereoSamples = 128;
-          for (int i = 0; i < stereoSamples; i++) {
-            int32_t val = (int32_t)item[i] << 16; // Shift 16-bit to 32-bit for DAC
-            stereoBuf[2 * i]     = val; // Left
-            stereoBuf[2 * i + 1] = val; // Right
-          }
+          int samplesProcessed = 0;
+          while (samplesProcessed < samples) {
+            int chunkSamples = samples - samplesProcessed;
+            if (chunkSamples > 128) chunkSamples = 128;
 
-          if (stereoSamples > 0) {
-            i2s_write(I2S_NUM_0, stereoBuf, stereoSamples * 8, &bytes_written, portMAX_DELAY);
+            int32_t stereoBuf[256]; // 128 samples × 2 channels (1024 bytes)
+            for (int i = 0; i < chunkSamples; i++) {
+              int32_t val = (int32_t)item[samplesProcessed + i] << 16; // Shift 16-bit to 32-bit for DAC
+              stereoBuf[2 * i]     = val; // Left
+              stereoBuf[2 * i + 1] = val; // Right
+            }
+
+            i2s_write(I2S_NUM_0, stereoBuf, chunkSamples * 8, &bytes_written, portMAX_DELAY);
+            samplesProcessed += chunkSamples;
           }
 
           static uint32_t last_print = 0;
           if (millis() - last_print > 1000) {
             last_print = millis();
-            Serial.printf("[AUDIO TX] item_size: %d, stereoSamples: %d, sample[0]: %d\n", (int)item_size, stereoSamples, (int)stereoBuf[0]);
+            Serial.printf("[AUDIO TX] item_size: %d, samples: %d\n", (int)item_size, samples);
           }
 
           vRingbufferReturnItem(self->txRingBuffer, (void*)item);

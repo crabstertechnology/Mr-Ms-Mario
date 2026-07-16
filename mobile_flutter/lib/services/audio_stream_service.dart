@@ -22,6 +22,9 @@ class AudioStreamService with ChangeNotifier {
   bool _isMusicPaused = false;
   int _musicStreamOffset = 0;
   int _musicStreamTotalSize = 0;
+  int _musicTimerStartTime = 0;
+  int _pauseStartTime = 0;
+  int _totalPauseDuration = 0;
   Timer? _musicTimer;
   Uint8List? _pcmBytes;
 
@@ -92,6 +95,9 @@ class AudioStreamService with ChangeNotifier {
     _pcmAccumulator.clear();
     _decodeComplete = false;
     _statusMessage = "Buffering...";
+    _totalPauseDuration = 0;
+    _pauseStartTime = 0;
+    _musicTimerStartTime = 0;
     notifyListeners();
 
     // ── Phase 1: Stream-decode into accumulator ──────────────────────────────
@@ -141,11 +147,9 @@ class AudioStreamService with ChangeNotifier {
   int _lastNotifiedOffset = 0;
 
   // ── Phase 2: Rate-controlled sender ─────────────────────────────────────────
-  // Sends PCM at EXACTLY the I2S playback rate: 16kHz × 16-bit × 1ch = 32,000 bytes/sec
-  // = 960 bytes every 30ms.
-  // Sending faster (e.g. 2×) fills the ESP32 ring buffer immediately, causing
-  // xRingbufferSend to block the BLE callback thread → slow-motion audio.
-  // The ESP32's 16KB ring buffer holds ~500ms of audio, providing enough jitter headroom.
+  // Sends PCM at EXACTLY the I2S playback rate: 16kHz × 16-bit × 1ch = 32,000 bytes/sec.
+  // We use system-time absolute pacing (DateTime.now()) to be immune to timer jitter,
+  // preventing buffer overflow (dropped audio/glitches) and underflow.
   void _startRateTimer(BLEService ble) {
     if (_musicTimerRunning) return;
     _musicTimerRunning = true;
@@ -153,55 +157,65 @@ class AudioStreamService with ChangeNotifier {
     _statusMessage = "Streaming Music...";
     notifyListeners();
 
-    // ── Phase 2: Rate-controlled sender ─────────────────────────────────────────
-    // 224 bytes per 7ms = 224/0.007 = 32,000 bytes/sec = exact 16kHz 16-bit mono rate.
-    // WHY 7ms not 30ms? Android Timer.periodic(30ms) actually fires every 33–40ms due
-    // to OS jitter (±20% error). At 30ms target, 33ms actual = 960/33ms = 29,090 bytes/sec
-    // = 91% speed → audio sounds slow. At 7ms target, 8ms actual = 224/8ms = 28,000 bytes/sec
-    // — still too slow! So we use 250 bytes per 7ms = 35,714 bytes/sec (12% over).
-    // The 16KB ring buffer absorbs the 12% excess (fills in ~4s then drops 1 packet,
-    // inaudible compared to consistent 91%-speed playback).
-    const int bytesPerTick = 1200; // 1200 bytes every 30ms ≈ 40,000 bytes/sec (prevents slow-motion/underrun)
-    const int timerMs = 30;
+    _musicTimerStartTime = DateTime.now().millisecondsSinceEpoch;
+    _totalPauseDuration = 0;
+    _pauseStartTime = 0;
+
     _musicTimer?.cancel();
-    _musicTimer = Timer.periodic(const Duration(milliseconds: timerMs), (timer) {
-      if (!_isStreamingMusic) {
-        timer.cancel();
-        _musicTimerRunning = false;
-        return;
-      }
-
-      if (_isMusicPaused) return;
-
-      final available = _pcmAccumulator.length - _musicStreamOffset;
-
-      if (available <= 0) {
-        if (_decodeComplete) {
-          timer.cancel();
-          _musicTimerRunning = false;
-          _isStreamingMusic = false;
-          _isBleStreaming = false;
-          _statusMessage = "Playback complete.";
-          notifyListeners();
+    
+    // Async backpressure loop
+    Future.microtask(() async {
+      while (_isStreamingMusic && _musicTimerRunning) {
+        if (_isMusicPaused) {
+          await Future.delayed(const Duration(milliseconds: 15));
+          continue;
         }
-        // Not yet done: keep waiting for more decoded data (buffer underrun prevention)
-        return;
+
+        final elapsedMs = DateTime.now().millisecondsSinceEpoch - _musicTimerStartTime - _totalPauseDuration;
+        final targetOffset = (elapsedMs * 32) ~/ 2 * 2;
+
+        if (_musicStreamOffset >= _pcmAccumulator.length) {
+          if (_decodeComplete) {
+            _musicTimerRunning = false;
+            _isStreamingMusic = false;
+            _isBleStreaming = false;
+            _statusMessage = "Playback complete.";
+            notifyListeners();
+            break;
+          }
+          await Future.delayed(const Duration(milliseconds: 15));
+          continue;
+        }
+
+        if (targetOffset > _musicStreamOffset) {
+          int bytesToSend = targetOffset - _musicStreamOffset;
+          if (bytesToSend > 480) bytesToSend = 480; // Limit burst size to 480 bytes
+
+          final available = _pcmAccumulator.length - _musicStreamOffset;
+          if (available <= 0) {
+            await Future.delayed(const Duration(milliseconds: 5));
+            continue;
+          }
+
+          int toSend = bytesToSend < available ? bytesToSend : available;
+          final chunk = Uint8List.fromList(
+            _pcmAccumulator.sublist(_musicStreamOffset, _musicStreamOffset + toSend),
+          );
+          _musicStreamOffset += toSend;
+
+          if (_musicStreamOffset - _lastNotifiedOffset >= _notifyEveryBytes) {
+            _lastNotifiedOffset = _musicStreamOffset;
+            notifyListeners();
+          }
+
+          final success = await ble.transmitAudioChunk(chunk);
+          if (!success) {
+            await Future.delayed(const Duration(milliseconds: 5));
+          }
+        } else {
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
       }
-
-      final toSend = available < bytesPerTick ? available : bytesPerTick;
-      final chunk = Uint8List.fromList(
-        _pcmAccumulator.sublist(_musicStreamOffset, _musicStreamOffset + toSend),
-      );
-      _musicStreamOffset += toSend;
-
-      // Only notify UI every ~250ms (8000 bytes) to avoid rebuilding widget tree every tick
-      if (_musicStreamOffset - _lastNotifiedOffset >= _notifyEveryBytes) {
-        _lastNotifiedOffset = _musicStreamOffset;
-        notifyListeners();
-      }
-
-      // Fire and forget — BLE stack queues the packets, no blocking
-      ble.transmitAudioChunk(chunk);
     });
   }
 
@@ -229,6 +243,7 @@ class AudioStreamService with ChangeNotifier {
   void pauseMusic() {
     if (_isStreamingMusic && !_isMusicPaused) {
       _isMusicPaused = true;
+      _pauseStartTime = DateTime.now().millisecondsSinceEpoch;
       _statusMessage = "Music Paused";
       notifyListeners();
     }
@@ -237,6 +252,10 @@ class AudioStreamService with ChangeNotifier {
   void resumeMusic() {
     if (_isStreamingMusic && _isMusicPaused) {
       _isMusicPaused = false;
+      if (_pauseStartTime > 0) {
+        _totalPauseDuration += DateTime.now().millisecondsSinceEpoch - _pauseStartTime;
+        _pauseStartTime = 0;
+      }
       _statusMessage = "Streaming Music...";
       notifyListeners();
     }
@@ -246,6 +265,7 @@ class AudioStreamService with ChangeNotifier {
     if (_isStreamingMusic) {
       int alignedOffset = (newOffset ~/ 2) * 2;
       _musicStreamOffset = alignedOffset.clamp(0, _musicStreamTotalSize);
+      _musicTimerStartTime = DateTime.now().millisecondsSinceEpoch - _totalPauseDuration - (_musicStreamOffset ~/ 32);
       notifyListeners();
     }
   }
@@ -480,40 +500,47 @@ class AudioStreamService with ChangeNotifier {
     _statusMessage = "Streaming Music...";
     notifyListeners();
     
-    final startTime = DateTime.now().millisecondsSinceEpoch;
+    _musicTimerStartTime = DateTime.now().millisecondsSinceEpoch;
+    _totalPauseDuration = 0;
+    _pauseStartTime = 0;
     
     _musicTimer?.cancel();
-    _musicTimer = Timer.periodic(const Duration(milliseconds: 15), (timer) async {
-      if (!_isStreamingMusic || !_isBleStreaming) {
-        timer.cancel();
-        return;
-      }
-
-      if (_isMusicPaused) {
-        return;
-      }
-      
-      final elapsedMs = DateTime.now().millisecondsSinceEpoch - startTime;
-      final targetOffset = (elapsedMs * 32) ~/ 2 * 2;
-      
-      if (_musicStreamOffset >= _musicStreamTotalSize) {
-        stopMusicStreamBLE();
-        timer.cancel();
-        return;
-      }
-      
-      if (targetOffset > _musicStreamOffset) {
-        int bytesToSend = targetOffset - _musicStreamOffset;
-        if (bytesToSend > 960) bytesToSend = 960;
+    _musicTimerRunning = true;
+    
+    // Async backpressure loop
+    Future.microtask(() async {
+      while (_isStreamingMusic && _isBleStreaming && _musicTimerRunning) {
+        if (_isMusicPaused) {
+          await Future.delayed(const Duration(milliseconds: 15));
+          continue;
+        }
         
-        int end = _musicStreamOffset + bytesToSend;
-        if (end > _musicStreamTotalSize) end = _musicStreamTotalSize;
+        final elapsedMs = DateTime.now().millisecondsSinceEpoch - _musicTimerStartTime - _totalPauseDuration;
+        final targetOffset = (elapsedMs * 32) ~/ 2 * 2;
         
-        final chunk = _pcmBytes!.sublist(_musicStreamOffset, end);
-        _musicStreamOffset = end;
-        notifyListeners();
+        if (_musicStreamOffset >= _musicStreamTotalSize) {
+          stopMusicStreamBLE();
+          break;
+        }
         
-        await ble.transmitAudioChunk(chunk);
+        if (targetOffset > _musicStreamOffset) {
+          int bytesToSend = targetOffset - _musicStreamOffset;
+          if (bytesToSend > 480) bytesToSend = 480; // Limit burst size to 480 bytes
+          
+          int end = _musicStreamOffset + bytesToSend;
+          if (end > _musicStreamTotalSize) end = _musicStreamTotalSize;
+          
+          final chunk = _pcmBytes!.sublist(_musicStreamOffset, end);
+          _musicStreamOffset = end;
+          notifyListeners();
+          
+          final success = await ble.transmitAudioChunk(chunk);
+          if (!success) {
+            await Future.delayed(const Duration(milliseconds: 5));
+          }
+        } else {
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
       }
     });
     
@@ -528,6 +555,7 @@ class AudioStreamService with ChangeNotifier {
     _musicStreamOffset = 0;
     _musicStreamTotalSize = 0;
     _pcmBytes = null;
+    _musicTimerRunning = false;
     notifyListeners();
     
     _musicTimer?.cancel();

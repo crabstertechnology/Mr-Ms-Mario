@@ -122,8 +122,7 @@ class BLEService with ChangeNotifier {
       while (offset < chunk.length) {
         final end = (offset + maxPacket < chunk.length) ? offset + maxPacket : chunk.length;
         final sub = chunk.sublist(offset, end);
-        // ignore: unawaited_futures
-        _audioStreamChar!.write(
+        await _audioStreamChar!.write(
           sub is Uint8List ? sub : Uint8List.fromList(sub),
           withoutResponse: true,
         );

@@ -601,9 +601,7 @@ void setup() {
   interaction.begin();
 
   Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
-  Serial.println(FIRMWARE_VERSION);
-
-  // Load persistence settings from NVS Preferences
+  Serial.println(FIRMWARE_VERSION);  // Load persistence settings from NVS Preferences
   preferences.begin("luna", false);
   bleActive = true; // Always ON
   gifSpeed = preferences.getInt("speed", 100);
@@ -677,6 +675,7 @@ void setup() {
 
   // Play startup sound immediately so it plays while loading the logo
   audio.playSound(SOUND_STARTUP, introSoundSpeed);
+
 
   // Show logo for 3 seconds while playing the startup sound and ignoring/clearing touches
   unsigned long bootStart = millis();
