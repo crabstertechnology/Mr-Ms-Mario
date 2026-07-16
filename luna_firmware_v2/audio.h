@@ -69,8 +69,8 @@ public:
   volatile int _bassBoost;     // Bass boost 0-10
   float _lpfState;             // Low-pass filter state for bass shelf EQ
 
-  LunaAudio() : currentFrequency(0), currentVolume(8000),
-                _streamVolume(70), _bassBoost(3), _lpfState(0.0f) {
+  LunaAudio() : currentFrequency(0), currentVolume(32767),
+                _streamVolume(100), _bassBoost(3), _lpfState(0.0f) {
     queueHead = 0;
     queueTail = 0;
     queueCount = 0;
@@ -500,8 +500,11 @@ public:
       // ---- Amplitude monitor (1 Hz print) ----
       int32_t sum = 0;
       for (int i = 0; i < frames; i++) {
-        // >> 16 gives top 16 bits of the 24-bit audio sample — correct 16-bit amplitude metric
-        int16_t s = (int16_t)(read_buffer[2 * i] >> 16);
+        // TEST: reading RIGHT channel (index 1) — try if L/R pin is wired to VCC
+        int16_t sL = (int16_t)(read_buffer[2 * i]     >> 16);
+        int16_t sR = (int16_t)(read_buffer[2 * i + 1] >> 16);
+        // Use whichever channel has larger amplitude
+        int16_t s = (abs(sR) > abs(sL)) ? sR : sL;
         sum += abs(s);
       }
       micAmplitude = frames > 0 ? (sum / frames) : 0;
@@ -509,8 +512,10 @@ public:
       static uint32_t last_print = 0;
       if (millis() - last_print > 1000) {
         last_print = millis();
-        Serial.printf("[AUDIO RX] frames=%d amp=%d raw_L=0x%08X raw_R=0x%08X loopback=%d\n",
-                      frames, micAmplitude,
+        int16_t ampL = (int16_t)(read_buffer[0] >> 16);
+        int16_t ampR = (int16_t)(read_buffer[1] >> 16);
+        Serial.printf("[AUDIO RX] frames=%d ampL=%d ampR=%d raw_L=0x%08X raw_R=0x%08X loopback=%d\n",
+                      frames, abs(ampL), abs(ampR),
                       (unsigned)read_buffer[0], (unsigned)read_buffer[1],
                       (int)self->directLoopback);
       }
@@ -522,7 +527,7 @@ public:
           // Raw mic value is left-aligned 24-bit in a 32-bit word.
           // Apply 50x gain to make quiet INMP441 signal audible through speaker.
           int64_t raw = (int64_t)(int32_t)read_buffer[2 * i];
-          int64_t boosted = raw * 50LL;
+          int64_t boosted = raw * 300LL;
           if (boosted >  2147483647LL) boosted =  2147483647LL;
           if (boosted < -2147483648LL) boosted = -2147483648LL;
           loopback_tx[2 * i]     = (int32_t)boosted; // L
