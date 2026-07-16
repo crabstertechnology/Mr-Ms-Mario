@@ -1188,28 +1188,28 @@ public:
     else if (mapDirection.indexOf("ROUNDABOUT") >= 0 ||
              mapDirection.indexOf("ROUND")      >= 0) dirLabel = "Roundabout";
     int lblW = dirLabel.length() * 12;
-    display.setCursor((SCREEN_WIDTH - lblW) / 2, 158);
+    display.setCursor((SCREEN_WIDTH - lblW) / 2, 152);
     display.print(dirLabel);
 
     // ── Bottom info bar ─────────────────────────────────────────────
-    display.drawFastHLine(12, 178, SCREEN_WIDTH - 24, 0x18E3);
-    display.fillRoundRect(8, 181, SCREEN_WIDTH - 16, 34, 6, 0x18E3);
+    display.drawFastHLine(8, 170, SCREEN_WIDTH - 16, 0x18E3);
+    display.fillRoundRect(6, 172, SCREEN_WIDTH - 12, 50, 8, 0x18E3);
 
-    // Distance — large, left-aligned
-    display.setTextSize(2);
+    // Distance — left side, large yellow
+    display.setTextSize(3);
     display.setTextColor(TFT_YELLOW, 0x18E3);
     String distStr = (mapDistance == "" || mapDistance == "--") ? "---" : mapDistance;
-    display.setCursor(14, 187);
+    display.setCursor(12, 179);
     display.print(distStr);
 
-    // ETA / description — small, right-aligned
+    // ETA / description — right side, white size 2
     if (mapDescription != "") {
-      display.setTextSize(1);
+      display.setTextSize(2);
       display.setTextColor(TFT_WHITE, 0x18E3);
-      int etaW = mapDescription.length() * 6;
-      int etaX = SCREEN_WIDTH - 14 - etaW;
-      if (etaX < 14) etaX = 14;
-      display.setCursor(etaX, 191);
+      int etaW = mapDescription.length() * 12;
+      int etaX = SCREEN_WIDTH - 12 - etaW;
+      if (etaX < 12) etaX = 12;
+      display.setCursor(etaX, 185);
       display.print(mapDescription);
     }
   }
