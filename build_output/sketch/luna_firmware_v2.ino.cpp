@@ -87,19 +87,19 @@ void handleBLEAudio(SoundEffect sound);
 void handleBLEText(String text);
 #line 196 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void handleRobotCommand(String text);
-#line 477 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 479 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void applySettings(String payload);
-#line 596 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 598 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void setup();
-#line 738 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 740 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void cycleExpression();
-#line 758 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 760 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void executeTouchAction(int actionType, TouchEvent eventType);
-#line 826 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 828 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void handleButton1Press();
-#line 852 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 854 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void handleButton2Press();
-#line 905 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 907 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void loop();
 #line 76 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void parseAndSyncTime(String timeStr) {
@@ -418,6 +418,8 @@ void handleRobotCommand(String text) {
     bool shouldBeep = (!mapsActive) || (dirUpper != face.getMapDirection());
     
     mapsActive = true;
+    currentScreen = SCREEN_MAPS;  // <-- CRITICAL: actually show the map screen
+    lastInteractionTime = millis(); // reset inactivity timer so map stays visible
     face.setMapNavigation(dirUpper, distance, description);
     
     if (shouldBeep) {

@@ -389,6 +389,8 @@ void handleRobotCommand(String text) {
     bool shouldBeep = (!mapsActive) || (dirUpper != face.getMapDirection());
     
     mapsActive = true;
+    currentScreen = SCREEN_MAPS;  // <-- CRITICAL: actually show the map screen
+    lastInteractionTime = millis(); // reset inactivity timer so map stays visible
     face.setMapNavigation(dirUpper, distance, description);
     
     if (shouldBeep) {

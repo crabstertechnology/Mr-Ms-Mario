@@ -1100,54 +1100,116 @@ public:
   }
 
   void drawMapScreenLandscape(int hour, int minute, bool is12Hour) {
-    display.setTextColor(TFT_WHITE, 0x0821);
     display.setTextWrap(false);
 
-    display.drawRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 12, TFT_GREEN);
-    display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 10, 0x0821);
-    
-    int arrowX = SCREEN_WIDTH / 2;
-    int arrowY = (SCREEN_HEIGHT - 28) / 2 + 10;
-    display.setTextColor(TFT_WHITE);
+    // ── Background card ───────────────────────────────────────────────
+    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, TFT_GREEN);
+    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 10, 0x0821);
+
+    // ── Top label: "NAVIGATION" ───────────────────────────────────────
+    display.setTextSize(1);
+    display.setTextColor(TFT_GREEN, 0x0821);
+    int navW = 10 * 6;
+    display.setCursor((SCREEN_WIDTH - navW) / 2, 35);
+    display.print("NAVIGATION");
+    display.drawFastHLine(12, 45, SCREEN_WIDTH - 24, 0x18E3);
+
+    // ── Arrow area (centered, 60x60px arrow in the middle) ───────────
+    int cx = SCREEN_WIDTH / 2;
+    int cy = 108;  // vertical center of arrow area
+
     if (mapDirection.indexOf("LEFT") >= 0) {
-      display.fillTriangle(arrowX - 24, arrowY, arrowX, arrowY - 20, arrowX, arrowY + 20, TFT_WHITE);
-      display.fillRect(arrowX, arrowY - 8, 24, 16, TFT_WHITE);
-      display.fillRect(arrowX + 12, arrowY + 8, 12, 16, TFT_WHITE);
+      // LEFT arrow: large clear left-pointing arrow
+      // Stem: horizontal bar going left from centre
+      display.fillRect(cx - 30, cy - 8, 40, 16, TFT_WHITE);
+      // Arrowhead pointing LEFT
+      display.fillTriangle(cx - 30, cy,
+                           cx - 10, cy - 26,
+                           cx - 10, cy + 26, TFT_WHITE);
+      // Small vertical stem going down at the right end (road continues straight then turns)
+      display.fillRect(cx + 10, cy - 8, 14, 30, TFT_WHITE);
+
     } else if (mapDirection.indexOf("RIGHT") >= 0) {
-      display.fillTriangle(arrowX + 24, arrowY, arrowX, arrowY - 20, arrowX, arrowY + 20, TFT_WHITE);
-      display.fillRect(arrowX - 24, arrowY - 8, 24, 16, TFT_WHITE);
-      display.fillRect(arrowX - 24, arrowY + 8, 12, 16, TFT_WHITE);
+      // RIGHT arrow: large clear right-pointing arrow
+      display.fillRect(cx - 10, cy - 8, 40, 16, TFT_WHITE);
+      // Arrowhead pointing RIGHT
+      display.fillTriangle(cx + 30, cy,
+                           cx + 10, cy - 26,
+                           cx + 10, cy + 26, TFT_WHITE);
+      // Small vertical stem going down at the left end
+      display.fillRect(cx - 24, cy - 8, 14, 30, TFT_WHITE);
+
     } else if (mapDirection.indexOf("UTURN") >= 0 || mapDirection.indexOf("U-TURN") >= 0) {
-      display.drawCircle(arrowX, arrowY, 18, TFT_WHITE);
-      display.drawCircle(arrowX, arrowY, 16, TFT_WHITE);
-      display.fillRect(arrowX - 20, arrowY, 40, 24, 0x0821);
-      display.fillRect(arrowX - 18, arrowY, 4, 14, TFT_WHITE);
-      display.fillRect(arrowX + 14, arrowY, 4, 22, TFT_WHITE);
-      display.fillTriangle(arrowX - 16, arrowY + 20, arrowX - 22, arrowY + 10, arrowX - 10, arrowY + 10, TFT_WHITE);
+      // U-TURN: thick U shape with downward arrow
+      display.drawCircle(cx, cy - 14, 22, TFT_WHITE);
+      display.drawCircle(cx, cy - 14, 20, TFT_WHITE);
+      display.drawCircle(cx, cy - 14, 18, TFT_WHITE);
+      // Erase the bottom half of the circles to make a U
+      display.fillRect(cx - 30, cy - 14, 60, 40, 0x0821);
+      // Left leg
+      display.fillRect(cx - 24, cy - 14, 6, 32, TFT_WHITE);
+      // Right leg with downward arrow at bottom
+      display.fillRect(cx + 18, cy - 14, 6, 24, TFT_WHITE);
+      display.fillTriangle(cx + 21, cy + 18,
+                           cx + 10, cy + 8,
+                           cx + 32, cy + 8, TFT_WHITE);
+
     } else if (mapDirection.indexOf("ROUNDABOUT") >= 0 || mapDirection.indexOf("ROUND") >= 0) {
-      display.drawCircle(arrowX, arrowY, 14, TFT_WHITE);
-      display.fillRect(arrowX - 8, arrowY - 8, 16, 16, 0x0821);
-      display.fillRect(arrowX - 2, arrowY + 8, 4, 10, TFT_WHITE);
-      display.fillRect(arrowX + 8, arrowY - 2, 8, 4, TFT_WHITE);
-      display.fillTriangle(arrowX + 20, arrowY, arrowX + 12, arrowY - 6, arrowX + 12, arrowY + 6, TFT_WHITE);
+      // ROUNDABOUT: circle with an exit arrow
+      display.drawCircle(cx, cy, 22, TFT_WHITE);
+      display.drawCircle(cx, cy, 20, TFT_WHITE);
+      // Fill inside dark
+      display.fillCircle(cx, cy, 17, 0x0821);
+      // Exit arrow pointing up-right
+      display.fillRect(cx + 14, cy - 28, 6, 24, TFT_WHITE);
+      display.fillTriangle(cx + 17, cy - 34,
+                           cx + 10, cy - 24,
+                           cx + 24, cy - 24, TFT_WHITE);
+      // Entry from bottom
+      display.fillRect(cx - 6, cy + 14, 12, 16, TFT_WHITE);
+
     } else {
-      display.fillRect(arrowX - 8, arrowY - 14, 16, 28, TFT_WHITE);
-      display.fillTriangle(arrowX, arrowY - 30, arrowX - 20, arrowY - 14, arrowX + 20, arrowY - 14, TFT_WHITE);
+      // STRAIGHT: tall upward arrow
+      display.fillRect(cx - 8, cy - 20, 16, 44, TFT_WHITE);
+      display.fillTriangle(cx, cy - 40,
+                           cx - 22, cy - 20,
+                           cx + 22, cy - 20, TFT_WHITE);
     }
 
-    display.drawFastHLine(12, SCREEN_HEIGHT - 32, SCREEN_WIDTH - 24, 0x18E3);
+    // ── Direction label text below arrow ────────────────────────────
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE, 0x0821);
+    String dirLabel = "Go Straight";
+    if      (mapDirection.indexOf("LEFT")       >= 0) dirLabel = "Turn Left";
+    else if (mapDirection.indexOf("RIGHT")      >= 0) dirLabel = "Turn Right";
+    else if (mapDirection.indexOf("UTURN")      >= 0 ||
+             mapDirection.indexOf("U-TURN")     >= 0) dirLabel = "Make U-Turn";
+    else if (mapDirection.indexOf("ROUNDABOUT") >= 0 ||
+             mapDirection.indexOf("ROUND")      >= 0) dirLabel = "Roundabout";
+    int lblW = dirLabel.length() * 12;
+    display.setCursor((SCREEN_WIDTH - lblW) / 2, 158);
+    display.print(dirLabel);
 
-    if (mapDistance != "" && mapDistance != "--") {
-      display.setTextColor(TFT_YELLOW, 0x0821);
-      drawMixedSizeText(mapDistance, 14, SCREEN_HEIGHT - 26, SCREEN_HEIGHT - 22);
-    }
+    // ── Bottom info bar ─────────────────────────────────────────────
+    display.drawFastHLine(12, 178, SCREEN_WIDTH - 24, 0x18E3);
+    display.fillRoundRect(8, 181, SCREEN_WIDTH - 16, 34, 6, 0x18E3);
 
+    // Distance — large, left-aligned
+    display.setTextSize(2);
+    display.setTextColor(TFT_YELLOW, 0x18E3);
+    String distStr = (mapDistance == "" || mapDistance == "--") ? "---" : mapDistance;
+    display.setCursor(14, 187);
+    display.print(distStr);
+
+    // ETA / description — small, right-aligned
     if (mapDescription != "") {
-      display.setTextColor(TFT_GREEN, 0x0821);
-      int timeWidth = getMixedSizeTextWidth(mapDescription);
-      int sX = SCREEN_WIDTH - 14 - timeWidth;
-      if (sX < arrowX) sX = arrowX;
-      drawMixedSizeText(mapDescription, sX, SCREEN_HEIGHT - 26, SCREEN_HEIGHT - 22);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE, 0x18E3);
+      int etaW = mapDescription.length() * 6;
+      int etaX = SCREEN_WIDTH - 14 - etaW;
+      if (etaX < 14) etaX = 14;
+      display.setCursor(etaX, 191);
+      display.print(mapDescription);
     }
   }
 
