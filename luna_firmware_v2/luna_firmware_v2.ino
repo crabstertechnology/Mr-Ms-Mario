@@ -1135,18 +1135,21 @@ void loop() {
           Serial.println("Touch Triple Tap: Switched directly to Settings screen.");
         }
       } else if (touchEvent == TOUCH_LONG_PRESS) {
-        if (currentScreen == SCREEN_CLOCK) {
-          audio.playSound(SOUND_CHIRP);
-        } else if (currentScreen == SCREEN_NOTIFICATIONS) {
-          face.clearNotifications();
-          audio.playSound(SOUND_GAMEOVER);
-        } else if (currentScreen == SCREEN_CALENDAR) {
-          face.toggleCalendarMode();
-          audio.playSound(SOUND_COIN);
-        } else if (currentScreen == SCREEN_FACE) {
+        if (currentScreen != SCREEN_FACE) {
+          hardwareLoopbackActive = false;
+          audio.micStreaming = false;
+          audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+          audio.prebuffering = true;
+          face.setStateLabel("IDLE");
+          
+          currentScreen = SCREEN_FACE;
+          audio.playSound(SOUND_STARTUP);
+          Serial.println("Touch Long Press: Exited UI, returned to Face.");
+        } else {
           isAsleep = !isAsleep;
           face.setExpression(isAsleep ? EXPR_SLEEPING : EXPR_IDLE);
           audio.playSound(isAsleep ? SOUND_POWERDOWN : SOUND_POWERUP);
+          Serial.println("Touch Long Press: Toggled Sleep mode.");
         }
       }
     }
