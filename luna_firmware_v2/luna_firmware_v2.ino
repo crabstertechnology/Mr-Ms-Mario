@@ -828,27 +828,39 @@ void handleButton1Press() {
   lastInteractionTime = now; // reset inactivity clock
   
   if (currentScreen == SCREEN_FACE) {
-    // Shortcut to Clock
     currentScreen = SCREEN_CLOCK;
     audio.playSound(SOUND_POWERUP);
-    Serial.println("Button 1: Shortcut to Clock screen.");
-  } else if (currentScreen >= SCREEN_CLOCK && currentScreen <= SCREEN_CALENDAR) {
-    // Cycle Forward
+    Serial.println("Button 1: Switched to Clock screen.");
+  } else {
+    // Cycle smartwatch screens: Clock -> Notifications -> Calendar -> Settings -> Clock
     currentScreen = (SmartwatchScreen)((currentScreen + 1) % 4);
     if (currentScreen == SCREEN_SETTINGS) {
       menuOption = 0;
       optionSelected = false;
+    } else {
+      hardwareLoopbackActive = false;
+      audio.micStreaming = false;
+      audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+      audio.prebuffering = true;
+      face.setStateLabel("IDLE");
     }
     audio.playSound(SOUND_COIN);
-    Serial.printf("Button 1: Cycled screen forward to %d\n", currentScreen);
-  } else if (currentScreen == SCREEN_SETTINGS) {
+    Serial.printf("Button 1: Switched screen to %d\n", currentScreen);
+  }
+}
+
+void handleButton2Press() {
+  unsigned long now = millis();
+  lastInteractionTime = now; // reset inactivity clock
+  
+  if (currentScreen == SCREEN_SETTINGS) {
     if (!optionSelected) {
-      // Move highlight down
+      // Navigate highlight down
       menuOption = (menuOption + 1) % 8;
       audio.playSound(SOUND_CHIRP);
-      Serial.printf("Button 1: Navigated highlight down to %d\n", menuOption);
+      Serial.printf("Button 2: Navigated highlight down to %d\n", menuOption);
     } else {
-      // Adjust value forward / increment
+      // Adjust value / increment
       if (menuOption == 0) { // BLE (always on)
         bleActive = true;
         audio.playSound(SOUND_CHIRP);
@@ -885,76 +897,7 @@ void handleButton1Press() {
           audio.playSound(SOUND_POWERDOWN);
         }
       }
-      Serial.printf("Button 1: Incremented option %d value\n", menuOption);
-    }
-  }
-}
-
-void handleButton2Press() {
-  unsigned long now = millis();
-  lastInteractionTime = now; // reset inactivity clock
-  
-  if (currentScreen == SCREEN_FACE) {
-    // Shortcut to Settings
-    currentScreen = SCREEN_SETTINGS;
-    menuOption = 0;
-    optionSelected = false;
-    audio.playSound(SOUND_POWERUP);
-    Serial.println("Button 2: Shortcut to Settings screen.");
-  } else if (currentScreen >= SCREEN_CLOCK && currentScreen <= SCREEN_CALENDAR) {
-    // Cycle Backward
-    currentScreen = (SmartwatchScreen)((currentScreen + 3) % 4); // goes backwards: Clock -> Settings -> Calendar -> Notifications -> Clock
-    if (currentScreen == SCREEN_SETTINGS) {
-      menuOption = 0;
-      optionSelected = false;
-    }
-    audio.playSound(SOUND_COIN);
-    Serial.printf("Button 2: Cycled screen backward to %d\n", currentScreen);
-  } else if (currentScreen == SCREEN_SETTINGS) {
-    if (!optionSelected) {
-      // Move highlight up
-      menuOption = (menuOption + 7) % 8;
-      audio.playSound(SOUND_CHIRP);
-      Serial.printf("Button 2: Navigated highlight up to %d\n", menuOption);
-    } else {
-      // Adjust value backward / decrement
-      if (menuOption == 0) { // BLE (always on)
-        bleActive = true;
-        audio.playSound(SOUND_CHIRP);
-      } else if (menuOption == 1) { // GIF Speed
-        gifSpeed -= 20;
-        if (gifSpeed < 20) gifSpeed = 300;
-        face.setFrameDelay(gifSpeed);
-        audio.playSound(SOUND_CHIRP);
-      } else if (menuOption == 2) { // Clock Style
-        clockStyle = (clockStyle == 0) ? 4 : clockStyle - 1;
-        audio.playSound(SOUND_CHIRP);
-      } else if (menuOption == 3) { // Invert Display
-        negativeDisplay = !negativeDisplay;
-        tft.invertDisplay(negativeDisplay);
-        audio.playSound(SOUND_CHIRP);
-      } else if (menuOption == 4) { // Brightness
-        oledBrightness = (oledBrightness == 1) ? 3 : oledBrightness - 1;
-        #ifdef TFT_BL
-        if (oledBrightness == 1) analogWrite(TFT_BL, 30);
-        else if (oledBrightness == 2) analogWrite(TFT_BL, 128);
-        else analogWrite(TFT_BL, 255);
-        #endif
-        audio.playSound(SOUND_CHIRP);
-      } else if (menuOption == 5) { // Loopback Test
-        hardwareLoopbackActive = !hardwareLoopbackActive;
-        audio.directLoopback = hardwareLoopbackActive;
-        audio.micStreaming = false;
-        audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
-        if (hardwareLoopbackActive) {
-          face.setStateLabel("TEST");
-          audio.playSound(SOUND_POWERUP);
-        } else {
-          face.setStateLabel("IDLE");
-          audio.playSound(SOUND_POWERDOWN);
-        }
-      }
-      Serial.printf("Button 2: Decremented option %d value\n", menuOption);
+      Serial.printf("Button 2: Adjusted option %d value\n", menuOption);
     }
   }
 }
@@ -1105,20 +1048,8 @@ void loop() {
     } else {
       // General touch handling
       if (touchEvent == TOUCH_TAP) {
-        if (currentScreen == SCREEN_FACE) {
-          cycleExpression();
-          audio.playSound(SOUND_CHIRP);
-        } else if (currentScreen == SCREEN_CLOCK) {
-          clockStyle = (clockStyle + 1) % 5; // Cycle clock style
-          audio.playSound(SOUND_CHIRP);
-        } else if (currentScreen == SCREEN_NOTIFICATIONS) {
-          face.cycleNotificationView();
-          audio.playSound(SOUND_CHIRP);
-        } else if (currentScreen == SCREEN_CALENDAR) {
-          face.cycleCalendarView();
-          audio.playSound(SOUND_CHIRP);
-        } else if (currentScreen == SCREEN_SETTINGS) {
-          // In settings screen, TAP acts as SELECT / CONFIRM
+        if (currentScreen == SCREEN_SETTINGS) {
+          // Tap is SELECT / CONFIRM
           if (!optionSelected) {
             if (menuOption == 6) { // SAVE
               preferences.begin("luna", false);
@@ -1142,7 +1073,7 @@ void loop() {
               
               audio.playSound(SOUND_POWERUP);
               optionSelected = false; // deselect
-              Serial.println("Touch: Settings saved.");
+              Serial.println("Touch Tap: Settings saved.");
             } else if (menuOption == 7) { // EXIT
               hardwareLoopbackActive = false;
               audio.micStreaming = false;
@@ -1151,44 +1082,57 @@ void loop() {
               face.setStateLabel("IDLE");
               currentScreen = SCREEN_FACE;
               audio.playSound(SOUND_POWERDOWN);
-              Serial.println("Touch: Exited settings.");
+              Serial.println("Touch Tap: Exited settings.");
             } else {
               // Select option (0 to 5)
               optionSelected = true;
               audio.playSound(SOUND_COIN);
-              Serial.printf("Touch: Selected option %d\n", menuOption);
+              Serial.printf("Touch Tap: Selected option %d\n", menuOption);
             }
           } else {
             // Confirms/deselects option
             optionSelected = false;
             audio.playSound(SOUND_COIN);
-            Serial.printf("Touch: Confirmed option %d\n", menuOption);
+            Serial.printf("Touch Tap: Confirmed option %d\n", menuOption);
           }
+        } else if (currentScreen == SCREEN_FACE) {
+          cycleExpression();
+          audio.playSound(SOUND_CHIRP);
+        } else if (currentScreen == SCREEN_CLOCK) {
+          clockStyle = (clockStyle + 1) % 5;
+          audio.playSound(SOUND_CHIRP);
+        } else if (currentScreen == SCREEN_NOTIFICATIONS) {
+          face.cycleNotificationView();
+          audio.playSound(SOUND_CHIRP);
+        } else if (currentScreen == SCREEN_CALENDAR) {
+          face.cycleCalendarView();
+          audio.playSound(SOUND_CHIRP);
         }
       } else if (touchEvent == TOUCH_DOUBLE_TAP) {
-        // Double tap cycles screens forwards
         if (currentScreen == SCREEN_FACE) {
           currentScreen = SCREEN_CLOCK;
           audio.playSound(SOUND_POWERUP);
-        } else if (currentScreen >= SCREEN_CLOCK && currentScreen <= SCREEN_SETTINGS) {
-          currentScreen = (SmartwatchScreen)((currentScreen + 1) % 4);
-          if (currentScreen == SCREEN_SETTINGS) {
-            menuOption = 0;
-            optionSelected = false;
-          }
-          audio.playSound(SOUND_COIN);
+          Serial.println("Double tap: Switched to Clock screen.");
         }
       } else if (touchEvent == TOUCH_TRIPLE_TAP) {
-        // Triple tap exits any UI screen back to Face
         if (currentScreen != SCREEN_FACE) {
+          // Exit settings cleanup
           hardwareLoopbackActive = false;
           audio.micStreaming = false;
           audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
           audio.prebuffering = true;
           face.setStateLabel("IDLE");
+          
           currentScreen = SCREEN_FACE;
           audio.playSound(SOUND_STARTUP);
-          Serial.println("Touch: Returned to Face.");
+          Serial.println("Touch Triple Tap: Exited UI, returned to Face.");
+        } else {
+          // Go to Settings Screen
+          currentScreen = SCREEN_SETTINGS;
+          menuOption = 0;
+          optionSelected = false;
+          audio.playSound(SOUND_POWERUP);
+          Serial.println("Touch Triple Tap: Switched directly to Settings screen.");
         }
       } else if (touchEvent == TOUCH_LONG_PRESS) {
         if (currentScreen == SCREEN_CLOCK) {
