@@ -866,44 +866,48 @@ public:
     display.drawRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 12, 0x07FF);
     display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 10, 0x0821);
     
+    // Month / Year header — size 1 so it fits
+    display.setTextSize(1);
     display.setTextColor(TFT_YELLOW, 0x0821);
-    display.setTextSize(2);
     char headerBuf[32];
     const char* monthNames[] = { "", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER" };
     snprintf(headerBuf, sizeof(headerBuf), "%s %d", (curMonth >= 1 && curMonth <= 12) ? monthNames[curMonth] : "JULY", curYear);
-    
-    int headerW = strlen(headerBuf) * 12;
-    display.setCursor((SCREEN_WIDTH - headerW) / 2, 38);
+    int headerW = strlen(headerBuf) * 6;
+    display.setCursor((SCREEN_WIDTH - headerW) / 2, 36);
     display.print(headerBuf);
-    
+
+    // Day-of-week header
+    int colWidth = (SCREEN_WIDTH - 16) / 7;  // ~32px per column on 240px screen
+    int startX = 8;
+    int startY = 48;
     display.setTextColor(0x5DFF, 0x0821);
-    display.setTextSize(1);
-    int colWidth = (SCREEN_WIDTH - 32) / 7;
-    int startX = (SCREEN_WIDTH - colWidth * 7) / 2 + 2;
-    int startY = 60;
-    display.setCursor(startX, startY);
-    display.print(" S   M   T   W   T   F   S");
-    
-    display.drawFastHLine(12, startY + 10, SCREEN_WIDTH - 24, 0x18E3);
+    const char* dayLabels[] = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" };
+    for (int i = 0; i < 7; i++) {
+      display.setCursor(startX + i * colWidth + 2, startY);
+      display.print(dayLabels[i]);
+    }
+    display.drawFastHLine(8, startY + 10, SCREEN_WIDTH - 16, 0x18E3);
     
     int col = startWeekday;
     int row = 0;
     
-    display.setTextSize(2); // Large calendar dates!
+    display.setTextSize(1);
+    int rowHeight = (SCREEN_HEIGHT - startY - 22) / 6;
+    if (rowHeight < 14) rowHeight = 14;
     for (int d = 1; d <= daysInMonth; d++) {
       int x = startX + col * colWidth;
-      int y = startY + 16 + row * 24;
-      
+      int y = startY + 14 + row * rowHeight;
+
       if (d == curDay) {
-        display.fillRoundRect(x - 2, y - 2, 18, 18, 4, TFT_RED);
+        display.fillCircle(x + 3, y + 3, 6, TFT_RED);
         display.setTextColor(TFT_WHITE, TFT_RED);
       } else {
         display.setTextColor(TFT_WHITE, 0x0821);
       }
-      
-      display.setCursor(d < 10 ? x + 3 : x, y);
+
+      display.setCursor(d < 10 ? x + 1 : x - 1, y);
       display.print(d);
-      
+
       col++;
       if (col >= 7) {
         col = 0;
@@ -913,134 +917,97 @@ public:
   }
 
   void drawSettingsMenuLandscape(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
-    // Bezel border
-    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, 0x07FF);
-    display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, 0x0821);
+    // Clean border
+    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, 0x07FF);
+    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 8, 0x0821);
+
+    // Header label
+    display.setTextSize(1);
+    display.setTextColor(0xFDA0, 0x0821);
+    display.setCursor(12, 34);
+    display.print("--- SETTINGS ---");
+    display.drawFastHLine(12, 44, SCREEN_WIDTH - 24, 0x18E3);
 
     display.setTextSize(2);
-    int itemsPerPage = 4;
+    int itemsPerPage = 5;
     int scrollOffset = 0;
     if (option >= itemsPerPage) {
       scrollOffset = option - itemsPerPage + 1;
     }
-    
-    int itemHeight = 28;
-    
+
+    int itemHeight = 36;
+
     for (int pageIdx = 0; pageIdx < itemsPerPage; pageIdx++) {
       int optIdx = pageIdx + scrollOffset;
       if (optIdx >= 8) break;
-      
-      int yPos = 34 + pageIdx * itemHeight + 2;
-      
+
+      int yPos = 46 + pageIdx * itemHeight;
+
       bool isCurrent = (option == optIdx);
       if (isCurrent) {
-        // Highlight active item with curved background
-        display.fillRoundRect(12, yPos - 2, SCREEN_WIDTH - 24, itemHeight - 2, 6, selected ? 0x02E0 : 0x18E3);
-        display.drawRoundRect(12, yPos - 2, SCREEN_WIDTH - 24, itemHeight - 2, 6, 0x07FF);
-        display.setTextColor(TFT_WHITE);
+        display.fillRoundRect(8, yPos, SCREEN_WIDTH - 16, itemHeight - 2, 6, selected ? 0x0248 : 0x18E3);
+        display.drawRoundRect(8, yPos, SCREEN_WIDTH - 16, itemHeight - 2, 6, 0x07FF);
+        display.setTextColor(TFT_WHITE, selected ? 0x0248 : 0x18E3);
       } else {
         display.setTextColor(TFT_LIGHTGREY, 0x0821);
       }
-      
-      // Draw Icon Base Color
-      uint16_t iconColor = isCurrent ? (selected ? TFT_GREEN : 0x07FF) : TFT_LIGHTGREY;
 
-      // Draw Icon
-      int ix = 18; 
-      int iy = yPos + 2;
-      switch (optIdx) {
-        case 0: // BLE
-          display.drawLine(ix + 6, iy, ix + 6, iy + 12, iconColor);
-          display.drawLine(ix + 6, iy, ix + 10, iy + 3, iconColor);
-          display.drawLine(ix + 10, iy + 3, ix + 6, iy + 6, iconColor);
-          display.drawLine(ix + 6, iy + 6, ix + 10, iy + 9, iconColor);
-          display.drawLine(ix + 10, iy + 9, ix + 6, iy + 12, iconColor);
-          display.drawLine(ix + 6, iy + 3, ix + 2, iy + 6, iconColor);
-          display.drawLine(ix + 6, iy + 9, ix + 2, iy + 6, iconColor);
-          break;
-        case 1: // Gear
-          display.drawCircle(ix + 6, iy + 6, 4, iconColor);
-          display.drawCircle(ix + 6, iy + 6, 1, iconColor);
-          for (int a = 0; a < 360; a += 45) {
-            float rad = a * PI / 180;
-            display.drawLine(ix + 6 + 3 * cos(rad), iy + 6 + 3 * sin(rad), ix + 6 + 5 * cos(rad), iy + 6 + 5 * sin(rad), iconColor);
-          }
-          break;
-        case 2: // Clock
-          display.drawCircle(ix + 6, iy + 6, 6, iconColor);
-          display.drawLine(ix + 6, iy + 6, ix + 6, iy + 3, iconColor);
-          display.drawLine(ix + 6, iy + 6, ix + 9, iy + 6, iconColor);
-          break;
-        case 3: // Invert
-          display.drawCircle(ix + 6, iy + 6, 6, iconColor);
-          for (int dx = 0; dx <= 5; dx++) {
-            for (int dy = -5; dy <= 5; dy++) {
-              if (dx*dx + dy*dy <= 25) {
-                display.drawPixel(ix + 6 + dx, iy + 6 + dy, iconColor);
-              }
-            }
-          }
-          break;
-        case 4: // Brightness
-          display.drawCircle(ix + 6, iy + 6, 3, iconColor);
-          for (int a = 0; a < 360; a += 45) {
-            float rad = a * PI / 180;
-            display.drawLine(ix + 6 + 4 * cos(rad), iy + 6 + 4 * sin(rad), ix + 6 + 6 * cos(rad), iy + 6 + 6 * sin(rad), iconColor);
-          }
-          break;
-        case 5: // Loopback Test
-          display.drawLine(ix + 2, iy + 6, ix + 2, iy + 6, iconColor);
-          display.drawLine(ix + 5, iy + 3, ix + 5, iy + 9, iconColor);
-          display.drawLine(ix + 8, iy + 1, ix + 8, iy + 11, iconColor);
-          display.drawLine(ix + 11, iy + 4, ix + 11, iy + 8, iconColor);
-          break;
-        case 6: // Save
-          display.drawRect(ix + 1, iy + 1, 10, 10, iconColor);
-          display.fillRect(ix + 3, iy + 1, 6, 3, iconColor);
-          display.fillRect(ix + 4, iy + 6, 4, 5, iconColor);
-          break;
-        case 7: // Exit
-          display.drawRect(ix + 1, iy + 1, 6, 10, iconColor);
-          display.fillRect(ix + 6, iy + 4, 5, 4, iconColor);
-          display.fillTriangle(ix + 9, iy + 2, ix + 12, iy + 6, ix + 9, iy + 10, iconColor);
-          break;
-      }
-      
-      // Draw Text next to Icon
-      display.setCursor(42, yPos + 2);
+      uint16_t bg = isCurrent ? (selected ? 0x0248 : 0x18E3) : 0x0821;
+      display.setCursor(14, yPos + 10);
       switch (optIdx) {
         case 0:
+          display.setTextColor(isCurrent ? TFT_WHITE : 0x07FF, bg);
           display.print("BLE: ALWAYS ON");
           break;
         case 1:
-          display.print("Anim Speed: ");
+          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
+          display.print("Speed: ");
           display.print(speed);
           display.print("ms");
           break;
         case 2:
-          display.print("Clock Style: ");
+          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
+          display.print("Clock: Style ");
           display.print(clockStyle);
           break;
         case 3:
-          display.print("Invert Colors: ");
+          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
+          display.print("Invert: ");
           display.print(invertOn ? "ON" : "OFF");
           break;
         case 4:
-          display.print("Brightness: ");
+          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
+          display.print("Bright: ");
           if (brightness == 1) display.print("LOW");
           else if (brightness == 2) display.print("MED");
           else display.print("HIGH");
           break;
         case 5:
+          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
           display.print("Loopback: ");
           display.print(hardwareLoopbackActive ? "ON" : "OFF");
           break;
         case 6:
-          display.print("[ SAVE SETTINGS ]");
+          display.setTextColor(isCurrent ? TFT_WHITE : TFT_GREEN, bg);
+          display.print("SAVE SETTINGS");
           break;
         case 7:
-          display.print("[ EXIT MENU ]");
+          display.setTextColor(isCurrent ? TFT_WHITE : 0xF8B8, bg);
+          display.print("EXIT MENU");
           break;
+      }
+    }
+
+    // Scroll indicator dots at bottom
+    int totalItems = 8;
+    int dotAreaY = SCREEN_HEIGHT - 14;
+    int dotSpacing = 14;
+    int dotsStartX = (SCREEN_WIDTH - totalItems * dotSpacing) / 2;
+    for (int i = 0; i < totalItems; i++) {
+      if (i == option) {
+        display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY, 8, 4, 2, 0x07FF);
+      } else {
+        display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY + 1, 4, 2, 1, 0x18E3);
       }
     }
   }
