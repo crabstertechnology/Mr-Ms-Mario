@@ -601,6 +601,10 @@ void setup() {
   audio.begin();
   interaction.begin();
 
+  // Initialize push buttons with pull-ups
+  pinMode(BUTTON1_PIN, INPUT_PULLUP);
+  pinMode(BUTTON2_PIN, INPUT_PULLUP);
+
   Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
   Serial.println(FIRMWARE_VERSION);  // Load persistence settings from NVS Preferences
   preferences.begin("luna", false);
@@ -819,9 +823,166 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
     }
   }
 }
+void handleButton1Press() {
+  unsigned long now = millis();
+  lastInteractionTime = now; // reset inactivity clock
+  
+  if (currentScreen != SCREEN_SETTINGS) {
+    // Go directly to settings screen
+    currentScreen = SCREEN_SETTINGS;
+    menuOption = 0;
+    optionSelected = false;
+    audio.playSound(SOUND_POWERUP);
+    Serial.println("Button 1: Switched to settings screen.");
+  } else {
+    // We are on settings screen
+    if (!optionSelected) {
+      // Navigate options (0 to 7)
+      menuOption = (menuOption + 1) % 8;
+      audio.playSound(SOUND_CHIRP);
+      Serial.printf("Button 1: Navigated to menu option %d\n", menuOption);
+    } else {
+      // Option is selected: cycle values!
+      if (menuOption == 0) { // BLE on/off toggle (BLE always on)
+        bleActive = true;
+        audio.playSound(SOUND_CHIRP);
+      } else if (menuOption == 1) { // GIF speed control
+        gifSpeed += 20;
+        if (gifSpeed > 300) {
+          gifSpeed = 20;
+        }
+        face.setFrameDelay(gifSpeed);
+        audio.playSound(SOUND_CHIRP);
+      } else if (menuOption == 2) { // Clock Style
+        clockStyle = (clockStyle + 1) % 5;
+        audio.playSound(SOUND_CHIRP);
+      } else if (menuOption == 3) { // Invert/Negative display
+        negativeDisplay = !negativeDisplay;
+        tft.invertDisplay(negativeDisplay);
+        audio.playSound(SOUND_CHIRP);
+      } else if (menuOption == 4) { // Brightness
+        oledBrightness = (oledBrightness % 3) + 1;
+        #ifdef TFT_BL
+        if (oledBrightness == 1) analogWrite(TFT_BL, 30);
+        else if (oledBrightness == 2) analogWrite(TFT_BL, 128);
+        else analogWrite(TFT_BL, 255);
+        #endif
+        audio.playSound(SOUND_CHIRP);
+      } else if (menuOption == 5) { // Loopback Test
+        hardwareLoopbackActive = !hardwareLoopbackActive;
+        audio.directLoopback = hardwareLoopbackActive;
+        audio.micStreaming = false;
+        audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+        if (hardwareLoopbackActive) {
+          face.setStateLabel("TEST");
+          audio.playSound(SOUND_POWERUP);
+        } else {
+          face.setStateLabel("IDLE");
+          audio.playSound(SOUND_POWERDOWN);
+        }
+      }
+      Serial.printf("Button 1: Cycled menu option %d value\n", menuOption);
+    }
+  }
+}
+
+void handleButton2Press() {
+  unsigned long now = millis();
+  lastInteractionTime = now; // reset inactivity clock
+  
+  if (currentScreen == SCREEN_SETTINGS) {
+    if (!optionSelected) {
+      if (menuOption == 6) { // SAVE
+        preferences.begin("luna", false);
+        preferences.putBool("ble", bleActive);
+        preferences.putInt("speed", gifSpeed);
+        preferences.putInt("defGif", defaultGif);
+        preferences.putInt("intGif", gifIntro);
+        preferences.putInt("tchSing", touchSingle);
+        preferences.putInt("tchDoub", touchDouble);
+        preferences.putInt("tchLong", touchLong);
+        preferences.putBool("neg", negativeDisplay);
+        preferences.putInt("clkStyle", clockStyle);
+        preferences.putInt("oledBright", oledBrightness);
+        preferences.end();
+        
+        #ifdef TFT_BL
+        if (oledBrightness == 1) analogWrite(TFT_BL, 30);
+        else if (oledBrightness == 2) analogWrite(TFT_BL, 128);
+        else analogWrite(TFT_BL, 255);
+        #endif
+        
+        audio.playSound(SOUND_POWERUP);
+        optionSelected = false; // deselect
+        Serial.println("Button 2: Settings saved.");
+      } else if (menuOption == 7) { // EXIT
+        hardwareLoopbackActive = false;
+        audio.micStreaming = false;
+        audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+        audio.prebuffering = true;
+        face.setStateLabel("IDLE");
+        currentScreen = SCREEN_FACE;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("Button 2: Exited settings.");
+      } else {
+        // Select option (0 to 5)
+        optionSelected = true;
+        audio.playSound(SOUND_COIN);
+        Serial.printf("Button 2: Selected option %d\n", menuOption);
+      }
+    } else {
+      // Confirms/deselects option
+      optionSelected = false;
+      audio.playSound(SOUND_COIN);
+      Serial.printf("Button 2: Confirmed option %d\n", menuOption);
+    }
+  }
+}
 
 void loop() {
   unsigned long now = millis();
+
+  // 0. Debounced Push Button Reads
+  static bool lastBtn1State = HIGH;
+  static bool lastBtn2State = HIGH;
+  static unsigned long lastBtn1DebounceTime = 0;
+  static unsigned long lastBtn2DebounceTime = 0;
+  const unsigned long DEBOUNCE_DELAY = 50;
+
+  bool currentBtn1State = digitalRead(BUTTON1_PIN);
+  bool currentBtn2State = digitalRead(BUTTON2_PIN);
+
+  if (currentBtn1State != lastBtn1State) {
+    lastBtn1DebounceTime = now;
+  }
+  if ((now - lastBtn1DebounceTime) > DEBOUNCE_DELAY) {
+    static bool btn1Processed = false;
+    if (currentBtn1State == LOW) {
+      if (!btn1Processed) {
+        handleButton1Press();
+        btn1Processed = true;
+      }
+    } else {
+      btn1Processed = false;
+    }
+  }
+  lastBtn1State = currentBtn1State;
+
+  if (currentBtn2State != lastBtn2State) {
+    lastBtn2DebounceTime = now;
+  }
+  if ((now - lastBtn2DebounceTime) > DEBOUNCE_DELAY) {
+    static bool btn2Processed = false;
+    if (currentBtn2State == LOW) {
+      if (!btn2Processed) {
+        handleButton2Press();
+        btn2Processed = true;
+      }
+    } else {
+      btn2Processed = false;
+    }
+  }
+  lastBtn2State = currentBtn2State;
 
   // 1. Maintain BLE stack status and connection advertisement
   ble.handleConnectionState();
@@ -1061,8 +1222,11 @@ void loop() {
             break;
 
           case TOUCH_DOUBLE_TAP:
-            // Switch to next smartwatch screen only when in UI mode
-            if (currentScreen >= SCREEN_CLOCK && currentScreen <= SCREEN_SETTINGS) {
+            if (currentScreen == SCREEN_FACE) {
+              currentScreen = SCREEN_CLOCK;
+              audio.playSound(SOUND_POWERUP);
+              Serial.println("Double tap: Switched to Clock screen.");
+            } else if (currentScreen >= SCREEN_CLOCK && currentScreen <= SCREEN_SETTINGS) {
               currentScreen = (SmartwatchScreen)((currentScreen + 1) % 4);
               if (currentScreen == SCREEN_SETTINGS) {
                 menuOption = 0;
@@ -1071,8 +1235,6 @@ void loop() {
               audio.playSound(SOUND_COIN);
               Serial.print("Switched screen to: ");
               Serial.println(currentScreen);
-            } else if (currentScreen == SCREEN_FACE) {
-              executeTouchAction(touchDouble, TOUCH_DOUBLE_TAP);
             }
             break;
 

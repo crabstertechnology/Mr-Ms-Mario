@@ -7,6 +7,8 @@
 #define SDA_PIN 17
 #define SCL_PIN 18
 #define TOUCH_PIN 1
+#define BUTTON1_PIN 9   // Settings/Navigation/Adjust button
+#define BUTTON2_PIN 2   // Select/Confirm button
 
 // I2S Pins (MAX98357 DAC & INMP441 Microphone sharing clocks)
 #define I2S_BCLK 4

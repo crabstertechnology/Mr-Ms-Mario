@@ -570,102 +570,153 @@ public:
   }
 
   void drawPopup() {
-    display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 8, 0x5DFF);
-    display.drawRoundRect(6, 6, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 12, 6, 0x0821);
+    uint16_t LUNA_CYAN   = 0x07FF;
+    uint16_t LUNA_PINK   = 0xF8B8;
+    uint16_t LUNA_DARK   = 0x0842;
+    uint16_t LUNA_GLASS  = 0x18E3;
+
+    // 1. Premium Card Container
+    display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 12, LUNA_CYAN);
+    display.drawRoundRect(5, 5, SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 11, LUNA_PINK);
+    display.fillRoundRect(8, 8, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 16, 9, LUNA_DARK);
+
+    // 2. Cute Header Bar (Pink Heart Mascot)
+    int hx = 24, hy = 22;
+    display.fillCircle(hx - 2, hy, 3, LUNA_PINK);
+    display.fillCircle(hx + 2, hy, 3, LUNA_PINK);
+    display.fillTriangle(hx - 5, hy + 1, hx + 5, hy + 1, hx, hy + 6, LUNA_PINK);
+
+    // Title Capsule
+    display.fillRoundRect(36, 13, 100, 18, 9, LUNA_GLASS);
+    display.setTextColor(LUNA_CYAN);
+    display.setTextSize(1);
+    display.setCursor(44, 18);
+    display.print("NEW ALERT  *");
+
+    display.drawFastHLine(12, 38, SCREEN_WIDTH - 24, LUNA_GLASS);
     
-    display.setTextColor(TFT_YELLOW);
-    display.setTextSize(2);
-    display.setCursor(12, 14);
-    display.print("NEW ALERT");
-    display.drawFastHLine(10, 34, SCREEN_WIDTH - 20, TFT_DARKGREY);
-    
+    // 3. Title & Content
     display.setTextColor(TFT_WHITE);
     display.setTextSize(2);
-    display.setCursor(12, 42);
-    display.print(popupTitle);
+    display.setCursor(16, 48);
+    String title = popupTitle;
+    if (title.length() > 16) title = title.substring(0, 14) + "...";
+    display.print(title);
     
-    display.setTextColor(TFT_LIGHTGREY);
+    display.setTextColor(0xDEDB);
     display.setTextSize(2);
-    int yStart = 64;
-    int charsPerLine = (SCREEN_WIDTH - 24) / 12;
+    int yStart = 72;
+    int charsPerLine = (SCREEN_WIDTH - 32) / 12;
     int line = 0;
-    int maxLines = (SCREEN_HEIGHT - 100) / 18;
+    int maxLines = (SCREEN_HEIGHT - 110) / 20;
     if (maxLines < 3) maxLines = 3;
     for (unsigned int i = 0; i < popupBody.length() && line < maxLines; i += charsPerLine) {
       unsigned int endIdx = i + charsPerLine;
       if (endIdx > popupBody.length()) endIdx = popupBody.length();
       String lineStr = popupBody.substring(i, endIdx);
-      display.setCursor(12, yStart + line * 18);
+      display.setCursor(16, yStart + line * 20);
       display.print(lineStr);
       line++;
     }
     
-    display.setTextColor(TFT_DARKGREY);
+    // 4. Dismiss indicator
+    display.setTextColor(LUNA_PINK);
     display.setTextSize(1);
-    display.setCursor((SCREEN_WIDTH - 96) / 2, SCREEN_HEIGHT - 18);
+    display.setCursor((SCREEN_WIDTH - 96) / 2, SCREEN_HEIGHT - 22);
     display.print("[Tap to Dismiss]");
   }
 
   void drawNotificationPanel() {
+    uint16_t LUNA_CYAN   = 0x07FF;
+    uint16_t LUNA_PINK   = 0xF8B8;
+    uint16_t LUNA_DARK   = 0x0842;
+    uint16_t LUNA_GLASS  = 0x18E3;
+    uint16_t LUNA_CORAL  = 0xFC10;
+
     if (notificationCount == 0) {
-      // Bell icon
+      // Sleeping face graphic
       int centerX = SCREEN_WIDTH / 2;
-      display.fillTriangle(centerX, 36, centerX - 10, 56, centerX + 10, 56, TFT_DARKGREY);
-      display.fillRect(centerX - 14, 56, 28, 4, TFT_DARKGREY);
-      display.fillCircle(centerX, 63, 3, TFT_DARKGREY);
+      display.fillCircle(centerX, 70, 36, LUNA_GLASS);
+      display.drawCircle(centerX, 70, 36, LUNA_PINK);
       
-      display.setTextColor(TFT_LIGHTGREY);
+      display.drawCircle(centerX - 12, 68, 6, TFT_WHITE);
+      display.fillRect(centerX - 19, 60, 14, 8, LUNA_GLASS);
+      display.drawCircle(centerX + 12, 68, 6, TFT_WHITE);
+      display.fillRect(centerX + 5, 60, 14, 8, LUNA_GLASS);
+      
+      display.fillCircle(centerX - 18, 76, 4, LUNA_CORAL);
+      display.fillCircle(centerX + 18, 76, 4, LUNA_CORAL);
+      
+      display.drawCircle(centerX, 76, 3, TFT_WHITE);
+      display.fillRect(centerX - 4, 73, 8, 3, LUNA_GLASS);
+      
+      display.setTextColor(LUNA_CYAN);
+      display.setTextSize(1);
+      display.setCursor(centerX + 24, 40);
+      display.print("Z");
+      display.setCursor(centerX + 32, 32);
+      display.print("z");
+      
+      display.setTextColor(TFT_WHITE);
       display.setTextSize(2);
       int lblW1 = 16 * 12;
-      display.setCursor((SCREEN_WIDTH - lblW1) / 2, 76);
+      display.setCursor((SCREEN_WIDTH - lblW1) / 2, 126);
       display.print("No Notifications");
-      display.setTextColor(TFT_DARKGREY);
+      
+      display.setTextColor(0xAD55);
       display.setTextSize(1);
       int lblW2 = 18 * 6;
-      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 100);
+      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 150);
       display.print("History is empty");
       return;
     }
     
     NotificationItem& notif = notificationHistory[currentNotifViewIdx];
     
-    // Draw card container
-    display.drawRoundRect(6, 22, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 28, 6, 0x5DFF);
+    // Glowing Card Container
+    display.drawRoundRect(6, 26, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 10, LUNA_CYAN);
+    display.drawRoundRect(7, 27, SCREEN_WIDTH - 14, SCREEN_HEIGHT - 34, 9, LUNA_GLASS);
+    display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, LUNA_DARK);
     
-    display.setTextColor(TFT_YELLOW);
+    // Header
+    display.setTextColor(LUNA_PINK);
     display.setTextSize(2);
-    display.setCursor(12, 28);
-    display.print(notif.title);
+    display.setCursor(14, 34);
+    String title = notif.title;
+    if (title.length() > 10) title = title.substring(0, 8) + "...";
+    display.print(title);
     
-    display.setTextColor(TFT_LIGHTGREY);
+    display.setTextColor(LUNA_CYAN);
     display.setTextSize(2);
-    display.setCursor(SCREEN_WIDTH - 76, 28);
+    display.setCursor(SCREEN_WIDTH - 76, 34);
     display.print(notif.timeStr);
     
-    display.drawFastHLine(10, 48, SCREEN_WIDTH - 20, TFT_DARKGREY);
+    display.drawFastHLine(12, 54, SCREEN_WIDTH - 24, LUNA_GLASS);
     
+    // Body Text
     display.setTextColor(TFT_WHITE);
     display.setTextSize(2);
-    int yStart = 58;
-    int charsPerLine = (SCREEN_WIDTH - 24) / 12;
+    int yStart = 64;
+    int charsPerLine = (SCREEN_WIDTH - 28) / 12;
     int line = 0;
-    int maxLines = (SCREEN_HEIGHT - 90) / 18;
+    int maxLines = (SCREEN_HEIGHT - 106) / 20;
     if (maxLines < 4) maxLines = 4;
     for (unsigned int i = 0; i < notif.body.length() && line < maxLines; i += charsPerLine) {
       unsigned int endIdx = i + charsPerLine;
       if (endIdx > notif.body.length()) endIdx = notif.body.length();
       String lineStr = notif.body.substring(i, endIdx);
-      display.setCursor(12, yStart + line * 18);
+      display.setCursor(14, yStart + line * 20);
       display.print(lineStr);
       line++;
     }
     
-    display.setTextColor(TFT_DARKGREY);
+    // Indicator
+    display.setTextColor(LUNA_PINK);
     display.setTextSize(1);
     char footerBuf[16];
     snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentNotifViewIdx + 1, notificationCount);
     int footerW = strlen(footerBuf) * 6;
-    display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 18);
+    display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 20);
     display.print(footerBuf);
   }
 
@@ -1251,18 +1302,24 @@ public:
   }
 
   void drawTextScreen() {
+    uint16_t LUNA_CYAN   = 0x07FF;
+    uint16_t LUNA_PINK   = 0xF8B8;
+    uint16_t LUNA_DARK   = 0x0842;
+    uint16_t LUNA_GLASS  = 0x18E3;
+
     display.setTextWrap(false);
     
-    display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 8, TFT_BLUE);
-    display.drawRoundRect(6, 6, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 12, 6, TFT_NAVY);
+    display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 12, LUNA_CYAN);
+    display.drawRoundRect(5, 5, SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 11, LUNA_PINK);
+    display.fillRoundRect(8, 8, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 16, 9, LUNA_DARK);
     
-    display.fillRoundRect(12, 10, 24, 18, 4, TFT_WHITE);
-    display.fillCircle(18, 18, 2, TFT_BLACK);
-    display.fillCircle(30, 18, 2, TFT_BLACK);
-    display.drawFastHLine(20, 24, 8, TFT_BLACK);
+    // Envelope Folder Mascot Icon
+    int bx = 22, by = 20;
+    display.fillRoundRect(bx - 8, by - 6, 16, 12, 3, LUNA_PINK);
+    display.fillTriangle(bx - 8, by - 6, bx + 8, by - 6, bx, by, LUNA_DARK);
 
     display.setTextSize(2);
-    display.setTextColor(TFT_YELLOW, TFT_BLACK);
+    display.setTextColor(LUNA_CYAN);
     display.setCursor(44, 12);
     
     String displayTitle = notificationTitle;
@@ -1274,9 +1331,9 @@ public:
     }
     display.print(displayTitle);
     
-    display.drawFastHLine(12, 36, SCREEN_WIDTH - 24, TFT_LIGHTGREY);
+    display.drawFastHLine(12, 36, SCREEN_WIDTH - 24, LUNA_GLASS);
 
-    display.setTextColor(TFT_WHITE, TFT_BLACK);
+    display.setTextColor(TFT_WHITE);
     display.setTextSize(3);
     
     int textLength = notificationText.length() * 18;
@@ -1290,10 +1347,10 @@ public:
     }
 
     display.setTextSize(2);
-    display.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    display.setTextColor(LUNA_PINK);
     int footerW = 10 * 12;
     display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 28);
-    display.print("Luna Notif");
+    display.print("Luna Alert");
   }
 
   int getMixedSizeTextWidth(String text) {
