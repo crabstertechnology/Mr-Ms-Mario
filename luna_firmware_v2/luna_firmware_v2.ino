@@ -558,6 +558,7 @@ void applySettings(String payload) {
   tft.invertDisplay(negativeDisplay);
   
   #ifdef TFT_BL
+  analogWriteFrequency(TFT_BL, 24000); // 24 kHz high-frequency PWM
   if (oledBrightness == 1) analogWrite(TFT_BL, 30);
   else if (oledBrightness == 2) analogWrite(TFT_BL, 128);
   else analogWrite(TFT_BL, 255);
@@ -658,6 +659,7 @@ void setup() {
   // Apply saved brightness setting
   #ifdef TFT_BL
   pinMode(TFT_BL, OUTPUT);
+  analogWriteFrequency(TFT_BL, 24000); // 24 kHz high-frequency PWM
   if (oledBrightness == 1) analogWrite(TFT_BL, 30);
   else if (oledBrightness == 2) analogWrite(TFT_BL, 128);
   else analogWrite(TFT_BL, 255);

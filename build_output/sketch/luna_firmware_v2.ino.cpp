@@ -89,13 +89,13 @@ void handleBLEText(String text);
 void handleRobotCommand(String text);
 #line 477 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void applySettings(String payload);
-#line 595 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 596 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void setup();
-#line 732 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 734 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void cycleExpression();
-#line 752 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 754 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void executeTouchAction(int actionType, TouchEvent eventType);
-#line 821 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
+#line 823 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void loop();
 #line 76 "W:\\Mr.mario\\luna_firmware_v2\\luna_firmware_v2.ino"
 void parseAndSyncTime(String timeStr) {
@@ -583,6 +583,7 @@ void applySettings(String payload) {
   tft.invertDisplay(negativeDisplay);
   
   #ifdef TFT_BL
+  analogWriteFrequency(TFT_BL, 24000); // 24 kHz high-frequency PWM
   if (oledBrightness == 1) analogWrite(TFT_BL, 30);
   else if (oledBrightness == 2) analogWrite(TFT_BL, 128);
   else analogWrite(TFT_BL, 255);
@@ -683,6 +684,7 @@ void setup() {
   // Apply saved brightness setting
   #ifdef TFT_BL
   pinMode(TFT_BL, OUTPUT);
+  analogWriteFrequency(TFT_BL, 24000); // 24 kHz high-frequency PWM
   if (oledBrightness == 1) analogWrite(TFT_BL, 30);
   else if (oledBrightness == 2) analogWrite(TFT_BL, 128);
   else analogWrite(TFT_BL, 255);
