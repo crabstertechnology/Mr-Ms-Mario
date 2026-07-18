@@ -63,6 +63,17 @@ int reminderDurationMs = 10000; // default 10 seconds
 int birthdayDurationMs = 15000; // default 15 seconds
 int activeNotificationDurationMs = 5000;
 bool mapsActive = false;
+bool isRelationCommEnabled = true;
+
+// Relationship Action Mappings
+int relTapExpr = 1; // Default Happy
+int relTapSound = 2; // Default Coin
+int relDoubleExpr = 6; // Default Wink
+int relDoubleSound = 6; // Default Jump
+int relTripleExpr = 4; // Default Surprised
+int relTripleSound = 8;
+int relLongExpr = 5; // Default Sleeping
+int relLongSound = 4; // Default Powerdown
 
 // Software Real-Time Clock variables
 int rtcHour = 12;
@@ -453,6 +464,79 @@ void handleRobotCommand(String text) {
       audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
     }
     Serial.println("Audio mode set to: " + mode);
+  } else if (text.startsWith("REL_COMM:")) {
+    int val = text.substring(9).toInt();
+    isRelationCommEnabled = (val == 1);
+    if (!isRelationCommEnabled) {
+      face.headerText = "";
+    }
+    preferences.begin("luna", false);
+    preferences.putBool("relComm", isRelationCommEnabled);
+    preferences.end();
+    Serial.print("Relationship communication set to: ");
+    Serial.println(isRelationCommEnabled ? "ON" : "OFF");
+    Serial.println("OK:RelationCommUpdated");
+  } else if (text.startsWith("SET_REL_MAP:")) {
+    String payload = text.substring(12);
+    int sep1 = payload.indexOf('|');
+    if (sep1 > 0) {
+      int sep2 = payload.indexOf('|', sep1 + 1);
+      if (sep2 > 0) {
+        int tapType = payload.substring(0, sep1).toInt();
+        int expr = payload.substring(sep1 + 1, sep2).toInt();
+        int sound = payload.substring(sep2 + 1).toInt();
+        
+        preferences.begin("luna", false);
+        if (tapType == 1) {
+          relTapExpr = expr; relTapSound = sound;
+          preferences.putInt("rTapEx", expr); preferences.putInt("rTapSd", sound);
+        } else if (tapType == 2) {
+          relDoubleExpr = expr; relDoubleSound = sound;
+          preferences.putInt("rDobEx", expr); preferences.putInt("rDobSd", sound);
+        } else if (tapType == 3) {
+          relTripleExpr = expr; relTripleSound = sound;
+          preferences.putInt("rTriEx", expr); preferences.putInt("rTriSd", sound);
+        } else if (tapType == 4) {
+          relLongExpr = expr; relLongSound = sound;
+          preferences.putInt("rLonEx", expr); preferences.putInt("rLonSd", sound);
+        }
+        preferences.end();
+        Serial.print("Relationship map updated: TapType=");
+        Serial.print(tapType);
+        Serial.print(" Expr=");
+        Serial.print(expr);
+        Serial.print(" Sound=");
+        Serial.println(sound);
+        Serial.println("OK:RelationMapUpdated");
+      }
+    }
+  } else if (text.startsWith("NOTIF_EXPR:")) {
+    if (!isRelationCommEnabled) {
+      Serial.println("Warning: NOTIF_EXPR ignored because relation communication is disabled.");
+      return;
+    }
+    // Command format: NOTIF_EXPR:Title|Body|ExprId
+    String payload = text.substring(11);
+    int sep1 = payload.indexOf('|');
+    if (sep1 > 0) {
+      int sep2 = payload.indexOf('|', sep1 + 1);
+      if (sep2 > 0) {
+        String title = payload.substring(0, sep1);
+        String body = payload.substring(sep1 + 1, sep2);
+        int exprVal = payload.substring(sep2 + 1).toInt();
+        title.trim();
+        body.trim();
+        
+        face.headerText = title + " - " + body;
+        if (face.headerText.length() > 20) {
+          face.headerText = face.headerText.substring(0, 17) + "...";
+        }
+        face.setExpression((Expression)exprVal);
+        activeNotificationDurationMs = notificationDurationMs;
+        lastExpressionCycleTime = millis();
+        audio.playSound(SOUND_CHIRP);
+      }
+    }
   } else if (text.startsWith("NOTIF:")) {
     // Command format: NOTIF:Title|Body
     String payload = text.substring(6);
@@ -599,16 +683,7 @@ void setup() {
   Serial.begin(115200);
   delay(100); // Faster boot!
   
-  // Initialize device pins safely after core initialization
-  audio.begin();
-  interaction.begin();
-
-  // Initialize push buttons with pull-ups
-  pinMode(BUTTON1_PIN, INPUT_PULLUP);
-  pinMode(BUTTON2_PIN, INPUT_PULLUP);
-
-  Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
-  Serial.println(FIRMWARE_VERSION);  // Load persistence settings from NVS Preferences
+  // 1. Load persistence settings from NVS Preferences first
   preferences.begin("luna", false);
   bleActive = true; // Always ON
   gifSpeed = preferences.getInt("speed", 100);
@@ -627,7 +702,32 @@ void setup() {
   reminderDurationMs = preferences.getInt("remDur", 10000);
   birthdayDurationMs = preferences.getInt("birthDur", 15000);
   activeNotificationDurationMs = notificationDurationMs;
+  isRelationCommEnabled = preferences.getBool("relComm", true);
+  relTapExpr = preferences.getInt("rTapEx", 1);
+  relTapSound = preferences.getInt("rTapSd", 2);
+  relDoubleExpr = preferences.getInt("rDobEx", 6);
+  relDoubleSound = preferences.getInt("rDobSd", 6);
+  relTripleExpr = preferences.getInt("rTriEx", 4);
+  relTripleSound = preferences.getInt("rTriSd", 8);
+  relLongExpr = preferences.getInt("rLonEx", 5);
+  relLongSound = preferences.getInt("rLonSd", 4);
   preferences.end();
+
+  // 2. Start Bluetooth BLE Server first when heap memory is maximum and unfragmented
+  bleActive = true;
+  ble.init();
+  Serial.println(negativeDisplay ? "BLE Server Started as 'Ms. Luna Robot'." : "BLE Server Started as 'Mr. Luna Robot'.");
+
+  // 3. Initialize audio and other hardware pins
+  audio.begin();
+  interaction.begin();
+
+  // Initialize push buttons with pull-ups
+  pinMode(BUTTON1_PIN, INPUT_PULLUP);
+  pinMode(BUTTON2_PIN, INPUT_PULLUP);
+
+  Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
+  Serial.println(FIRMWARE_VERSION);
 
   // Set the GIF speed delay and default expression
   face.setFrameDelay(gifSpeed);
@@ -675,11 +775,6 @@ void setup() {
   display.fillSprite(TFT_BLACK);
   display.pushImage((SCREEN_WIDTH - LOGO_WIDTH)/2, (SCREEN_HEIGHT - LOGO_HEIGHT)/2, LOGO_WIDTH, LOGO_HEIGHT, image_logo_pixels);
   display.pushSprite(0, 0);
-  
-  // Start Bluetooth BLE Server (always on)
-  bleActive = true;
-  ble.init();
-  Serial.println(negativeDisplay ? "BLE Server Started as 'Ms. Luna Robot'." : "BLE Server Started as 'Mr. Luna Robot'.");
 
   // Play startup sound immediately so it plays while loading the logo
   audio.playSound(SOUND_STARTUP, introSoundSpeed);
@@ -1019,6 +1114,52 @@ void loop() {
     lastInteractionTime = now; // reset inactivity clock
     lastExpressionCycleTime = now; // reset expression cycle timer
 
+    if (touchEvent == TOUCH_TAP) {
+      if (isRelationCommEnabled) {
+        String logMsg = "TOUCH_REL:TAP|" + String(relTapExpr) + "|" + String(relTapSound);
+        ble.sendLog(logMsg);
+        Serial.println(logMsg);
+        face.headerText = "Sent: Single Tap";
+      } else {
+        face.headerText = "";
+      }
+      face.setExpression(isRelationCommEnabled ? (Expression)relTapExpr : EXPR_HAPPY);
+      activeNotificationDurationMs = notificationDurationMs;
+    } else if (touchEvent == TOUCH_DOUBLE_TAP) {
+      if (isRelationCommEnabled) {
+        String logMsg = "TOUCH_REL:DOUBLE|" + String(relDoubleExpr) + "|" + String(relDoubleSound);
+        ble.sendLog(logMsg);
+        Serial.println(logMsg);
+        face.headerText = "Sent: Double Tap";
+      } else {
+        face.headerText = "";
+      }
+      face.setExpression(isRelationCommEnabled ? (Expression)relDoubleExpr : EXPR_WINK);
+      activeNotificationDurationMs = notificationDurationMs;
+    } else if (touchEvent == TOUCH_TRIPLE_TAP) {
+      if (isRelationCommEnabled) {
+        String logMsg = "TOUCH_REL:TRIPLE|" + String(relTripleExpr) + "|" + String(relTripleSound);
+        ble.sendLog(logMsg);
+        Serial.println(logMsg);
+        face.headerText = "Sent: Triple Tap";
+      } else {
+        face.headerText = "";
+      }
+      face.setExpression(isRelationCommEnabled ? (Expression)relTripleExpr : EXPR_SURPRISED);
+      activeNotificationDurationMs = notificationDurationMs;
+    } else if (touchEvent == TOUCH_LONG_PRESS) {
+      if (isRelationCommEnabled) {
+        String logMsg = "TOUCH_REL:LONG|" + String(relLongExpr) + "|" + String(relLongSound);
+        ble.sendLog(logMsg);
+        Serial.println(logMsg);
+        face.headerText = "Sent: Long Press";
+      } else {
+        face.headerText = "";
+      }
+      face.setExpression(isRelationCommEnabled ? (Expression)relLongExpr : EXPR_SURPRISED);
+      activeNotificationDurationMs = notificationDurationMs;
+    }
+
     if (face.isPopupActive()) {
       face.setPopupDismiss();
       audio.playSound(SOUND_CHIRP);
@@ -1098,8 +1239,10 @@ void loop() {
             Serial.printf("Touch Tap: Confirmed option %d\n", menuOption);
           }
         } else if (currentScreen == SCREEN_FACE) {
-          cycleExpression();
-          audio.playSound(SOUND_CHIRP);
+          if (!isRelationCommEnabled) {
+            cycleExpression();
+            audio.playSound(SOUND_CHIRP);
+          }
         } else if (currentScreen == SCREEN_CLOCK) {
           clockStyle = (clockStyle + 1) % 3;
           audio.playSound(SOUND_CHIRP);
@@ -1211,6 +1354,7 @@ void loop() {
       } else {
         // Return to random emoji cycling/default expression after notification duration
         if (!isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
+          face.headerText = ""; // Clear header overlay
           if (isCycleMode) {
             cycleExpression();
           } else {

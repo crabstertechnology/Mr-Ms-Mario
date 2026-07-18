@@ -53,6 +53,45 @@ class BLEService with ChangeNotifier {
   int _activeExpressionId = 0;
   String _activeExpressionLabel = "IDLE";
 
+  // Companion Device Properties
+  BluetoothDevice? _companionDevice;
+  bool _isCompanionConnected = false;
+  bool _isCompanionConnecting = false;
+
+  BluetoothCharacteristic? _companionExprChar;
+  BluetoothCharacteristic? _companionAudioChar;
+  BluetoothCharacteristic? _companionTextChar;
+  BluetoothCharacteristic? _companionStatusChar;
+  BluetoothCharacteristic? _companionAudioStreamChar;
+
+  StreamSubscription? _companionConnectionStateSub;
+  StreamSubscription? _companionStatusNotificationSub;
+
+  int _companionUptimeSeconds = 0;
+  int _companionTouchCount = 0;
+  double _companionBatteryVoltage = 0.0;
+  int _companionActiveExpressionId = 0;
+  String _companionActiveExpressionLabel = "IDLE";
+
+  // Relationship Configurable Actions
+  int relPrimaryTapExpr = 1; // Default Happy
+  int relPrimaryTapSound = 2; // Default Coin
+  int relPrimaryDoubleExpr = 6; // Default Wink
+  int relPrimaryDoubleSound = 6; // Default Jump
+  int relPrimaryLongExpr = 5; // Default Sleeping
+  int relPrimaryLongSound = 4; // Default Powerdown
+
+  int relCompanionTapExpr = 1;
+  int relCompanionTapSound = 2;
+  int relCompanionDoubleExpr = 6;
+  int relCompanionDoubleSound = 6;
+  int relCompanionLongExpr = 5;
+  int relCompanionLongSound = 4;
+
+  bool isPrimaryCommEnabled = true;
+  bool isCompanionCommEnabled = true;
+  void Function(String eventType, int expr, int sound)? onPrimaryTouchTriggered;
+
   // Console log entries
   final List<String> _consoleLogs = [];
 
@@ -79,6 +118,20 @@ class BLEService with ChangeNotifier {
   String get activeExpressionLabel => _activeExpressionLabel;
   List<String> get consoleLogs => _consoleLogs;
   String get serverIp => _serverIp;
+  bool get hasSpeaker => !_isConnected || _audioStreamChar != null;
+  String get hardwareVersionString => !_isConnected ? "Disconnected" : (_audioStreamChar != null ? "Luna v2 (With Speaker)" : "Luna v1 (No Speaker)");
+
+  // Companion Getters
+  BluetoothDevice? get companionDevice => _companionDevice;
+  bool get isCompanionConnected => _isCompanionConnected;
+  bool get isCompanionConnecting => _isCompanionConnecting;
+  int get companionUptimeSeconds => _companionUptimeSeconds;
+  int get companionTouchCount => _companionTouchCount;
+  double get companionBatteryVoltage => _companionBatteryVoltage;
+  int get companionActiveExpressionId => _companionActiveExpressionId;
+  String get companionActiveExpressionLabel => _companionActiveExpressionLabel;
+  bool get companionHasSpeaker => !_isCompanionConnected || _companionAudioStreamChar != null;
+  String get companionHardwareVersionString => !_isCompanionConnected ? "Disconnected" : (_companionAudioStreamChar != null ? "Luna v2 (With Speaker)" : "Luna v1 (No Speaker)");
 
   void setServerIp(String ip) {
     if (_serverIp != ip) {
@@ -140,6 +193,7 @@ class BLEService with ChangeNotifier {
       triggerReconnection();
     });
     _startReconnectTimer();
+    loadRelationshipSettings();
     
     // Periodically sync connection status with background service
     Timer.periodic(const Duration(seconds: 5), (timer) {
@@ -538,6 +592,14 @@ class BLEService with ChangeNotifier {
       // Sync clock to hardware after successful connection
       Future.delayed(const Duration(milliseconds: 800), () => syncClockToHardware());
 
+      // Sync relationship communication state and mapping to primary
+      Future.delayed(const Duration(milliseconds: 1000), () async {
+        await _writePrimaryTextDirect("REL_COMM:${isPrimaryCommEnabled ? 1 : 0}");
+        await _writePrimaryTextDirect("SET_REL_MAP:1|$relPrimaryTapExpr|$relPrimaryTapSound");
+        await _writePrimaryTextDirect("SET_REL_MAP:2|$relPrimaryDoubleExpr|$relPrimaryDoubleSound");
+        await _writePrimaryTextDirect("SET_REL_MAP:4|$relPrimaryLongExpr|$relPrimaryLongSound");
+      });
+
     } catch (e) {
       addLog("Service discovery failed: $e", "ERROR");
     }
@@ -556,6 +618,21 @@ class BLEService with ChangeNotifier {
         if (logMsg.startsWith("ACK:")) {
           final ackId = logMsg.substring(4);
           _handleAckReceived(ackId);
+        }
+        
+        // Handle primary touch events (make companion respond)
+        if (logMsg.startsWith("TOUCH_REL:")) {
+          final payload = logMsg.substring(10);
+          final parts = payload.split('|');
+          if (parts.length >= 3) {
+            final eventType = parts[0];
+            final expr = int.tryParse(parts[1]) ?? 1;
+            final sound = int.tryParse(parts[2]) ?? 2;
+            _triggerRelationshipActionDirect(fromPrimary: true, eventType: eventType, expr: expr, sound: sound);
+          }
+        } else if (logMsg.startsWith("TOUCH:")) {
+          final event = logMsg.substring(6); // TAP, DOUBLE, TRIPLE, LONG
+          _triggerRelationshipAction(fromPrimary: true, eventType: event);
         }
         
         _robotEventsController.add(logMsg);
@@ -633,6 +710,10 @@ class BLEService with ChangeNotifier {
       await _connectedDevice!.disconnect();
     }
     _handleDisconnect();
+
+    if (_companionDevice != null) {
+      await disconnectCompanion();
+    }
   }
 
   // Characteristics Write Helpers
@@ -888,6 +969,515 @@ class BLEService with ChangeNotifier {
       if (!pending.completer.isCompleted) {
         pending.completer.complete(true);
       }
+    }
+  }
+
+  // ==========================================
+  // COMPANION / RELATIONSHIP METHODS
+  // ==========================================
+
+  Future<void> loadRelationshipSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      relPrimaryTapExpr = prefs.getInt("rel_primary_tap_expr") ?? 1;
+      relPrimaryTapSound = prefs.getInt("rel_primary_tap_sound") ?? 2;
+      relPrimaryDoubleExpr = prefs.getInt("rel_primary_double_expr") ?? 6;
+      relPrimaryDoubleSound = prefs.getInt("rel_primary_double_sound") ?? 6;
+      relPrimaryLongExpr = prefs.getInt("rel_primary_long_expr") ?? 5;
+      relPrimaryLongSound = prefs.getInt("rel_primary_long_sound") ?? 4;
+
+      relCompanionTapExpr = prefs.getInt("rel_companion_tap_expr") ?? 1;
+      relCompanionTapSound = prefs.getInt("rel_companion_tap_sound") ?? 2;
+      relCompanionDoubleExpr = prefs.getInt("rel_companion_double_expr") ?? 6;
+      relCompanionDoubleSound = prefs.getInt("rel_companion_double_sound") ?? 6;
+      relCompanionLongExpr = prefs.getInt("rel_companion_long_expr") ?? 5;
+      relCompanionLongSound = prefs.getInt("rel_companion_long_sound") ?? 4;
+
+      isPrimaryCommEnabled = prefs.getBool("rel_primary_comm_enabled") ?? true;
+      isCompanionCommEnabled = prefs.getBool("rel_companion_comm_enabled") ?? true;
+    } catch (e) {
+      print("Error loading relationship settings: $e");
+    }
+  }
+
+  Future<void> togglePrimaryComm(bool enabled) async {
+    isPrimaryCommEnabled = enabled;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool("rel_primary_comm_enabled", enabled);
+    } catch (e) {
+      print("Error saving primary comm setting: $e");
+    }
+    notifyListeners();
+    if (isConnected) {
+      await _writePrimaryTextDirect("REL_COMM:${enabled ? 1 : 0}");
+    }
+  }
+
+  Future<void> toggleCompanionComm(bool enabled) async {
+    isCompanionCommEnabled = enabled;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool("rel_companion_comm_enabled", enabled);
+    } catch (e) {
+      print("Error saving companion comm setting: $e");
+    }
+    notifyListeners();
+    if (isCompanionConnected) {
+      await _writeCompanionTextDirect("REL_COMM:${enabled ? 1 : 0}");
+    }
+  }
+
+  Future<void> saveRelationshipSettings({
+    required int primaryTapExpr,
+    required int primaryTapSound,
+    required int primaryDoubleExpr,
+    required int primaryDoubleSound,
+    required int primaryLongExpr,
+    required int primaryLongSound,
+    required int companionTapExpr,
+    required int companionTapSound,
+    required int companionDoubleExpr,
+    required int companionDoubleSound,
+    required int companionLongExpr,
+    required int companionLongSound,
+  }) async {
+    relPrimaryTapExpr = primaryTapExpr;
+    relPrimaryTapSound = primaryTapSound;
+    relPrimaryDoubleExpr = primaryDoubleExpr;
+    relPrimaryDoubleSound = primaryDoubleSound;
+    relPrimaryLongExpr = primaryLongExpr;
+    relPrimaryLongSound = primaryLongSound;
+
+    relCompanionTapExpr = companionTapExpr;
+    relCompanionTapSound = companionTapSound;
+    relCompanionDoubleExpr = companionDoubleExpr;
+    relCompanionDoubleSound = companionDoubleSound;
+    relCompanionLongExpr = companionLongExpr;
+    relCompanionLongSound = companionLongSound;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt("rel_primary_tap_expr", primaryTapExpr);
+      await prefs.setInt("rel_primary_tap_sound", primaryTapSound);
+      await prefs.setInt("rel_primary_double_expr", primaryDoubleExpr);
+      await prefs.setInt("rel_primary_double_sound", primaryDoubleSound);
+      await prefs.setInt("rel_primary_long_expr", primaryLongExpr);
+      await prefs.setInt("rel_primary_long_sound", primaryLongSound);
+
+      await prefs.setInt("rel_companion_tap_expr", companionTapExpr);
+      await prefs.setInt("rel_companion_tap_sound", companionTapSound);
+      await prefs.setInt("rel_companion_double_expr", companionDoubleExpr);
+      await prefs.setInt("rel_companion_double_sound", companionDoubleSound);
+      await prefs.setInt("rel_companion_long_expr", companionLongExpr);
+      await prefs.setInt("rel_companion_long_sound", companionLongSound);
+    } catch (e) {
+      print("Error saving relationship settings: $e");
+    }
+    notifyListeners();
+    
+    // Sync mappings to robots if connected
+    if (isConnected) {
+      _writePrimaryTextDirect("SET_REL_MAP:1|$primaryTapExpr|$primaryTapSound");
+      _writePrimaryTextDirect("SET_REL_MAP:2|$primaryDoubleExpr|$primaryDoubleSound");
+      _writePrimaryTextDirect("SET_REL_MAP:4|$primaryLongExpr|$primaryLongSound");
+    }
+    if (isCompanionConnected) {
+      _writeCompanionTextDirect("SET_REL_MAP:1|$companionTapExpr|$companionTapSound");
+      _writeCompanionTextDirect("SET_REL_MAP:2|$companionDoubleExpr|$companionDoubleSound");
+      _writeCompanionTextDirect("SET_REL_MAP:4|$companionLongExpr|$companionLongSound");
+    }
+  }
+
+  String _getExpressionLabel(int exprId) {
+    switch (exprId) {
+      case 1: return "HAPPY";
+      case 2: return "SAD";
+      case 3: return "ANGRY";
+      case 4: return "SURPRISED";
+      case 5: return "SLEEPING";
+      case 6: return "WINK";
+      default: return "IDLE";
+    }
+  }
+
+  void _triggerRelationshipActionDirect({required bool fromPrimary, required String eventType, required int expr, required int sound}) {
+    if (fromPrimary && onPrimaryTouchTriggered != null) {
+      onPrimaryTouchTriggered!(eventType, expr, sound);
+    }
+    if (!isPrimaryCommEnabled || !isCompanionCommEnabled) {
+      addLog("Relationship action blocked because communication is disabled on one or both devices.", "BLE");
+      return;
+    }
+    if (fromPrimary) {
+      if (!_isCompanionConnected) return;
+      
+      addLog("Trigger Relationship: Primary $eventType -> Companion respond (Expr $expr, Sound $sound)", "BLE");
+      _companionActiveExpressionId = expr;
+      _companionActiveExpressionLabel = _getExpressionLabel(expr);
+      if (companionHasSpeaker) {
+        transmitCompanionAudio(sound);
+      }
+      
+      final senderName = _connectedDevice?.platformName.isNotEmpty == true 
+          ? _connectedDevice!.platformName 
+          : "Primary Luna";
+      transmitCompanionNotification(senderName, "$eventType Action", expr: expr);
+    } else {
+      if (!_isConnected) return;
+      
+      addLog("Trigger Relationship: Companion $eventType -> Primary respond (Expr $expr, Sound $sound)", "BLE");
+      _activeExpressionId = expr;
+      _activeExpressionLabel = _getExpressionLabel(expr);
+      if (hasSpeaker) {
+        transmitAudio(sound);
+      }
+      
+      final senderName = _companionDevice?.platformName.isNotEmpty == true 
+          ? _companionDevice!.platformName 
+          : "Companion Luna";
+      transmitPrimaryNotification(senderName, "$eventType Action", expr: expr);
+    }
+  }
+
+  void _triggerRelationshipAction({required bool fromPrimary, required String eventType}) {
+    int expr = 1;
+    int sound = 2;
+    if (eventType == "TAP") {
+      expr = relPrimaryTapExpr;
+      sound = relPrimaryTapSound;
+    } else if (eventType == "DOUBLE") {
+      expr = relPrimaryDoubleExpr;
+      sound = relPrimaryDoubleSound;
+    } else if (eventType == "LONG") {
+      expr = relPrimaryLongExpr;
+      sound = relPrimaryLongSound;
+    } else {
+      return;
+    }
+
+    if (fromPrimary && onPrimaryTouchTriggered != null) {
+      onPrimaryTouchTriggered!(eventType, expr, sound);
+    }
+
+    if (!isPrimaryCommEnabled || !isCompanionCommEnabled) {
+      
+      addLog("Trigger Relationship: Primary $eventType -> Companion respond (Expr $expr, Sound $sound)", "BLE");
+      _companionActiveExpressionId = expr;
+      _companionActiveExpressionLabel = _getExpressionLabel(expr);
+      if (companionHasSpeaker) {
+        transmitCompanionAudio(sound);
+      }
+      
+      // Notify the companion robot from whom it received the touch event
+      final senderName = _connectedDevice?.platformName.isNotEmpty == true 
+          ? _connectedDevice!.platformName 
+          : "Primary Luna";
+      transmitCompanionNotification(senderName, "$eventType Action", expr: expr);
+    } else {
+      if (!_isConnected) return;
+      int expr = 1;
+      int sound = 2;
+      if (eventType == "TAP") {
+        expr = relCompanionTapExpr;
+        sound = relCompanionTapSound;
+      } else if (eventType == "DOUBLE") {
+        expr = relCompanionDoubleExpr;
+        sound = relCompanionDoubleSound;
+      } else if (eventType == "LONG") {
+        expr = relCompanionLongExpr;
+        sound = relCompanionLongSound;
+      } else {
+        return;
+      }
+      
+      addLog("Trigger Relationship: Companion $eventType -> Primary respond (Expr $expr, Sound $sound)", "BLE");
+      _activeExpressionId = expr;
+      _activeExpressionLabel = _getExpressionLabel(expr);
+      if (hasSpeaker) {
+        transmitAudio(sound);
+      }
+      
+      // Notify the primary robot from whom it received the touch event
+      final senderName = _companionDevice?.platformName.isNotEmpty == true 
+          ? _companionDevice!.platformName 
+          : "Companion Luna";
+      transmitPrimaryNotification(senderName, "$eventType Action", expr: expr);
+    }
+  }
+
+  void handleRemoteCloudTrigger(int expr, int sound, String friendName, String eventType) {
+    _activeExpressionId = expr;
+    _activeExpressionLabel = _getExpressionLabel(expr);
+    if (hasSpeaker) {
+      transmitAudio(sound);
+    }
+    transmitPrimaryNotification(friendName, "$eventType Action", expr: expr);
+    notifyListeners();
+  }
+
+  Future<void> connectCompanion(BluetoothDevice device) async {
+    if (_isCompanionConnecting) return;
+    _isCompanionConnecting = true;
+    notifyListeners();
+
+    try {
+      addLog("Connecting companion robot: ${device.remoteId.str}...", "BLE");
+      
+      final startState = await device.connectionState.first;
+      if (startState == BluetoothConnectionState.connected) {
+        _handleCompanionConnected(device);
+        return;
+      }
+
+      _companionConnectionStateSub?.cancel();
+      _companionConnectionStateSub = device.connectionState.listen((state) {
+        if (state == BluetoothConnectionState.connected) {
+          _handleCompanionConnected(device);
+        } else if (state == BluetoothConnectionState.disconnected) {
+          _handleCompanionDisconnect();
+        }
+      });
+
+      await device.connect(autoConnect: false, timeout: const Duration(seconds: 5));
+
+      final currentState = await device.connectionState.first.timeout(
+        const Duration(milliseconds: 500),
+        onTimeout: () => BluetoothConnectionState.disconnected,
+      );
+      if (currentState == BluetoothConnectionState.connected) {
+        _handleCompanionConnected(device);
+      }
+    } catch (e) {
+      addLog("Companion connection failed: $e", "WARNING");
+      _isCompanionConnecting = false;
+      _handleCompanionDisconnect();
+    }
+  }
+
+  Future<void> connectCompanionById(String deviceId) async {
+    if (_isCompanionConnecting) return;
+    try {
+      addLog("Connecting companion directly to ID: $deviceId...", "BLE");
+      final device = BluetoothDevice.fromId(deviceId);
+      await connectCompanion(device);
+    } catch (e) {
+      addLog("Companion direct connection failed: $e", "ERROR");
+      _isCompanionConnecting = false;
+      _handleCompanionDisconnect();
+    }
+  }
+
+  void _handleCompanionConnected(BluetoothDevice device) {
+    if (_isCompanionConnected) return;
+    _isCompanionConnected = true;
+    _isCompanionConnecting = false;
+    _companionDevice = device;
+    addLog("Connected to companion successfully!", "BLE");
+    _setupCompanionServices(device);
+    
+    try {
+      device.requestConnectionPriority(connectionPriorityRequest: ConnectionPriority.high);
+    } catch (e) {}
+    
+    notifyListeners();
+  }
+
+  Future<void> _setupCompanionServices(BluetoothDevice device) async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 1000));
+      List<BluetoothService> services = await device.discoverServices();
+      BluetoothService? targetService = services.firstWhere(
+        (s) => s.uuid == Guid(serviceUuid),
+      );
+
+      for (var c in targetService.characteristics) {
+        if (c.uuid == Guid(expressionCharUuid)) _companionExprChar = c;
+        if (c.uuid == Guid(audioCharUuid)) _companionAudioChar = c;
+        if (c.uuid == Guid(textCharUuid)) _companionTextChar = c;
+        if (c.uuid == Guid(statusCharUuid)) _companionStatusChar = c;
+        if (c.uuid == Guid(audioStreamCharUuid)) _companionAudioStreamChar = c;
+      }
+
+      if (_companionStatusChar != null) {
+        await _companionStatusChar!.setNotifyValue(true);
+        _companionStatusNotificationSub = _companionStatusChar!.lastValueStream.listen((value) {
+          _parseCompanionStatusData(value);
+        });
+        addLog("Companion Status notifications enabled.", "BLE");
+      }
+
+      // Sync relationship communication state and mapping to companion
+      Future.delayed(const Duration(milliseconds: 1200), () async {
+        await _writeCompanionTextDirect("REL_COMM:${isCompanionCommEnabled ? 1 : 0}");
+        await _writeCompanionTextDirect("SET_REL_MAP:1|$relCompanionTapExpr|$relCompanionTapSound");
+        await _writeCompanionTextDirect("SET_REL_MAP:2|$relCompanionDoubleExpr|$relCompanionDoubleSound");
+        await _writeCompanionTextDirect("SET_REL_MAP:4|$relCompanionLongExpr|$relCompanionLongSound");
+      });
+    } catch (e) {
+      addLog("Companion Service discovery failed: $e", "ERROR");
+    }
+  }
+
+  void _parseCompanionStatusData(List<int> value) {
+    if (value.isEmpty) return;
+    try {
+      final dataStr = utf8.decode(value);
+      
+      if (dataStr.startsWith("LOG:")) {
+        final logMsg = dataStr.substring(4);
+        addLog("[Companion] $logMsg", "ROBOT");
+        
+        // Handle companion touch events (make primary respond)
+        if (logMsg.startsWith("TOUCH_REL:")) {
+          final payload = logMsg.substring(10);
+          final parts = payload.split('|');
+          if (parts.length >= 3) {
+            final eventType = parts[0];
+            final expr = int.tryParse(parts[1]) ?? 1;
+            final sound = int.tryParse(parts[2]) ?? 2;
+            _triggerRelationshipActionDirect(fromPrimary: false, eventType: eventType, expr: expr, sound: sound);
+          }
+        } else if (logMsg.startsWith("TOUCH:")) {
+          final event = logMsg.substring(6); // TAP, DOUBLE, TRIPLE, LONG
+          _triggerRelationshipAction(fromPrimary: false, eventType: event);
+        }
+        return;
+      }
+      
+      final parts = dataStr.split(',');
+      if (parts.length >= 3) {
+        _companionUptimeSeconds = int.tryParse(parts[0]) ?? _companionUptimeSeconds;
+        _companionTouchCount = int.tryParse(parts[1]) ?? _companionTouchCount;
+        _companionBatteryVoltage = double.tryParse(parts[2]) ?? _companionBatteryVoltage;
+        
+        if (parts.length >= 4) {
+          _companionActiveExpressionId = int.tryParse(parts[3]) ?? _companionActiveExpressionId;
+        }
+        if (parts.length >= 5) {
+          _companionActiveExpressionLabel = parts[4].trim();
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      print("Error decoding companion status packet: $e");
+    }
+  }
+
+  void _handleCompanionDisconnect() {
+    _isCompanionConnected = false;
+    _isCompanionConnecting = false;
+    _companionDevice = null;
+    _companionExprChar = null;
+    _companionAudioChar = null;
+    _companionTextChar = null;
+    _companionStatusChar = null;
+    _companionAudioStreamChar = null;
+    
+    _companionUptimeSeconds = 0;
+    _companionTouchCount = 0;
+    _companionBatteryVoltage = 0.0;
+    _companionActiveExpressionId = 0;
+    _companionActiveExpressionLabel = "IDLE";
+
+    _companionConnectionStateSub?.cancel();
+    _companionStatusNotificationSub?.cancel();
+    
+    addLog("Companion disconnected.", "BLE");
+    notifyListeners();
+  }
+
+  Future<void> disconnectCompanion() async {
+    if (_companionDevice != null) {
+      addLog("Disconnecting companion manually...", "BLE");
+      await _companionDevice!.disconnect();
+    }
+    _handleCompanionDisconnect();
+  }
+
+  Future<void> transmitCompanionExpression(int expr, String label) async {
+    if (!_isCompanionConnected || _companionExprChar == null) {
+      addLog("Cannot transmit companion expression: Companion not connected.", "ERROR");
+      return;
+    }
+    try {
+      final labelBytes = utf8.encode(label.toUpperCase());
+      final payload = Uint8List(1 + labelBytes.length);
+      payload[0] = expr;
+      payload.setRange(1, payload.length, labelBytes);
+      
+      await _companionExprChar!.write(payload, withoutResponse: false);
+      _companionActiveExpressionId = expr;
+      _companionActiveExpressionLabel = label;
+      addLog("Sent companion expression: $expr ($label)", "BLE");
+      notifyListeners();
+    } catch (e) {
+      addLog("Failed to write companion expression characteristic: $e", "ERROR");
+    }
+  }
+
+  Future<void> transmitCompanionAudio(int soundId) async {
+    if (!_isCompanionConnected || _companionAudioChar == null) {
+      addLog("Cannot transmit companion audio: Companion not connected.", "ERROR");
+      return;
+    }
+    try {
+      await _companionAudioChar!.write([soundId], withoutResponse: false);
+      addLog("Sent companion audio trigger: SFX $soundId", "BLE");
+    } catch (e) {
+      addLog("Failed to write companion audio characteristic: $e", "ERROR");
+    }
+  }
+
+  Future<void> _writePrimaryTextDirect(String text) async {
+    if (!_isConnected || _textChar == null) return;
+    try {
+      final payload = utf8.encode(text);
+      await _textChar!.write(payload, withoutResponse: false);
+      addLog("Sent primary command: $text", "BLE");
+    } catch (e) {
+      addLog("Failed to write primary text characteristic: $e", "ERROR");
+    }
+  }
+
+  Future<void> _writeCompanionTextDirect(String text) async {
+    if (!_isCompanionConnected || _companionTextChar == null) return;
+    try {
+      final payload = utf8.encode(text);
+      await _companionTextChar!.write(payload, withoutResponse: false);
+      addLog("Sent companion command: $text", "BLE");
+    } catch (e) {
+      addLog("Failed to write companion text characteristic: $e", "ERROR");
+    }
+  }
+
+  Future<void> transmitCompanionNotification(String title, String body, {int? expr}) async {
+    if (!_isCompanionConnected || _companionTextChar == null) {
+      addLog("Cannot transmit companion notification: Companion not connected.", "ERROR");
+      return;
+    }
+    try {
+      final payloadStr = expr != null ? "NOTIF_EXPR:$title|$body|$expr" : "NOTIF:$title|$body";
+      final payload = utf8.encode(payloadStr);
+      await _companionTextChar!.write(payload, withoutResponse: false);
+      addLog("Sent companion notification: $title - $body (Expr: $expr)", "BLE");
+    } catch (e) {
+      addLog("Failed to write companion text characteristic: $e", "ERROR");
+    }
+  }
+
+  Future<void> transmitPrimaryNotification(String title, String body, {int? expr}) async {
+    if (!_isConnected || _textChar == null) {
+      addLog("Cannot transmit primary notification: Not connected.", "ERROR");
+      return;
+    }
+    try {
+      final payloadStr = expr != null ? "NOTIF_EXPR:$title|$body|$expr" : "NOTIF:$title|$body";
+      final payload = utf8.encode(payloadStr);
+      await _textChar!.write(payload, withoutResponse: false);
+      addLog("Sent primary notification: $title - $body (Expr: $expr)", "BLE");
+    } catch (e) {
+      addLog("Failed to write primary text characteristic: $e", "ERROR");
     }
   }
 }

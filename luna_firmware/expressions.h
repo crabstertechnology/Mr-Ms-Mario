@@ -34,6 +34,7 @@ private:
   String mapDescription;
 
 public:
+  String headerText;
   LunaFace(Adafruit_SSD1306& disp) 
     : display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
     currentFrame = 0;
@@ -49,6 +50,7 @@ public:
     mapDirection = "STRAIGHT";
     mapDistance = "--";
     mapDescription = "";
+    headerText = "";
   }
 
   void updateLabelFromState() {
@@ -476,6 +478,20 @@ public:
       if (frameData != nullptr) {
         display.drawBitmap(0, 0, frameData, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
       }
+    }
+    if (currentExpr != EXPR_TEXT && headerText.length() > 0) {
+      display.fillRect(0, 0, SCREEN_WIDTH, 11, SSD1306_BLACK);
+      display.setTextColor(SSD1306_WHITE);
+      display.setTextSize(1);
+      
+      // Center the header text
+      int textW = headerText.length() * 6;
+      int startX = (SCREEN_WIDTH - textW) / 2;
+      if (startX < 0) startX = 0;
+      
+      display.setCursor(startX, 2);
+      display.print(headerText);
+      display.drawFastHLine(0, 11, SCREEN_WIDTH, SSD1306_WHITE);
     }
 
     display.display();

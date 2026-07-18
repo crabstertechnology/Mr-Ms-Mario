@@ -19,6 +19,7 @@ import '../models/robot_profile.dart';
 import '../models/calendar_event.dart';
 import '../models/alarm_model.dart';
 import '../services/notification_service.dart';
+import '../services/firebase_service.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/oled_simulator.dart';
 import '../widgets/pixel_editor.dart';
@@ -59,6 +60,8 @@ class _MainDashboardState extends State<MainDashboard> {
   final TextEditingController _aiPromptController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _calendarTitleController = TextEditingController();
+  final TextEditingController _lunaLinkSearchController = TextEditingController();
+  StreamSubscription? _remoteTriggerSub;
   
   String _selectedCategory = 'ALL';
   String _selectedSort = 'name';
@@ -302,6 +305,47 @@ class _MainDashboardState extends State<MainDashboard> {
       }
     });
 
+    final firebase = Provider.of<FirebaseService>(context, listen: false);
+    ble.onPrimaryTouchTriggered = (eventType, expr, sound) {
+      if (firebase.pairedFriendUid != null) {
+        firebase.sendCloudTrigger(eventType, expr, sound);
+      }
+    };
+
+    _remoteTriggerSub = firebase.remoteTriggers.listen((data) {
+      final senderName = data['senderName'] ?? "Friend";
+      final eventType = data['eventType'] ?? "TAP";
+      final exprLabel = data['exprLabel'] ?? "HAPPY";
+      final soundId = data['soundId'] ?? 2;
+      
+      int exprId = 1;
+      switch (exprLabel) {
+        case "HAPPY": exprId = 1; break;
+        case "SAD": exprId = 2; break;
+        case "ANGRY": exprId = 3; break;
+        case "SURPRISED": exprId = 4; break;
+        case "SLEEPING": exprId = 5; break;
+        case "WINK": exprId = 6; break;
+      }
+      
+      ble.handleRemoteCloudTrigger(exprId, soundId, senderName, eventType);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.cloud_sync, color: Colors.white),
+              const SizedBox(width: 10),
+              Text("$senderName sent a remote $eventType (Expr: $exprLabel)!"),
+            ],
+          ),
+          backgroundColor: _accentColor,
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
+
     _loadInstalledApps();
   }
 
@@ -312,11 +356,13 @@ class _MainDashboardState extends State<MainDashboard> {
     _udpDiscoveryTimer?.cancel();
     _clockTickerTimer?.cancel();
     _robotEventsSub?.cancel();
+    _remoteTriggerSub?.cancel();
     _homeMessageController.dispose();
     _marqueeController.dispose();
     _customMelodyController.dispose();
     _aiPromptController.dispose();
     _searchController.dispose();
+    _lunaLinkSearchController.dispose();
     _appSearchController.dispose();
     _audioSearchController.dispose();
     _audioSynth.stop();
@@ -802,6 +848,16 @@ class _MainDashboardState extends State<MainDashboard> {
     final db = Provider.of<DatabaseService>(context);
     final ble = Provider.of<BLEService>(context);
 
+    // Auto-connect companion if paired and primary is connected
+    if (ble.isConnected && db.primaryRobot != null && db.primaryRobot!.companionDeviceId != null) {
+      final compId = db.primaryRobot!.companionDeviceId!;
+      if (!ble.isCompanionConnected && !ble.isCompanionConnecting) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ble.connectCompanionById(compId);
+        });
+      }
+    }
+
     // Dynamic theme: Ms. Luna = pink, Mr. Luna = blue
     final isMsLuna = db.primaryRobot?.variant == 'ms_luna';
     _accentColor = isMsLuna ? const Color(0xFFE91E8C) : const Color(0xFF0284C7);
@@ -899,6 +955,7 @@ class _MainDashboardState extends State<MainDashboard> {
       {'icon': Icons.home, 'label': 'Home'},
       {'icon': Icons.face, 'label': 'Expressions'},
       {'icon': Icons.audiotrack, 'label': 'Sounds'},
+      {'icon': Icons.cloud_sync, 'label': 'Luna Link'},
       {'icon': Icons.calendar_month, 'label': 'Calendar'},
       {'icon': Icons.settings, 'label': 'Settings'},
     ];
@@ -934,7 +991,7 @@ class _MainDashboardState extends State<MainDashboard> {
               onTap: () {
                 setState(() {
                   _activeTabIdx = idx;
-                  if (idx == 4) {
+                  if (idx == 5) {
                     _currentSettingsSection = 'categories';
                   }
                 });
@@ -979,9 +1036,58 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
+  // Status indicator and version badges helper methods
+  Widget _buildStatusDot(bool connected) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(
+        color: connected ? Colors.green : Colors.red,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  Widget _buildVersionBadge(bool hasSpeaker) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: hasSpeaker ? Colors.green.shade50 : Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(
+          color: hasSpeaker ? Colors.green.shade200 : Colors.orange.shade200,
+          width: 0.6,
+        ),
+      ),
+      child: Text(
+        hasSpeaker ? "v2" : "v1",
+        style: GoogleFonts.outfit(
+          color: hasSpeaker ? Colors.green.shade700 : Colors.orange.shade700,
+          fontSize: 7.5,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   // Top header navbar
   Widget _buildTopNavigation(BLEService ble) {
-    _isMsLuna = Provider.of<DatabaseService>(context, listen: false).primaryRobot?.variant == 'ms_luna';
+    final db = Provider.of<DatabaseService>(context, listen: false);
+    _isMsLuna = db.primaryRobot?.variant == 'ms_luna';
+    final hasRelationship = db.primaryRobot != null && db.primaryRobot!.companionDeviceId != null;
+    final primaryName = db.primaryRobot?.name ?? (_isMsLuna ? "Ms. Luna" : "Mr. Luna");
+    
+    String? companionName;
+    bool isCompanionMsLuna = false;
+    if (hasRelationship) {
+      final companion = db.robots.firstWhere(
+        (r) => r.id == db.primaryRobot!.companionDeviceId, 
+        orElse: () => RobotProfile(id: '', name: 'Companion', variant: 'mr_luna', remoteId: '', lastConnected: DateTime.now())
+      );
+      companionName = companion.name;
+      isCompanionMsLuna = companion.variant == 'ms_luna';
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: BoxDecoration(
@@ -1024,22 +1130,78 @@ class _MainDashboardState extends State<MainDashboard> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _isMsLuna ? "Ms. Luna" : "Mr. Luna",
-                    style: GoogleFonts.outfit(
-                      color: _accentColor,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.2,
+                  if (!hasRelationship) ...[
+                    Row(
+                      children: [
+                        Text(
+                          primaryName,
+                          style: GoogleFonts.outfit(
+                            color: _accentColor,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        _buildStatusDot(ble.isConnected),
+                        if (ble.isConnected) ...[
+                          const SizedBox(width: 6),
+                          _buildVersionBadge(ble.hasSpeaker),
+                        ],
+                      ],
                     ),
-                  ),
-                  if (ble.pairedDeviceId != null) ...[
                     const SizedBox(height: 2),
                     Text(
-                      "ID: ${ble.pairedDeviceId}",
+                      ble.isConnected ? "Connected" : "Disconnected",
+                      style: GoogleFonts.outfit(color: textColor54, fontSize: 10, fontWeight: FontWeight.w500),
+                    ),
+                  ] else ...[
+                    Row(
+                      children: [
+                        Text(
+                          primaryName,
+                          style: GoogleFonts.outfit(
+                            color: _accentColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        _buildStatusDot(ble.isConnected),
+                        if (ble.isConnected) ...[
+                          const SizedBox(width: 4),
+                          _buildVersionBadge(ble.hasSpeaker),
+                        ],
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Icon(
+                            db.primaryRobot?.relationshipType == 'couple' ? Icons.favorite : Icons.link,
+                            color: db.primaryRobot?.relationshipType == 'couple' ? Colors.pink : Colors.green,
+                            size: 14,
+                          ),
+                        ),
+                        Text(
+                          companionName!,
+                          style: GoogleFonts.outfit(
+                            color: isCompanionMsLuna ? const Color(0xFFE91E8C) : const Color(0xFF0284C7),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        _buildStatusDot(ble.isCompanionConnected),
+                        if (ble.isCompanionConnected) ...[
+                          const SizedBox(width: 4),
+                          _buildVersionBadge(ble.companionHasSpeaker),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Bond: ${db.primaryRobot?.relationshipType.toUpperCase() ?? 'NONE'}",
                       style: GoogleFonts.outfit(
                         color: textColor54,
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1077,7 +1239,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     ble.disconnect();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text("Disconnected from robot."),
+                        content: Text("Disconnected from robots."),
                         duration: Duration(seconds: 2),
                       ),
                     );
@@ -1306,6 +1468,36 @@ class _MainDashboardState extends State<MainDashboard> {
                 ),
               ),
               const SizedBox(height: 20),
+              if (ble.isConnected && !ble.hasSpeaker) ...[
+                GlassCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.speaker_notes_off, color: Colors.orangeAccent, size: 36),
+                      const SizedBox(height: 10),
+                      Text(
+                        "LUNA V1 DETECTED (NO SPEAKER)",
+                        style: GoogleFonts.outfit(
+                          color: textColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "Voice call, audio streaming, volume controls, and soundboard features are disabled because Luna v1 hardware does not have a speaker module.",
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.outfit(
+                          color: textColor60,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
               _buildIntercomAndMusicSection(ble),
               const SizedBox(height: 20),
               _buildSoundBoardPanel(db, ble),
@@ -1314,11 +1506,17 @@ class _MainDashboardState extends State<MainDashboard> {
         );
       case 3:
         return SingleChildScrollView(
+          key: const PageStorageKey('luna_link_scroll'),
+          padding: const EdgeInsets.only(top: 10, bottom: 20),
+          child: _buildLunaLinkPanel(db, ble),
+        );
+      case 4:
+        return SingleChildScrollView(
           key: const PageStorageKey('calendar_scroll'),
           padding: const EdgeInsets.only(top: 10, bottom: 20),
           child: _buildCalendarPanel(db, ble),
         );
-      case 4:
+      case 5:
         return SingleChildScrollView(
           key: const PageStorageKey('settings_scroll'),
           padding: const EdgeInsets.only(top: 10, bottom: 20),
@@ -1913,7 +2111,7 @@ class _MainDashboardState extends State<MainDashboard> {
         ble.addLog("Executing expression: ${gif.name}", "ANIM");
         await ble.transmitExpression(exprVal, gif.name);
 
-        if (soundVal > 0) {
+        if (soundVal > 0 && ble.hasSpeaker) {
           Future.delayed(const Duration(milliseconds: 150), () {
             ble.transmitAudio(soundVal);
           });
@@ -2080,14 +2278,15 @@ class _MainDashboardState extends State<MainDashboard> {
           itemBuilder: (context, index) {
             final sfx = sfxList[index];
             final color = sfx['color'] as Color;
+            final hasSpeaker = ble.hasSpeaker;
             return Card(
-              color: const Color(0xFFE0F2FE),
+              color: hasSpeaker ? const Color(0xFFE0F2FE) : const Color(0xFFE2E8F0),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: _accentColor.withOpacity(0.3), width: 1.2),
+                side: BorderSide(color: hasSpeaker ? _accentColor.withOpacity(0.3) : Colors.black.withOpacity(0.05), width: 1.2),
               ),
               child: InkWell(
-                onTap: () async {
+                onTap: !hasSpeaker ? null : () async {
                   final sfxId = sfx['id'] as int;
                   await ble.transmitAudio(sfxId);
                 },
@@ -2099,14 +2298,14 @@ class _MainDashboardState extends State<MainDashboard> {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: hasSpeaker ? color : textColor38),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           sfx['name'] as String,
                           style: GoogleFonts.outfit(
-                            color: textColor,
+                            color: hasSpeaker ? textColor : textColor38,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -2343,7 +2542,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text("Intro Sound Speed", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
-                  Text("${db.introSoundSpeed.toInt()}%", style: GoogleFonts.firaCode(color: Colors.yellow, fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text(ble.hasSpeaker ? "${db.introSoundSpeed.toInt()}%" : "N/A", style: GoogleFonts.firaCode(color: ble.hasSpeaker ? Colors.yellow : textColor38, fontSize: 12, fontWeight: FontWeight.bold)),
                 ],
               ),
               Slider(
@@ -2351,8 +2550,8 @@ class _MainDashboardState extends State<MainDashboard> {
                 min: 20,
                 max: 300,
                 activeColor: const Color(0xFFE53935),
-                onChanged: (val) => db.updateIntroSoundSpeed(val),
-                onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
+                onChanged: !ble.hasSpeaker ? null : (val) => db.updateIntroSoundSpeed(val),
+                onChangeEnd: !ble.hasSpeaker ? null : (val) => _syncSettingsToRobot(db, ble),
               ),
             ],
           ),
@@ -2382,7 +2581,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       await db.updateOledInvert(val);
                       await db.updateNegativeEnabled(val);
                       _syncSettingsToRobot(db, ble);
-                      if (ble.isConnected) {
+                      if (ble.isConnected && ble.hasSpeaker) {
                         await ble.transmitAudio(10);
                       }
                     },
@@ -2846,6 +3045,7 @@ class _MainDashboardState extends State<MainDashboard> {
     final audioStream = Provider.of<AudioStreamService>(context);
     final isMiss = _isMsLuna;
     final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
+    final hasSpeaker = ble.hasSpeaker;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2894,7 +3094,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   // VoIP Call Button
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () async {
+                      onPressed: !hasSpeaker ? null : () async {
                         if (audioStream.isCalling) {
                           await audioStream.stopCall();
                           await ble.transmitStopCall();
@@ -2914,7 +3114,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       icon: Icon(audioStream.isCalling ? Icons.call_end : Icons.call, size: 18),
                       label: Text(audioStream.isCalling ? "End Call" : "Voice Call"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: audioStream.isCalling ? Colors.red.shade700 : const Color(0xFF10B981),
+                        backgroundColor: !hasSpeaker ? Colors.grey : (audioStream.isCalling ? Colors.red.shade700 : const Color(0xFF10B981)),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -2924,7 +3124,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   // Custom WAV / Audio Picker Button
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () async {
+                      onPressed: !hasSpeaker ? null : () async {
                         if (audioStream.isStreamingMusic) {
                           await _stopMusic(audioStream, ble);
                         } else {
@@ -2946,7 +3146,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       icon: Icon(audioStream.isStreamingMusic ? Icons.stop : Icons.folder_open, size: 18),
                       label: Text(audioStream.isStreamingMusic ? "Stop Music" : "Pick Audio"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: audioStream.isStreamingMusic ? Colors.red.shade700 : const Color(0xFF3B82F6),
+                        backgroundColor: !hasSpeaker ? Colors.grey : (audioStream.isStreamingMusic ? Colors.red.shade700 : const Color(0xFF3B82F6)),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -2958,7 +3158,7 @@ class _MainDashboardState extends State<MainDashboard> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () async {
+                  onPressed: !hasSpeaker ? null : () async {
                     if (audioStream.isLoopbackActive) {
                       await audioStream.stopLoopback(ble);
                     } else {
@@ -2968,7 +3168,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   icon: Icon(audioStream.isLoopbackActive ? Icons.stop : Icons.loop, size: 18),
                   label: Text(audioStream.isLoopbackActive ? "Stop Loopback Test" : "Hardware Loopback Test"),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: audioStream.isLoopbackActive ? Colors.red.shade700 : const Color(0xFF8B5CF6),
+                    backgroundColor: !hasSpeaker ? Colors.grey : (audioStream.isLoopbackActive ? Colors.red.shade700 : const Color(0xFF8B5CF6)),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -3063,10 +3263,10 @@ class _MainDashboardState extends State<MainDashboard> {
                                 trackHeight: 4.0,
                                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
                                 overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-                                activeTrackColor: accentColor,
+                                activeTrackColor: hasSpeaker ? accentColor : Colors.grey,
                                 inactiveTrackColor: textColor24,
-                                thumbColor: accentColor,
-                                overlayColor: accentColor.withOpacity(0.18),
+                                thumbColor: hasSpeaker ? accentColor : Colors.grey,
+                                overlayColor: hasSpeaker ? accentColor.withOpacity(0.18) : Colors.transparent,
                               ),
                               child: Slider(
                                 value: audioStream.volume.toDouble(),
@@ -3074,17 +3274,17 @@ class _MainDashboardState extends State<MainDashboard> {
                                 max: 100,
                                 divisions: 20,
                                 label: "Vol ${audioStream.volume}%",
-                                onChanged: (val) {
+                                onChanged: !hasSpeaker ? null : (val) {
                                   audioStream.setVolume(val.toInt());
                                 },
                                 // Send BLE command only when user releases finger
-                                onChangeEnd: (val) {
+                                onChangeEnd: !hasSpeaker ? null : (val) {
                                   ble.transmitVolume(val.toInt());
                                 },
                               ),
                             ),
                           ),
-                          Icon(Icons.volume_up, color: accentColor, size: 18),
+                          Icon(Icons.volume_up, color: hasSpeaker ? accentColor : Colors.grey, size: 18),
                           const SizedBox(width: 4),
                           Text(
                             "${audioStream.volume}%",
@@ -3102,10 +3302,10 @@ class _MainDashboardState extends State<MainDashboard> {
                                 trackHeight: 4.0,
                                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
                                 overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-                                activeTrackColor: const Color(0xFF7C3AED),
+                                activeTrackColor: hasSpeaker ? const Color(0xFF7C3AED) : Colors.grey,
                                 inactiveTrackColor: textColor24,
-                                thumbColor: const Color(0xFF7C3AED),
-                                overlayColor: const Color(0x287C3AED),
+                                thumbColor: hasSpeaker ? const Color(0xFF7C3AED) : Colors.grey,
+                                overlayColor: hasSpeaker ? const Color(0x287C3AED) : Colors.transparent,
                               ),
                               child: Slider(
                                 value: audioStream.bass.toDouble(),
@@ -3113,11 +3313,11 @@ class _MainDashboardState extends State<MainDashboard> {
                                 max: 10,
                                 divisions: 10,
                                 label: "Bass ${audioStream.bass}",
-                                onChanged: (val) {
+                                onChanged: !hasSpeaker ? null : (val) {
                                   audioStream.setBass(val.toInt());
                                 },
                                 // Send BLE command only when user releases finger
-                                onChangeEnd: (val) {
+                                onChangeEnd: !hasSpeaker ? null : (val) {
                                   ble.transmitBass(val.toInt());
                                 },
                               ),
@@ -4314,7 +4514,804 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  // ================= NEW TAB 3: CALENDAR MANAGEMENT PANEL =================
+  // ================= NEW TAB 3: LUNA LINK (CLOUD SYNC) PANEL =================
+  Widget _buildLunaLinkPanel(DatabaseService db, BLEService ble) {
+    final firebase = Provider.of<FirebaseService>(context);
+    final themeColor = _accentColor;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Title Block
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "LUNA LINK",
+                  style: GoogleFonts.outfit(
+                    color: textColor,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  "Cloud robot pairing & authentication",
+                  style: GoogleFonts.outfit(
+                    color: textColor60,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Text(
+                  firebase.useLiveConfig ? "Live Config" : "Local Sandbox",
+                  style: GoogleFonts.outfit(
+                    color: firebase.useLiveConfig ? Colors.green : Colors.blueGrey,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Switch(
+                  activeColor: Colors.green,
+                  value: firebase.useLiveConfig,
+                  onChanged: (val) {
+                    firebase.toggleLiveConfig(val);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        if (!firebase.isSignedIn) ...[
+          // WELCOME / SIGN IN CARD
+          GlassCard(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Icon(Icons.cloud_sync, size: 64, color: themeColor),
+                const SizedBox(height: 16),
+                Text(
+                  "Snapchat-Style Robot Bonding",
+                  style: GoogleFonts.outfit(
+                    color: textColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Register your robot profile and pair with friends online to transmit real-time touch feedback, emojis, and sound sequences over the cloud database.",
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(
+                    color: textColor60,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: themeColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: const Icon(Icons.login, color: Colors.white),
+                  label: Text(
+                    "SIGN IN WITH GOOGLE",
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  ),
+                  onPressed: () => _showGoogleSignInBottomSheet(context, firebase),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
+          // SIGNED IN USER PROFILE & PAIRING STATUS
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: GlassCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundImage: NetworkImage(firebase.currentUser!['photoUrl'] ?? ''),
+                            backgroundColor: themeColor.withOpacity(0.1),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  firebase.currentUser!['displayName'] ?? 'User',
+                                  style: GoogleFonts.outfit(
+                                    color: textColor,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  firebase.currentUser!['email'] ?? '',
+                                  style: GoogleFonts.outfit(
+                                    color: textColor60,
+                                    fontSize: 11,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "MY ROBOT",
+                                style: GoogleFonts.outfit(
+                                  color: textColor38,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                "${firebase.currentUser!['robotName']}",
+                                style: GoogleFonts.outfit(
+                                  color: textColor,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: themeColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              (firebase.currentUser!['robotVariant'] ?? 'mr_luna').toString().toUpperCase(),
+                              style: GoogleFonts.outfit(
+                                color: themeColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.redAccent, width: 1),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () => firebase.signOut(),
+                          child: Text(
+                            "SIGN OUT",
+                            style: GoogleFonts.outfit(
+                              color: Colors.redAccent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GlassCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "CLOUD ROBOT BOND",
+                        style: GoogleFonts.outfit(
+                          color: textColor38,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (firebase.pairedFriendUid == null) ...[
+                        Row(
+                          children: [
+                            const Icon(Icons.cloud_off, color: Colors.orangeAccent, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Not Linked",
+                              style: GoogleFonts.outfit(
+                                color: textColor,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Pair with a friend's robot from your friends list below to start cloud communication.",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ] else ...[
+                        Row(
+                          children: [
+                            const Icon(Icons.cloud_queue, color: Colors.green, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                firebase.pairedFriendRobotName ?? 'Companion',
+                                style: GoogleFonts.outfit(
+                                  color: textColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Owner: ${firebase.friends.firstWhere((f) => f['uid'] == firebase.pairedFriendUid, orElse: () => {'displayName': 'Friend'})['displayName']}",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 11,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: themeColor,
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: () {
+                                  firebase.sendCloudTrigger("TAP", 1, 2);
+                                },
+                                child: Text(
+                                  "TEST TAP",
+                                  style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: () => firebase.unpairRobot(),
+                                child: Text(
+                                  "UNPAIR",
+                                  style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // SNAPCHAT STYLE FRIENDS CARD
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "FRIENDS & MATCHMAKING",
+                      style: GoogleFonts.outfit(
+                        color: textColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Icon(Icons.people_outline, color: themeColor, size: 20),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Search Bar
+                TextField(
+                  controller: _lunaLinkSearchController,
+                  onChanged: (val) {
+                    setState(() {});
+                  },
+                  decoration: InputDecoration(
+                    hintText: "Search email or username...",
+                    hintStyle: GoogleFonts.outfit(color: textColor38, fontSize: 13),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    suffixIcon: _lunaLinkSearchController.text.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () {
+                              _lunaLinkSearchController.clear();
+                              setState(() {});
+                            },
+                            child: const Icon(Icons.clear, size: 18),
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.all(10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: themeColor.withOpacity(0.2)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: themeColor),
+                    ),
+                  ),
+                ),
+
+                // Search results list
+                if (_lunaLinkSearchController.text.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    "Search Results",
+                    style: GoogleFonts.outfit(color: textColor38, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  ...firebase.searchProfiles(_lunaLinkSearchController.text).map((user) {
+                    final isFriend = firebase.friends.any((f) => f['uid'] == user['uid']);
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundImage: NetworkImage(user['photoUrl'] ?? ''),
+                        radius: 16,
+                      ),
+                      title: Text(user['displayName'] ?? '', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold)),
+                      subtitle: Text(user['email'] ?? '', style: GoogleFonts.outfit(fontSize: 11, color: textColor60)),
+                      trailing: isFriend
+                          ? Text("Friend", style: GoogleFonts.outfit(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold))
+                          : ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: themeColor,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () async {
+                                final sent = await firebase.sendFriendRequest(user);
+                                if (sent) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text("Sent friend request to ${user['displayName']}!")),
+                                  );
+                                }
+                              },
+                              child: Text("Add", style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold)),
+                            ),
+                    );
+                  }).toList(),
+                  if (firebase.searchProfiles(_lunaLinkSearchController.text).isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text("No users found matching query.", style: GoogleFonts.outfit(color: textColor60, fontSize: 12, fontStyle: FontStyle.italic)),
+                    ),
+                  const Divider(height: 24),
+                ],
+
+                // Pending Requests
+                if (firebase.friendRequests.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "Pending Friend Requests",
+                        style: GoogleFonts.outfit(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ...firebase.friendRequests.map((req) {
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundImage: NetworkImage(req['photoUrl'] ?? ''),
+                        radius: 16,
+                      ),
+                      title: Text(req['displayName'] ?? '', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.check_circle, color: Colors.green, size: 24),
+                            onPressed: () => firebase.acceptFriendRequest(req['id']),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.cancel, color: Colors.redAccent, size: 24),
+                            onPressed: () => firebase.rejectFriendRequest(req['id']),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  const Divider(height: 24),
+                ],
+
+                // Friends List
+                const SizedBox(height: 8),
+                Text(
+                  "My Friends",
+                  style: GoogleFonts.outfit(color: textColor38, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                if (firebase.friends.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text("Add friends to pair robots over the cloud database.", style: GoogleFonts.outfit(color: textColor60, fontSize: 12, fontStyle: FontStyle.italic)),
+                  )
+                else
+                  ...firebase.friends.map((friend) {
+                    final isOnline = friend['isOnline'] == true;
+                    final isPaired = firebase.pairedFriendUid == friend['uid'];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Stack(
+                        children: [
+                          CircleAvatar(
+                            backgroundImage: NetworkImage(friend['photoUrl'] ?? ''),
+                            radius: 18,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: isOnline ? Colors.green : Colors.grey,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1.5),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      title: Text(friend['displayName'] ?? '', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold)),
+                      subtitle: Text(
+                        isPaired
+                            ? "Paired Robot Link Active"
+                            : (friend['robotName'] != null
+                                ? "${friend['robotName']} (${friend['robotVariant'] == 'ms_luna' ? 'MS' : 'MR'})"
+                                : "No Robot Registered"),
+                        style: GoogleFonts.outfit(fontSize: 11, color: isPaired ? themeColor : textColor60, fontWeight: isPaired ? FontWeight.bold : FontWeight.normal),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isOnline && friend['robotId'] != null) ...[
+                            IconButton(
+                              icon: Icon(
+                                isPaired ? Icons.cloud_done : Icons.cloud_upload_outlined,
+                                color: isPaired ? Colors.green : themeColor,
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                if (isPaired) {
+                                  firebase.unpairRobot();
+                                } else {
+                                  firebase.pairRobotWithFriend(friend);
+                                }
+                              },
+                              tooltip: isPaired ? "Disconnect Cloud Link" : "Cloud Pair Robots",
+                            ),
+                          ],
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                            onPressed: () => firebase.unfriend(friend['uid']),
+                            tooltip: "Unfriend",
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // CLOUD LOGS
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "SANDBOX CLOUD LOGS",
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF22D3EE),
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      onPressed: () => firebase.clearCloudLogs(),
+                      child: Text("CLEAR", style: GoogleFonts.outfit(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 120,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF090D16),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: ListView.builder(
+                    itemCount: firebase.cloudLogs.length,
+                    itemBuilder: (context, idx) {
+                      return Text(
+                        firebase.cloudLogs[idx],
+                        style: GoogleFonts.firaCode(color: const Color(0xFF38BDF8), fontSize: 10.5),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _showGoogleSignInBottomSheet(BuildContext context, FirebaseService firebase) {
+    final TextEditingController emailController = TextEditingController();
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController robotController = TextEditingController();
+    String selectedVariant = 'mr_luna';
+    String selectedAvatar = 'Sasi';
+
+    final List<Map<String, String>> mockAccounts = [
+      {'name': 'Sasi Dev', 'email': 'sasi.dev@gmail.com', 'avatar': 'Sasi', 'robot': 'LunaMax', 'variant': 'mr_luna'},
+      {'name': 'Alice Owner', 'email': 'alice.luna@gmail.com', 'avatar': 'Alice', 'robot': 'Lumina', 'variant': 'ms_luna'},
+      {'name': 'Bob Tech', 'email': 'bob.luna@gmail.com', 'avatar': 'Bob', 'robot': 'RoboBob', 'variant': 'mr_luna'},
+      {'name': 'Luna Fanatic', 'email': 'luna.fanatic@gmail.com', 'avatar': 'Fanatic', 'robot': 'Rosy', 'variant': 'ms_luna'},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                ),
+              ),
+              padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Sign In with Google",
+                    style: GoogleFonts.outfit(
+                      color: textColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Select a simulated Google Account to login to the cloud sandbox.",
+                    style: GoogleFonts.outfit(
+                      color: textColor60,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // MOCK ACCOUNT LIST
+                  ...mockAccounts.map((acc) {
+                    return Card(
+                      color: Colors.grey.shade50,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage: NetworkImage('https://api.dicebear.com/7.x/adventurer/png?seed=${acc['avatar']}'),
+                          radius: 16,
+                        ),
+                        title: Text(acc['name']!, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold)),
+                        subtitle: Text(acc['email']!, style: GoogleFonts.outfit(fontSize: 11, color: textColor60)),
+                        trailing: Icon(Icons.arrow_forward_ios, size: 12, color: _accentColor),
+                        onTap: () {
+                          firebase.signInWithGoogle(
+                            acc['email']!,
+                            acc['name']!,
+                            acc['avatar']!,
+                            acc['robot']!,
+                            acc['variant']!,
+                          );
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                    );
+                  }).toList(),
+                  const Divider(height: 24),
+                  
+                  // CUSTOM ACCOUNT ACCORDION
+                  Text(
+                    "OR AUTHENTICATE CUSTOM ACCOUNT",
+                    style: GoogleFonts.outfit(
+                      color: textColor38,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: "Display Name",
+                      labelStyle: GoogleFonts.outfit(fontSize: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: emailController,
+                    decoration: InputDecoration(
+                      labelText: "Google Email Address",
+                      labelStyle: GoogleFonts.outfit(fontSize: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: robotController,
+                    decoration: InputDecoration(
+                      labelText: "My Robot Name",
+                      labelStyle: GoogleFonts.outfit(fontSize: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text("Robot Model:", style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 12),
+                      ChoiceChip(
+                        label: Text("Mr. Luna", style: GoogleFonts.outfit(fontSize: 11)),
+                        selected: selectedVariant == 'mr_luna',
+                        onSelected: (val) {
+                          setModalState(() {
+                            selectedVariant = 'mr_luna';
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: Text("Ms. Luna", style: GoogleFonts.outfit(fontSize: 11)),
+                        selected: selectedVariant == 'ms_luna',
+                        onSelected: (val) {
+                          setModalState(() {
+                            selectedVariant = 'ms_luna';
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accentColor,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () {
+                      final email = emailController.text.trim();
+                      final name = nameController.text.trim();
+                      final robot = robotController.text.trim();
+                      if (email.isNotEmpty && name.isNotEmpty && robot.isNotEmpty) {
+                        firebase.signInWithGoogle(email, name, name, robot, selectedVariant);
+                        Navigator.pop(ctx);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Please fill all custom fields.")),
+                        );
+                      }
+                    },
+                    child: Text("AUTHENTICATE CUSTOM", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ================= NEW TAB 4: CALENDAR MANAGEMENT PANEL =================
   Widget _buildCalendarPanel(DatabaseService db, BLEService ble) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -5645,9 +6642,13 @@ class _MainDashboardState extends State<MainDashboard> {
         _buildCompanionsPanel(db, ble),
         const SizedBox(height: 28),
 
+        // 2. Bonding Tap Sequences
+        _buildSectionHeader("Bonding Tap Sequences", Icons.sync_alt, Colors.pink.shade600),
+        const SizedBox(height: 12),
+        _buildRelationshipActionsCard(db, ble),
+        const SizedBox(height: 28),
 
-
-        // 2. Device Configuration
+        // 3. Device Configuration
         _buildSectionHeader("Device Configuration", Icons.settings, Colors.purple.shade600),
         const SizedBox(height: 12),
         _buildChronosPanel(db, ble),
@@ -5657,6 +6658,514 @@ class _MainDashboardState extends State<MainDashboard> {
         _buildHardwarePanel(db, ble),
         const SizedBox(height: 24),
       ],
+    );
+  }
+
+  Widget _buildTapSequenceRow({
+    required String actionLabel,
+    required int selectedExpr,
+    required int selectedSound,
+    required bool targetHasSpeaker,
+    required ValueChanged<int?> onExprChanged,
+    required ValueChanged<int?> onSoundChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              actionLabel,
+              style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.black.withOpacity(0.06)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: selectedExpr,
+                  dropdownColor: Colors.white,
+                  style: GoogleFonts.outfit(color: textColor, fontSize: 12),
+                  icon: const Icon(Icons.arrow_drop_down, color: textColor60, size: 16),
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text("Idle/Blank")),
+                    DropdownMenuItem(value: 1, child: Text("Happy")),
+                    DropdownMenuItem(value: 2, child: Text("Sad")),
+                    DropdownMenuItem(value: 3, child: Text("Angry")),
+                    DropdownMenuItem(value: 4, child: Text("Surprised")),
+                    DropdownMenuItem(value: 5, child: Text("Sleeping")),
+                    DropdownMenuItem(value: 6, child: Text("Wink")),
+                  ],
+                  onChanged: onExprChanged,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: targetHasSpeaker ? Colors.white : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.black.withOpacity(0.06)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: targetHasSpeaker ? selectedSound : 0,
+                  dropdownColor: Colors.white,
+                  style: GoogleFonts.outfit(
+                    color: targetHasSpeaker ? textColor : textColor38,
+                    fontSize: 12,
+                  ),
+                  icon: Icon(
+                    Icons.arrow_drop_down,
+                    color: targetHasSpeaker ? textColor60 : textColor38,
+                    size: 16,
+                  ),
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text("No Sound")),
+                    DropdownMenuItem(value: 1, child: Text("Jump")),
+                    DropdownMenuItem(value: 2, child: Text("Coin")),
+                    DropdownMenuItem(value: 3, child: Text("Power Up")),
+                    DropdownMenuItem(value: 4, child: Text("Power Down")),
+                    DropdownMenuItem(value: 5, child: Text("Game Over")),
+                    DropdownMenuItem(value: 6, child: Text("Chirp")),
+                    DropdownMenuItem(value: 7, child: Text("Startup")),
+                    DropdownMenuItem(value: 8, child: Text("Castle")),
+                    DropdownMenuItem(value: 9, child: Text("Underworld")),
+                    DropdownMenuItem(value: 10, child: Text("Theme Change")),
+                  ],
+                  onChanged: targetHasSpeaker ? onSoundChanged : null,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRelationshipActionsCard(DatabaseService db, BLEService ble) {
+    final bool hasRelationship = db.primaryRobot != null && db.primaryRobot!.companionDeviceId != null;
+    final primaryName = db.primaryRobot?.name ?? "Primary Robot";
+    
+    String companionName = "Companion";
+    if (hasRelationship) {
+      try {
+        companionName = db.robots.firstWhere((r) => r.id == db.primaryRobot!.companionDeviceId).name;
+      } catch (_) {}
+    }
+
+    final primaryHasSpeaker = ble.hasSpeaker;
+    final companionHasSpeaker = ble.companionHasSpeaker;
+
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!hasRelationship) ...[
+            const Center(
+              child: Icon(Icons.favorite_border, color: textColor38, size: 48),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "No relationship configured.\nPair two robots in Friends or Couple mode first to enable interactive tap triggers!",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(color: textColor38, fontSize: 13),
+            ),
+          ] else ...[
+            Text(
+              "RELATIONSHIP COMMUNICATION STATUS",
+              style: GoogleFonts.outfit(color: _accentColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "Enable or disable interactive tap communication for each Luna robot device. If turned off, that robot will not send or react to any relationship triggers.",
+              style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.wifi_tethering, color: ble.isPrimaryCommEnabled ? Colors.green : Colors.grey, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            "$primaryName Communication",
+                            style: GoogleFonts.outfit(color: textColor60, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      Switch(
+                        value: ble.isPrimaryCommEnabled,
+                        activeColor: _accentColor,
+                        onChanged: (val) {
+                          ble.togglePrimaryComm(val);
+                        },
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white10, height: 1),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.wifi_tethering, color: ble.isCompanionCommEnabled ? Colors.green : Colors.grey, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            "$companionName Communication",
+                            style: GoogleFonts.outfit(color: textColor60, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      Switch(
+                        value: ble.isCompanionCommEnabled,
+                        activeColor: _accentColor,
+                        onChanged: (val) {
+                          ble.toggleCompanionComm(val);
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Divider(color: Colors.black12, height: 1),
+            const SizedBox(height: 20),
+            Text(
+              "PRIMARY TAP SEQUENCE (WHEN $primaryName IS TAPPED)",
+              style: GoogleFonts.outfit(color: _accentColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "Configure how companion robot '$companionName' responds when you interact with '$primaryName'.",
+              style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
+            ),
+            const SizedBox(height: 12),
+            _buildTapSequenceRow(
+              actionLabel: "Single Tap",
+              selectedExpr: ble.relPrimaryTapExpr,
+              selectedSound: ble.relPrimaryTapSound,
+              targetHasSpeaker: companionHasSpeaker,
+              onExprChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: val,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+              onSoundChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: val,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+            ),
+            _buildTapSequenceRow(
+              actionLabel: "Double Tap",
+              selectedExpr: ble.relPrimaryDoubleExpr,
+              selectedSound: ble.relPrimaryDoubleSound,
+              targetHasSpeaker: companionHasSpeaker,
+              onExprChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: val,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+              onSoundChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: val,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+            ),
+            _buildTapSequenceRow(
+              actionLabel: "Long Press",
+              selectedExpr: ble.relPrimaryLongExpr,
+              selectedSound: ble.relPrimaryLongSound,
+              targetHasSpeaker: companionHasSpeaker,
+              onExprChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: val,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+              onSoundChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: val,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+            ),
+            if (!companionHasSpeaker) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.volume_mute, color: Colors.orange, size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "Companion '$companionName' has no speaker (Luna v1). Sound triggers are disabled.",
+                      style: GoogleFonts.outfit(color: Colors.orange.shade700, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 24),
+            const Divider(color: Colors.black12, height: 1),
+            const SizedBox(height: 20),
+            Text(
+              "COMPANION TAP SEQUENCE (WHEN $companionName IS TAPPED)",
+              style: GoogleFonts.outfit(color: const Color(0xFFEC4899), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "Configure how primary robot '$primaryName' responds when you interact with '$companionName'.",
+              style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
+            ),
+            const SizedBox(height: 12),
+            _buildTapSequenceRow(
+              actionLabel: "Single Tap",
+              selectedExpr: ble.relCompanionTapExpr,
+              selectedSound: ble.relCompanionTapSound,
+              targetHasSpeaker: primaryHasSpeaker,
+              onExprChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: val,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+              onSoundChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: val,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+            ),
+            _buildTapSequenceRow(
+              actionLabel: "Double Tap",
+              selectedExpr: ble.relCompanionDoubleExpr,
+              selectedSound: ble.relCompanionDoubleSound,
+              targetHasSpeaker: primaryHasSpeaker,
+              onExprChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: val,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+              onSoundChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: val,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+            ),
+            _buildTapSequenceRow(
+              actionLabel: "Long Press",
+              selectedExpr: ble.relCompanionLongExpr,
+              selectedSound: ble.relCompanionLongSound,
+              targetHasSpeaker: primaryHasSpeaker,
+              onExprChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relPrimaryLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: val,
+                    companionLongSound: ble.relCompanionLongSound,
+                  );
+                }
+              },
+              onSoundChanged: (val) {
+                if (val != null) {
+                  ble.saveRelationshipSettings(
+                    primaryTapExpr: ble.relPrimaryTapExpr,
+                    primaryTapSound: ble.relPrimaryTapSound,
+                    primaryDoubleExpr: ble.relPrimaryDoubleExpr,
+                    primaryDoubleSound: ble.relPrimaryDoubleSound,
+                    primaryLongExpr: ble.relPrimaryLongExpr,
+                    primaryLongSound: ble.relCompanionLongSound,
+                    companionTapExpr: ble.relCompanionTapExpr,
+                    companionTapSound: ble.relCompanionTapSound,
+                    companionDoubleExpr: ble.relCompanionDoubleExpr,
+                    companionDoubleSound: ble.relCompanionDoubleSound,
+                    companionLongExpr: ble.relCompanionLongExpr,
+                    companionLongSound: val,
+                  );
+                }
+              },
+            ),
+            if (!primaryHasSpeaker) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.volume_mute, color: Colors.orange, size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "Primary '$primaryName' has no speaker (Luna v1). Sound triggers are disabled.",
+                      style: GoogleFonts.outfit(color: Colors.orange.shade700, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 }

@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  firebase_core: ^2.32.0
+  firebase_auth: ^4.19.6
+  google_sign_in: ^6.2.1
   flutter_blue_plus: ^1.31.0
   shared_preferences: ^2.2.2
   path_provider: ^2.1.1

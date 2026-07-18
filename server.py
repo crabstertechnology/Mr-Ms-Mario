@@ -232,15 +232,21 @@ class DualStackServer(http.server.SimpleHTTPRequestHandler):
 
 # ----------------- WEBSOCKET SERVER -----------------
 async def ws_handler(websocket):
-    path = getattr(websocket, 'path', '/')
+    path = getattr(websocket, 'path', None)
+    if path is None and hasattr(websocket, 'request'):
+        path = websocket.request.path
+    if path is None:
+        path = '/'
+    print(f"[WS Debug] Path: {path}")
     parsed_url = urllib.parse.urlparse(path)
     params = urllib.parse.parse_qs(parsed_url.query)
+    print(f"[WS Debug] Params: {params}")
     
     mac = params.get('mac', [None])[0]
     variant = params.get('variant', ['mr_luna'])[0]
     
     if not mac:
-        print("[WS Server] Closed connection: Missing 'mac' parameter.")
+        print(f"[WS Server] Closed connection: Missing 'mac' parameter (path={path}).")
         await websocket.close()
         return
         

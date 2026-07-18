@@ -8,7 +8,7 @@
 #include "config.h"
 #include "freertos/ringbuf.h"
 
-#define TX_RING_BUFFER_SIZE 65536
+#define TX_RING_BUFFER_SIZE 32768
 
 struct Note {
   uint16_t frequency;

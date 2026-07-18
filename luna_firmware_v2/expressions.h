@@ -80,6 +80,7 @@ private:
   String popupBody;
 
 public:
+  String headerText;
   LunaFace(TFT_eSprite& disp) 
     : display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
     currentFrame = 0;
@@ -111,6 +112,7 @@ public:
     popupDuration = 5000;
     popupTitle = "";
     popupBody = "";
+    headerText = "";
 
     for (int i = 0; i < 5; i++) {
       notificationHistory[i].active = false;
@@ -1513,6 +1515,21 @@ public:
           drawMapScreenLandscape(hour, minute, is12Hour);
           break;
       }
+    }
+
+    if (!popupActive && currentScreen == SCREEN_FACE && headerText.length() > 0) {
+      display.fillRect(0, 0, SCREEN_WIDTH, 24, TFT_BLACK);
+      display.setTextColor(TFT_WHITE);
+      display.setTextSize(2);
+      
+      // Center the header text
+      int textW = headerText.length() * 12;
+      int startX = (SCREEN_WIDTH - textW) / 2;
+      if (startX < 0) startX = 0;
+      
+      display.setCursor(startX, 4);
+      display.print(headerText);
+      display.drawFastHLine(0, 24, SCREEN_WIDTH, TFT_WHITE);
     }
     
     display.pushSprite(0, 0);

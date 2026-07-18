@@ -1,22 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'services/bluetooth_service.dart';
 import 'services/database_service.dart';
 import 'services/notification_service.dart';
 import 'services/audio_stream_service.dart';
+import 'services/firebase_service.dart';
 import 'screens/main_dashboard.dart';
 import 'screens/splash_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint("Firebase initialization failed: $e");
+  }
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => DatabaseService()),
         ChangeNotifierProvider(create: (_) => BLEService()),
         ChangeNotifierProvider(create: (_) => AudioStreamService()),
+        ChangeNotifierProvider(create: (_) => FirebaseService()),
         ProxyProvider2<BLEService, DatabaseService, PhoneNotificationService>(
           create: (context) => PhoneNotificationService(
             Provider.of<BLEService>(context, listen: false),
