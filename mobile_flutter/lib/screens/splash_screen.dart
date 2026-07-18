@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'main_dashboard.dart';
+import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -38,12 +40,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _animationController.forward();
 
-    // Navigate to MainDashboard after exactly 4 seconds
+    // Check login state and navigate after 4 seconds
     Timer(const Duration(seconds: 4), () {
       if (mounted) {
+        final bool isAlreadyLoggedIn = FirebaseAuth.instance.currentUser != null;
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const MainDashboard(),
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                isAlreadyLoggedIn ? const MainDashboard() : const LoginScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return FadeTransition(
                 opacity: animation,

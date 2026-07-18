@@ -287,6 +287,13 @@ public:
   }
 
   void setExpression(Expression expr) {
+    if ((int)expr >= 100) {
+      int gifIdx = (int)expr - 100;
+      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
+        setGifIndex(gifIdx);
+        expr = EXPR_ALL_GIF;
+      }
+    }
     if (currentExpr == expr) return;
     targetExpr = expr;
     currentExpr = expr;

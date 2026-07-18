@@ -49,133 +49,81 @@ class FirebaseService with ChangeNotifier {
   }
 
   Future<void> _initService() async {
-    final prefs = await SharedPreferences.getInstance();
-    _useLiveConfig = prefs.getBool("firebase_use_live_config") ?? false;
+    _useLiveConfig = true; // Always use Live Firebase Database!
     
-    // Load currentUser if saved
-    final userJson = prefs.getString("firebase_current_user");
-    if (userJson != null) {
+    // Check real Firebase Auth status
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser != null) {
+      final uid = firebaseUser.uid;
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString("firebase_current_user");
+      if (userJson != null) {
+        try {
+          _currentUser = jsonDecode(userJson);
+        } catch (_) {}
+      }
+      
+      if (_currentUser == null) {
+        _currentUser = {
+          'uid': uid,
+          'email': firebaseUser.email ?? '',
+          'displayName': firebaseUser.displayName ?? 'Luna User',
+          'photoUrl': firebaseUser.photoURL ?? 'https://api.dicebear.com/7.x/adventurer/png?seed=$uid',
+          'robotId': 'ROBOT_$uid',
+          'robotName': 'My Luna',
+          'robotVariant': 'mr_luna',
+          'isOnline': true,
+        };
+      } else {
+        _currentUser!['isOnline'] = true;
+      }
+      
       try {
-        _currentUser = jsonDecode(userJson);
+        final url = Uri.parse("$_firebaseUrl/users/$uid.json");
+        await http.put(url, body: jsonEncode(_currentUser));
       } catch (_) {}
     }
     
     // Load remote pairing info
+    final prefs = await SharedPreferences.getInstance();
     _pairedFriendUid = prefs.getString("firebase_paired_friend_uid");
     _pairedFriendRobotId = prefs.getString("firebase_paired_friend_robot_id");
     _pairedFriendRobotName = prefs.getString("firebase_paired_friend_robot_name");
     _pairedFriendRobotVariant = prefs.getString("firebase_paired_friend_robot_variant");
 
-    // Initialize mock database users
-    _setupMockDatabase();
-    
     // Load friends/requests from local storage
     _loadFriendsData();
 
     _startLivePolling();
   }
 
-  void _setupMockDatabase() {
-    _registeredUsers = [
-      {
-        'uid': 'alice_123',
-        'email': 'alice.luna@gmail.com',
-        'displayName': 'Alice',
-        'photoUrl': 'https://api.dicebear.com/7.x/adventurer/png?seed=Alice',
-        'robotId': 'MS_LUNA_ALICE',
-        'robotName': 'Lumina',
-        'robotVariant': 'ms_luna',
-        'isOnline': true,
-      },
-      {
-        'uid': 'bob_456',
-        'email': 'bob.luna@gmail.com',
-        'displayName': 'Bob',
-        'photoUrl': 'https://api.dicebear.com/7.x/adventurer/png?seed=Bob',
-        'robotId': 'MR_LUNA_BOB',
-        'robotName': 'RoboBob',
-        'robotVariant': 'mr_luna',
-        'isOnline': false,
-      },
-      {
-        'uid': 'sasi_789',
-        'email': 'sasi.dev@gmail.com',
-        'displayName': 'Sasi Dev',
-        'photoUrl': 'https://api.dicebear.com/7.x/adventurer/png?seed=Sasi',
-        'robotId': 'MR_LUNA_SASI',
-        'robotName': 'LunaMax',
-        'robotVariant': 'mr_luna',
-        'isOnline': true,
-      },
-      {
-        'uid': 'luna_fan_99',
-        'email': 'luna.fanatic@gmail.com',
-        'displayName': 'Luna Fanatic',
-        'photoUrl': 'https://api.dicebear.com/7.x/adventurer/png?seed=Fanatic',
-        'robotId': 'MS_LUNA_FAN',
-        'robotName': 'Rosy',
-        'robotVariant': 'ms_luna',
-        'isOnline': true,
-      },
-      {
-        'uid': 'google_eng_0',
-        'email': 'google.engineer@gmail.com',
-        'displayName': 'Google Eng',
-        'photoUrl': 'https://api.dicebear.com/7.x/adventurer/png?seed=Google',
-        'robotId': 'MR_LUNA_GOOG',
-        'robotName': 'Tensor',
-        'robotVariant': 'mr_luna',
-        'isOnline': true,
-      }
-    ];
-  }
-
   Future<void> _loadFriendsData() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // Load friends
+    // Load friends (no mock defaults)
     final friendsJson = prefs.getString("firebase_friends_list");
     if (friendsJson != null) {
       try {
         final List<dynamic> list = jsonDecode(friendsJson);
         _friends = list.map((item) => Map<String, dynamic>.from(item)).toList();
-      } catch (_) {}
+      } catch (_) {
+        _friends = [];
+      }
     } else {
-      _friends = [
-        {
-          'uid': 'sasi_789',
-          'email': 'sasi.dev@gmail.com',
-          'displayName': 'Sasi Dev',
-          'photoUrl': 'https://api.dicebear.com/7.x/adventurer/png?seed=Sasi',
-          'robotId': 'MR_LUNA_SASI',
-          'robotName': 'LunaMax',
-          'robotVariant': 'mr_luna',
-          'isOnline': true,
-        }
-      ];
+      _friends = [];
     }
 
-    // Load friend requests
+    // Load friend requests (no mock defaults)
     final requestsJson = prefs.getString("firebase_requests_list");
     if (requestsJson != null) {
       try {
         final List<dynamic> list = jsonDecode(requestsJson);
         _friendRequests = list.map((item) => Map<String, dynamic>.from(item)).toList();
-      } catch (_) {}
+      } catch (_) {
+        _friendRequests = [];
+      }
     } else {
-      _friendRequests = [
-        {
-          'id': 'req_alice',
-          'fromUid': 'alice_123',
-          'email': 'alice.luna@gmail.com',
-          'displayName': 'Alice',
-          'photoUrl': 'https://api.dicebear.com/7.x/adventurer/png?seed=Alice',
-          'robotId': 'MS_LUNA_ALICE',
-          'robotName': 'Lumina',
-          'robotVariant': 'ms_luna',
-          'timestamp': DateTime.now().subtract(const Duration(minutes: 5)).toIso8601String(),
-        }
-      ];
+      _friendRequests = [];
     }
     notifyListeners();
   }
@@ -187,10 +135,8 @@ class FirebaseService with ChangeNotifier {
   }
 
   Future<void> toggleLiveConfig(bool value) async {
-    _useLiveConfig = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool("firebase_use_live_config", value);
-    addCloudLog("Toggled mode: ${value ? 'LIVE FIREBASE' : 'LOCAL SANDBOX'}");
+    // Keep it always true to enforce live mode as requested
+    _useLiveConfig = true;
     notifyListeners();
   }
 
@@ -601,14 +547,23 @@ class FirebaseService with ChangeNotifier {
   }
 
   // Send Cloud Trigger (e.g. Tap Sequence Expression / SFX)
-  Future<void> sendCloudTrigger(String eventType, int expr, int sound) async {
+  Future<void> sendCloudTrigger(String eventType, int expr, int sound, {String? customLabel}) async {
     if (_pairedFriendUid == null) return;
     
+    // Update active streak on interaction
+    if (_useLiveConfig) {
+      await updateStreak(_pairedFriendUid!);
+    }
+    
     final senderName = _currentUser != null ? _currentUser!['displayName'] : "Luna Owner";
-    addCloudLog("Cloud Send: $eventType trigger -> '${_pairedFriendRobotName}' (Expr: $expr, Sound: $sound)");
     
     final expressions = ["HAPPY", "SAD", "ANGRY", "SURPRISED", "SLEEPING", "WINK"];
-    final reactionExprLabel = (expr >= 1 && expr <= expressions.length) ? expressions[expr - 1] : "HAPPY";
+    String reactionExprLabel = (expr >= 1 && expr <= expressions.length) ? expressions[expr - 1] : "HAPPY";
+    if (customLabel != null && customLabel.isNotEmpty) {
+      reactionExprLabel = customLabel.toUpperCase();
+    }
+    
+    addCloudLog("Cloud Send: $eventType trigger -> '${_pairedFriendRobotName}' ($reactionExprLabel)");
 
     if (_useLiveConfig) {
       try {
@@ -644,6 +599,95 @@ class FirebaseService with ChangeNotifier {
         addCloudLog("Cloud Receive: '${_pairedFriendRobotName}' reacted with expression $reactionExprLabel and Sound $reactionSoundId!");
       });
     }
+  }
+
+  // Snapchat-style streak maintenance: updates last active date and increments streak
+  Future<void> updateStreak(String friendUid) async {
+    if (_currentUser == null) return;
+    final myUid = _currentUser!['uid'];
+    
+    try {
+      final myFriendUrl = Uri.parse("$_firebaseUrl/friends/$myUid/$friendUid.json");
+      final res = await http.get(myFriendUrl);
+      if (res.statusCode == 200 && res.body != "null") {
+        final friendData = jsonDecode(res.body) as Map<String, dynamic>;
+        final todayStr = DateTime.now().toLocal().toString().split(' ')[0]; // YYYY-MM-DD
+        
+        int currentStreak = 0;
+        String? lastActiveDate;
+        
+        if (friendData.containsKey('streak')) {
+          final streakMap = friendData['streak'] as Map<String, dynamic>;
+          currentStreak = streakMap['streakCount'] ?? 0;
+          lastActiveDate = streakMap['lastActiveDate'];
+        }
+        
+        if (lastActiveDate == todayStr) {
+          // Already interacted today
+          return;
+        }
+        
+        if (lastActiveDate != null) {
+          final lastDate = DateTime.parse(lastActiveDate);
+          final todayDate = DateTime.parse(todayStr);
+          final diffDays = todayDate.difference(lastDate).inDays;
+          
+          if (diffDays == 1) {
+            currentStreak += 1;
+          } else {
+            currentStreak = 1;
+          }
+        } else {
+          currentStreak = 1;
+        }
+        
+        final updatedStreak = {
+          'streakCount': currentStreak,
+          'lastActiveDate': todayStr,
+        };
+        
+        // Update user's local record of the friend
+        friendData['streak'] = updatedStreak;
+        await http.put(myFriendUrl, body: jsonEncode(friendData));
+        
+        // Update target friend's record of the user
+        final targetFriendUrl = Uri.parse("$_firebaseUrl/friends/$friendUid/$myUid.json");
+        final targetRes = await http.get(targetFriendUrl);
+        if (targetRes.statusCode == 200 && targetRes.body != "null") {
+          final targetFriendData = jsonDecode(targetRes.body) as Map<String, dynamic>;
+          targetFriendData['streak'] = updatedStreak;
+          await http.put(targetFriendUrl, body: jsonEncode(targetFriendData));
+        }
+        
+        addCloudLog("Streak with '$friendUid' updated: 🔥 $currentStreak");
+      }
+    } catch (e) {
+      addCloudLog("Streak update error: $e");
+    }
+  }
+
+  // Update User Profile metadata
+  Future<void> updateUserProfile(String displayName, String robotName, String robotVariant) async {
+    if (_currentUser == null) return;
+    
+    _currentUser!['displayName'] = displayName;
+    _currentUser!['robotName'] = robotName;
+    _currentUser!['robotVariant'] = robotVariant;
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("firebase_current_user", jsonEncode(_currentUser));
+    
+    final uid = _currentUser!['uid'];
+    if (_useLiveConfig) {
+      try {
+        final url = Uri.parse("$_firebaseUrl/users/$uid.json");
+        await http.put(url, body: jsonEncode(_currentUser));
+        addCloudLog("Updated user profile on Live Database.");
+      } catch (e) {
+        addCloudLog("Profile update error: $e");
+      }
+    }
+    notifyListeners();
   }
 
   void addCloudLog(String message) {

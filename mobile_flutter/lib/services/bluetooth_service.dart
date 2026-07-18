@@ -1090,6 +1090,13 @@ class BLEService with ChangeNotifier {
   }
 
   String _getExpressionLabel(int exprId) {
+    if (exprId >= 100) {
+      final idx = exprId - 100;
+      final keys = DatabaseService.animMapping.keys.toList();
+      if (idx >= 0 && idx < keys.length) {
+        return DatabaseService.animMapping[keys[idx]]!['label'] as String;
+      }
+    }
     switch (exprId) {
       case 1: return "HAPPY";
       case 2: return "SAD";
@@ -1206,13 +1213,14 @@ class BLEService with ChangeNotifier {
     }
   }
 
-  void handleRemoteCloudTrigger(int expr, int sound, String friendName, String eventType) {
+  void handleRemoteCloudTrigger(int expr, int sound, String friendName, String eventType, {String? customLabel}) {
     _activeExpressionId = expr;
-    _activeExpressionLabel = _getExpressionLabel(expr);
+    _activeExpressionLabel = customLabel ?? _getExpressionLabel(expr);
     if (hasSpeaker) {
       transmitAudio(sound);
     }
-    transmitPrimaryNotification(friendName, "$eventType Action", expr: expr);
+    transmitExpression(_activeExpressionId, _activeExpressionLabel);
+    transmitPrimaryNotification(friendName, _activeExpressionLabel.toUpperCase(), expr: expr);
     notifyListeners();
   }
 

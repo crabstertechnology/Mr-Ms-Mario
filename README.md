@@ -1,114 +1,134 @@
-# 🌙 Mr.&Ms Luna: The Ultimate Interactive Desktop Companion Robots
+# 🌙 Mr.&Ms Luna: Interactive Desktop Companion Robots
 
-Welcome to the future of interactive desktop companions! Meet **Mr. Luna** and **Ms. Luna**, a pair of smart, expressive, and connected desk toy robots designed to bring personality, utility, and joy to your workspace. 
-
-Whether you want a charming digital assistant to relay your phone's notifications, a whimsical alarm clock, or a real-time emotional bridge to a loved one's desk, Mr.&Ms Luna are here to light up your day.
+Welcome to the official repository for **Mr. Luna** and **Ms. Luna**, a pair of smart, expressive, and connected desktop companion robots designed to bridge communication, display notifications, and bring dynamic animations to your workspace.
 
 ---
 
-## 🚀 What is Mr.&Ms Luna? (The Use Cases)
+## 🚀 System Architecture & Interaction Flow
 
-Mr.&Ms Luna are more than just static ornaments; they are dynamic companions designed for several key purposes:
+Mr.&Ms Luna utilizes a hybrid communication network comprising **Bluetooth Low Energy (BLE)** for local phone-to-robot communication and **Google Firebase Realtime Database** for internet-wide matchmaking and remote synchronization.
 
-*   **Desk Companionship & Stress Relief:** With over 63 unique facial expressions rendered on a crisp OLED display and synchronized classic sound effects, they react dynamically to your touch, keeping your workspace lively and interactive.
-*   **Smart Desktop Assistant:** Connect them to your phone to receive real-time, glanceable updates. Read scrolling text notifications, track meetings, manage alarms, and even view turn-by-turn Google Maps navigation without touching your phone.
-*   **Duo Sync (Long-Distance Connection):** Pair a Mr. Luna and a Ms. Luna together. They can communicate over Wi-Fi, mirroring expressions and sending romantic or friendly reactions across desks—whether in the same room or across the globe.
-*   **Hacker-Friendly Open Source Project:** Built on the powerful **ESP32-C3 SuperMini** microcontroller, they are completely open-source and customizable. Easily flash new firmware, design custom bitmap animations, or program new interactive behaviors.
+### 🌐 End-to-End Remote Gesture Playback Flow
 
----
+The diagram below details the entire data journey when a user interacts with their local robot (Sender) and triggers a synced expression on their partner's robot (Receiver).
 
-## 👥 Who are They For?
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Sender as Sender User
+    participant SR as Sender Robot (V1/V2)
+    participant SA as Sender App (Flutter)
+    participant FB as Firebase Realtime DB
+    participant RA as Receiver App (Flutter)
+    participant RR as Receiver Robot (V1/V2)
 
-*   **Couples & Partners (Couple Mode):** The ultimate gift for long-distance or co-working couples. In Couple Mode, the robots share a heartbeat, trigger romantic expressions (like heart-eyes and winks), and play sweet chimes. When you tap your robot, your partner's robot responds!
-*   **Best Friends & Besties (Friends Mode):** Perfect for sharing with a close friend. Sync your robots to coordinate friendly greetings, send messages, and share chimes.
-*   **Tech Enthusiasts & Makers:** A dream project for anyone interested in IoT, Arduino, Flutter, BLE, or hardware hacking. The clean separation of hardware firmware and mobile app provides a great learning playground.
-*   **Professionals & Work-from-Home Heroes:** Anyone looking to spruce up their desk setup. It helps you stay focused by filtering important phone notifications right to your peripheral vision.
-
----
-
-## 🌟 Feature Breakdown
-
-### 1. Expressive OLED Display (63+ Animations)
-Equipped with an SSD1306 128x64 display, the robots render smooth, high-speed procedural and bitmap eye animations:
-*   **Dynamic Expressions:** Happy, Sad, Angry, Surprised, Wink, and Sleeping states.
-*   **Preloaded Library:** A built-in table of 63 detailed GIF-style animations (e.g., eye roll, looking around, squinting).
-*   **Custom Labels:** Display custom status messages alongside expressions.
-
-### 2. Multi-Gesture Touch Sensor
-Interact naturally with a simple touch! The capacitive touch sensor supports:
-*   **Single Tap:** Wink reaction, quick audio chirp, or skip to a random animation.
-*   **Double Tap:** Plays a classic coin chime and triggers a Happy face reaction.
-*   **Long Press:** Manually toggle the robot's sleep cycle.
-*   **Alarm Dismissal:** Silence active alarms or reminders with a single tap.
-
-### 3. Integrated Audio Synthesizer
-A non-blocking piezo buzzer synthesizer outputs charming melodies tailored to the robot's state:
-*   Includes chimes for *Power-up*, *Power-down*, *Jump*, *Coin*, *Game Over*, *Chirp*, and *Startup*.
-
-### 4. Smart Notification & Navigation Mirroring
-Relay phone alerts directly to your desk companion:
-*   **App Notifications:** View incoming messages (WhatsApp, Slack, SMS) in marquee-scrolling format.
-*   **Turn-by-Turn Navigation:** Displays custom direction icons (L/R arrows) and remaining distance from Google Maps.
-*   **Calendar Reminders:** Sounds alerts for upcoming meetings and birthdays.
-*   **Alarms:** Synchronized desktop alarm clock that rings and flashes when your phone alarm goes off.
-
-### 5. Companion Pairing & Relationship Engine
-Pair Mr.&Ms Luna through the mobile app and configure:
-*   **Besties (Friends Mode):** For synchronized play and shared notifications.
-*   **Partners (Couple Mode):** For intimate sharing, romantic chimes, and shared heart animations.
-
-### 6. AI Companion Chat
-Use the Flutter companion app to send messages or ask questions to your AI Companion. The robot will display responses on its screen.
-
-### 7. Smart Power Management
-*   **Auto-Sleep:** Automatically enters sleep mode after 45 seconds of inactivity to conserve battery power.
-*   **Instant Wake:** Tapping the touch sensor instantly wakes the robot up.
+    Sender->>SR: Tap Capacitive Touch Sensor
+    Note over SR: Detects TOUCH_TAP<br/>Looks up relTapExpr (e.g. 105 / ADORE)
+    SR->>SR: Play local expression (ADORE)
+    SR-->>SA: Send BLE Log "TOUCH_REL:TAP|105|2" (Expr|Sound)
+    Note over SA: onPrimaryTouchTriggered catches log<br/>Resolves label "ADORE" from animMapping
+    SA-->>FB: Write trigger {eventType: "TAP", exprLabel: "ADORE", soundId: 2}
+    Note over FB: Live Stream trigger updates
+    FB-->>RA: Push remoteTrigger event
+    Note over RA: Resolves "ADORE" to expression ID 105<br/>Calls handleRemoteCloudTrigger
+    RA-->>RR: Send BLE Command "NOTIF_EXPR:Sender - TAP Action|105"
+    Note over RR: setExpression(105) decodes index >= 100<br/>Loads ADORE GIF (index 5) from ALL_GIFS_TABLE
+    RR->>RR: Play ADORE GIF & sound (Coin)
+```
 
 ---
 
-## 🛠️ How It Works (Technical Overview)
+## 🌟 Core Features & Functional Logic
 
-The ecosystem is split into three main components:
-1.  **Firmware (`luna_firmware/`):** C++ Arduino code running on the ESP32-C3 SuperMini. Controls the SSD1306 screen, Buzzer, Touch Pin, BLE server, and Wi-Fi WebSockets client.
-2.  **Companion App (`mobile_flutter/`):** A beautiful cross-platform Flutter application (iOS/Android) featuring Glassmorphic styling, BLE device management, Wi-Fi configuration, notification listener, and calendar/chat integration.
-3.  **Local broker server (`server.py`):** A Python-based WebSocket and HTTP broker to route messages, bridge Wi-Fi-enabled robots, and support compilation workflows.
+### 1. Google Firebase Authentication & Live Matchmaking
+*   **Startup Login Screen:** Secure login/registration screen on app startup utilizing Google Firebase Auth.
+*   **Live User Discovery:** Real-time online user directory allowing users to search by email, send/accept/decline invites, and pair their desktop companions.
 
----
+### 2. Snapchat-Style Daily Streaks (`🔥`)
+*   **Streak Tracker:** Interacting with your paired companion daily increments your streak.
+*   **Streak Reset Protection:** The streak value is synchronized directly in the Firebase Database under the `friends` nodes and renders dynamically with a `🔥` badge in the dashboard.
 
-## ⚡ Quick Start Guide
+### 3. Master GIF Library (63 Custom Animations)
+*   **Bitmap Arrays:** Inside `mochi_bitmaps.h`, 63 high-fidelity bitmap sequences are stored in `PROGMEM` (`ALL_GIFS_TABLE`).
+*   **App Seeding:** The companion Flutter app loads this list alphabetically via `DatabaseService.animMapping` keys.
+*   **Categories & Sounds:** Custom animations (e.g., `"adore"`, `"furious"`, `"giggle"`) are mapped to default sound indexes (0 to 10).
 
-### 1. Flash the Firmware
-*   **Arduino IDE:** Open `luna_firmware/luna_firmware.ino`. Select `ESP32C3 Dev Module` as your board, ensure `Adafruit SSD1306` and `Adafruit GFX` libraries are installed, and hit upload.
-*   **PlatformIO:** Use the provided configurations to compile and upload via VS Code.
-*   **Web Flashing:** Open the companion web dashboard, navigate to the Flasher tab, connect the ESP32 via USB, and write the binary partitions directly.
-
-### 2. Connect the Mobile App
-1.  Launch the **Flutter Mobile App** on your smartphone.
-2.  Turn on Bluetooth and pair with **"Mr. Luna Robot"** or **"Ms. Luna Robot"**.
-3.  Use the App Dashboard to configure your home Wi-Fi SSID and password. Once saved, the robot will automatically transition to Wi-Fi/WebSocket control.
-4.  Activate the **Notification Listener Service** inside the app settings to start forwarding notifications and navigation events!
-
-### 3. Pair Companions
-*   Pair a second robot in the app.
-*   Go to **Robot Relationship Settings** and select **Friends Mode** or **Couple Mode** to sync Mr.&Ms Luna!
+### 4. Custom Gesture Touch Mapping
+*   **Capacitive Gestures:** Supports **Single Tap**, **Double Tap**, **Triple Tap**, and **Long Press**.
+*   **Offline/Standalone Settings:** If not paired, the app configures local options (e.g. show clock, cycle animations).
+*   **Couple/Friends Settings:** When paired, the app configures relationship tap sequences that sync expression IDs (base `0-6` or custom `100-162`) to the local robot via BLE.
 
 ---
 
-## 📂 Project Structure
+## 🛠️ Hardware & Firmware Architectures
+
+| Feature | Version 1 (`luna_firmware/`) | Version 2 (`luna_firmware_v2/`) |
+| :--- | :--- | :--- |
+| **Microcontroller** | ESP32-C3 (SuperMini) | ESP32-S3 (LOLIN S3 Mini) |
+| **Display Support** | SSD1306 OLED (128x64) | Premium Smartwatch UI (SH1106/SSD1306) |
+| **UI Screens** | Companion Eyes Face, Clock, Text Scroll | Face, Calendar Grid, Google Maps, Notifications, Clock Styles, settings |
+| **Buzzer Melodies** | Non-blocking Piezo Synthesizer | Non-blocking Piezo Synthesizer |
+| **Pairing Intercept** | Prevents clock screen switch on active pairing | Prevents clock screen switch on active pairing |
+
+---
+
+## 📂 Project Organization
+
+Unwanted test files and duplicates have been cleaned up to maintain a clean project root:
 
 ```
-├── luna_firmware/       # C++ Arduino firmware for ESP32-C3 SuperMini
-│   ├── config.h          # Pins, UUIDs, sound/expression definitions
-│   ├── expressions.h     # OLED render loop & bitmap helpers
-│   ├── audio.h           # Non-blocking buzzer melody player
-│   ├── bluetooth.h       # BLE GATT Server callbacks
-│   └── luna_network.h   # Wi-Fi WebSockets and HTTP client
-├── mobile_flutter/       # Cross-platform Flutter companion application
-│   ├── lib/screens/      # Dashboard and custom UI widgets
-│   └── lib/services/     # BLE, local SQLite database, and Notification relayer
-├── server.py             # Python-based web app host & WebSocket router
-└── README.md             # This document!
+├── luna_firmware/         # C++ Arduino firmware for ESP32-C3 (V1)
+│   ├── luna_firmware.ino  # Main hardware routine (BLE, touch, buzzer)
+│   ├── expressions.h      # Procedural & master GIF rendering face classes
+│   └── mochi_bitmaps.h    # 63 custom PROGMEM bitmap tables
+│
+├── luna_firmware_v2/      # Smartwatch UI C++ Arduino firmware for ESP32-S3 (V2)
+│   ├── luna_firmware_v2.ino
+│   ├── expressions.h      # Includes notification, calendar, and map drawers
+│   └── mochi_bitmaps.h
+│
+├── mobile_flutter/        # Flutter Cross-Platform App
+│   ├── lib/screens/       # login_startup, main_dashboard, matchmaking screens
+│   ├── lib/services/      # firebase_service, bluetooth_service, database_service
+│   └── pubspec.yaml
+│
+├── analyze_gifs.py        # Extracts timing metadata from raw GIF assets
+├── convert_mochi_gifs.py  # Converts raw GIF animations into C++ PROGMEM byte arrays
+├── flash_server.py        # Web-based local flashing server (serves flash_dashboard)
+├── flash_tool.py          # Command line serial programmer utility
+└── README.md              # This documentation!
 ```
+
+---
+
+## ⚡ Quick-Start Guide (Compilation & Flashing)
+
+Ensure you have the `arduino-cli` utility installed and configured.
+
+### 1. Flash Version 1 (ESP32-C3)
+Compile and upload with the custom partition scheme `huge_app` to accommodate the 63 high-fidelity bitmap assets:
+
+```powershell
+# Compile sketch
+arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc luna_firmware
+
+# Upload/Flash to COM port
+arduino-cli upload -p COM6 --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc luna_firmware
+```
+
+### 2. Flash Version 2 (ESP32-S3)
+Compile and upload to the ESP32-S3 smartwatch board:
+
+```powershell
+# Compile sketch
+arduino-cli compile --fqbn esp32:esp32:lolin_s3_mini:PartitionScheme=huge_app,CDCOnBoot=cdc luna_firmware_v2
+
+# Upload/Flash to COM port
+arduino-cli upload -p COM9 --fqbn esp32:esp32:lolin_s3_mini:PartitionScheme=huge_app,CDCOnBoot=cdc luna_firmware_v2
+```
+
+> [!IMPORTANT]
+> Both firmware versions utilize `PartitionScheme=huge_app` configuration. Standard partition mapping will fail compilation due to binary sizes.
 
 ---
 

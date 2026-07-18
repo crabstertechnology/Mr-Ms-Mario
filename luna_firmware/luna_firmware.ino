@@ -763,6 +763,32 @@ void cycleExpression() {
   Serial.println(" frames)");
 }
 
+String getExpressionName(int expr) {
+  if (expr >= 100) {
+    int gifIndex = expr - 100;
+    if (gifIndex >= 0 && gifIndex < ALL_GIFS_COUNT) {
+      char nameBuf[32];
+      strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIndex].name));
+      String name = String(nameBuf);
+      name.toUpperCase();
+      return name;
+    }
+  }
+  switch (expr) {
+    case 0: return "IDLE";
+    case 1: return "HAPPY";
+    case 2: return "SAD";
+    case 3: return "ANGRY";
+    case 4: return "SURPRISED";
+    case 5: return "SLEEPING";
+    case 6: return "WINK";
+    case 7: return "TEXT";
+    case 8: return "CLOCK";
+    case 9: return "MAP";
+    default: return "HAPPY";
+  }
+}
+
 void executeTouchAction(int actionType, TouchEvent eventType) {
   if (actionType == 0) {
     // Default reaction
@@ -899,7 +925,7 @@ void loop() {
         String logMsg = "TOUCH_REL:TAP|" + String(relTapExpr) + "|" + String(relTapSound);
         ble.sendLog(logMsg);
         Serial.println(logMsg);
-        face.headerText = "Sent: Single Tap";
+        face.headerText = "Sent: " + getExpressionName(relTapExpr);
       } else {
         face.headerText = "";
       }
@@ -910,7 +936,7 @@ void loop() {
         String logMsg = "TOUCH_REL:DOUBLE|" + String(relDoubleExpr) + "|" + String(relDoubleSound);
         ble.sendLog(logMsg);
         Serial.println(logMsg);
-        face.headerText = "Sent: Double Tap";
+        face.headerText = "Sent: " + getExpressionName(relDoubleExpr);
       } else {
         face.headerText = "";
       }
@@ -921,8 +947,8 @@ void loop() {
         String logMsg = "TOUCH_REL:TRIPLE|" + String(relTripleExpr) + "|" + String(relTripleSound);
         ble.sendLog(logMsg);
         Serial.println(logMsg);
-        face.headerText = "Sent: Triple Tap";
-      } {
+        face.headerText = "Sent: " + getExpressionName(relTripleExpr);
+      } else {
         face.headerText = "";
       }
       face.setExpression(isRelationCommEnabled ? (Expression)relTripleExpr : EXPR_SURPRISED);
@@ -932,7 +958,7 @@ void loop() {
         String logMsg = "TOUCH_REL:LONG|" + String(relLongExpr) + "|" + String(relLongSound);
         ble.sendLog(logMsg);
         Serial.println(logMsg);
-        face.headerText = "Sent: Long Press";
+        face.headerText = "Sent: " + getExpressionName(relLongExpr);
       } else {
         face.headerText = "";
       }
@@ -1061,7 +1087,9 @@ void loop() {
             touchCount += 2;
             Serial.print("Touch count (Double Tap): ");
             Serial.println(touchCount);
-            executeTouchAction(touchDouble, TOUCH_DOUBLE_TAP);
+            if (!isRelationCommEnabled) {
+              executeTouchAction(touchDouble, TOUCH_DOUBLE_TAP);
+            }
             break;
 
           case TOUCH_TRIPLE_TAP:

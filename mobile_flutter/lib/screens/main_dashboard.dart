@@ -25,6 +25,7 @@ import '../widgets/oled_simulator.dart';
 import '../widgets/pixel_editor.dart';
 import '../widgets/luna_background.dart';
 import 'package:gif/gif.dart';
+import 'login_screen.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -306,9 +307,25 @@ class _MainDashboardState extends State<MainDashboard> {
     });
 
     final firebase = Provider.of<FirebaseService>(context, listen: false);
+    final db = Provider.of<DatabaseService>(context, listen: false);
     ble.onPrimaryTouchTriggered = (eventType, expr, sound) {
       if (firebase.pairedFriendUid != null) {
-        firebase.sendCloudTrigger(eventType, expr, sound);
+        String customLabel = eventType;
+        if (expr == 0) customLabel = 'IDLE';
+        else if (expr == 1) customLabel = 'HAPPY';
+        else if (expr == 2) customLabel = 'SAD';
+        else if (expr == 3) customLabel = 'ANGRY';
+        else if (expr == 4) customLabel = 'SURPRISED';
+        else if (expr == 5) customLabel = 'SLEEPING';
+        else if (expr == 6) customLabel = 'WINK';
+        else if (expr >= 100) {
+          final idx = expr - 100;
+          final keys = DatabaseService.animMapping.keys.toList();
+          if (idx >= 0 && idx < keys.length) {
+            customLabel = DatabaseService.animMapping[keys[idx]]!['label'] ?? eventType;
+          }
+        }
+        firebase.sendCloudTrigger(eventType, expr, sound, customLabel: customLabel);
       }
     };
 
@@ -319,16 +336,32 @@ class _MainDashboardState extends State<MainDashboard> {
       final soundId = data['soundId'] ?? 2;
       
       int exprId = 1;
-      switch (exprLabel) {
+      switch (exprLabel.toUpperCase()) {
+        case "IDLE": case "IDLE/BLANK": exprId = 0; break;
         case "HAPPY": exprId = 1; break;
         case "SAD": exprId = 2; break;
         case "ANGRY": exprId = 3; break;
-        case "SURPRISED": exprId = 4; break;
-        case "SLEEPING": exprId = 5; break;
+        case "SURPRISED": case "SURPRISE": exprId = 4; break;
+        case "SLEEPING": case "SLEEP": exprId = 5; break;
         case "WINK": exprId = 6; break;
+        default:
+          final lowKey = exprLabel.toLowerCase();
+          int foundIdx = -1;
+          final keysList = DatabaseService.animMapping.keys.toList();
+          for (int i = 0; i < keysList.length; i++) {
+            if (keysList[i] == lowKey || DatabaseService.animMapping[keysList[i]]!['label'].toString().toLowerCase() == lowKey) {
+              foundIdx = i;
+              break;
+            }
+          }
+          if (foundIdx != -1) {
+            exprId = 100 + foundIdx;
+          } else {
+            exprId = 1;
+          }
       }
       
-      ble.handleRemoteCloudTrigger(exprId, soundId, senderName, eventType);
+      ble.handleRemoteCloudTrigger(exprId, soundId, senderName, eventType, customLabel: exprLabel);
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -336,7 +369,7 @@ class _MainDashboardState extends State<MainDashboard> {
             children: [
               const Icon(Icons.cloud_sync, color: Colors.white),
               const SizedBox(width: 10),
-              Text("$senderName sent a remote $eventType (Expr: $exprLabel)!"),
+              Text("$senderName sent '$exprLabel'!"),
             ],
           ),
           backgroundColor: _accentColor,
@@ -651,11 +684,14 @@ class _MainDashboardState extends State<MainDashboard> {
       _isSettingsSaving = true;
     });
 
+    final firebase = Provider.of<FirebaseService>(context, listen: false);
+    final isCloudPaired = firebase.pairedFriendUid != null;
+
     final defaultGifVal = db.defaultGif;
     final introGifVal = db.introGif;
-    final touchSingleVal = db.touchSingle;
-    final touchDoubleVal = db.touchDouble;
-    final touchLongVal = db.touchLong;
+    final touchSingleVal = isCloudPaired ? 'default' : db.touchSingle;
+    final touchDoubleVal = isCloudPaired ? 'default' : db.touchDouble;
+    final touchLongVal = isCloudPaired ? 'default' : db.touchLong;
 
     // Helper map matches JS index calculation
     int getExpressionValue(String val) {
@@ -1277,10 +1313,179 @@ class _MainDashboardState extends State<MainDashboard> {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _showUserProfileDialog(context),
+                child: CircleAvatar(
+                  radius: 17,
+                  backgroundImage: NetworkImage(
+                    Provider.of<FirebaseService>(context).currentUser?['photoUrl'] ?? 
+                    'https://api.dicebear.com/7.x/adventurer/png?seed=Luna'
+                  ),
+                  backgroundColor: _accentColor.withOpacity(0.1),
+                ),
+              ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  void _showUserProfileDialog(BuildContext context) {
+    final firebase = Provider.of<FirebaseService>(context, listen: false);
+    final user = firebase.currentUser;
+    if (user == null) return;
+
+    final displayNameController = TextEditingController(text: user['displayName'] ?? '');
+    final robotNameController = TextEditingController(text: user['robotName'] ?? '');
+    String selectedVariant = user['robotVariant'] ?? 'ms_luna';
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final isPink = selectedVariant == 'ms_luna';
+            final themeColor = isPink ? const Color(0xFFEC4899) : const Color(0xFF0074D9);
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 36,
+                            backgroundImage: NetworkImage(user['photoUrl'] ?? ''),
+                            backgroundColor: themeColor.withOpacity(0.1),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: themeColor,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: const Icon(Icons.edit, size: 12, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      user['email'] ?? '',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(color: textColor60, fontSize: 13),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: displayNameController,
+                      decoration: InputDecoration(
+                        labelText: "My Display Name",
+                        labelStyle: GoogleFonts.outfit(fontSize: 12),
+                        prefixIcon: const Icon(Icons.person_outline, size: 18),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: robotNameController,
+                      decoration: InputDecoration(
+                        labelText: "Robot Name",
+                        labelStyle: GoogleFonts.outfit(fontSize: 12),
+                        prefixIcon: const Icon(Icons.android_outlined, size: 18),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "Robot Model:",
+                          style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        Row(
+                          children: [
+                            ChoiceChip(
+                              label: Text("Ms. Luna", style: GoogleFonts.outfit(fontSize: 11)),
+                              selected: selectedVariant == 'ms_luna',
+                              selectedColor: const Color(0xFFEC4899).withOpacity(0.2),
+                              onSelected: (val) {
+                                if (val) setModalState(() => selectedVariant = 'ms_luna');
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            ChoiceChip(
+                              label: Text("Mr. Luna", style: GoogleFonts.outfit(fontSize: 11)),
+                              selected: selectedVariant == 'mr_luna',
+                              selectedColor: const Color(0xFF0074D9).withOpacity(0.2),
+                              onSelected: (val) {
+                                if (val) setModalState(() => selectedVariant = 'mr_luna');
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () => Navigator.pop(ctx),
+                            child: Text("CANCEL", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: themeColor,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () async {
+                              final dName = displayNameController.text.trim();
+                              final rName = robotNameController.text.trim();
+                              if (dName.isNotEmpty && rName.isNotEmpty) {
+                                await firebase.updateUserProfile(dName, rName, selectedVariant);
+                                if (context.mounted) {
+                                  Navigator.pop(ctx);
+                                  setState(() {});
+                                }
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Names cannot be empty")),
+                                );
+                              }
+                            },
+                            child: Text("SAVE", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -3711,7 +3916,7 @@ class _MainDashboardState extends State<MainDashboard> {
               const SizedBox(height: 8),
               Text(
                 robot.companionDeviceId != null
-                    ? (robot.relationshipType == 'couple' ? "Couple â¤ï¸" : "Friends ðŸ¤")
+                    ? (robot.relationshipType == 'couple' ? "Couple \u{2764}\u{FE0F}" : "Friends \u{1F91D}")
                     : "Single",
                 style: GoogleFonts.outfit(
                   color: robot.companionDeviceId != null ? const Color(0xFFEC4899) : Colors.white70,
@@ -3760,7 +3965,7 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildRelationshipBanner(RobotProfile primary, DatabaseService db) {
     final companion = db.robots.firstWhere((r) => r.id == primary.companionDeviceId, orElse: () => primary);
     final isCouple = primary.relationshipType == 'couple';
-    final heartEmoji = isCouple ? "â¤ï¸" : "ðŸ¤";
+    final heartEmoji = isCouple ? "\u{2764}\u{FE0F}" : "\u{1F91D}";
     final relText = isCouple ? "Couple" : "Friends";
     final relationshipColor = isCouple ? const Color(0xFFEC4899) : const Color(0xFF10B981);
 
@@ -4035,10 +4240,10 @@ class _MainDashboardState extends State<MainDashboard> {
 
   void _showNotificationCenterDialog(BLEService ble) {
     final List<Map<String, dynamic>> notifs = [
-      {'label': 'Birthday Reminder ðŸŽ‚', 'text': 'HAPPY BIRTHDAY!'},
-      {'label': 'Meeting Reminder ðŸ“…', 'text': 'MEETING IN 5 MINS'},
-      {'label': 'Task Reminder âœ…', 'text': 'DRINK WATER / STAND UP'},
-      {'label': 'Weather Alert â›ˆï¸', 'text': 'HEAVY RAIN EXPECTED'},
+      {'label': 'Birthday Reminder \u{1F382}', 'text': 'HAPPY BIRTHDAY!'},
+      {'label': 'Meeting Reminder \u{1F4C5}', 'text': 'MEETING IN 5 MINS'},
+      {'label': 'Task Reminder \u{2705}', 'text': 'DRINK WATER / STAND UP'},
+      {'label': 'Weather Alert \u{26C8}\u{FE0F}', 'text': 'HEAVY RAIN EXPECTED'},
     ];
 
     showDialog(
@@ -4237,7 +4442,7 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(height: 6),
               Text(
-                "Manage relationship status (Friends ðŸ¤ vs Couple â¤ï¸) between Mr. Luna and Ms. Luna companions.",
+                "Manage relationship status (Friends \u{1F91D} vs Couple \u{2764}\u{FE0F}) between Mr. Luna and Ms. Luna companions.",
                 style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
               ),
               const SizedBox(height: 16),
@@ -4459,7 +4664,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       side: BorderSide(color: selectedRel == 'friends' ? const Color(0xFF10B981) : Colors.black.withOpacity(0.06)),
                     ),
                     child: ListTile(
-                      title: Text("ðŸ¤ Friends Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                      title: Text("\u{1F91D} Friends Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
                       subtitle: Text("Casual talk, synchronized friendly expressions.", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
                       onTap: () => setModalState(() => selectedRel = 'friends'),
                     ),
@@ -4473,7 +4678,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       side: BorderSide(color: selectedRel == 'couple' ? const Color(0xFFEC4899) : Colors.black.withOpacity(0.06)),
                     ),
                     child: ListTile(
-                      title: Text("â¤ï¸ Couple Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                      title: Text("\u{2764}\u{FE0F} Couple Mode", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
                       subtitle: Text("Romantic expressions, shared hearts, anniversary reminders.", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
                       onTap: () => setModalState(() => selectedRel = 'couple'),
                     ),
@@ -4548,21 +4753,33 @@ class _MainDashboardState extends State<MainDashboard> {
             ),
             Row(
               children: [
-                Text(
-                  firebase.useLiveConfig ? "Live Config" : "Local Sandbox",
-                  style: GoogleFonts.outfit(
-                    color: firebase.useLiveConfig ? Colors.green : Colors.blueGrey,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ),
-                const SizedBox(width: 4),
-                Switch(
-                  activeColor: Colors.green,
-                  value: firebase.useLiveConfig,
-                  onChanged: (val) {
-                    firebase.toggleLiveConfig(val);
-                  },
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "Live Cloud Sync",
+                        style: GoogleFonts.outfit(
+                          color: Colors.green,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -4570,53 +4787,9 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
         const SizedBox(height: 16),
 
-        if (!firebase.isSignedIn) ...[
-          // WELCOME / SIGN IN CARD
-          GlassCard(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                Icon(Icons.cloud_sync, size: 64, color: themeColor),
-                const SizedBox(height: 16),
-                Text(
-                  "Snapchat-Style Robot Bonding",
-                  style: GoogleFonts.outfit(
-                    color: textColor,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Register your robot profile and pair with friends online to transmit real-time touch feedback, emojis, and sound sequences over the cloud database.",
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(
-                    color: textColor60,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: themeColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  icon: const Icon(Icons.login, color: Colors.white),
-                  label: Text(
-                    "SIGN IN WITH GOOGLE",
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                  ),
-                  onPressed: () => _showGoogleSignInBottomSheet(context, firebase),
-                ),
-              ],
-            ),
-          ),
-        ] else ...[
-          // SIGNED IN USER PROFILE & PAIRING STATUS
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               Expanded(
                 child: GlassCard(
                   padding: const EdgeInsets.all(16),
@@ -4707,7 +4880,14 @@ class _MainDashboardState extends State<MainDashboard> {
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                          onPressed: () => firebase.signOut(),
+                          onPressed: () async {
+                            await firebase.signOut();
+                            if (mounted) {
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                              );
+                            }
+                          },
                           child: Text(
                             "SIGN OUT",
                             style: GoogleFonts.outfit(
@@ -4800,7 +4980,24 @@ class _MainDashboardState extends State<MainDashboard> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
                                 onPressed: () {
-                                  firebase.sendCloudTrigger("TAP", 1, 2);
+                                  int expr = ble.relPrimaryTapExpr;
+                                  int sound = ble.relPrimaryTapSound;
+                                  String customLabel = "TAP";
+                                  if (expr == 0) customLabel = 'IDLE';
+                                  else if (expr == 1) customLabel = 'HAPPY';
+                                  else if (expr == 2) customLabel = 'SAD';
+                                  else if (expr == 3) customLabel = 'ANGRY';
+                                  else if (expr == 4) customLabel = 'SURPRISED';
+                                  else if (expr == 5) customLabel = 'SLEEPING';
+                                  else if (expr == 6) customLabel = 'WINK';
+                                  else if (expr >= 100) {
+                                    final idx = expr - 100;
+                                    final keys = DatabaseService.animMapping.keys.toList();
+                                    if (idx >= 0 && idx < keys.length) {
+                                      customLabel = DatabaseService.animMapping[keys[idx]]!['label'] ?? "TAP";
+                                    }
+                                  }
+                                  firebase.sendCloudTrigger("TAP", expr, sound, customLabel: customLabel);
                                 },
                                 child: Text(
                                   "TEST TAP",
@@ -4815,7 +5012,12 @@ class _MainDashboardState extends State<MainDashboard> {
                                   padding: const EdgeInsets.symmetric(vertical: 6),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
-                                onPressed: () => firebase.unpairRobot(),
+                                onPressed: () async {
+                                  await firebase.unpairRobot();
+                                  if (ble.isConnected) {
+                                    await _syncSettingsToRobot(db, ble);
+                                  }
+                                },
                                 child: Text(
                                   "UNPAIR",
                                   style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
@@ -5024,7 +5226,31 @@ class _MainDashboardState extends State<MainDashboard> {
                           ),
                         ],
                       ),
-                      title: Text(friend['displayName'] ?? '', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold)),
+                      title: Row(
+                        children: [
+                          Text(friend['displayName'] ?? '', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold)),
+                          if (friend['streak'] != null && friend['streak']['streakCount'] != null && friend['streak']['streakCount'] > 0) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Text("🔥", style: TextStyle(fontSize: 11)),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    "${friend['streak']['streakCount']}",
+                                    style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.orange.shade800),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                       subtitle: Text(
                         isPaired
                             ? "Paired Robot Link Active"
@@ -5043,11 +5269,14 @@ class _MainDashboardState extends State<MainDashboard> {
                                 color: isPaired ? Colors.green : themeColor,
                                 size: 20,
                               ),
-                              onPressed: () {
+                              onPressed: () async {
                                 if (isPaired) {
-                                  firebase.unpairRobot();
+                                  await firebase.unpairRobot();
                                 } else {
-                                  firebase.pairRobotWithFriend(friend);
+                                  await firebase.pairRobotWithFriend(friend);
+                                }
+                                if (ble.isConnected) {
+                                  await _syncSettingsToRobot(db, ble);
                                 }
                               },
                               tooltip: isPaired ? "Disconnect Cloud Link" : "Cloud Pair Robots",
@@ -5113,7 +5342,6 @@ class _MainDashboardState extends State<MainDashboard> {
             ),
           ),
         ],
-      ],
     );
   }
 
@@ -6692,19 +6920,36 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<int>(
-                  value: selectedExpr,
+                  value: (selectedExpr == 0 ||
+                          selectedExpr == 1 ||
+                          selectedExpr == 2 ||
+                          selectedExpr == 3 ||
+                          selectedExpr == 4 ||
+                          selectedExpr == 5 ||
+                          selectedExpr == 6 ||
+                          (selectedExpr >= 100 && selectedExpr < 100 + DatabaseService.animMapping.length))
+                      ? selectedExpr
+                      : 1, // Fallback to Happy
                   dropdownColor: Colors.white,
                   style: GoogleFonts.outfit(color: textColor, fontSize: 12),
                   icon: const Icon(Icons.arrow_drop_down, color: textColor60, size: 16),
                   isExpanded: true,
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text("Idle/Blank")),
-                    DropdownMenuItem(value: 1, child: Text("Happy")),
-                    DropdownMenuItem(value: 2, child: Text("Sad")),
-                    DropdownMenuItem(value: 3, child: Text("Angry")),
-                    DropdownMenuItem(value: 4, child: Text("Surprised")),
-                    DropdownMenuItem(value: 5, child: Text("Sleeping")),
-                    DropdownMenuItem(value: 6, child: Text("Wink")),
+                  items: [
+                    const DropdownMenuItem(value: 0, child: Text("Idle/Blank")),
+                    const DropdownMenuItem(value: 1, child: Text("Happy")),
+                    const DropdownMenuItem(value: 2, child: Text("Sad")),
+                    const DropdownMenuItem(value: 3, child: Text("Angry")),
+                    const DropdownMenuItem(value: 4, child: Text("Surprised")),
+                    const DropdownMenuItem(value: 5, child: Text("Sleeping")),
+                    const DropdownMenuItem(value: 6, child: Text("Wink")),
+                    ...DatabaseService.animMapping.keys.map((key) {
+                      final idx = DatabaseService.animMapping.keys.toList().indexOf(key);
+                      final label = DatabaseService.animMapping[key]!['label'] as String;
+                      return DropdownMenuItem(
+                        value: 100 + idx,
+                        child: Text(label),
+                      );
+                    }).toList(),
                   ],
                   onChanged: onExprChanged,
                 ),
