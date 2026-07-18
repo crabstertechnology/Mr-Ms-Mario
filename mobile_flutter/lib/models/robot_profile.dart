@@ -9,6 +9,7 @@ class RobotProfile {
   final String relationshipType; // 'friends', 'couple', or 'none'
   final bool isPrimary;
   final DateTime lastConnected;
+  final int firmwareVersion; // 1 or 2
 
   RobotProfile({
     required this.id,
@@ -21,6 +22,7 @@ class RobotProfile {
     this.relationshipType = 'none',
     this.isPrimary = false,
     required this.lastConnected,
+    this.firmwareVersion = 1,
   });
 
   RobotProfile copyWith({
@@ -34,6 +36,7 @@ class RobotProfile {
     String? relationshipType,
     bool? isPrimary,
     DateTime? lastConnected,
+    int? firmwareVersion,
   }) {
     return RobotProfile(
       id: id ?? this.id,
@@ -46,6 +49,7 @@ class RobotProfile {
       relationshipType: relationshipType ?? this.relationshipType,
       isPrimary: isPrimary ?? this.isPrimary,
       lastConnected: lastConnected ?? this.lastConnected,
+      firmwareVersion: firmwareVersion ?? this.firmwareVersion,
     );
   }
 
@@ -61,6 +65,7 @@ class RobotProfile {
       'relationshipType': relationshipType,
       'isPrimary': isPrimary,
       'lastConnected': lastConnected.toIso8601String(),
+      'firmwareVersion': firmwareVersion,
     };
   }
 
@@ -78,6 +83,7 @@ class RobotProfile {
       lastConnected: json['lastConnected'] != null
           ? DateTime.parse(json['lastConnected'] as String)
           : DateTime.now(),
+      firmwareVersion: json['firmwareVersion'] as int? ?? 1,
     );
   }
 }

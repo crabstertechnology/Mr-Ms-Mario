@@ -66,9 +66,9 @@ class AudioStreamService with ChangeNotifier {
   final List<int> _pcmAccumulator = [];
   bool _decodeComplete = false;
 
-  // Notify UI only when offset advances by this many bytes (~250ms of audio)
+  // Notify UI only when offset advances by this many bytes (~100ms of audio)
   // to avoid rebuilding the widget tree every 20ms tick.
-  static const int _notifyEveryBytes = 8000;
+  static const int _notifyEveryBytes = 3200;
 
   // ─── Streaming BLE from file path ────────────────────────────────────────
   // Phase 1: EventChannel decodes into _pcmAccumulator (fast, background)
@@ -110,9 +110,17 @@ class AudioStreamService with ChangeNotifier {
         })
         .listen(
       (dynamic data) {
-        if (data is Uint8List) {
+        if (data is Map) {
+          final totalBytes = data['totalPcmBytes'];
+          if (totalBytes is num) {
+            _musicStreamTotalSize = totalBytes.toInt();
+            notifyListeners();
+          }
+        } else if (data is Uint8List) {
           _pcmAccumulator.addAll(data);
-          _musicStreamTotalSize = _pcmAccumulator.length;
+          if (_musicStreamTotalSize == 0) {
+            _musicStreamTotalSize = _pcmAccumulator.length;
+          }
 
           // Start rate-controlled sender once we have ~375ms of audio buffered (12000 bytes)
           // to align with the hardware's 12000-byte prebuffer threshold.
@@ -130,11 +138,14 @@ class AudioStreamService with ChangeNotifier {
       },
       onDone: () {
         _decodeComplete = true;
-        _musicStreamTotalSize = _pcmAccumulator.length;
+        if (_musicStreamTotalSize == 0) {
+          _musicStreamTotalSize = _pcmAccumulator.length;
+        }
         // If timer hasn't started yet (very short file), start it now
         if (!_musicTimerRunning && _pcmAccumulator.isNotEmpty) {
           _startRateTimer(ble);
         }
+        notifyListeners();
       },
       cancelOnError: true,
     );

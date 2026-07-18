@@ -292,6 +292,16 @@ class MainActivity: FlutterActivity() {
         codec.configure(inputFormat, null, null, 0)
         codec.start()
 
+        val durationUs = if (inputFormat.containsKey(MediaFormat.KEY_DURATION)) inputFormat.getLong(MediaFormat.KEY_DURATION) else 0L
+        val totalPcmBytes = (durationUs / 1000000.0 * targetSampleRate * 2).toLong()
+        runOnUiThread {
+            if (!stopStreamRequested) {
+                val meta = HashMap<String, Any>()
+                meta["totalPcmBytes"] = totalPcmBytes
+                sink.success(meta)
+            }
+        }
+
         val info = MediaCodec.BufferInfo()
         var inputEOS = false
         var outputEOS = false

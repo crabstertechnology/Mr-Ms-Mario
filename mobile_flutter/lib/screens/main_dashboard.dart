@@ -62,12 +62,17 @@ class _MainDashboardState extends State<MainDashboard> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _calendarTitleController = TextEditingController();
   final TextEditingController _lunaLinkSearchController = TextEditingController();
+  final TextEditingController _profileDisplayNameController = TextEditingController();
+  final TextEditingController _profileRobotNameController = TextEditingController();
+  String? _profileSelectedVariant;
+  bool _isProfileInitialized = false;
   StreamSubscription? _remoteTriggerSub;
   
   String _selectedCategory = 'ALL';
   String _selectedSort = 'name';
   String _selectedEventType = 'meeting';
   DateTime _selectedEventDateTime = DateTime.now();
+  DateTime _calendarViewDate = DateTime.now();
   bool _isSettingsSaving = false;
   bool _isCompiling = false;
   String _localActiveGifId = 'relaxed';
@@ -262,6 +267,22 @@ class _MainDashboardState extends State<MainDashboard> {
       if (mounted) {
         final db = Provider.of<DatabaseService>(context, listen: false);
         final ble = Provider.of<BLEService>(context, listen: false);
+
+        // Dynamically detect and persist firmware version updates
+        for (final robot in db.robots) {
+          if (ble.isConnected && ble.connectedDevice?.remoteId.str == robot.remoteId) {
+            final version = ble.hasSpeaker ? 2 : 1;
+            if (robot.firmwareVersion != version) {
+              db.updateRobotFirmwareVersion(robot.id, version);
+            }
+          } else if (ble.isCompanionConnected && ble.companionDevice?.remoteId.str == robot.remoteId) {
+            final version = ble.companionHasSpeaker ? 2 : 1;
+            if (robot.firmwareVersion != version) {
+              db.updateRobotFirmwareVersion(robot.id, version);
+            }
+          }
+        }
+
         _checkAlarms(db, ble);
         _checkNotificationPermission();
         setState(() {});
@@ -576,6 +597,360 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
     );
     return false;
+  }
+
+  void _showLocalAudioFilesDialog(BLEService ble, AudioStreamService audioStream) {
+    final isMiss = _isMsLuna;
+    final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Local Audio Library",
+      transitionDuration: const Duration(milliseconds: 300),
+      transitionBuilder: (context, anim1, anim2, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 1),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOut)),
+          child: child,
+        );
+      },
+      pageBuilder: (ctx, anim1, anim2) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AnimatedBuilder(
+              animation: audioStream,
+              builder: (context, _) {
+                final filteredFiles = _localAudioFiles.where((file) {
+                  final name = (file['name'] ?? '').toLowerCase();
+                  final title = (file['title'] ?? '').toLowerCase();
+                  return name.contains(_audioSearchQuery) || title.contains(_audioSearchQuery);
+                }).toList();
+
+                return Scaffold(
+                  backgroundColor: Colors.white,
+                  appBar: AppBar(
+                    elevation: 0.5,
+                    backgroundColor: Colors.white,
+                    leading: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                    title: Text(
+                      "LOCAL AUDIO LIBRARY",
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF0F172A),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    actions: [
+                      IconButton(
+                        icon: Icon(Icons.refresh, color: accentColor),
+                        onPressed: () async {
+                          setState(() => _isLoadingAudioFiles = true);
+                          setDialogState(() {});
+                          await _scanLocalAudioFiles();
+                          setState(() => _isLoadingAudioFiles = false);
+                          setDialogState(() {});
+                        },
+                        tooltip: "Scan files",
+                      ),
+                    ],
+                  ),
+                  body: SafeArea(
+                    child: Column(
+                      children: [
+                        // Search bar
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.search, color: Color(0xFF64748B), size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _audioSearchController,
+                                    style: GoogleFonts.outfit(color: const Color(0xFF0F172A), fontSize: 14),
+                                    decoration: InputDecoration(
+                                      hintText: "Search local files...",
+                                      hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14),
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                    onChanged: (val) {
+                                      setDialogState(() {
+                                        _audioSearchQuery = val.trim().toLowerCase();
+                                      });
+                                    },
+                                  ),
+                                ),
+                                if (_audioSearchQuery.isNotEmpty)
+                                  GestureDetector(
+                                    onTap: () {
+                                      _audioSearchController.clear();
+                                      setDialogState(() {
+                                        _audioSearchQuery = "";
+                                      });
+                                    },
+                                    child: const Icon(Icons.close, color: Color(0xFF64748B), size: 18),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                        Expanded(
+                          child: _isLoadingAudioFiles
+                              ? Center(
+                                  child: CircularProgressIndicator(color: accentColor),
+                                )
+                              : filteredFiles.isEmpty
+                                  ? Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(24.0),
+                                        child: Text(
+                                          _audioSearchQuery.isNotEmpty
+                                              ? "No matching tracks found."
+                                              : "No MP3 or WAV files found on phone.\nPlace files in /sdcard/Music or /sdcard/Download.",
+                                          textAlign: TextAlign.center,
+                                          style: GoogleFonts.outfit(
+                                            color: const Color(0xFF64748B),
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: filteredFiles.length,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                      itemBuilder: (ctx, idx) {
+                                        final file = filteredFiles[idx];
+                                        final filename = file['name'] ?? '';
+                                        final cleanTitle = file['title'] ?? filename.split('.').first;
+                                        final isWav = (file['path'] ?? '').endsWith('.wav');
+                                        final isCurrent = _currentlyPlayingFile == file && audioStream.isStreamingMusic;
+
+                                        return Card(
+                                          color: isCurrent ? accentColor.withOpacity(0.06) : Colors.white,
+                                          elevation: isCurrent ? 0 : 0.5,
+                                          margin: const EdgeInsets.symmetric(vertical: 6),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            side: BorderSide(
+                                              color: isCurrent ? accentColor.withOpacity(0.4) : const Color(0xFFE2E8F0),
+                                              width: isCurrent ? 1.5 : 1,
+                                            ),
+                                          ),
+                                          child: InkWell(
+                                            onTap: () async {
+                                              await _playLocalAudioFile(file, ble, audioStream);
+                                              setDialogState(() {});
+                                            },
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(12.0),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    width: 42,
+                                                    height: 42,
+                                                    decoration: BoxDecoration(
+                                                      color: isCurrent ? accentColor.withOpacity(0.15) : const Color(0xFFF1F5F9),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: Icon(
+                                                      isCurrent
+                                                          ? (audioStream.isMusicPaused ? Icons.play_arrow : Icons.equalizer)
+                                                          : (isWav ? Icons.audiotrack : Icons.music_note),
+                                                      color: isCurrent ? accentColor : const Color(0xFF64748B),
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          cleanTitle,
+                                                          style: GoogleFonts.outfit(
+                                                            color: isCurrent ? accentColor : const Color(0xFF0F172A),
+                                                            fontSize: 14,
+                                                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w600,
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                        const SizedBox(height: 4),
+                                                        Text(
+                                                          "${isWav ? 'WAV Audio' : 'MP3 Audio'} • $filename",
+                                                          style: GoogleFonts.outfit(
+                                                            color: isCurrent ? accentColor.withOpacity(0.7) : const Color(0xFF64748B),
+                                                            fontSize: 11,
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  Icon(
+                                                    isCurrent
+                                                        ? (audioStream.isMusicPaused ? Icons.play_arrow : Icons.pause_circle_filled)
+                                                        : Icons.play_circle_filled,
+                                                    color: isCurrent ? accentColor : const Color(0xFFCBD5E1),
+                                                    size: 28,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                        ),
+                        // Bottom Now Playing Dock
+                        if (audioStream.isStreamingMusic && _currentlyPlayingFile != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, -3),
+                                )
+                              ],
+                              border: const Border(
+                                top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _currentlyPlayingFile?['title'] ?? _currentlyPlayingFile?['name'] ?? "Now Playing",
+                                            style: GoogleFonts.outfit(
+                                              color: const Color(0xFF0F172A),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            audioStream.statusMessage ?? "Streaming to Companion...",
+                                            style: GoogleFonts.outfit(
+                                              color: const Color(0xFF64748B),
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Text(
+                                      _formatPcmDuration(audioStream.musicStreamOffset),
+                                      style: GoogleFonts.firaCode(
+                                        color: const Color(0xFF64748B),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Slider(
+                                        value: audioStream.musicStreamOffset.toDouble().clamp(
+                                          0.0,
+                                          audioStream.musicStreamTotalSize.toDouble() > 0
+                                              ? audioStream.musicStreamTotalSize.toDouble()
+                                              : 1.0,
+                                        ),
+                                        min: 0.0,
+                                        max: audioStream.musicStreamTotalSize.toDouble() > 0
+                                            ? audioStream.musicStreamTotalSize.toDouble()
+                                            : 1.0,
+                                        activeColor: accentColor,
+                                        inactiveColor: const Color(0xFFE2E8F0),
+                                        onChanged: (val) {
+                                          audioStream.seekMusic(val.toInt());
+                                        },
+                                      ),
+                                    ),
+                                    Text(
+                                      _formatPcmDuration(audioStream.musicStreamTotalSize),
+                                      style: GoogleFonts.firaCode(
+                                        color: const Color(0xFF64748B),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        audioStream.isMusicPaused ? Icons.play_arrow : Icons.pause,
+                                        color: const Color(0xFF0F172A),
+                                        size: 32,
+                                      ),
+                                      onPressed: () {
+                                        if (audioStream.isMusicPaused) {
+                                          audioStream.resumeMusic();
+                                        } else {
+                                          audioStream.pauseMusic();
+                                        }
+                                      },
+                                    ),
+                                    const SizedBox(width: 24),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.stop,
+                                        color: Color(0xFFE53935),
+                                        size: 32,
+                                      ),
+                                      onPressed: () async {
+                                        await _stopMusic(audioStream, ble);
+                                        setDialogState(() {});
+                                      },
+                                    ),
+                                  ],
+                                )
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _playLocalAudioFile(Map<String, String> fileMap, BLEService ble, AudioStreamService audioStream) async {
@@ -993,7 +1368,7 @@ class _MainDashboardState extends State<MainDashboard> {
       {'icon': Icons.audiotrack, 'label': 'Sounds'},
       {'icon': Icons.cloud_sync, 'label': 'Luna Link'},
       {'icon': Icons.calendar_month, 'label': 'Calendar'},
-      {'icon': Icons.settings, 'label': 'Settings'},
+      {'icon': Icons.person, 'label': 'Profile'},
     ];
 
     return Container(
@@ -1315,7 +1690,7 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () => _showUserProfileDialog(context),
+                onTap: () => setState(() => _activeTabIdx = 5),
                 child: CircleAvatar(
                   radius: 17,
                   backgroundImage: NetworkImage(
@@ -1505,7 +1880,7 @@ class _MainDashboardState extends State<MainDashboard> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF0F172A), // Dark premium background
+              backgroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -1514,12 +1889,12 @@ class _MainDashboardState extends State<MainDashboard> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.terminal, color: Color(0xFF22D3EE), size: 20),
+                      const Icon(Icons.terminal, color: Colors.black87, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         "DEVICE CONSOLE LOGS",
                         style: GoogleFonts.outfit(
-                          color: const Color(0xFF22D3EE),
+                          color: Colors.black87,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
@@ -1544,7 +1919,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       ),
                       IconButton(
                         onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close, color: Colors.white70, size: 18),
+                        icon: const Icon(Icons.close, color: Colors.black54, size: 18),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
@@ -1558,14 +1933,13 @@ class _MainDashboardState extends State<MainDashboard> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF05040A),
+                    color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    border: Border.all(color: Colors.black.withOpacity(0.08)),
                   ),
                   child: StreamBuilder(
                     stream: Stream.periodic(const Duration(seconds: 1)),
                     builder: (context, snapshot) {
-                      // Trigger scroll to bottom on new logs
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (logScrollController.hasClients) {
                           logScrollController.jumpTo(logScrollController.position.maxScrollExtent);
@@ -1577,12 +1951,12 @@ class _MainDashboardState extends State<MainDashboard> {
                         itemCount: ble.consoleLogs.length,
                         itemBuilder: (context, idx) {
                           final logLine = ble.consoleLogs[idx];
-                          Color textColor = const Color(0xFF34D399); // default emerald
-                          if (logLine.contains('[ERROR]')) textColor = Colors.redAccent;
-                          if (logLine.contains('[BLE]')) textColor = Colors.lightBlue;
-                          if (logLine.contains('[SETTINGS]')) textColor = Colors.amber;
-                          if (logLine.contains('[CLOCK]')) textColor = Colors.purpleAccent;
-                          if (logLine.contains('[ROBOT]')) textColor = Colors.pinkAccent;
+                          Color textColor = const Color(0xFF047857);
+                          if (logLine.contains('[ERROR]')) textColor = const Color(0xFFDC2626);
+                          if (logLine.contains('[BLE]')) textColor = const Color(0xFF1D4ED8);
+                          if (logLine.contains('[SETTINGS]')) textColor = const Color(0xFFB45309);
+                          if (logLine.contains('[CLOCK]')) textColor = const Color(0xFF7E22CE);
+                          if (logLine.contains('[ROBOT]')) textColor = const Color(0xFFBE185D);
 
                           return Text(
                             logLine,
@@ -1723,9 +2097,9 @@ class _MainDashboardState extends State<MainDashboard> {
         );
       case 5:
         return SingleChildScrollView(
-          key: const PageStorageKey('settings_scroll'),
+          key: const PageStorageKey('profile_scroll'),
           padding: const EdgeInsets.only(top: 10, bottom: 20),
-          child: _buildSettingsPanel(db, ble),
+          child: _buildProfilePanel(db, ble),
         );
       default:
         return const SizedBox();
@@ -1991,21 +2365,21 @@ class _MainDashboardState extends State<MainDashboard> {
             height: 120,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF05040A),
+              color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
+              border: Border.all(color: Colors.black.withOpacity(0.08)),
             ),
             child: ListView.builder(
               controller: logScrollController,
               itemCount: ble.consoleLogs.length,
               itemBuilder: (context, idx) {
                 final logLine = ble.consoleLogs[idx];
-                Color textColor = const Color(0xFF34D399); // default emerald
-                if (logLine.contains('[ERROR]')) textColor = Colors.redAccent;
-                if (logLine.contains('[BLE]')) textColor = Colors.lightBlue;
-                if (logLine.contains('[SETTINGS]')) textColor = Colors.amber;
-                if (logLine.contains('[CLOCK]')) textColor = Colors.purpleAccent;
-                if (logLine.contains('[ROBOT]')) textColor = Colors.pinkAccent;
+                Color textColor = const Color(0xFF047857);
+                if (logLine.contains('[ERROR]')) textColor = const Color(0xFFDC2626);
+                if (logLine.contains('[BLE]')) textColor = const Color(0xFF1D4ED8);
+                if (logLine.contains('[SETTINGS]')) textColor = const Color(0xFFB45309);
+                if (logLine.contains('[CLOCK]')) textColor = const Color(0xFF7E22CE);
+                if (logLine.contains('[ROBOT]')) textColor = const Color(0xFFBE185D);
 
                 return Text(
                   logLine,
@@ -2342,123 +2716,6 @@ class _MainDashboardState extends State<MainDashboard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Custom Synth Preview area
-        GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                "8-BIT MUSIC COMPOSER",
-                style: GoogleFonts.outfit(
-                  color: const Color(0xFFFFCDD2),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  letterSpacing: 1,
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _customMelodyController,
-                maxLines: 4,
-                style: GoogleFonts.firaCode(color: const Color(0xFF2ECC40), fontSize: 12),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.black45,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.07)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        if (_audioSynth.isPlaying) {
-                          _audioSynth.stop();
-                          setState(() {});
-                        } else {
-                          setState(() {});
-                          _audioSynth.playMelody(
-                            _customMelodyController.text,
-                            onCompleted: () => setState(() {}),
-                          );
-                        }
-                      },
-                      icon: Icon(_audioSynth.isPlaying ? Icons.stop : Icons.play_arrow, size: 16),
-                      label: Text(_audioSynth.isPlaying ? "STOP PREVIEW" : "PLAY PREVIEW"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _audioSynth.isPlaying ? Colors.red.shade900 : const Color(0xFFE53935),
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // AI Music composer prompt
-        GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                "AI MUSIC GENERATOR",
-                style: GoogleFonts.outfit(
-                  color: textColor70,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  letterSpacing: 1,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _aiPromptController,
-                      style: GoogleFonts.outfit(color: textColor, fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: "Enter theme (e.g. victory, coin, sad)...",
-                        hintStyle: GoogleFonts.outfit(color: textColor24),
-                        filled: true,
-                        fillColor: Colors.black26,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_aiPromptController.text.isNotEmpty) {
-                        final notes = _audioSynth.generateAiMelody(_aiPromptController.text);
-                        setState(() {
-                          _customMelodyController.text = notes;
-                        });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Melody generated and loaded!")),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE53935),
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text("COMPOSE"),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
         // Soundboard Grid triggers
         Text(
           "SFX SOUND BOARD BOARD",
@@ -2647,39 +2904,6 @@ class _MainDashboardState extends State<MainDashboard> {
                 style: GoogleFonts.outfit(color: const Color(0xFFFFCDD2), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
               ),
               const SizedBox(height: 12),
-
-              // Server IP Address
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Server IP Address", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
-                  GestureDetector(
-                    onTap: _discoverServer,
-                    child: Text(
-                      "DISCOVER",
-                      style: GoogleFonts.outfit(color: const Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                key: const ValueKey("server_ip_field"),
-                style: GoogleFonts.outfit(color: textColor, fontSize: 14),
-                controller: TextEditingController(text: ble.serverIp),
-                onSubmitted: (val) {
-                  ble.setServerIp(val);
-                },
-                decoration: const InputDecoration(
-                  filled: true,
-                  fillColor: Colors.black26,
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                  hintText: "192.168.x.x or localhost",
-                  hintStyle: TextStyle(color: Colors.white24),
-                ),
-              ),
-              const SizedBox(height: 16),
 
               // BLE Device Name
               Text("BLE Server Broadcast Name", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
@@ -3076,7 +3300,7 @@ class _MainDashboardState extends State<MainDashboard> {
           GestureDetector(
             onTap: () {
               setState(() {
-                _activeTabIdx = 4; // Settings tab
+                _activeTabIdx = 5; // Profile/Settings tab
                 _currentSettingsSection = 'companions';
               });
             },
@@ -3326,32 +3550,16 @@ class _MainDashboardState extends State<MainDashboard> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Custom WAV / Audio Picker Button
+                  // Local Library Button
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: !hasSpeaker ? null : () async {
-                        if (audioStream.isStreamingMusic) {
-                          await _stopMusic(audioStream, ble);
-                        } else {
-                          final result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: ['wav', 'mp3'],
-                          );
-                          if (result != null && result.files.single.path != null) {
-                            final path = result.files.single.path!;
-                            final name = path.split('/').last;
-                            _playLocalAudioFile({
-                              'path': path,
-                              'name': name,
-                              'title': name.split('.').first,
-                            }, ble, audioStream);
-                          }
-                        }
+                      onPressed: !hasSpeaker ? null : () {
+                        _showLocalAudioFilesDialog(ble, audioStream);
                       },
-                      icon: Icon(audioStream.isStreamingMusic ? Icons.stop : Icons.folder_open, size: 18),
-                      label: Text(audioStream.isStreamingMusic ? "Stop Music" : "Pick Audio"),
+                      icon: const Icon(Icons.library_music, size: 18),
+                      label: const Text("Local Library"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: !hasSpeaker ? Colors.grey : (audioStream.isStreamingMusic ? Colors.red.shade700 : const Color(0xFF3B82F6)),
+                        backgroundColor: !hasSpeaker ? Colors.grey : const Color(0xFF3B82F6),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -3539,200 +3747,6 @@ class _MainDashboardState extends State<MainDashboard> {
                     ],
                   ),
                 ),
-              ],
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "LOCAL AUDIO FILES",
-                    style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.refresh, color: accentColor, size: 20),
-                    onPressed: _scanLocalAudioFiles,
-                    tooltip: "Scan files",
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Spotify-style search bar
-              Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.search, color: Colors.white38, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _audioSearchController,
-                        style: GoogleFonts.outfit(color: textColor, fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: "Search local files...",
-                          hintStyle: GoogleFonts.outfit(color: Colors.white24, fontSize: 13),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                        onChanged: (val) {
-                          setState(() {
-                            _audioSearchQuery = val.trim().toLowerCase();
-                          });
-                        },
-                      ),
-                    ),
-                    if (_audioSearchQuery.isNotEmpty)
-                      GestureDetector(
-                        onTap: () {
-                          _audioSearchController.clear();
-                          setState(() {
-                            _audioSearchQuery = "";
-                          });
-                        },
-                        child: const Icon(Icons.close, color: Colors.white38, size: 16),
-                      ),
-                  ],
-                ),
-              ),
-              if (_isLoadingAudioFiles)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: CircularProgressIndicator(),
-                  ),
-                )
-              else ...[
-                (() {
-                  final filteredFiles = _localAudioFiles.where((file) {
-                    final name = (file['name'] ?? '').toLowerCase();
-                    final title = (file['title'] ?? '').toLowerCase();
-                    return name.contains(_audioSearchQuery) || title.contains(_audioSearchQuery);
-                  }).toList();
-
-                  if (filteredFiles.isEmpty) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.02),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.black.withOpacity(0.04)),
-                      ),
-                      child: Center(
-                        child: Text(
-                          _audioSearchQuery.isNotEmpty
-                              ? "No matching tracks found."
-                              : "No MP3 or WAV files found on phone.\nPlace files in /sdcard/Music or /sdcard/Download.",
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.outfit(color: textColor60, fontSize: 12),
-                        ),
-                      ),
-                    );
-                  }
-
-                  return Container(
-                    constraints: const BoxConstraints(maxHeight: 280),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.02),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white.withOpacity(0.05)),
-                    ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      physics: const ClampingScrollPhysics(),
-                      itemCount: filteredFiles.length,
-                      itemBuilder: (ctx, idx) {
-                        final file = filteredFiles[idx];
-                        final filename = file['name'] ?? '';
-                        final cleanTitle = file['title'] ?? filename.split('.').first;
-                        final isWav = (file['path'] ?? '').endsWith('.wav');
-                        final isCurrent = _currentlyPlayingFile == file && audioStream.isStreamingMusic;
-
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => _playLocalAudioFile(file, ble, audioStream),
-                            borderRadius: BorderRadius.circular(8),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 44,
-                                    height: 44,
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: isCurrent
-                                            ? [accentColor.withOpacity(0.8), accentColor.withOpacity(0.4)]
-                                            : [Colors.purple.shade700.withOpacity(0.2), Colors.blue.shade700.withOpacity(0.2)],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: isCurrent ? accentColor.withOpacity(0.5) : Colors.white.withOpacity(0.05),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Icon(
-                                        isCurrent
-                                            ? (audioStream.isMusicPaused ? Icons.play_arrow : Icons.equalizer)
-                                            : (isWav ? Icons.audiotrack : Icons.music_note),
-                                        color: isCurrent ? Colors.white : Colors.white70,
-                                        size: 20,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          cleanTitle,
-                                          style: GoogleFonts.outfit(
-                                            color: isCurrent ? accentColor : textColor,
-                                            fontSize: 14,
-                                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          "${isWav ? 'WAV Audio' : 'MP3 Audio'} • ${file['path']?.split('/').last ?? ''}",
-                                          style: GoogleFonts.outfit(
-                                            color: isCurrent ? accentColor.withOpacity(0.7) : textColor60,
-                                            fontSize: 11,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Icon(
-                                    isCurrent
-                                        ? (audioStream.isMusicPaused ? Icons.play_arrow : Icons.pause_circle_filled)
-                                        : Icons.play_circle_filled,
-                                    color: isCurrent ? accentColor : Colors.white30,
-                                    size: 28,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                })(),
               ],
             ],
           ),
@@ -4064,7 +4078,7 @@ class _MainDashboardState extends State<MainDashboard> {
         'label': 'Pair Comp',
         'color': const Color(0xFFEC4899),
         'onTap': () => setState(() {
-          _activeTabIdx = 4; // Settings tab
+          _activeTabIdx = 5; // Profile/Settings tab
           _currentSettingsSection = 'companions';
         }),
       },
@@ -4305,11 +4319,21 @@ class _MainDashboardState extends State<MainDashboard> {
               final isMiss = robot.variant == 'ms_luna';
               final accent = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
 
+              // Dynamically check version if currently connected, else fallback to database
+              bool isV2 = robot.firmwareVersion == 2;
+              if (ble.isConnected && ble.connectedDevice?.remoteId.str == robot.remoteId) {
+                isV2 = ble.hasSpeaker;
+              } else if (ble.isCompanionConnected && ble.companionDevice?.remoteId.str == robot.remoteId) {
+                isV2 = ble.companionHasSpeaker;
+              }
+              final versionStr = isV2 ? "Version 2 (Luna v2)" : "Version 1 (Luna v1)";
+
               return Card(
-                color: const Color(0x66161526),
+                color: Colors.white,
+                elevation: 0.5,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: isPrimary ? accent : Colors.white.withOpacity(0.05)),
+                  side: BorderSide(color: isPrimary ? accent : Colors.black.withOpacity(0.08)),
                 ),
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
@@ -4329,38 +4353,58 @@ class _MainDashboardState extends State<MainDashboard> {
                     children: [
                       Text(
                         robot.name,
-                        style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: GoogleFonts.outfit(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       if (isPrimary) ...[
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0x3310B981),
+                            color: const Color(0xFFD1FAE5),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             "PRIMARY",
-                            style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 8, fontWeight: FontWeight.bold),
+                            style: GoogleFonts.outfit(color: const Color(0xFF065F46), fontSize: 8, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
                     ],
                   ),
-                  subtitle: Text(
-                    isMiss ? "Ms. Luna variant" : "Mr. Luna variant",
-                    style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      Text(
+                        isMiss ? "Ms. Luna variant" : "Mr. Luna variant",
+                        style: GoogleFonts.outfit(color: Colors.black54, fontSize: 11),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Bluetooth ID: ${robot.remoteId}",
+                        style: GoogleFonts.outfit(color: Colors.black54, fontSize: 11),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        versionStr,
+                        style: GoogleFonts.outfit(
+                          color: isV2 ? const Color(0xFF047857) : const Color(0xFFB45309),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.edit, color: textColor60, size: 16),
+                        icon: const Icon(Icons.edit, color: Colors.black54, size: 16),
                         onPressed: () => _showEditRobotDialog(db, robot),
                       ),
                       if (!isPrimary)
                         IconButton(
-                          icon: const Icon(Icons.star_border, color: textColor60, size: 16),
+                          icon: const Icon(Icons.star_border, color: Colors.black54, size: 16),
                           onPressed: () => db.setPrimaryRobot(robot.id),
                         ),
                       IconButton(
@@ -4787,253 +4831,7 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
         const SizedBox(height: 16),
 
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-              Expanded(
-                child: GlassCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundImage: NetworkImage(firebase.currentUser!['photoUrl'] ?? ''),
-                            backgroundColor: themeColor.withOpacity(0.1),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  firebase.currentUser!['displayName'] ?? 'User',
-                                  style: GoogleFonts.outfit(
-                                    color: textColor,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  firebase.currentUser!['email'] ?? '',
-                                  style: GoogleFonts.outfit(
-                                    color: textColor60,
-                                    fontSize: 11,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "MY ROBOT",
-                                style: GoogleFonts.outfit(
-                                  color: textColor38,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                "${firebase.currentUser!['robotName']}",
-                                style: GoogleFonts.outfit(
-                                  color: textColor,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: themeColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              (firebase.currentUser!['robotVariant'] ?? 'mr_luna').toString().toUpperCase(),
-                              style: GoogleFonts.outfit(
-                                color: themeColor,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.redAccent, width: 1),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: () async {
-                            await firebase.signOut();
-                            if (mounted) {
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(builder: (context) => const LoginScreen()),
-                              );
-                            }
-                          },
-                          child: Text(
-                            "SIGN OUT",
-                            style: GoogleFonts.outfit(
-                              color: Colors.redAccent,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GlassCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "CLOUD ROBOT BOND",
-                        style: GoogleFonts.outfit(
-                          color: textColor38,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (firebase.pairedFriendUid == null) ...[
-                        Row(
-                          children: [
-                            const Icon(Icons.cloud_off, color: Colors.orangeAccent, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Not Linked",
-                              style: GoogleFonts.outfit(
-                                color: textColor,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Pair with a friend's robot from your friends list below to start cloud communication.",
-                          style: GoogleFonts.outfit(
-                            color: textColor60,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ] else ...[
-                        Row(
-                          children: [
-                            const Icon(Icons.cloud_queue, color: Colors.green, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                firebase.pairedFriendRobotName ?? 'Companion',
-                                style: GoogleFonts.outfit(
-                                  color: textColor,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Owner: ${firebase.friends.firstWhere((f) => f['uid'] == firebase.pairedFriendUid, orElse: () => {'displayName': 'Friend'})['displayName']}",
-                          style: GoogleFonts.outfit(
-                            color: textColor60,
-                            fontSize: 11,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: themeColor,
-                                  padding: const EdgeInsets.symmetric(vertical: 6),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                onPressed: () {
-                                  int expr = ble.relPrimaryTapExpr;
-                                  int sound = ble.relPrimaryTapSound;
-                                  String customLabel = "TAP";
-                                  if (expr == 0) customLabel = 'IDLE';
-                                  else if (expr == 1) customLabel = 'HAPPY';
-                                  else if (expr == 2) customLabel = 'SAD';
-                                  else if (expr == 3) customLabel = 'ANGRY';
-                                  else if (expr == 4) customLabel = 'SURPRISED';
-                                  else if (expr == 5) customLabel = 'SLEEPING';
-                                  else if (expr == 6) customLabel = 'WINK';
-                                  else if (expr >= 100) {
-                                    final idx = expr - 100;
-                                    final keys = DatabaseService.animMapping.keys.toList();
-                                    if (idx >= 0 && idx < keys.length) {
-                                      customLabel = DatabaseService.animMapping[keys[idx]]!['label'] ?? "TAP";
-                                    }
-                                  }
-                                  firebase.sendCloudTrigger("TAP", expr, sound, customLabel: customLabel);
-                                },
-                                child: Text(
-                                  "TEST TAP",
-                                  style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 6),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                onPressed: () async {
-                                  await firebase.unpairRobot();
-                                  if (ble.isConnected) {
-                                    await _syncSettingsToRobot(db, ble);
-                                  }
-                                },
-                                child: Text(
-                                  "UNPAIR",
-                                  style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+
 
           // SNAPCHAT STYLE FRIENDS CARD
           GlassCard(
@@ -5325,15 +5123,16 @@ class _MainDashboardState extends State<MainDashboard> {
                   height: 120,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF090D16),
+                    color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black.withOpacity(0.08)),
                   ),
                   child: ListView.builder(
                     itemCount: firebase.cloudLogs.length,
                     itemBuilder: (context, idx) {
                       return Text(
                         firebase.cloudLogs[idx],
-                        style: GoogleFonts.firaCode(color: const Color(0xFF38BDF8), fontSize: 10.5),
+                        style: GoogleFonts.firaCode(color: const Color(0xFF0F172A), fontSize: 10.5),
                       );
                     },
                   ),
@@ -5539,8 +5338,264 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
+  String _getMonthName(int month) {
+    const months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    return months[month - 1];
+  }
+
+  void _showEventSchedulerPopup(BuildContext context, DateTime date, DatabaseService db, BLEService ble) {
+    _calendarTitleController.clear();
+    String localSelectedType = 'meeting';
+    TimeOfDay selectedTime = TimeOfDay.now();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              backgroundColor: Colors.white,
+              title: Text(
+                "SCHEDULE EVENT\n${date.day} ${_getMonthName(date.month)} ${date.year}",
+                style: GoogleFonts.outfit(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      "EVENT TYPE",
+                      style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildTypeChip('meeting', 'Meeting', Icons.groups, const Color(0xFFEF4444), localSelectedType, (t) => setModalState(() => localSelectedType = t)),
+                        _buildTypeChip('birthday', 'Birthday', Icons.cake, const Color(0xFFEC4899), localSelectedType, (t) => setModalState(() => localSelectedType = t)),
+                        _buildTypeChip('alarm', 'Alarm', Icons.alarm, const Color(0xFF14B8A6), localSelectedType, (t) => setModalState(() => localSelectedType = t)),
+                        _buildTypeChip('reminder', 'Reminder', Icons.notifications, const Color(0xFFF59E0B), localSelectedType, (t) => setModalState(() => localSelectedType = t)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "DESCRIPTION",
+                      style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _calendarTitleController,
+                      style: GoogleFonts.outfit(color: Colors.black87, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: "e.g., Standup, Call, Wakeup",
+                        hintStyle: GoogleFonts.outfit(color: Colors.black38, fontSize: 13),
+                        filled: true,
+                        fillColor: Colors.black.withOpacity(0.04),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFA855F7)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "SELECT TIME",
+                      style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: selectedTime,
+                          builder: (context, child) {
+                            return Theme(
+                              data: ThemeData.light().copyWith(
+                                colorScheme: const ColorScheme.light(
+                                  primary: Color(0xFFA855F7),
+                                  onPrimary: Colors.white,
+                                  surface: Colors.white,
+                                  onSurface: Colors.black87,
+                                ),
+                                dialogBackgroundColor: Colors.white,
+                              ),
+                              child: child!,
+                            );
+                          },
+                        );
+                        if (picked != null) {
+                          setModalState(() {
+                            selectedTime = picked;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.04),
+                          border: Border.all(color: Colors.black.withOpacity(0.08)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              selectedTime.format(context),
+                              style: GoogleFonts.outfit(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            const Icon(Icons.access_time, color: Colors.purpleAccent, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text("CANCEL", style: GoogleFonts.outfit(color: Colors.black54)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accentColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () async {
+                    if (_calendarTitleController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Please enter a description"),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                      return;
+                    }
+
+                    final eventDateTime = DateTime(
+                      date.year,
+                      date.month,
+                      date.day,
+                      selectedTime.hour,
+                      selectedTime.minute,
+                    );
+
+                    final newEvent = CalendarEvent(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      title: _calendarTitleController.text.trim(),
+                      dateTime: eventDateTime,
+                      type: localSelectedType,
+                    );
+
+                    await db.addEvent(newEvent);
+
+                    if (localSelectedType == 'alarm') {
+                      final newAlarm = AlarmModel(
+                        id: newEvent.id,
+                        hour: selectedTime.hour,
+                        minute: selectedTime.minute,
+                        label: newEvent.title,
+                        isEnabled: true,
+                      );
+                      await db.addAlarm(newAlarm);
+                    }
+
+                    if (ble.isConnected) {
+                      final hh = selectedTime.hour.toString().padLeft(2, '0');
+                      final mm = selectedTime.minute.toString().padLeft(2, '0');
+                      final timeStr = "$hh:$mm";
+                      await ble.transmitCalendarEvent(
+                        newEvent.type,
+                        timeStr,
+                        newEvent.title,
+                      );
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Scheduled '${newEvent.title}'!"),
+                        backgroundColor: const Color(0xFF10B981),
+                      ),
+                    );
+
+                    Navigator.pop(ctx);
+                    setState(() {});
+                  },
+                  child: Text("SAVE & SYNC", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTypeChip(String typeKey, String label, IconData icon, Color color, String currentType, Function(String) onSelected) {
+    final isSelected = currentType == typeKey;
+    return ChoiceChip(
+      avatar: Icon(icon, color: isSelected ? Colors.white : color, size: 16),
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (selected) {
+        if (selected) onSelected(typeKey);
+      },
+      selectedColor: color,
+      backgroundColor: Colors.black.withOpacity(0.03),
+      labelStyle: GoogleFonts.outfit(
+        color: isSelected ? Colors.white : Colors.black87,
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: isSelected ? color : Colors.black.withOpacity(0.08)),
+      ),
+    );
+  }
+
   // ================= NEW TAB 4: CALENDAR MANAGEMENT PANEL =================
   Widget _buildCalendarPanel(DatabaseService db, BLEService ble) {
+    final year = _calendarViewDate.year;
+    final month = _calendarViewDate.month;
+    final firstDay = DateTime(year, month, 1);
+    final startWeekday = firstDay.weekday; 
+    final totalDays = DateTime(year, month + 1, 0).day;
+
+    final prevMonthEnd = DateTime(year, month, 0);
+    final int prevDaysCount = startWeekday - 1;
+    final List<DateTime> cells = [];
+    for (int i = prevDaysCount - 1; i >= 0; i--) {
+      cells.add(DateTime(prevMonthEnd.year, prevMonthEnd.month, prevMonthEnd.day - i));
+    }
+    for (int i = 1; i <= totalDays; i++) {
+      cells.add(DateTime(year, month, i));
+    }
+    final int remaining = 42 - cells.length;
+    for (int i = 1; i <= remaining; i++) {
+      final nextMonth = DateTime(year, month + 1, 1);
+      cells.add(DateTime(nextMonth.year, nextMonth.month, i));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -5555,307 +5610,149 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
         const SizedBox(height: 16),
 
-        // Add Event Card
+        // Visual Monthly Calendar Grid
         GlassCard(
+          padding: const EdgeInsets.all(12),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                "Add Calendar Event",
-                style: GoogleFonts.outfit(
-                  color: textColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.chevron_left, color: textColor),
+                    onPressed: () {
+                      setState(() {
+                        _calendarViewDate = DateTime(
+                          _calendarViewDate.year,
+                          _calendarViewDate.month - 1,
+                          1,
+                        );
+                      });
+                    },
+                  ),
+                  Text(
+                    "${_getMonthName(_calendarViewDate.month)} ${_calendarViewDate.year}".toUpperCase(),
+                    style: GoogleFonts.outfit(
+                      color: textColor,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.chevron_right, color: textColor),
+                    onPressed: () {
+                      setState(() {
+                        _calendarViewDate = DateTime(
+                          _calendarViewDate.year,
+                          _calendarViewDate.month + 1,
+                          1,
+                        );
+                      });
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 8),
               
-              // Event Type Toggle
               Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedEventType = 'meeting';
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _selectedEventType == 'meeting'
-                              ? const Color(0x33A855F7)
-                              : Colors.white.withOpacity(0.05),
-                          border: Border.all(
-                            color: _selectedEventType == 'meeting'
-                                ? const Color(0x80A855F7)
-                                : Colors.white.withOpacity(0.1),
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.groups, color: Color(0xFFFFCDD2), size: 18),
-                            const SizedBox(width: 6),
-                            Text(
-                              "Meeting",
-                              style: GoogleFonts.outfit(
-                                color: textColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((day) {
+                  return Expanded(
+                    child: Center(
+                      child: Text(
+                        day,
+                        style: GoogleFonts.outfit(
+                          color: _accentColor.withOpacity(0.8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedEventType = 'birthday';
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _selectedEventType == 'birthday'
-                              ? const Color(0x33EC4899)
-                              : Colors.white.withOpacity(0.05),
-                          border: Border.all(
-                            color: _selectedEventType == 'birthday'
-                                ? const Color(0x80EC4899)
-                                : Colors.white.withOpacity(0.1),
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.cake, color: Color(0xFFF9A8D4), size: 18),
-                            const SizedBox(width: 6),
-                            Text(
-                              "Birthday",
-                              style: GoogleFonts.outfit(
-                                color: textColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  );
+                }).toList(),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
-              // Title input
-              TextField(
-                controller: _calendarTitleController,
-                style: GoogleFonts.outfit(color: textColor, fontSize: 14),
-                decoration: InputDecoration(
-                  labelText: "Event Title",
-                  labelStyle: GoogleFonts.outfit(color: textColor38),
-                  hintText: _selectedEventType == 'meeting'
-                      ? "e.g., Team Sync"
-                      : "e.g., Mr. Luna's Birthday",
-                  hintStyle: GoogleFonts.outfit(color: textColor24, fontSize: 13),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.03),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.07)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFA855F7)),
-                  ),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 42,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  childAspectRatio: 1.0,
+                  crossAxisSpacing: 4,
+                  mainAxisSpacing: 4,
                 ),
-              ),
-              const SizedBox(height: 12),
+                itemBuilder: (context, idx) {
+                  final cellDate = cells[idx];
+                  final isCurrentMonth = cellDate.month == month;
+                  final isToday = cellDate.year == DateTime.now().year &&
+                      cellDate.month == DateTime.now().month &&
+                      cellDate.day == DateTime.now().day;
 
-              // Date/Time Selection Row
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _selectedEventDateTime,
-                          firstDate: DateTime(2025),
-                          lastDate: DateTime(2030),
-                          builder: (context, child) {
-                            return Theme(
-                              data: ThemeData.dark().copyWith(
-                                colorScheme: const ColorScheme.dark(
-                                  primary: Color(0xFFA855F7),
-                                  onPrimary: Colors.white,
-                                  surface: Color(0xFF0F0E1A),
-                                  onSurface: Colors.white,
-                                ),
-                                dialogBackgroundColor: const Color(0xFF080710),
-                              ),
-                              child: child!,
-                            );
-                          },
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _selectedEventDateTime = DateTime(
-                              picked.year,
-                              picked.month,
-                              picked.day,
-                              _selectedEventDateTime.hour,
-                              _selectedEventDateTime.minute,
-                            );
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
-                          border: Border.all(color: Colors.white.withOpacity(0.07)),
-                          borderRadius: BorderRadius.circular(10),
+                  final dayEvents = db.events.where((e) {
+                    return e.dateTime.year == cellDate.year &&
+                        e.dateTime.month == cellDate.month &&
+                        e.dateTime.day == cellDate.day;
+                  }).toList();
+
+                  return GestureDetector(
+                    onTap: () => _showEventSchedulerPopup(context, cellDate, db, ble),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isToday
+                            ? _accentColor.withOpacity(0.15)
+                            : (isCurrentMonth ? Colors.white.withOpacity(0.03) : Colors.transparent),
+                        border: Border.all(
+                          color: isToday
+                              ? _accentColor
+                              : (isCurrentMonth ? Colors.white.withOpacity(0.05) : Colors.transparent),
+                          width: isToday ? 1.5 : 1.0,
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "${_selectedEventDateTime.day}/${_selectedEventDateTime.month}/${_selectedEventDateTime.year}",
-                              style: GoogleFonts.outfit(color: textColor, fontSize: 13),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "${cellDate.day}",
+                            style: GoogleFonts.outfit(
+                              color: isCurrentMonth
+                                  ? (isToday ? _accentColor : textColor)
+                                  : textColor38.withOpacity(0.3),
+                              fontSize: 13,
+                              fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                             ),
-                            const Icon(Icons.calendar_today, color: textColor54, size: 16),
-                          ],
-                        ),
+                          ),
+                          if (dayEvents.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: dayEvents.take(4).map((ev) {
+                                Color dotColor = const Color(0xFFE2E8F0);
+                                if (ev.type == 'meeting') dotColor = const Color(0xFFEF4444);
+                                else if (ev.type == 'birthday') dotColor = const Color(0xFFEC4899);
+                                else if (ev.type == 'alarm') dotColor = const Color(0xFF14B8A6);
+                                else if (ev.type == 'reminder') dotColor = const Color(0xFFF59E0B);
+                                return Container(
+                                  width: 4,
+                                  height: 4,
+                                  margin: const EdgeInsets.symmetric(horizontal: 1),
+                                  decoration: BoxDecoration(
+                                    color: dotColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                );
+                              }).toList(),
+                            )
+                          ]
+                        ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(_selectedEventDateTime),
-                          builder: (context, child) {
-                            return Theme(
-                              data: ThemeData.dark().copyWith(
-                                colorScheme: const ColorScheme.dark(
-                                  primary: Color(0xFFA855F7),
-                                  onPrimary: Colors.white,
-                                  surface: Color(0xFF0F0E1A),
-                                  onSurface: Colors.white,
-                                ),
-                                dialogBackgroundColor: const Color(0xFF080710),
-                              ),
-                              child: child!,
-                            );
-                          },
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _selectedEventDateTime = DateTime(
-                              _selectedEventDateTime.year,
-                              _selectedEventDateTime.month,
-                              _selectedEventDateTime.day,
-                              picked.hour,
-                              picked.minute,
-                            );
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
-                          border: Border.all(color: Colors.white.withOpacity(0.07)),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              TimeOfDay.fromDateTime(_selectedEventDateTime).format(context),
-                              style: GoogleFonts.outfit(color: textColor, fontSize: 13),
-                            ),
-                            const Icon(Icons.access_time, color: textColor54, size: 16),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Action button to save
-              ElevatedButton(
-                onPressed: () async {
-                  if (_calendarTitleController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Please enter event title"),
-                        backgroundColor: Colors.redAccent,
-                      ),
-                    );
-                    return;
-                  }
-
-                  final newEvent = CalendarEvent(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    title: _calendarTitleController.text.trim(),
-                    dateTime: _selectedEventDateTime,
-                    type: _selectedEventType,
-                  );
-
-                  await db.addEvent(newEvent);
-
-                  // Send event notification directly if connected
-                  if (ble.isConnected) {
-                    final hh = newEvent.dateTime.hour.toString().padLeft(2, '0');
-                    final mm = newEvent.dateTime.minute.toString().padLeft(2, '0');
-                    final timeStr = "$hh:$mm";
-                    await ble.transmitCalendarEvent(
-                      newEvent.type,
-                      timeStr,
-                      newEvent.title,
-                    );
-                  }
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Event '${newEvent.title}' scheduled!"),
-                      backgroundColor: const Color(0xFF10B981),
                     ),
                   );
-
-                  _calendarTitleController.clear();
-                  setState(() {
-                    _selectedEventDateTime = DateTime.now();
-                  });
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE53935),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: Text(
-                  "Schedule & Push to Robot",
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
-                ),
               ),
             ],
           ),
@@ -5879,7 +5776,7 @@ class _MainDashboardState extends State<MainDashboard> {
             padding: const EdgeInsets.symmetric(vertical: 36),
             alignment: Alignment.center,
             child: Text(
-              "No upcoming meetings or birthdays.",
+              "No upcoming meetings, birthdays, alarms or reminders.",
               style: GoogleFonts.outfit(color: textColor38),
             ),
           )
@@ -5891,10 +5788,36 @@ class _MainDashboardState extends State<MainDashboard> {
             itemBuilder: (context, index) {
               final event = db.events[index];
               final isMeeting = event.type == 'meeting';
+              final isBirthday = event.type == 'birthday';
+              final isAlarm = event.type == 'alarm';
+              final isReminder = event.type == 'reminder';
+
               final hh = event.dateTime.hour.toString().padLeft(2, '0');
               final mm = event.dateTime.minute.toString().padLeft(2, '0');
               final timeStr = "$hh:$mm";
               final dateStr = "${event.dateTime.day}/${event.dateTime.month}/${event.dateTime.year}";
+
+              IconData eventIcon = Icons.groups;
+              List<Color> gradientColors = [const Color(0xFFE53935), const Color(0xFFFFB300)];
+              String typeLabel = "Event";
+
+              if (isMeeting) {
+                eventIcon = Icons.groups;
+                gradientColors = [const Color(0xFFE53935), const Color(0xFFFFB300)];
+                typeLabel = "Meeting @ $timeStr ($dateStr)";
+              } else if (isBirthday) {
+                eventIcon = Icons.cake;
+                gradientColors = [const Color(0xFFEC4899), const Color(0xFFF43F5E)];
+                typeLabel = "Birthday ($dateStr)";
+              } else if (isAlarm) {
+                eventIcon = Icons.alarm;
+                gradientColors = [const Color(0xFF14B8A6), const Color(0xFF0D9488)];
+                typeLabel = "Alarm @ $timeStr ($dateStr)";
+              } else if (isReminder) {
+                eventIcon = Icons.notifications;
+                gradientColors = [const Color(0xFFF59E0B), const Color(0xDDF59E0B)];
+                typeLabel = "Reminder @ $timeStr ($dateStr)";
+              }
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -5906,27 +5829,21 @@ class _MainDashboardState extends State<MainDashboard> {
                 ),
                 child: Row(
                   children: [
-                    // Icon inside circle
                     Container(
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: isMeeting
-                              ? [const Color(0xFFE53935), const Color(0xFFFFB300)]
-                              : [const Color(0xFFEC4899), const Color(0xFFF43F5E)],
-                        ),
+                        gradient: LinearGradient(colors: gradientColors),
                       ),
                       child: Icon(
-                        isMeeting ? Icons.groups : Icons.cake,
+                        eventIcon,
                         color: textColor,
                         size: 18,
                       ),
                     ),
                     const SizedBox(width: 12),
 
-                    // Event Details
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5941,7 +5858,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            isMeeting ? "Meeting @ $timeStr ($dateStr)" : "Birthday ($dateStr)",
+                            typeLabel,
                             style: GoogleFonts.outfit(
                               color: textColor54,
                               fontSize: 11,
@@ -5951,7 +5868,6 @@ class _MainDashboardState extends State<MainDashboard> {
                       ),
                     ),
 
-                    // Action buttons
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -5980,6 +5896,9 @@ class _MainDashboardState extends State<MainDashboard> {
                         IconButton(
                           onPressed: () async {
                             await db.deleteEvent(event.id);
+                            if (isAlarm) {
+                              await db.deleteAlarm(event.id);
+                            }
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text("Event '${event.title}' deleted"),
@@ -6842,12 +6761,39 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  Widget _buildSettingsPanel(DatabaseService db, BLEService ble) {
+  Widget _buildProfilePanel(DatabaseService db, BLEService ble) {
+    final firebase = Provider.of<FirebaseService>(context);
+    final user = firebase.currentUser;
+    if (user == null) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 40),
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          Text(
+            "Loading User Profile...",
+            style: GoogleFonts.outfit(color: textColor60, fontSize: 14),
+          ),
+        ],
+      );
+    }
+
+    if (!_isProfileInitialized) {
+      _profileDisplayNameController.text = user['displayName'] ?? '';
+      _profileRobotNameController.text = user['robotName'] ?? '';
+      _profileSelectedVariant = user['robotVariant'] ?? 'ms_luna';
+      _isProfileInitialized = true;
+    }
+
+    final isPink = _profileSelectedVariant == 'ms_luna';
+    final themeColor = isPink ? const Color(0xFFEC4899) : const Color(0xFF0074D9);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          "SETTINGS",
+          "MY PROFILE",
           style: GoogleFonts.outfit(
             color: textColor,
             fontSize: 20,
@@ -6856,13 +6802,218 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
         const SizedBox(height: 4),
         Text(
-          "Directly configure and manage your companion robot below.",
+          "Manage your user profile and personalize your companion robot model.",
           style: GoogleFonts.outfit(
             color: textColor60,
             fontSize: 13,
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
+
+        // User Profile GlassCard
+        GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 44,
+                      backgroundImage: NetworkImage(user['photoUrl'] ?? 'https://api.dicebear.com/7.x/adventurer/png?seed=Luna'),
+                      backgroundColor: themeColor.withOpacity(0.1),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: themeColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(Icons.person, size: 14, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                user['email'] ?? '',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  color: textColor60,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Inputs
+              TextField(
+                controller: _profileDisplayNameController,
+                style: GoogleFonts.outfit(color: textColor, fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: "My Display Name",
+                  labelStyle: GoogleFonts.outfit(fontSize: 12, color: textColor60),
+                  prefixIcon: const Icon(Icons.person_outline, size: 18, color: textColor60),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: textColor.withOpacity(0.15)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: themeColor, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _profileRobotNameController,
+                style: GoogleFonts.outfit(color: textColor, fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: "Robot Name",
+                  labelStyle: GoogleFonts.outfit(fontSize: 12, color: textColor60),
+                  prefixIcon: const Icon(Icons.android_outlined, size: 18, color: textColor60),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: textColor.withOpacity(0.15)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: themeColor, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Variant Choice
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Robot Model:",
+                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
+                  ),
+                  Row(
+                    children: [
+                      ChoiceChip(
+                        label: Text("Ms. Luna", style: GoogleFonts.outfit(fontSize: 11, color: _profileSelectedVariant == 'ms_luna' ? Colors.pink.shade700 : textColor)),
+                        selected: _profileSelectedVariant == 'ms_luna',
+                        selectedColor: const Color(0xFFEC4899).withOpacity(0.2),
+                        onSelected: (val) {
+                          if (val) setState(() => _profileSelectedVariant = 'ms_luna');
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: Text("Mr. Luna", style: GoogleFonts.outfit(fontSize: 11, color: _profileSelectedVariant == 'mr_luna' ? Colors.blue.shade700 : textColor)),
+                        selected: _profileSelectedVariant == 'mr_luna',
+                        selectedColor: const Color(0xFF0074D9).withOpacity(0.2),
+                        onSelected: (val) {
+                          if (val) setState(() => _profileSelectedVariant = 'mr_luna');
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              
+              // Action Buttons row
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.red.shade400, width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onPressed: () async {
+                        await firebase.signOut();
+                        if (context.mounted) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (context) => const LoginScreen()),
+                          );
+                        }
+                      },
+                      child: Text(
+                        "SIGN OUT",
+                        style: GoogleFonts.outfit(
+                          color: Colors.red.shade600,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: themeColor,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                      ),
+                      onPressed: () async {
+                        final dName = _profileDisplayNameController.text.trim();
+                        final rName = _profileRobotNameController.text.trim();
+                        if (dName.isNotEmpty && rName.isNotEmpty) {
+                          await firebase.updateUserProfile(dName, rName, _profileSelectedVariant!);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Profile updated successfully")),
+                          );
+                          setState(() {});
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Names cannot be empty")),
+                          );
+                        }
+                      },
+                      child: Text(
+                        "SAVE CHANGES",
+                        style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 32),
+        
+        // ------------------ ALL SETTINGS UNDER PROFILE ------------------
+        Text(
+          "ROBOT & SYSTEM SETTINGS",
+          style: GoogleFonts.outfit(
+            color: textColor,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Configure gesture controls, sync schedules, and device settings below.",
+          style: GoogleFonts.outfit(
+            color: textColor60,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 16),
 
         // 1. Companion Profiles
         _buildSectionHeader("Companion Profiles", Icons.people, Colors.blue.shade600),

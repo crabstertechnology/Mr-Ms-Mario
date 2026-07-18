@@ -7,6 +7,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'database_service.dart';
 
 class BLEService with ChangeNotifier {
   static const String serviceUuid = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';

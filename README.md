@@ -56,7 +56,13 @@ sequenceDiagram
 ### 4. Custom Gesture Touch Mapping
 *   **Capacitive Gestures:** Supports **Single Tap**, **Double Tap**, **Triple Tap**, and **Long Press**.
 *   **Offline/Standalone Settings:** If not paired, the app configures local options (e.g. show clock, cycle animations).
-*   **Couple/Friends Settings:** When paired, the app configures relationship tap sequences that sync expression IDs (base `0-6` or custom `100-162`) to the local robot via BLE.
+*   **Couple/Friends Settings:** When paired, the app configures relationship tap sequences that sync expression IDs to the local robot via BLE.
+
+### 5. VoIP Intercom & Local Library Audio Streaming
+*   **Voice Call (VoIP/BLE):** Establish standard VoIP calls directly between the phone and the robot over local network socket connection.
+*   **Local Library Popup:** Search, scan, and list MP3 and WAV files on your phone via a clean, glassmorphic popup dialog. Easily stream selected tracks directly to the robot over BLE.
+*   **Music Controls:** Interactive volume slider, bass adjustment slider, playback position seek bar, and play/pause/stop buttons live-update the streaming state.
+*   **Hardware Loopback Test:** Quickly diagnose audio capture and playback latency by running an echo loopback test on the robot.
 
 ---
 
@@ -69,6 +75,7 @@ sequenceDiagram
 | **UI Screens** | Companion Eyes Face, Clock, Text Scroll | Face, Calendar Grid, Google Maps, Notifications, Clock Styles, settings |
 | **Buzzer Melodies** | Non-blocking Piezo Synthesizer | Non-blocking Piezo Synthesizer |
 | **Pairing Intercept** | Prevents clock screen switch on active pairing | Prevents clock screen switch on active pairing |
+| **VoIP / Audio Stream** | Local Audio playback support | PCM audio buffer streaming, volume & bass controls |
 
 ---
 

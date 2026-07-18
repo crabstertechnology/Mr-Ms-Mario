@@ -660,6 +660,15 @@ class DatabaseService with ChangeNotifier {
     }
   }
 
+  Future<void> updateRobotFirmwareVersion(String id, int version) async {
+    final idx = _robots.indexWhere((r) => r.id == id);
+    if (idx != -1 && _robots[idx].firmwareVersion != version) {
+      _robots[idx] = _robots[idx].copyWith(firmwareVersion: version);
+      await _saveRobotsToDisk();
+      notifyListeners();
+    }
+  }
+
   void _loadEvents() {
     if (_prefs == null) return;
     final jsonStr = _prefs!.getString('calendar_events');
