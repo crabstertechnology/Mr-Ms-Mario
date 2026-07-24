@@ -60,6 +60,16 @@ int birthdayDurationMs = 15000; // default 15 seconds
 int activeNotificationDurationMs = 5000;
 bool mapsActive = false;
 bool isRelationCommEnabled = true;
+String companionMac = "";
+String relType = "";
+
+bool isCompanionPaired() {
+  return (companionMac.length() > 0 && companionMac != "none" && relType.length() > 0 && relType != "none");
+}
+
+bool isRelationshipActive() {
+  return isRelationCommEnabled && isCompanionPaired();
+}
 
 // Relationship Action Mappings
 int relTapExpr = 1; // Default Happy
@@ -289,31 +299,53 @@ void handleRobotCommand(String text) {
     String payload = text.substring(5);
     int comma = payload.indexOf(',');
     if (comma > 0) {
-      String companionMac = payload.substring(0, comma);
-      String relationType = payload.substring(comma + 1);
+      companionMac = payload.substring(0, comma);
+      relType = payload.substring(comma + 1);
+      companionMac.trim();
+      relType.trim();
+      
+      if (companionMac == "none" || relType == "none" || companionMac.length() == 0 || relType.length() == 0) {
+        companionMac = "";
+        relType = "none";
+      }
       
       preferences.begin("luna", false);
       preferences.putString("comp_mac", companionMac);
-      preferences.putString("rel_type", relationType);
+      preferences.putString("rel_type", relType);
       preferences.end();
       
       audio.playSound(SOUND_POWERUP);
-      Serial.println("Companion paired: MAC=" + companionMac + ", Relation=" + relationType);
+      Serial.println("Companion paired: MAC=" + companionMac + ", Relation=" + relType);
     }
-  } else if (text.startsWith("RELATION:")) {
-    // Command format: RELATION:type (friends, couple)
-    String relationType = text.substring(9);
+  } else if (text == "UNPAIR" || text.startsWith("UNPAIR")) {
+    companionMac = "";
+    relType = "none";
     preferences.begin("luna", false);
-    preferences.putString("rel_type", relationType);
+    preferences.putString("comp_mac", "");
+    preferences.putString("rel_type", "none");
+    preferences.end();
+    audio.playSound(SOUND_POWERDOWN);
+    Serial.println("Companion unpaired.");
+  } else if (text.startsWith("RELATION:")) {
+    // Command format: RELATION:type (friends, couple, none)
+    relType = text.substring(9);
+    relType.trim();
+    if (relType == "none" || relType.length() == 0) {
+      companionMac = "";
+      relType = "none";
+    }
+    preferences.begin("luna", false);
+    preferences.putString("comp_mac", companionMac);
+    preferences.putString("rel_type", relType);
     preferences.end();
     
     // Play romantic sound for couple, friendly chime for friends
-    if (relationType == "couple") {
+    if (relType == "couple") {
       audio.playSound(SOUND_POWERUP);
     } else {
       audio.playSound(SOUND_COIN);
     }
-    Serial.println("Relationship status updated: " + relationType);
+    Serial.println("Relationship status updated: " + relType);
   } else if (text.startsWith("CAL:")) {
     // Command format: CAL:type,time,title
     String payload = text.substring(4);
@@ -447,8 +479,8 @@ void handleRobotCommand(String text) {
       }
     }
   } else if (text.startsWith("NOTIF_EXPR:")) {
-    if (!isRelationCommEnabled) {
-      Serial.println("Warning: NOTIF_EXPR ignored because relation communication is disabled.");
+    if (!isRelationshipActive()) {
+      Serial.println("Warning: NOTIF_EXPR ignored because relation communication is disabled or companion is not paired.");
       return;
     }
     // Command format: NOTIF_EXPR:Title|Body|ExprId
@@ -639,6 +671,8 @@ void setup() {
   birthdayDurationMs = preferences.getInt("birthDur", 15000);
   activeNotificationDurationMs = notificationDurationMs;
   isRelationCommEnabled = preferences.getBool("relComm", true);
+  companionMac = preferences.getString("comp_mac", "");
+  relType = preferences.getString("rel_type", "");
   relTapExpr = preferences.getInt("rTapEx", 1);
   relTapSound = preferences.getInt("rTapSd", 2);
   relDoubleExpr = preferences.getInt("rDobEx", 6);
@@ -920,50 +954,40 @@ void loop() {
     lastInteractionTime = now; // reset inactivity clock
     lastExpressionCycleTime = now; // reset expression cycle timer
 
-    if (touchEvent == TOUCH_TAP) {
-      if (isRelationCommEnabled) {
+    bool relActive = isRelationshipActive();
+
+    if (relActive) {
+      if (touchEvent == TOUCH_TAP) {
         String logMsg = "TOUCH_REL:TAP|" + String(relTapExpr) + "|" + String(relTapSound);
         ble.sendLog(logMsg);
         Serial.println(logMsg);
         face.headerText = "Sent: " + getExpressionName(relTapExpr);
-      } else {
-        face.headerText = "";
-      }
-      face.setExpression(isRelationCommEnabled ? (Expression)relTapExpr : EXPR_HAPPY);
-      activeNotificationDurationMs = notificationDurationMs;
-    } else if (touchEvent == TOUCH_DOUBLE_TAP) {
-      if (isRelationCommEnabled) {
+        face.setExpression((Expression)relTapExpr);
+        activeNotificationDurationMs = notificationDurationMs;
+      } else if (touchEvent == TOUCH_DOUBLE_TAP) {
         String logMsg = "TOUCH_REL:DOUBLE|" + String(relDoubleExpr) + "|" + String(relDoubleSound);
         ble.sendLog(logMsg);
         Serial.println(logMsg);
         face.headerText = "Sent: " + getExpressionName(relDoubleExpr);
-      } else {
-        face.headerText = "";
-      }
-      face.setExpression(isRelationCommEnabled ? (Expression)relDoubleExpr : EXPR_WINK);
-      activeNotificationDurationMs = notificationDurationMs;
-    } else if (touchEvent == TOUCH_TRIPLE_TAP) {
-      if (isRelationCommEnabled) {
+        face.setExpression((Expression)relDoubleExpr);
+        activeNotificationDurationMs = notificationDurationMs;
+      } else if (touchEvent == TOUCH_TRIPLE_TAP) {
         String logMsg = "TOUCH_REL:TRIPLE|" + String(relTripleExpr) + "|" + String(relTripleSound);
         ble.sendLog(logMsg);
         Serial.println(logMsg);
         face.headerText = "Sent: " + getExpressionName(relTripleExpr);
-      } else {
-        face.headerText = "";
-      }
-      face.setExpression(isRelationCommEnabled ? (Expression)relTripleExpr : EXPR_SURPRISED);
-      activeNotificationDurationMs = notificationDurationMs;
-    } else if (touchEvent == TOUCH_LONG_PRESS) {
-      if (isRelationCommEnabled) {
+        face.setExpression((Expression)relTripleExpr);
+        activeNotificationDurationMs = notificationDurationMs;
+      } else if (touchEvent == TOUCH_LONG_PRESS) {
         String logMsg = "TOUCH_REL:LONG|" + String(relLongExpr) + "|" + String(relLongSound);
         ble.sendLog(logMsg);
         Serial.println(logMsg);
         face.headerText = "Sent: " + getExpressionName(relLongExpr);
-      } else {
-        face.headerText = "";
+        face.setExpression((Expression)relLongExpr);
+        activeNotificationDurationMs = notificationDurationMs;
       }
-      face.setExpression(isRelationCommEnabled ? (Expression)relLongExpr : EXPR_SURPRISED);
-      activeNotificationDurationMs = notificationDurationMs;
+    } else {
+      face.headerText = "";
     }
 
     if (isAlarmRinging || isReminderRinging) {
@@ -1073,40 +1097,38 @@ void loop() {
         }
       } else {
         // Normal state controls
-        switch (touchEvent) {
-          case TOUCH_TAP:
-            touchCount++;
-            Serial.print("Touch count (Single Tap): ");
-            Serial.println(touchCount);
-            if (!isRelationCommEnabled) {
+        if (!relActive) {
+          switch (touchEvent) {
+            case TOUCH_TAP:
+              touchCount++;
+              Serial.print("Touch count (Single Tap): ");
+              Serial.println(touchCount);
               executeTouchAction(touchSingle, TOUCH_TAP);
-            }
-            break;
+              break;
 
-          case TOUCH_DOUBLE_TAP:
-            touchCount += 2;
-            Serial.print("Touch count (Double Tap): ");
-            Serial.println(touchCount);
-            if (!isRelationCommEnabled) {
+            case TOUCH_DOUBLE_TAP:
+              touchCount += 2;
+              Serial.print("Touch count (Double Tap): ");
+              Serial.println(touchCount);
               executeTouchAction(touchDouble, TOUCH_DOUBLE_TAP);
-            }
-            break;
+              break;
 
-          case TOUCH_TRIPLE_TAP:
-            // Open local settings menu
-            inSettingsMenu = true;
-            menuOption = 0;
-            optionSelected = false;
-            audio.playSound(SOUND_POWERUP);
-            Serial.println("Local Settings Menu opened.");
-            break;
+            case TOUCH_TRIPLE_TAP:
+              // Open local settings menu
+              inSettingsMenu = true;
+              menuOption = 0;
+              optionSelected = false;
+              audio.playSound(SOUND_POWERUP);
+              Serial.println("Local Settings Menu opened.");
+              break;
 
-          case TOUCH_LONG_PRESS:
-            executeTouchAction(touchLong, TOUCH_LONG_PRESS);
-            break;
+            case TOUCH_LONG_PRESS:
+              executeTouchAction(touchLong, TOUCH_LONG_PRESS);
+              break;
 
-          default:
-            break;
+            default:
+              break;
+          }
         }
       }
     }

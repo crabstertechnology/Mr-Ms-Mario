@@ -3,7 +3,7 @@
   "compiler.optimization_flags": "-Os",
   "customBuildProperties": "",
   "fqbn": "esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc",
-  "hardwareFolders": "C:\\Users\\sasit\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.7,C:\\Users\\sasit\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.7",
+  "hardwareFolders": "C:\\Users\\sasit\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11,C:\\Users\\sasit\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11",
   "otherLibrariesFolders": "C:\\Users\\sasit\\OneDrive\\Documents\\Arduino\\libraries",
   "sketchLocation": "W:\\Mr.mario\\luna_firmware"
 }
