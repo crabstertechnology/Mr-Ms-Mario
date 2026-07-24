@@ -834,6 +834,11 @@ class BLEService with ChangeNotifier {
     await _writeTextWithAck(payloadStr, "Relationship Update");
   }
 
+  Future<void> transmitModelVariant(String variant) async {
+    final payloadStr = 'MODEL:$variant';
+    await _writeTextWithAck(payloadStr, "Model Variant");
+  }
+
   Future<void> transmitWake() async {
     await _writeTextWithAck('WAKE', "Wake Robot");
   }
@@ -1137,7 +1142,7 @@ class BLEService with ChangeNotifier {
       addLog("Trigger Relationship: Companion $eventType -> Primary respond (Expr $expr, Sound $sound)", "BLE");
       _activeExpressionId = expr;
       _activeExpressionLabel = _getExpressionLabel(expr);
-      if (hasSpeaker) {
+      if (sound > 0) {
         transmitAudio(sound);
       }
       
@@ -1202,7 +1207,7 @@ class BLEService with ChangeNotifier {
       addLog("Trigger Relationship: Companion $eventType -> Primary respond (Expr $expr, Sound $sound)", "BLE");
       _activeExpressionId = expr;
       _activeExpressionLabel = _getExpressionLabel(expr);
-      if (hasSpeaker) {
+      if (sound > 0) {
         transmitAudio(sound);
       }
       
@@ -1217,7 +1222,7 @@ class BLEService with ChangeNotifier {
   void handleRemoteCloudTrigger(int expr, int sound, String friendName, String eventType, {String? customLabel}) {
     _activeExpressionId = expr;
     _activeExpressionLabel = customLabel ?? _getExpressionLabel(expr);
-    if (hasSpeaker) {
+    if (sound > 0) {
       transmitAudio(sound);
     }
     transmitExpression(_activeExpressionId, _activeExpressionLabel);

@@ -102,11 +102,16 @@ class _MainDashboardState extends State<MainDashboard> {
       _ringingAlarm = alarm;
     });
 
-    ble.transmitMarqueeText("ALARM!");
+    if (ble.isConnected) {
+      ble.transmitMarqueeText("ALARM: ${alarm.label.toUpperCase()}");
+      ble.transmitAudio(3);
+    }
 
     _alarmSoundTimer?.cancel();
-    _alarmSoundTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _audioSynth.playMelody("A5 200 0");
+    _alarmSoundTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (ble.isConnected) {
+        ble.transmitAudio(3);
+      }
     });
 
     showDialog(
@@ -121,12 +126,12 @@ class _MainDashboardState extends State<MainDashboard> {
             children: const [
               Icon(Icons.alarm, color: Colors.redAccent),
               SizedBox(width: 8),
-              Text("Alarm Ringing!", style: TextStyle(color: Colors.white)),
+              Text("Hardware Alarm Ringing!", style: TextStyle(color: Colors.white)),
             ],
           ),
           content: Text(
-            "Time: ${alarm.formatTime(Provider.of<DatabaseService>(context, listen: false).is12HourFormat)}",
-            style: const TextStyle(color: Colors.white70, fontSize: 16),
+            "Alarm pushed to Luna hardware: ${alarm.formatTime(Provider.of<DatabaseService>(context, listen: false).is12HourFormat)}",
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           actions: [
             ElevatedButton(
@@ -292,15 +297,15 @@ class _MainDashboardState extends State<MainDashboard> {
     _customMelodyController.text =
         "E5 50 10\nE5 50 10\nE5 50 30\nC5 50 10\nE5 50 30\nG5 50 50\nG4 50 50\nC5 50 10\nG4 50 30\nE4 50 10\nA4 50 10\nB4 50 10\nAS4 50 10\nA4 50 30\nG4 50 20\nE5 50 10\nG5 50 10\nA5 50 10\nF5 50 10\nG5 50 10\nE5 50 10\nC5 50 10\nD5 50 10\nB4 50 50";
     
-    // Poll the cloud connectivity status of all paired robots
-    _cloudPollTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    // Poll the cloud connectivity status of all paired robots (every 15s)
+    _cloudPollTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (mounted) {
         _pollCloudStatus();
       }
     });
 
-    // Check calendar scheduled meetings/birthdays every 5 seconds
-    _calendarSchedulerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+    // Check calendar scheduled meetings/birthdays every 30 seconds
+    _calendarSchedulerTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted) {
         _checkCalendarScheduledEvents();
       }
@@ -310,8 +315,8 @@ class _MainDashboardState extends State<MainDashboard> {
     _discoverServer();
     _scanLocalAudioFiles();
 
-    // Periodically run UDP discovery every 10 seconds to detect server IP changes
-    _udpDiscoveryTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    // Periodically run UDP discovery every 30 seconds to detect server IP changes
+    _udpDiscoveryTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted) {
         _discoverServer();
       }
@@ -471,10 +476,21 @@ class _MainDashboardState extends State<MainDashboard> {
             final mm = event.dateTime.minute.toString().padLeft(2, '0');
             final timeStr = "$hh:$mm";
             ble.transmitCalendarEvent(event.type, timeStr, event.title);
-            
+
+            // Hardware sound triggers for Calendar Reminders / Birthdays / Alarms
+            int sfxId = 1;
+            if (event.type == 'birthday') {
+              sfxId = 3; // 1-Up Melody for Birthday
+            } else if (event.type == 'alarm') {
+              sfxId = 2; // Super Mushroom / Alarm
+            } else if (event.type == 'reminder') {
+              sfxId = 4; // Stomp SFX / Reminder
+            }
+            ble.transmitAudio(sfxId);
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text("Event '${event.title}' automatically pushed to robot!"),
+                content: Text("Event '${event.title}' pushed to Luna hardware!"),
                 backgroundColor: _accentColor,
               ),
             );
@@ -2047,38 +2063,11 @@ class _MainDashboardState extends State<MainDashboard> {
                 ),
               ),
               const SizedBox(height: 20),
-              if (ble.isConnected && !ble.hasSpeaker) ...[
-                GlassCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.speaker_notes_off, color: Colors.orangeAccent, size: 36),
-                      const SizedBox(height: 10),
-                      Text(
-                        "LUNA V1 DETECTED (NO SPEAKER)",
-                        style: GoogleFonts.outfit(
-                          color: textColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        "Voice call, audio streaming, volume controls, and soundboard features are disabled because Luna v1 hardware does not have a speaker module.",
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.outfit(
-                          color: textColor60,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              // Show Intercom & Music Player only if speaker hardware is present (v2) or disconnected
+              if (!ble.isConnected || ble.hasSpeaker) ...[
+                _buildIntercomAndMusicSection(ble),
                 const SizedBox(height: 20),
               ],
-              _buildIntercomAndMusicSection(ble),
-              const SizedBox(height: 20),
               _buildSoundBoardPanel(db, ble),
             ],
           ),
@@ -2690,7 +2679,7 @@ class _MainDashboardState extends State<MainDashboard> {
         ble.addLog("Executing expression: ${gif.name}", "ANIM");
         await ble.transmitExpression(exprVal, gif.name);
 
-        if (soundVal > 0 && ble.hasSpeaker) {
+        if (soundVal > 0) {
           Future.delayed(const Duration(milliseconds: 150), () {
             ble.transmitAudio(soundVal);
           });
@@ -2740,15 +2729,15 @@ class _MainDashboardState extends State<MainDashboard> {
           itemBuilder: (context, index) {
             final sfx = sfxList[index];
             final color = sfx['color'] as Color;
-            final hasSpeaker = ble.hasSpeaker;
+            final isEnabled = ble.isConnected;
             return Card(
-              color: hasSpeaker ? const Color(0xFFE0F2FE) : const Color(0xFFE2E8F0),
+              color: isEnabled ? const Color(0xFFE0F2FE) : const Color(0xFFF1F5F9),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: hasSpeaker ? _accentColor.withOpacity(0.3) : Colors.black.withOpacity(0.05), width: 1.2),
+                side: BorderSide(color: isEnabled ? _accentColor.withOpacity(0.3) : Colors.black.withOpacity(0.05), width: 1.2),
               ),
               child: InkWell(
-                onTap: !hasSpeaker ? null : () async {
+                onTap: !isEnabled ? null : () async {
                   final sfxId = sfx['id'] as int;
                   await ble.transmitAudio(sfxId);
                 },
@@ -2760,14 +2749,14 @@ class _MainDashboardState extends State<MainDashboard> {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: hasSpeaker ? color : textColor38),
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: isEnabled ? color : textColor38),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           sfx['name'] as String,
                           style: GoogleFonts.outfit(
-                            color: hasSpeaker ? textColor : textColor38,
+                            color: isEnabled ? textColor : textColor38,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -3804,40 +3793,7 @@ class _MainDashboardState extends State<MainDashboard> {
             ],
           ),
         ),
-        // WiFi Status card
-        GlassCard(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Icon(
-                    robot.wifiSSID.isNotEmpty ? Icons.wifi : Icons.wifi_off,
-                    color: robot.wifiSSID.isNotEmpty ? const Color(0xFF10B981) : Colors.white38,
-                    size: 18,
-                  ),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: robot.wifiSSID.isNotEmpty ? const Color(0xFF10B981) : Colors.transparent,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                robot.wifiSSID.isNotEmpty ? robot.wifiSSID : "Not Configured",
-                style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 13, textStyle: const TextStyle(overflow: TextOverflow.ellipsis)),
-              ),
-              Text("Wi-Fi Connection", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
-            ],
-          ),
-        ),
+
         // BLE connection card
         GlassCard(
           padding: const EdgeInsets.all(12),
@@ -3872,98 +3828,7 @@ class _MainDashboardState extends State<MainDashboard> {
             ],
           ),
         ),
-        // Cloud Link card
-        GlassCard(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Icon(
-                    robot.cloudStatus == 'online' ? Icons.cloud_done : Icons.cloud_off,
-                    color: robot.cloudStatus == 'online' ? const Color(0xFFFFCDD2) : Colors.white38,
-                    size: 18,
-                  ),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: robot.cloudStatus == 'online' ? const Color(0xFFFFCDD2) : Colors.transparent,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                robot.cloudStatus == 'online' ? "Connected" : "Offline",
-                style: GoogleFonts.outfit(
-                  color: robot.cloudStatus == 'online' ? const Color(0xFFFFCDD2) : Colors.white70,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              Text("Cloud Link", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
-            ],
-          ),
-        ),
-        // Companion status card
-        GlassCard(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Icon(
-                    robot.companionDeviceId != null ? Icons.people : Icons.people_outline,
-                    color: robot.companionDeviceId != null ? const Color(0xFFEC4899) : Colors.white38,
-                    size: 18,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                robot.companionDeviceId != null
-                    ? (robot.relationshipType == 'couple' ? "Couple \u{2764}\u{FE0F}" : "Friends \u{1F91D}")
-                    : "Single",
-                style: GoogleFonts.outfit(
-                  color: robot.companionDeviceId != null ? const Color(0xFFEC4899) : Colors.white70,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              Text("Companion Link", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
-            ],
-          ),
-        ),
-        // Uptime card
-        GlassCard(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Icon(Icons.timer, color: Colors.amber, size: 18),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                ble.isConnected ? _formatUptime(ble.uptimeSeconds) : "--",
-                style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              Text("Robot Uptime", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
-            ],
-          ),
-        ),
+
       ],
     );
   }
@@ -4028,38 +3893,10 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildQuickActionsPanel(BLEService ble) {
     final List<Map<String, dynamic>> actions = [
       {
-        'icon': Icons.face,
-        'label': 'Expression',
-        'color': const Color(0xFFE53935),
-        'onTap': () => setState(() {
-          _activeTabIdx = 1;
-        }),
-      },
-      {
-        'icon': Icons.audiotrack,
-        'label': 'Play Sound',
-        'color': const Color(0xFF10B981),
-        'onTap': () => setState(() {
-          _activeTabIdx = 2; // Sounds tab
-        }),
-      },
-      {
         'icon': Icons.watch_later,
-        'label': 'Show Clock',
+        'label': 'Clock',
         'color': const Color(0xFFE53935),
         'onTap': () => ble.transmitExpression(8, ""), // 8 is EXPR_CLOCK
-      },
-      {
-        'icon': Icons.calendar_month,
-        'label': 'Calendar',
-        'color': const Color(0xFF0074D9),
-        'onTap': () => setState(() => _activeTabIdx = 3), // Calendar tab
-      },
-      {
-        'icon': Icons.message,
-        'label': 'Send Msg',
-        'color': const Color(0xFF3B82F6),
-        'onTap': () => _showSendMessageDialog(ble),
       },
       {
         'icon': Icons.wb_sunny,
@@ -4074,13 +3911,10 @@ class _MainDashboardState extends State<MainDashboard> {
         'onTap': () => ble.transmitSleep(),
       },
       {
-        'icon': Icons.link,
-        'label': 'Pair Comp',
-        'color': const Color(0xFFEC4899),
-        'onTap': () => setState(() {
-          _activeTabIdx = 5; // Profile/Settings tab
-          _currentSettingsSection = 'companions';
-        }),
+        'icon': Icons.message,
+        'label': 'Send Msg',
+        'color': const Color(0xFF3B82F6),
+        'onTap': () => _showSendMessageDialog(ble),
       },
     ];
 
@@ -4433,40 +4267,7 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
 
         const SizedBox(height: 24),
-        // Wifi Setup Panel
-        Text(
-          "NETWORK CONFIGURATION",
-          style: GoogleFonts.outfit(color: textColor60, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
-        ),
-        const SizedBox(height: 12),
-        GlassCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                "Configure Robot Wi-Fi",
-                style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                "Send local Wi-Fi router name and password securely to the companion robot over Bluetooth.",
-                style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: ble.isConnected ? () => _showWifiConfigDialog(db, ble) : null,
-                icon: const Icon(Icons.wifi),
-                label: const Text("CONFIGURE WI-FI"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ],
-          ),
-        ),
+
 
         const SizedBox(height: 24),
         // Relationship Setup Panel
@@ -4603,77 +4404,7 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  void _showWifiConfigDialog(DatabaseService db, BLEService ble) {
-    final primary = db.primaryRobot;
-    if (primary == null) return;
 
-    final ssidController = TextEditingController(text: primary.wifiSSID);
-    final passController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: Text("Configure Wi-Fi", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: ssidController,
-                style: GoogleFonts.outfit(color: textColor),
-                decoration: InputDecoration(
-                  labelText: "Wi-Fi SSID (Network Name)",
-                  labelStyle: GoogleFonts.outfit(color: textColor60),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black.withOpacity(0.1))),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentColor)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: passController,
-                style: GoogleFonts.outfit(color: textColor),
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  labelStyle: GoogleFonts.outfit(color: textColor60),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black.withOpacity(0.1))),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentColor)),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("CANCEL", style: TextStyle(color: textColor60)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (ssidController.text.isNotEmpty) {
-                  Navigator.pop(context);
-                  await db.updateRobotWifi(primary.id, ssidController.text);
-                  await ble.transmitWifiConfig(ssidController.text, passController.text);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Wi-Fi SSID '${ssidController.text}' sent successfully!"),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _accentColor,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text("CONNECT"),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   void _showRelationshipSetupDialog(DatabaseService db, BLEService ble) {
     final robots = db.robots;
@@ -5519,10 +5250,11 @@ class _MainDashboardState extends State<MainDashboard> {
                       await db.addAlarm(newAlarm);
                     }
 
+                    final hh = selectedTime.hour.toString().padLeft(2, '0');
+                    final mm = selectedTime.minute.toString().padLeft(2, '0');
+                    final timeStr = "$hh:$mm";
+
                     if (ble.isConnected) {
-                      final hh = selectedTime.hour.toString().padLeft(2, '0');
-                      final mm = selectedTime.minute.toString().padLeft(2, '0');
-                      final timeStr = "$hh:$mm";
                       await ble.transmitCalendarEvent(
                         newEvent.type,
                         timeStr,
@@ -5532,7 +5264,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text("Scheduled '${newEvent.title}'!"),
+                        content: Text("Scheduled '${newEvent.title}' for ${selectedTime.format(context)}!"),
                         backgroundColor: const Color(0xFF10B981),
                       ),
                     );
@@ -6016,7 +5748,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                onPressed: () => _addAlarmFlow(db),
+                onPressed: () => _addAlarmFlow(db, ble),
                 icon: const Icon(Icons.add_alarm),
                 label: const Text("ADD NEW ALARM"),
                 style: ElevatedButton.styleFrom(
@@ -6032,7 +5764,7 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  Future<void> _addAlarmFlow(DatabaseService db) async {
+  Future<void> _addAlarmFlow(DatabaseService db, BLEService ble) async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
@@ -6046,6 +5778,18 @@ class _MainDashboardState extends State<MainDashboard> {
         isEnabled: true,
       );
       await db.addAlarm(alarm);
+
+      final hh = picked.hour.toString().padLeft(2, '0');
+      final mm = picked.minute.toString().padLeft(2, '0');
+      if (ble.isConnected) {
+        await ble.transmitCalendarEvent("alarm", "$hh:$mm", "Alarm");
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Alarm set for $hh:$mm!"),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
     }
   }
 
@@ -6968,8 +6712,14 @@ class _MainDashboardState extends State<MainDashboard> {
                         final rName = _profileRobotNameController.text.trim();
                         if (dName.isNotEmpty && rName.isNotEmpty) {
                           await firebase.updateUserProfile(dName, rName, _profileSelectedVariant!);
+                          final isMsLuna = _profileSelectedVariant == 'ms_luna';
+                          await db.updateNegativeEnabled(isMsLuna);
+                          await db.updateOledInvert(isMsLuna);
+                          if (ble.isConnected) {
+                            await ble.transmitModelVariant(_profileSelectedVariant!);
+                          }
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Profile updated successfully")),
+                            const SnackBar(content: Text("Profile updated and synced to hardware!")),
                           );
                           setState(() {});
                         } else {

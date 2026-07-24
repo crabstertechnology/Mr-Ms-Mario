@@ -65,17 +65,10 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
 
     _checkCycleTimer();
 
-    // 1-second general refresh timer for clock and GIF stability
+    // 1-second general refresh timer for clock display
     _refreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          // Increment cache reset counter every 30 seconds
-          if (timer.tick % 30 == 0 && widget.activeLabel.toUpperCase() == "CYCLING ALL GIFS") {
-            _gifResetCounter++;
-            PaintingBinding.instance.imageCache.clear();
-            PaintingBinding.instance.imageCache.clearLiveImages();
-          }
-        });
+      if (mounted && widget.activeGifId == 'clock') {
+        setState(() {});
       }
     });
   }

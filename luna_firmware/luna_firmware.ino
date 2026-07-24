@@ -62,6 +62,7 @@ bool mapsActive = false;
 bool isRelationCommEnabled = true;
 String companionMac = "";
 String relType = "";
+String robotVariant = "ms_luna";
 
 bool isCompanionPaired() {
   return (companionMac.length() > 0 && companionMac != "none" && relType.length() > 0 && relType != "none");
@@ -81,6 +82,58 @@ int relTripleSound = 8;
 int relLongExpr = 5; // Default Sleeping
 int relLongSound = 4; // Default Powerdown
 
+struct NVSEventItem {
+  String type;
+  String time;
+  String title;
+  bool active;
+};
+NVSEventItem nvsEvents[5];
+int nvsEventCount = 0;
+int lastTriggeredAlarmMinute = -1;
+
+void saveCalendarEventToNVS(String type, String time, String title) {
+  for (int i = 4; i > 0; i--) {
+    nvsEvents[i] = nvsEvents[i - 1];
+  }
+  nvsEvents[0].type = type;
+  nvsEvents[0].time = time;
+  nvsEvents[0].title = title;
+  nvsEvents[0].active = true;
+  if (nvsEventCount < 5) nvsEventCount++;
+
+  preferences.begin("luna", false);
+  preferences.putInt("cal_cnt", nvsEventCount);
+  for (int i = 0; i < nvsEventCount; i++) {
+    String key = "cal_" + String(i);
+    String val = nvsEvents[i].type + "|" + nvsEvents[i].time + "|" + nvsEvents[i].title;
+    preferences.putString(key.c_str(), val);
+  }
+  preferences.end();
+}
+
+void loadCalendarEventsFromNVS() {
+  preferences.begin("luna", false);
+  robotVariant = preferences.getString("robot_var", "ms_luna");
+  nvsEventCount = preferences.getInt("cal_cnt", 0);
+  if (nvsEventCount > 5) nvsEventCount = 5;
+  for (int i = 0; i < nvsEventCount; i++) {
+    String key = "cal_" + String(i);
+    String val = preferences.getString(key.c_str(), "");
+    if (val.length() > 0) {
+      int sep1 = val.indexOf('|');
+      int sep2 = val.indexOf('|', sep1 + 1);
+      if (sep1 > 0 && sep2 > sep1) {
+        nvsEvents[i].type = val.substring(0, sep1);
+        nvsEvents[i].time = val.substring(sep1 + 1, sep2);
+        nvsEvents[i].title = val.substring(sep2 + 1);
+        nvsEvents[i].active = true;
+      }
+    }
+  }
+  preferences.end();
+}
+
 // Software Real-Time Clock variables
 int rtcHour = 12;
 int rtcMinute = 0;
@@ -89,6 +142,36 @@ String rtcDay = "Mon";
 String rtcDate = "06 Jul";
 unsigned long lastRtcMillis = 0;
 bool is12HourFormat = false;
+
+void checkHardwareScheduledAlarms() {
+  if (rtcSecond == 0 && rtcMinute != lastTriggeredAlarmMinute) {
+    char currentHHMM[6];
+    snprintf(currentHHMM, sizeof(currentHHMM), "%02d:%02d", rtcHour, rtcMinute);
+    String currentStr = String(currentHHMM);
+
+    for (int i = 0; i < nvsEventCount; i++) {
+      if (nvsEvents[i].active && nvsEvents[i].time == currentStr) {
+        lastTriggeredAlarmMinute = rtcMinute;
+        isReminderRinging = true;
+        lastReminderSoundTime = millis();
+        String typeLabel = nvsEvents[i].type;
+        if (typeLabel.length() > 0) {
+          typeLabel[0] = toupper(typeLabel[0]);
+        }
+        face.setNotificationText(typeLabel + ": " + nvsEvents[i].title);
+        if (nvsEvents[i].type == "birthday") {
+          audio.playSound(SOUND_POWERUP);
+        } else if (nvsEvents[i].type == "alarm") {
+          audio.playSound(SOUND_POWERUP);
+        } else {
+          audio.playSound(SOUND_COIN);
+        }
+        Serial.println("Offline Hardware Alarm Ringing for: " + nvsEvents[i].title + " @ " + currentStr);
+        break;
+      }
+    }
+  }
+}
 
 void parseAndSyncTime(String timeStr) {
   int firstColon = timeStr.indexOf(':');
@@ -346,6 +429,16 @@ void handleRobotCommand(String text) {
       audio.playSound(SOUND_COIN);
     }
     Serial.println("Relationship status updated: " + relType);
+  } else if (text.startsWith("MODEL:")) {
+    robotVariant = text.substring(6);
+    robotVariant.trim();
+    negativeDisplay = (robotVariant == "ms_luna");
+    display.invertDisplay(negativeDisplay);
+    preferences.begin("luna", false);
+    preferences.putString("robot_var", robotVariant);
+    preferences.putBool("neg", negativeDisplay);
+    preferences.end();
+    Serial.println("OK:ModelVariantUpdated:" + robotVariant);
   } else if (text.startsWith("CAL:")) {
     // Command format: CAL:type,time,title
     String payload = text.substring(4);
@@ -358,18 +451,8 @@ void handleRobotCommand(String text) {
       
       Serial.println("Calendar Event: type=" + type + ", time=" + time + ", title=" + title);
       
-      String notificationText = "";
-      if (type == "birthday") {
-        notificationText = "Birthday: " + title;
-        activeNotificationDurationMs = birthdayDurationMs;
-      } else {
-        notificationText = "Meeting @ " + time + ": " + title;
-        activeNotificationDurationMs = reminderDurationMs;
-      }
-      isReminderRinging = true;
-      lastReminderSoundTime = millis();
-      face.setNotificationText(notificationText);
-      audio.playSound(SOUND_POWERUP); // play alert sound
+      // Save in RAM and NVS persistent Flash memory
+      saveCalendarEventToNVS(type, time, title);
     }
   } else if (text.startsWith("ALARM:")) {
     String state = text.substring(6);
@@ -660,7 +743,8 @@ void setup() {
   touchSingle = preferences.getInt("tchSing", 2);  // default: skip animation
   touchDouble = preferences.getInt("tchDoub", 0);
   touchLong = preferences.getInt("tchLong", 0);
-  negativeDisplay = preferences.getBool("neg", false);
+  robotVariant = preferences.getString("robot_var", "ms_luna");
+  negativeDisplay = preferences.getBool("neg", (robotVariant == "ms_luna"));
   clockStyle = preferences.getInt("clkStyle", 0);
   oledBrightness = preferences.getInt("oledBright", 2);
   gifIntroSpeed = preferences.getInt("intSpeed", 100);
@@ -727,6 +811,8 @@ void setup() {
   display.print(negativeDisplay ? "Loading Ms. Luna..." : "Loading Mr. Luna...");
   display.display();
   
+  loadCalendarEventsFromNVS();
+
   // Start Bluetooth BLE Server (always on)
   bleActive = true;
   ble.init();
@@ -897,6 +983,9 @@ void loop() {
 
   // 1. Maintain BLE stack status and connection advertisement
   ble.handleConnectionState();
+
+  // 1.5. Check offline hardware scheduled alarms & calendar events
+  checkHardwareScheduledAlarms();
 
   // 2. Refresh non-blocking audio synthesizer
   audio.update();
