@@ -437,15 +437,8 @@ void handleRobotCommand(String text) {
   } else if (text.startsWith("MODEL:")) {
     robotVariant = text.substring(6);
     robotVariant.trim();
-    negativeDisplay = (robotVariant == "ms_luna");
-    #ifdef TFT_CS
-    tft.invertDisplay(negativeDisplay);
-    #else
-    display.invertDisplay(negativeDisplay);
-    #endif
     preferences.begin("luna", false);
     preferences.putString("robot_var", robotVariant);
-    preferences.putBool("neg", negativeDisplay);
     preferences.end();
     Serial.println("OK:ModelVariantUpdated:" + robotVariant);
   } else if (text.startsWith("CAL:")) {

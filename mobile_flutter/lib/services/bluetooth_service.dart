@@ -593,7 +593,7 @@ class BLEService with ChangeNotifier {
       // Sync clock to hardware after successful connection
       Future.delayed(const Duration(milliseconds: 700), () => syncClockToHardware());
 
-      // App is Single Source of Truth: push app's stored robot variant to hardware upon connection
+      // App is Single Source of Truth: push app's stored robot variant and negative display settings to hardware upon connection
       Future.delayed(const Duration(milliseconds: 900), () async {
         try {
           final prefs = await SharedPreferences.getInstance();
@@ -606,10 +606,30 @@ class BLEService with ChangeNotifier {
               targetVariant = primary['variant'] as String;
             }
           }
-          addLog("Pushing app primary variant ($targetVariant) to hardware...", "BLE");
+          final negEnabled = prefs.getBool('negativeEnabled') ?? (targetVariant == 'ms_luna');
+
+          addLog("Pushing app primary variant ($targetVariant) & negative display ($negEnabled) to hardware...", "BLE");
           await transmitModelVariant(targetVariant);
+          
+          await transmitSaveSettings(
+            bleEnabled: true,
+            speedMs: prefs.getInt('animation_speed') ?? 100,
+            defaultGif: prefs.getInt('default_gif') ?? 99,
+            introGif: prefs.getInt('intro_gif') ?? 0,
+            touchSingle: prefs.getInt('touch_single') ?? 2,
+            touchDouble: prefs.getInt('touch_double') ?? 0,
+            touchLong: prefs.getInt('touch_long') ?? 0,
+            negativeEnabled: negEnabled,
+            introSpeedMs: prefs.getInt('intro_speed') ?? 100,
+            introSoundSpeed: prefs.getInt('intro_sound_speed') ?? 100,
+            notificationDurationSec: prefs.getInt('notif_duration') ?? 5,
+            reminderDurationSec: prefs.getInt('reminder_duration') ?? 10,
+            birthdayDurationSec: prefs.getInt('birthday_duration') ?? 15,
+            clockStyle: prefs.getInt('clock_style') ?? 0,
+            oledBrightness: prefs.getInt('oled_brightness') ?? 2,
+          );
         } catch (e) {
-          addLog("Failed to sync app variant to hardware on connect: $e", "WARNING");
+          addLog("Failed to sync app settings to hardware on connect: $e", "WARNING");
         }
       });
 
