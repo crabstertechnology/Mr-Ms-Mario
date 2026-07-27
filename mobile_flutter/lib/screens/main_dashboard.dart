@@ -1501,8 +1501,14 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget _buildTopNavigation(BLEService ble) {
     final db = Provider.of<DatabaseService>(context, listen: false);
     _isMsLuna = db.primaryRobot?.variant == 'ms_luna';
-    final hasRelationship = db.primaryRobot != null && db.primaryRobot!.companionDeviceId != null;
-    final primaryName = db.primaryRobot?.name ?? (_isMsLuna ? "Ms. Luna" : "Mr. Luna");
+    final primaryRobot = db.primaryRobot;
+    final hasRelationship = primaryRobot != null && primaryRobot.companionDeviceId != null;
+    String primaryName = primaryRobot?.name ?? (_isMsLuna ? "Ms. Luna Robot" : "Mr. Luna Robot");
+    if (_isMsLuna && (primaryName == "Mr. Luna Robot" || primaryName == "Mr. Luna")) {
+      primaryName = "Ms. Luna Robot";
+    } else if (!_isMsLuna && (primaryName == "Ms. Luna Robot" || primaryName == "Ms. Luna")) {
+      primaryName = "Mr. Luna Robot";
+    }
     
     String? companionName;
     bool isCompanionMsLuna = false;

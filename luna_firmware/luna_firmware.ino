@@ -1,6 +1,3 @@
-#include <WiFi.h>
-#include <Network.h>
-#include <WiFiUdp.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -62,7 +59,7 @@ bool mapsActive = false;
 bool isRelationCommEnabled = true;
 String companionMac = "";
 String relType = "";
-String robotVariant = "ms_luna";
+String robotVariant = "mr_luna";
 
 bool isCompanionPaired() {
   return (companionMac.length() > 0 && companionMac != "none" && relType.length() > 0 && relType != "none");
@@ -743,7 +740,7 @@ void setup() {
   touchSingle = preferences.getInt("tchSing", 2);  // default: skip animation
   touchDouble = preferences.getInt("tchDoub", 0);
   touchLong = preferences.getInt("tchLong", 0);
-  robotVariant = preferences.getString("robot_var", "ms_luna");
+  robotVariant = preferences.getString("robot_var", "mr_luna");
   negativeDisplay = preferences.getBool("neg", (robotVariant == "ms_luna"));
   clockStyle = preferences.getInt("clkStyle", 0);
   oledBrightness = preferences.getInt("oledBright", 2);

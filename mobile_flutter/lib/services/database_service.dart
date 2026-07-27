@@ -61,9 +61,14 @@ class DatabaseService with ChangeNotifier {
 
   RobotProfile? get primaryRobot {
     if (_robots.isEmpty) return null;
-    final primary = _robots.where((r) => r.isPrimary);
-    if (primary.isNotEmpty) return primary.first;
-    return _robots.first;
+    final p = _robots.firstWhere((r) => r.isPrimary, orElse: () => _robots.first);
+    if (p.variant == 'mr_luna' && (p.name == "Ms. Luna Robot" || p.name == "Ms. Luna")) {
+      return p.copyWith(name: "Mr. Luna Robot");
+    }
+    if (p.variant == 'ms_luna' && (p.name == "Mr. Luna Robot" || p.name == "Mr. Luna")) {
+      return p.copyWith(name: "Ms. Luna Robot");
+    }
+    return p;
   }
 
   // Getters for settings
@@ -584,7 +589,13 @@ class DatabaseService with ChangeNotifier {
   Future<void> updateRobotProfile(String id, String name, String variant) async {
     final idx = _robots.indexWhere((r) => r.id == id);
     if (idx != -1) {
-      _robots[idx] = _robots[idx].copyWith(name: name, variant: variant);
+      String finalName = name;
+      if (variant == 'mr_luna' && (finalName == "Ms. Luna Robot" || finalName == "Ms. Luna")) {
+        finalName = "Mr. Luna Robot";
+      } else if (variant == 'ms_luna' && (finalName == "Mr. Luna Robot" || finalName == "Mr. Luna")) {
+        finalName = "Ms. Luna Robot";
+      }
+      _robots[idx] = _robots[idx].copyWith(name: finalName, variant: variant);
       await _saveRobotsToDisk();
       notifyListeners();
     }

@@ -591,10 +591,30 @@ class BLEService with ChangeNotifier {
       }
 
       // Sync clock to hardware after successful connection
-      Future.delayed(const Duration(milliseconds: 800), () => syncClockToHardware());
+      Future.delayed(const Duration(milliseconds: 700), () => syncClockToHardware());
+
+      // App is Single Source of Truth: push app's stored robot variant to hardware upon connection
+      Future.delayed(const Duration(milliseconds: 900), () async {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final jsonStr = prefs.getString('robots_database');
+          String targetVariant = 'mr_luna';
+          if (jsonStr != null) {
+            final List<dynamic> decoded = jsonDecode(jsonStr);
+            final primary = decoded.firstWhere((r) => r['isPrimary'] == true, orElse: () => decoded.isNotEmpty ? decoded.first : null);
+            if (primary != null && primary['variant'] != null) {
+              targetVariant = primary['variant'] as String;
+            }
+          }
+          addLog("Pushing app primary variant ($targetVariant) to hardware...", "BLE");
+          await transmitModelVariant(targetVariant);
+        } catch (e) {
+          addLog("Failed to sync app variant to hardware on connect: $e", "WARNING");
+        }
+      });
 
       // Sync relationship communication state and mapping to primary
-      Future.delayed(const Duration(milliseconds: 1000), () async {
+      Future.delayed(const Duration(milliseconds: 1100), () async {
         await _writePrimaryTextDirect("REL_COMM:${isPrimaryCommEnabled ? 1 : 0}");
         await _writePrimaryTextDirect("SET_REL_MAP:1|$relPrimaryTapExpr|$relPrimaryTapSound");
         await _writePrimaryTextDirect("SET_REL_MAP:2|$relPrimaryDoubleExpr|$relPrimaryDoubleSound");
