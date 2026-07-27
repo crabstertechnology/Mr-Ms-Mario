@@ -581,6 +581,15 @@ class DatabaseService with ChangeNotifier {
     }
   }
 
+  Future<void> updateRobotProfile(String id, String name, String variant) async {
+    final idx = _robots.indexWhere((r) => r.id == id);
+    if (idx != -1) {
+      _robots[idx] = _robots[idx].copyWith(name: name, variant: variant);
+      await _saveRobotsToDisk();
+      notifyListeners();
+    }
+  }
+
   Future<void> removeRobot(String id) async {
     final idx = _robots.indexWhere((r) => r.id == id);
     if (idx != -1) {

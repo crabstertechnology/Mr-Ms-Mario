@@ -132,7 +132,11 @@ void checkHardwareScheduledAlarms() {
         lastTriggeredAlarmMinute = rtcMinute;
         isReminderRinging = true;
         lastReminderSoundTime = millis();
-        face.setDetailedNotification(nvsEvents[i].type.substring(0, 1).toUpperCase() + nvsEvents[i].type.substring(1), nvsEvents[i].title, rtcHour, rtcMinute);
+        String formattedType = nvsEvents[i].type;
+        if (formattedType.length() > 0) {
+          formattedType[0] = toupper(formattedType[0]);
+        }
+        face.setDetailedNotification(formattedType, nvsEvents[i].title, rtcHour, rtcMinute);
         if (nvsEvents[i].type == "birthday") {
           audio.playSound(SOUND_POWERUP);
         } else if (nvsEvents[i].type == "alarm") {

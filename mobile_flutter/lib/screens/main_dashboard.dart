@@ -6525,9 +6525,19 @@ class _MainDashboardState extends State<MainDashboard> {
 
     if (!_isProfileInitialized) {
       _profileDisplayNameController.text = user['displayName'] ?? '';
-      _profileRobotNameController.text = user['robotName'] ?? '';
-      _profileSelectedVariant = user['robotVariant'] ?? 'ms_luna';
+      final rName = (user['robotName'] != null && user['robotName'].toString().isNotEmpty)
+          ? user['robotName']
+          : (db.primaryRobot?.name ?? 'Mr. Luna Robot');
+      final rVariant = user['robotVariant'] ?? (db.primaryRobot?.variant ?? 'mr_luna');
+      _profileRobotNameController.text = rName;
+      _profileSelectedVariant = rVariant;
       _isProfileInitialized = true;
+
+      if (db.primaryRobot != null && (db.primaryRobot!.variant != rVariant || db.primaryRobot!.name != rName)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          db.updateRobotProfile(db.primaryRobot!.id, rName, rVariant);
+        });
+      }
     }
 
     final isPink = _profileSelectedVariant == 'ms_luna';
@@ -6651,7 +6661,14 @@ class _MainDashboardState extends State<MainDashboard> {
                         selected: _profileSelectedVariant == 'ms_luna',
                         selectedColor: const Color(0xFFEC4899).withOpacity(0.2),
                         onSelected: (val) {
-                          if (val) setState(() => _profileSelectedVariant = 'ms_luna');
+                          if (val) {
+                            setState(() {
+                              _profileSelectedVariant = 'ms_luna';
+                              if (_profileRobotNameController.text == "Mr. Luna Robot" || _profileRobotNameController.text.isEmpty) {
+                                _profileRobotNameController.text = "Ms. Luna Robot";
+                              }
+                            });
+                          }
                         },
                       ),
                       const SizedBox(width: 8),
@@ -6660,7 +6677,14 @@ class _MainDashboardState extends State<MainDashboard> {
                         selected: _profileSelectedVariant == 'mr_luna',
                         selectedColor: const Color(0xFF0074D9).withOpacity(0.2),
                         onSelected: (val) {
-                          if (val) setState(() => _profileSelectedVariant = 'mr_luna');
+                          if (val) {
+                            setState(() {
+                              _profileSelectedVariant = 'mr_luna';
+                              if (_profileRobotNameController.text == "Ms. Luna Robot" || _profileRobotNameController.text.isEmpty) {
+                                _profileRobotNameController.text = "Mr. Luna Robot";
+                              }
+                            });
+                          }
                         },
                       ),
                     ],
@@ -6715,6 +6739,21 @@ class _MainDashboardState extends State<MainDashboard> {
                           final isMsLuna = _profileSelectedVariant == 'ms_luna';
                           await db.updateNegativeEnabled(isMsLuna);
                           await db.updateOledInvert(isMsLuna);
+
+                          if (db.primaryRobot != null) {
+                            await db.updateRobotProfile(db.primaryRobot!.id, rName, _profileSelectedVariant!);
+                          } else {
+                            final newRobot = RobotProfile(
+                              id: ble.connectedDevice?.remoteId.str ?? 'primary_robot',
+                              name: rName,
+                              variant: _profileSelectedVariant!,
+                              remoteId: ble.connectedDevice?.remoteId.str ?? '00:00:00:00:00:00',
+                              isPrimary: true,
+                              lastConnected: DateTime.now(),
+                            );
+                            await db.addRobot(newRobot);
+                          }
+
                           if (ble.isConnected) {
                             await ble.transmitModelVariant(_profileSelectedVariant!);
                           }
