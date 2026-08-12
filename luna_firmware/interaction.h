@@ -14,99 +14,99 @@ enum TouchEvent {
 
 class LunaInteraction {
 private:
-  int touchPin;
-  bool lastButtonState;
-  bool debouncedState;
-  unsigned long lastDebounceTime;
+  int pinExpr;
+  int pinSettings;
+
+  bool lastStateExpr;
+  bool debouncedStateExpr;
+  unsigned long lastDebounceTimeExpr;
+
+  bool lastStateSettings;
+  bool debouncedStateSettings;
+  unsigned long lastDebounceTimeSettings;
+
   unsigned long debounceDelay;
 
-  // Gesture detection timings
-  unsigned long touchStartTime;
-  unsigned long touchEndTime;
-  bool isPressed;
-  bool isHolding;
-  bool holdReported;
-  
-  int tapCount;
-  unsigned long doubleTapTimeout;
-
 public:
-  LunaInteraction(int pin) : touchPin(pin) {
-    lastButtonState = false;
-    debouncedState = false;
-    lastDebounceTime = 0;
-    debounceDelay = 25; // 25ms debounce
+  LunaInteraction(int exprPin, int settingsPin) : pinExpr(exprPin), pinSettings(settingsPin) {
+    lastStateExpr = true;
+    debouncedStateExpr = true;
+    lastDebounceTimeExpr = 0;
 
-    touchStartTime = 0;
-    touchEndTime = 0;
-    isPressed = false;
-    isHolding = false;
-    holdReported = false;
+    lastStateSettings = true;
+    debouncedStateSettings = true;
+    lastDebounceTimeSettings = 0;
 
-    tapCount = 0;
-    doubleTapTimeout = 450; // 450ms to register double-taps
-    
-    pinMode(touchPin, INPUT);
+    debounceDelay = 20; // 20ms debounce for mechanical switches
+
+    pinMode(pinExpr, INPUT_PULLUP);
+    pinMode(pinSettings, INPUT_PULLUP);
   }
 
-  TouchEvent update() {
-    bool rawState = digitalRead(touchPin) == HIGH; // TTP233 outputs HIGH on touch
-    TouchEvent event = TOUCH_NONE;
+  // Returns:
+  // 1: Button Expression pressed (single tap equivalent)
+  // 2: Button Settings pressed (short press)
+  int update(bool &isLongPressSettings) {
+    int event = 0;
+    isLongPressSettings = false;
     unsigned long now = millis();
 
-    // 1. Debounce logic
-    if (rawState != lastButtonState) {
-      lastDebounceTime = now;
+    // 1. Read Button Expression (Active LOW)
+    bool rawExpr = digitalRead(pinExpr) == LOW;
+    static bool prevDebouncedExpr = false;
+
+    // Debounce Button Expression
+    static bool lastRawExpr = false;
+    static unsigned long lastDebTimeExpr = 0;
+    if (rawExpr != lastRawExpr) {
+      lastDebTimeExpr = now;
     }
-    lastButtonState = rawState;
+    lastRawExpr = rawExpr;
 
-    if ((now - lastDebounceTime) > debounceDelay) {
-      // Pin state has stabilized
-      if (rawState != debouncedState) {
-        debouncedState = rawState;
+    if ((now - lastDebTimeExpr) > debounceDelay) {
+      if (rawExpr != prevDebouncedExpr) {
+        prevDebouncedExpr = rawExpr;
+        if (prevDebouncedExpr) {
+          // Button pressed (falling edge of digital reading)
+          event = 1; 
+        }
+      }
+    }
 
-        if (debouncedState) {
-          // Touch start (rising edge)
-          isPressed = true;
-          touchStartTime = now;
-          isHolding = false;
-          holdReported = false;
+    // 2. Read Button Settings (Active LOW)
+    bool rawSettings = digitalRead(pinSettings) == LOW;
+    static bool prevDebouncedSettings = false;
+    static unsigned long pressStartSettings = 0;
+    static bool longPressReported = false;
+
+    static bool lastRawSettings = false;
+    static unsigned long lastDebTimeSettings = 0;
+    if (rawSettings != lastRawSettings) {
+      lastDebTimeSettings = now;
+    }
+    lastRawSettings = rawSettings;
+
+    if ((now - lastDebTimeSettings) > debounceDelay) {
+      if (rawSettings != prevDebouncedSettings) {
+        prevDebouncedSettings = rawSettings;
+        if (prevDebouncedSettings) {
+          // Button pressed
+          pressStartSettings = now;
+          longPressReported = false;
         } else {
-          // Touch release (falling edge)
-          isPressed = false;
-          touchEndTime = now;
-          
-          if (!isHolding) {
-            tapCount++;
-            if (tapCount >= 3) {
-              event = TOUCH_TRIPLE_TAP;
-              tapCount = 0; // Reset immediately
-            }
+          // Button released
+          if (!longPressReported && (now - pressStartSettings < 1000)) {
+            event = 2; // Short press settings
           }
-          isHolding = false;
         }
       }
     }
 
-    // 2. Gesture parsing
-    if (isPressed && !holdReported) {
-      if ((now - touchStartTime) > 800) { // 800ms hold threshold
-        isHolding = true;
-        holdReported = true;
-        tapCount = 0; // Clear tap queue on hold
-        event = TOUCH_LONG_PRESS;
-      }
-    }
-
-    // Process tap queue when release has occurred and no new touch starts
-    if (tapCount > 0 && !isPressed) {
-      if ((now - touchEndTime) > doubleTapTimeout) {
-        if (tapCount == 1) {
-          event = TOUCH_TAP;
-        } else if (tapCount == 2) {
-          event = TOUCH_DOUBLE_TAP;
-        }
-        tapCount = 0; // Reset tap count
+    // Check settings long press (hold for 1 second)
+    if (prevDebouncedSettings && !longPressReported) {
+      if ((now - pressStartSettings) >= 1000) {
+        isLongPressSettings = true;
+        longPressReported = true;
       }
     }
 

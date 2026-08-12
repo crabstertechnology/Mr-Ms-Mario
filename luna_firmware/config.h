@@ -3,18 +3,28 @@
 
 #define FIRMWARE_VERSION "1.0.1"
 
-// Pin Configurations for ESP32-C3 SuperMini
-#define SDA_PIN 20
-#define SCL_PIN 21
-#define TOUCH_PIN 1
-#define BUZZER_PIN 2
+// Pin Configurations for ESP32-C3 SuperMini with 1.3" IPS ST7789 TFT SPI Display
+#define TFT_SCL 4     // Hardware SPI SCLK
+#define TFT_SDA 6     // Hardware SPI MOSI (SDA)
+#define TFT_RST 1    // Reset
+#define TFT_DC 3      // Data/Command
+#define TFT_BLK 7     // Backlight control
+
+// --- Two Push Buttons Mappings ---
+// Note: GPIO 8 and 9 are strapping pins on ESP32-C3.
+// Since we configure them with internal pull-ups, they remain HIGH during reset (normal boot).
+// Just avoid holding Button 2 (GPIO 9) down while plugging in USB or pressing Reset,
+// otherwise the ESP32-C3 will enter serial bootloader/flasher mode instead of booting.
+#define BTN_EXPR_PIN 8      // Button 1: Next Expression / Menu Navigate
+#define BTN_SETTINGS_PIN 9  // Button 2: Enter Settings / Confirm Option
+
+#define BUZZER_PIN 5        // Buzzer pin
 
 
-// SSD1306 Display Settings
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-#define SCREEN_ADDRESS 0x3C
+// ST7789 Display Settings (Resolution: 240x240)
+#define SCREEN_WIDTH 240
+#define SCREEN_HEIGHT 240
+#define TFT_CS -1     // Chip Select pin (CS is tied to ground on display)
 
 // BLE Service & Characteristic UUIDs
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"

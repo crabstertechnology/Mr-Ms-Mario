@@ -1,6 +1,6 @@
-#include <Wire.h>
+#include <SPI.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <Adafruit_ST7789.h>
 #include <Preferences.h>
 
 #include "config.h"
@@ -15,11 +15,11 @@ void handleRobotCommand(String cmd);
 #include "luna_network.h"
 
 // Hardware Interface Objects
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_ST7789 display(&SPI, TFT_CS, TFT_DC, TFT_RST);
 LunaFace face(display);
 LunaAudio audio(BUZZER_PIN);
 LunaBLE ble;
-LunaInteraction interaction(TOUCH_PIN);
+LunaInteraction interaction(BTN_EXPR_PIN, BTN_SETTINGS_PIN);
 LunaNetwork network;
 
 // NVS Settings Persistence
@@ -34,10 +34,11 @@ int gifIntro = 1;        // intro GIF expression (0-6)
 int touchSingle = 2;     // action for single tap: 0=default, 1=clock, 2=skip_anim, 3=ble_toggle, 10-16=specific expr
 int touchDouble = 0;     // action for double tap
 int touchLong = 0;       // action for long press
-bool negativeDisplay = false; // SSD1306 display color inversion
+bool negativeDisplay = false; // ST7789 display color inversion
 int clockStyle = 0; // clock style selector (0 to 3)
 int oledBrightness = 2; // screen brightness (1: Low, 2: Med, 3: High)
 bool inSettingsMenu = false;
+bool settingsMenuChanged = false;
 int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
 bool optionSelected = false;
 
@@ -686,12 +687,11 @@ void applySettings(String payload) {
   }
 
   ble.setBLEActive(bleActive);
-  display.invertDisplay(negativeDisplay);
+  display.invertDisplay(negativeDisplay ? false : true);
   
-  display.ssd1306_command(0x81);
-  if (oledBrightness == 1) display.ssd1306_command(10);
-  else if (oledBrightness == 2) display.ssd1306_command(127);
-  else display.ssd1306_command(255);
+  if (oledBrightness == 1) analogWrite(TFT_BLK, 50);
+  else if (oledBrightness == 2) analogWrite(TFT_BLK, 150);
+  else analogWrite(TFT_BLK, 255);
   
   Serial.print("NegativeDisplay set to: ");
   Serial.println(negativeDisplay ? "ON" : "OFF");
@@ -720,10 +720,12 @@ void applySettings(String payload) {
   preferences.end();
 
   audio.playSound(SOUND_POWERUP);
+  settingsMenuChanged = true;
 }
 
 void setup() {
   Serial.begin(115200);
+  Serial.setTxTimeoutMs(0); // Prevent serial write blocking when monitor is not open
   delay(100); // Faster boot!
   Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
   Serial.println(FIRMWARE_VERSION);
@@ -779,31 +781,42 @@ void setup() {
     }
   }
 
-  // Initialize I2C Communication
-  Wire.begin(SDA_PIN, SCL_PIN);
-  Wire.setClock(800000); // 800kHz high-speed I2C for smooth rendering
-  
-  // Initialize SSD1306 Display
-  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed. Check connections!"));
-    for (;;); // Stop execution
-  }
-  // Apply saved invert setting immediately after display init
-  display.invertDisplay(negativeDisplay);
+  // Initialize control pins and backlight
+  pinMode(TFT_DC, OUTPUT);
+  pinMode(TFT_RST, OUTPUT);
+  pinMode(TFT_BLK, OUTPUT);
+  if (oledBrightness == 1) analogWrite(TFT_BLK, 50);
+  else if (oledBrightness == 2) analogWrite(TFT_BLK, 150);
+  else analogWrite(TFT_BLK, 255);
+  Serial.println("💡 Display Backlight Initialized");
 
-  // Apply saved brightness setting
-  display.ssd1306_command(0x81);
-  if (oledBrightness == 1) display.ssd1306_command(10);
-  else if (oledBrightness == 2) display.ssd1306_command(127);
-  else display.ssd1306_command(255);
+  // Hardware Reset (matching working SPI direct test code)
+  Serial.println("Performing Hardware Reset...");
+  digitalWrite(TFT_RST, HIGH);
+  delay(50);
+  digitalWrite(TFT_RST, LOW);
+  delay(100);
+  digitalWrite(TFT_RST, HIGH);
+  delay(150);
+
+  // Initialize Hardware SPI on custom pins
+  SPI.begin(TFT_SCL, -1, TFT_SDA, -1);
+  Serial.println("📡 Hardware SPI Initialized (SCLK: 4, MOSI: 6)");
+  
+  // Initialize ST7789 Display in SPI MODE 3 (matching working SPI direct test code)
+  display.init(240, 240, SPI_MODE3);
+  display.setSPISpeed(20000000UL); // 20MHz SPI frequency
+  display.setRotation(1);
+  
+  // Apply saved invert setting immediately after display init (correct colors via IPS inversion)
+  display.invertDisplay(negativeDisplay ? false : true);
 
   // Display initial loading face
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(15, 25);
+  display.fillScreen(ST77XX_BLACK);
+  display.setTextSize(2);
+  display.setTextColor(ST77XX_WHITE);
+  display.setCursor(10, 110);
   display.print(negativeDisplay ? "Loading Ms. Luna..." : "Loading Mr. Luna...");
-  display.display();
   
   loadCalendarEventsFromNVS();
 
@@ -1032,7 +1045,23 @@ void loop() {
     }
   }
 
-  TouchEvent touchEvent = interaction.update();
+  bool isLongPressSettings = false;
+  int btnEvent = interaction.update(isLongPressSettings);
+  TouchEvent touchEvent = TOUCH_NONE;
+  if (btnEvent == 1) {
+    touchEvent = TOUCH_TAP;
+  } else if (btnEvent == 2) {
+    if (inSettingsMenu) {
+      touchEvent = TOUCH_LONG_PRESS; // select/deselect in settings
+    } else {
+      touchEvent = TOUCH_TRIPLE_TAP; // enter settings menu
+    }
+  } else if (isLongPressSettings) {
+    if (!inSettingsMenu) {
+      touchEvent = TOUCH_LONG_PRESS; // sleep/wake in normal mode
+    }
+  }
+
   if (touchEvent != TOUCH_NONE) {
     lastInteractionTime = now; // reset inactivity clock
     lastExpressionCycleTime = now; // reset expression cycle timer
@@ -1055,12 +1084,13 @@ void loop() {
         face.setExpression((Expression)relDoubleExpr);
         activeNotificationDurationMs = notificationDurationMs;
       } else if (touchEvent == TOUCH_TRIPLE_TAP) {
-        String logMsg = "TOUCH_REL:TRIPLE|" + String(relTripleExpr) + "|" + String(relTripleSound);
-        ble.sendLog(logMsg);
-        Serial.println(logMsg);
-        face.headerText = "Sent: " + getExpressionName(relTripleExpr);
-        face.setExpression((Expression)relTripleExpr);
-        activeNotificationDurationMs = notificationDurationMs;
+        // Open local settings menu (triple tap always opens settings menu)
+        inSettingsMenu = true;
+        settingsMenuChanged = true;
+        menuOption = 0;
+        optionSelected = false;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("Local Settings Menu opened via Relationship mode.");
       } else if (touchEvent == TOUCH_LONG_PRESS) {
         String logMsg = "TOUCH_REL:LONG|" + String(relLongExpr) + "|" + String(relLongSound);
         ble.sendLog(logMsg);
@@ -1104,6 +1134,7 @@ void loop() {
     } else {
       if (inSettingsMenu) {
         // Settings Menu Touch Logic
+        settingsMenuChanged = true;
         if (optionSelected) {
           // Adjusting an option value
           if (touchEvent == TOUCH_TAP) {
@@ -1123,14 +1154,13 @@ void loop() {
               audio.playSound(SOUND_CHIRP);
             } else if (menuOption == 3) { // Invert/Negative display
               negativeDisplay = !negativeDisplay;
-              display.invertDisplay(negativeDisplay);
+              display.invertDisplay(negativeDisplay ? false : true);
               audio.playSound(SOUND_CHIRP);
             } else if (menuOption == 4) { // Brightness
               oledBrightness = (oledBrightness % 3) + 1;
-              display.ssd1306_command(0x81);
-              if (oledBrightness == 1) display.ssd1306_command(10);
-              else if (oledBrightness == 2) display.ssd1306_command(127);
-              else display.ssd1306_command(255);
+              if (oledBrightness == 1) analogWrite(TFT_BLK, 50);
+              else if (oledBrightness == 2) analogWrite(TFT_BLK, 150);
+              else analogWrite(TFT_BLK, 255);
               audio.playSound(SOUND_CHIRP);
             }
           } else if (touchEvent == TOUCH_LONG_PRESS) {
@@ -1161,10 +1191,9 @@ void loop() {
               preferences.end();
               
               // Apply settings immediately
-              display.ssd1306_command(0x81);
-              if (oledBrightness == 1) display.ssd1306_command(10);
-              else if (oledBrightness == 2) display.ssd1306_command(127);
-              else display.ssd1306_command(255);
+              if (oledBrightness == 1) analogWrite(TFT_BLK, 50);
+              else if (oledBrightness == 2) analogWrite(TFT_BLK, 150);
+              else analogWrite(TFT_BLK, 255);
               
               audio.playSound(SOUND_POWERUP);
               optionSelected = false; // deselect
@@ -1199,6 +1228,7 @@ void loop() {
             case TOUCH_TRIPLE_TAP:
               // Open local settings menu
               inSettingsMenu = true;
+              settingsMenuChanged = true;
               menuOption = 0;
               optionSelected = false;
               audio.playSound(SOUND_POWERUP);
@@ -1335,15 +1365,25 @@ void loop() {
   static unsigned long lastDisplayDrawTime = 0;
   bool forceRedraw = (now - lastDisplayDrawTime >= 500);
 
+  static bool wasInSettingsMenu = false;
   if (inSettingsMenu) {
-    // Redraw settings menu at ~40fps
-    if (now - lastDisplayDrawTime >= 25) {
+    wasInSettingsMenu = true;
+    // Redraw settings menu only when settings menu content changed
+    if (settingsMenuChanged) {
       lastDisplayDrawTime = now;
       face.drawSettingsMenu(menuOption, optionSelected, bleActive, gifSpeed, clockStyle, negativeDisplay, oledBrightness);
+      settingsMenuChanged = false;
     }
-  } else if (faceChanged || ((face.getExpression() == EXPR_CLOCK || face.getExpression() == EXPR_MAP) && timeUpdated) || forceRedraw) {
-    lastDisplayDrawTime = now;
-    lastDrawnSecond = rtcSecond;
-    face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+  } else {
+    bool justExitedSettings = wasInSettingsMenu;
+    if (justExitedSettings) {
+      wasInSettingsMenu = false;
+      display.fillScreen(ST77XX_BLACK); // Clean up settings text from background
+    }
+    if (faceChanged || ((face.getExpression() == EXPR_CLOCK || face.getExpression() == EXPR_MAP) && timeUpdated) || forceRedraw || justExitedSettings) {
+      lastDisplayDrawTime = now;
+      lastDrawnSecond = rtcSecond;
+      face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+    }
   }
 }
