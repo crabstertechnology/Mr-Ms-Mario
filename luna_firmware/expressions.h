@@ -21,12 +21,15 @@
 #define TFT_LIGHTGREY   0xC618
 #define TFT_DARKGREY    0x7BEF
 
+#include "games.h"
+
 // External references to settings/status variables defined in the main sketch
 extern bool bleActive;
 extern int gifSpeed;
 extern int clockStyle;
 extern int oledBrightness;
 extern bool negativeDisplay;
+extern String robotVariant;
 extern volatile bool hardwareLoopbackActive;
 extern int menuOption;
 extern bool optionSelected;
@@ -35,6 +38,12 @@ extern bool notificationsActive;
 extern bool notificationSelected;
 extern unsigned int touchCount;
 extern SmartwatchScreen currentScreen;
+
+extern bool gamesActive;
+extern bool gamePlaying;
+extern int gameSelected;
+extern LunaGames games;
+extern LunaAudio audio;
 
 class LunaFace {
 private:
@@ -578,7 +587,7 @@ public:
       case SCREEN_CLOCK:         nm = "CLOCK";     break;
       case SCREEN_NOTIFICATIONS: nm = "NOTIFS";    break;
       case SCREEN_CALENDAR:      nm = "CAL";       break;
-      case SCREEN_SETTINGS:      nm = "SETTINGS";  break;
+      case SCREEN_GAMES:         nm = "ARCADE";    break;
       case SCREEN_FACE:          nm = "FACE";      break;
       case SCREEN_MAPS:          nm = "MAPS";      break;
       default:                   nm = "LUNA";      break;
@@ -826,9 +835,9 @@ public:
       display.setCursor((SCREEN_WIDTH - lblW1) / 2, 98);
       display.print("No Events");
       display.setTextColor(TFT_DARKGREY, 0x0821);
-      display.setTextSize(1);
-      int lblW2 = 19 * 6;
-      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 120);
+      display.setTextSize(2);
+      int lblW2 = 19 * 12;
+      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 130);
       display.print("Sync events via BLE");
       return;
     }
@@ -850,7 +859,8 @@ public:
     
     display.setTextColor(0x07FF, 0x0821);
     display.setTextSize(2);
-    display.setCursor(SCREEN_WIDTH - 90, 40);
+    int timeW = ev.timeStr.length() * 12;
+    display.setCursor(SCREEN_WIDTH - 16 - timeW, 40);
     display.print(ev.timeStr);
     
     display.drawFastHLine(12, 66, SCREEN_WIDTH - 24, 0x18E3);
@@ -871,11 +881,11 @@ public:
     }
     
     display.setTextColor(TFT_DARKGREY, 0x0821);
-    display.setTextSize(1);
+    display.setTextSize(2);
     char footerBuf[16];
     snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentCalViewIdx + 1, calendarEventCount);
-    int footerW = strlen(footerBuf) * 6;
-    display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 22);
+    int footerW = strlen(footerBuf) * 12;
+    display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 26);
     display.print(footerBuf);
   }
 
@@ -953,46 +963,45 @@ public:
     display.drawRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 12, 0x07FF);
     display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 10, 0x0821);
     
-    // Month / Year header — size 1 so it fits
-    display.setTextSize(1);
+    // Month / Year header — size 2
+    display.setTextSize(2);
     display.setTextColor(TFT_YELLOW, 0x0821);
     char headerBuf[32];
     const char* monthNames[] = { "", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER" };
     snprintf(headerBuf, sizeof(headerBuf), "%s %d", (curMonth >= 1 && curMonth <= 12) ? monthNames[curMonth] : "JULY", curYear);
-    int headerW = strlen(headerBuf) * 6;
-    display.setCursor((SCREEN_WIDTH - headerW) / 2, 36);
+    int headerW = strlen(headerBuf) * 12;
+    display.setCursor((SCREEN_WIDTH - headerW) / 2, 38);
     display.print(headerBuf);
 
     // Day-of-week header
-    int colWidth = (SCREEN_WIDTH - 16) / 7;  // ~32px per column on 240px screen
-    int startX = 8;
-    int startY = 48;
+    int colWidth = 31;
+    int startX = 12;
+    int startY = 60;
     display.setTextColor(0x5DFF, 0x0821);
+    display.setTextSize(2);
     const char* dayLabels[] = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" };
     for (int i = 0; i < 7; i++) {
-      display.setCursor(startX + i * colWidth + 2, startY);
+      display.setCursor(startX + i * colWidth + 4, startY);
       display.print(dayLabels[i]);
     }
-    display.drawFastHLine(8, startY + 10, SCREEN_WIDTH - 16, 0x18E3);
+    display.drawFastHLine(8, startY + 16, SCREEN_WIDTH - 16, 0x18E3);
     
     int col = startWeekday;
     int row = 0;
+    int rowHeight = 22;
     
-    display.setTextSize(1);
-    int rowHeight = (SCREEN_HEIGHT - startY - 22) / 6;
-    if (rowHeight < 14) rowHeight = 14;
     for (int d = 1; d <= daysInMonth; d++) {
       int x = startX + col * colWidth;
-      int y = startY + 14 + row * rowHeight;
+      int y = startY + 22 + row * rowHeight;
 
       if (d == curDay) {
-        display.fillCircle(x + 3, y + 3, 6, TFT_RED);
+        display.fillCircle(x + 15, y + 7, 11, TFT_RED);
         display.setTextColor(TFT_WHITE, TFT_RED);
       } else {
         display.setTextColor(TFT_WHITE, 0x0821);
       }
 
-      display.setCursor(d < 10 ? x + 1 : x - 1, y);
+      display.setCursor(d < 10 ? x + 10 : x + 4, y);
       display.print(d);
 
       col++;
@@ -1026,7 +1035,7 @@ public:
 
     for (int pageIdx = 0; pageIdx < itemsPerPage; pageIdx++) {
       int optIdx = pageIdx + scrollOffset;
-      if (optIdx >= 8) break;
+      if (optIdx >= 7) break;
 
       int yPos = 46 + pageIdx * itemHeight;
 
@@ -1070,15 +1079,10 @@ public:
           else display.print("HIGH");
           break;
         case 5:
-          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
-          display.print("Loopback: ");
-          display.print(hardwareLoopbackActive ? "ON" : "OFF");
-          break;
-        case 6:
           display.setTextColor(isCurrent ? TFT_WHITE : TFT_GREEN, bg);
           display.print("SAVE SETTINGS");
           break;
-        case 7:
+        case 6:
           display.setTextColor(isCurrent ? TFT_WHITE : 0xF8B8, bg);
           display.print("EXIT MENU");
           break;
@@ -1086,7 +1090,7 @@ public:
     }
 
     // Scroll indicator dots at bottom
-    int totalItems = 8;
+    int totalItems = 7;
     int dotAreaY = SCREEN_HEIGHT - 14;
     int dotSpacing = 14;
     int dotsStartX = (SCREEN_WIDTH - totalItems * dotSpacing) / 2;
@@ -1125,7 +1129,18 @@ public:
       exprToDraw = defaultExpr;
     }
     
-    uint16_t color = getExpressionColor(currentExpr);
+    uint16_t bgColor = TFT_WHITE;
+    uint16_t color   = 0x001F; // Default Blue
+    
+    if (robotVariant == "mr_luna") {
+      bgColor = negativeDisplay ? 0xFFE0 : TFT_WHITE; // 0xFFE0 is complement of Blue (Yellow)
+      color   = negativeDisplay ? 0x0000 : 0x001F;    // 0x0000 is complement of White (Black)
+    } else { // ms_luna
+      bgColor = negativeDisplay ? 0x0747 : TFT_WHITE; // 0x0747 is complement of Pink
+      color   = negativeDisplay ? 0x0000 : 0xF8B8;    // 0x0000 is complement of White (Black)
+    }
+    
+    display.fillScreen(bgColor);
 
     // Keep aspect ratio (2:1) and fit safely within circular smartwatch screen (210x105)
     int targetW = 210;
@@ -1595,8 +1610,36 @@ public:
             drawCalendarEvents();
           }
           break;
-        case SCREEN_SETTINGS:
-          drawSettingsMenuLandscape(settingsActive ? menuOption : -1, optionSelected, bleActive, gifSpeed, clockStyle, negativeDisplay, oledBrightness);
+        case SCREEN_GAMES:
+          if (!gamesActive) {
+            // Draw initial Games screen with prompt
+            display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 10, 0x0821);
+            display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, 0x07FF);
+
+            display.setTextSize(2);
+            display.setTextColor(TFT_WHITE, 0x0821);
+            display.setCursor(60, 80);
+            display.print("LUNA ARCADE");
+
+            display.setTextSize(1);
+            display.setTextColor(0xFDA0, 0x0821); // Orange
+            display.setCursor(44, 130);
+            display.print("Press Button 1 to Start");
+
+            display.setTextColor(TFT_DARKGREY, 0x0821);
+            display.setCursor(44, 180);
+            display.print("Press Button 2 to Cycle");
+          } else {
+            if (!gamePlaying) {
+              games.drawMenu(display);
+            } else {
+              if (gameSelected == 1) {
+                games.updateAndDrawCoinCatcher(display, audio);
+              } else if (gameSelected == 2) {
+                games.updateAndDrawFlappyMochy(display, audio);
+              }
+            }
+          }
           break;
         case SCREEN_FACE:
           drawRobotFaceScreen();
@@ -1608,8 +1651,17 @@ public:
     }
 
     if (!popupActive && currentScreen == SCREEN_FACE && headerText.length() > 0) {
-      display.fillRect(0, 0, SCREEN_WIDTH, 24, TFT_BLACK);
-      display.setTextColor(TFT_WHITE);
+      uint16_t headerBg = TFT_WHITE;
+      uint16_t headerFg = 0x001F;
+      if (robotVariant == "mr_luna") {
+        headerBg = negativeDisplay ? 0xFFE0 : TFT_WHITE;
+        headerFg = negativeDisplay ? 0x0000 : 0x001F;
+      } else {
+        headerBg = negativeDisplay ? 0x0747 : TFT_WHITE;
+        headerFg = negativeDisplay ? 0x0000 : 0xF8B8;
+      }
+      display.fillRect(0, 0, SCREEN_WIDTH, 24, headerBg);
+      display.setTextColor(headerFg);
       display.setTextSize(2);
       
       // Center the header text
@@ -1619,7 +1671,7 @@ public:
       
       display.setCursor(startX, 4);
       display.print(headerText);
-      display.drawFastHLine(0, 24, SCREEN_WIDTH, TFT_WHITE);
+      display.drawFastHLine(0, 24, SCREEN_WIDTH, headerFg);
     }
     
     tft.drawRGBBitmap(0, 0, display.getBuffer(), 240, 240);

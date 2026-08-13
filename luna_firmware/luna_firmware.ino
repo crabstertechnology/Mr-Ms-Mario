@@ -12,6 +12,7 @@
 #include "audio.h"
 #include "bluetooth.h"
 #include "interaction.h"
+#include "games.h"
 
 #define BUTTON1_PIN BTN_EXPR_PIN
 #define BUTTON2_PIN BTN_SETTINGS_PIN
@@ -53,6 +54,12 @@ int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brigh
 volatile bool hardwareLoopbackActive = false;
 bool optionSelected = false;
 SmartwatchScreen currentScreen = SCREEN_FACE;
+
+bool gamesActive = false;
+bool gamePlaying = false;
+int gameMenuOption = 0;
+int gameSelected = 0;
+LunaGames games;
 
 // System State Variables
 unsigned int touchCount = 0;
@@ -893,7 +900,7 @@ void setup() {
   tft.setSPISpeed(20000000UL); // 20 MHz SPI speed
   tft.setRotation(2);          // Rotate right to make it vertical!
   
-  tft.invertDisplay(false);   // No inversion during logo — gives white background on IPS
+  tft.invertDisplay(true);   // Standard color representation for IPS screen during logo — gives white background
   tft.fillScreen(ST77XX_WHITE);
   
   display.fillScreen(ST77XX_WHITE);
@@ -1121,15 +1128,7 @@ void adjustOption(int option, int direction) {
       else analogWrite(TFT_BLK, 255);
       audio.playSound(SOUND_CHIRP);
       break;
-    case 5: // Loopback test
-      hardwareLoopbackActive = !hardwareLoopbackActive;
-      audio.directLoopback = hardwareLoopbackActive;
-      audio.micStreaming = false;
-      audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
-      if (hardwareLoopbackActive) { face.setStateLabel("TEST"); audio.playSound(SOUND_POWERUP); }
-      else                        { face.setStateLabel("IDLE"); audio.playSound(SOUND_POWERDOWN); }
-      break;
-    case 6: // Save settings
+    case 5: // Save settings
       {
         preferences.begin("luna", false);
         preferences.putBool("ble",       bleActive);
@@ -1143,7 +1142,7 @@ void adjustOption(int option, int direction) {
         optionSelected = false; // deselect
       }
       break;
-    case 7: // Exit settings
+    case 6: // Exit settings
       optionSelected = false;
       currentScreen  = SCREEN_FACE;
       audio.playSound(SOUND_POWERDOWN);
@@ -1158,24 +1157,19 @@ void adjustOption(int option, int direction) {
 void handleBtn1Single() {
   lastInteractionTime = millis();
 
-  if (currentScreen == SCREEN_SETTINGS) {
-    if (!settingsActive) {
-      // If settings menu is not activated/selected yet, press Button 1 to select/activate it
-      settingsActive = true;
-      menuOption = 0;
-      optionSelected = false;
+  if (currentScreen == SCREEN_GAMES) {
+    if (!gamesActive) {
+      gamesActive = true;
+      gameMenuOption = 0;
+      gamePlaying = false;
       audio.playSound(SOUND_POWERUP);
-      Serial.println("[BTN1] Settings screen ACTIVATED");
+      Serial.println("[BTN1] Games screen ACTIVATED");
     } else {
-      if (!optionSelected) {
-        // If settings is active but we are not editing an option, press Button 1 to enter/select it
-        optionSelected = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.printf("[BTN1] Enters option %d\n", menuOption);
-      } else {
-        // If we are actively editing an option, press Button 1 to decrement value
-        adjustOption(menuOption, -1);
-        Serial.printf("[BTN1] Decremented option %d value\n", menuOption);
+      if (!gamePlaying) {
+        // Red button (Button 1) cycles games menu down
+        gameMenuOption = (gameMenuOption + 1) % 3;
+        audio.playSound(SOUND_CHIRP);
+        Serial.printf("[BTN1] Games Menu DOWN -> option %d\n", gameMenuOption);
       }
     }
     return;
@@ -1220,6 +1214,15 @@ void handleBtn1Single() {
 void handleBtn1Double() {
   lastInteractionTime = millis();
   
+  if (currentScreen == SCREEN_GAMES) {
+    gamesActive = false;
+    gamePlaying = false;
+    currentScreen = SCREEN_FACE;
+    audio.playSound(SOUND_POWERDOWN);
+    Serial.println("[BTN1 DBL] Switched from Games to FACE screen");
+    return;
+  }
+
   // Clear any settings menu activation states
   settingsActive = false;
   optionSelected = false;
@@ -1234,22 +1237,21 @@ void handleBtn1Double() {
 void handleBtn1Long() {
   lastInteractionTime = millis();
 
-  if (currentScreen == SCREEN_SETTINGS) {
-    if (optionSelected) {
-      // If inside a setting, deselect and return to menu navigation
-      optionSelected = false;
+  if (currentScreen == SCREEN_GAMES) {
+    if (gamePlaying) {
+      // Long press BTN1 exits the active game back to arcade menu
+      gamePlaying = false;
       audio.playSound(SOUND_POWERDOWN);
-      Serial.println("[BTN1 LONG] Deselected setting option");
-    } else if (settingsActive) {
-      // If not inside a setting but menu is active, deactivate menu navigation
-      settingsActive = false;
+      Serial.println("[BTN1 LONG] Exited active game back to Arcade menu");
+    } else if (gamesActive) {
+      // Exits arcade menu to main games screen
+      gamesActive = false;
       audio.playSound(SOUND_POWERDOWN);
-      Serial.println("[BTN1 LONG] Deactivated settings screen");
+      Serial.println("[BTN1 LONG] Deactivated games arcade menu");
     } else {
-      // If settings screen is completely inactive, return to Face screen
       currentScreen = SCREEN_FACE;
       audio.playSound(SOUND_STARTUP);
-      Serial.println("[BTN1 LONG] Exited Settings to FACE");
+      Serial.println("[BTN1 LONG] Exited Games to FACE");
     }
     return;
   }
@@ -1290,16 +1292,34 @@ void handleBtn1Long() {
 void handleBtn2Single() {
   lastInteractionTime = millis();
 
-  if (currentScreen == SCREEN_SETTINGS && settingsActive) {
-    if (!optionSelected) {
-      // If active and not selected: Move highlight DOWN
-      menuOption = (menuOption + 1) % 8;
-      audio.playSound(SOUND_CHIRP);
-      Serial.printf("[BTN2] Settings DOWN -> option %d\n", menuOption);
+  if (currentScreen == SCREEN_GAMES && gamesActive) {
+    if (!gamePlaying) {
+      // Yellow button (Button 2) selects/confirms the option in games menu
+      if (gameMenuOption == 0) {
+        games.resetCoinCatcher();
+        gameSelected = 1;
+        gamePlaying = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN2] Started Game 1: Coin Catcher");
+      } else if (gameMenuOption == 1) {
+        games.resetFlappyMochy();
+        gameSelected = 2;
+        gamePlaying = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN2] Started Game 2: Flappy Mochy");
+      } else {
+        gamesActive = false;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[BTN2] Exited Games Menu");
+      }
     } else {
-      // If active and selected: Adjust option value UP (increment)
-      adjustOption(menuOption, 1);
-      Serial.printf("[BTN2] Incremented option %d value\n", menuOption);
+      // Game is playing: Button 2 action (Coin Catcher: Right, Flappy Mochy: Exit/Reset)
+      if (gameSelected == 2) {
+        // In Flappy Mochy, pressing Button 2 exits back to the Arcade menu
+        gamePlaying = false;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[BTN2] Exited Flappy Mochy back to Arcade menu");
+      }
     }
     return;
   }
@@ -1314,7 +1334,7 @@ void handleBtn2Single() {
     return;
   }
 
-  // Cycles screens: Clock -> Notifications -> Calendar -> Settings -> Face -> Clock
+  // Cycles screens: Clock -> Notifications -> Calendar -> Games -> Face -> Clock
   SmartwatchScreen nextScreen;
   if (currentScreen == SCREEN_FACE) {
     nextScreen = SCREEN_CLOCK;
@@ -1323,7 +1343,7 @@ void handleBtn2Single() {
   } else if (currentScreen == SCREEN_NOTIFICATIONS) {
     nextScreen = SCREEN_CALENDAR;
   } else if (currentScreen == SCREEN_CALENDAR) {
-    nextScreen = SCREEN_SETTINGS;
+    nextScreen = SCREEN_GAMES;
   } else {
     nextScreen = SCREEN_FACE;
   }
@@ -1357,7 +1377,6 @@ void loop() {
     case BTN1_DOUBLE: handleBtn1Double(); break;
     case BTN1_LONG:   handleBtn1Long();   break;
     case BTN2_SINGLE: handleBtn2Single(); break;
-    case BTN2_LONG:   handleBtn2Long();   break;
     default: break;
   }
 

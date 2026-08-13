@@ -22,6 +22,7 @@ enum ButtonEvent {
   BTN1_DOUBLE,          // Button 1 double click
   BTN1_LONG,            // Button 1 long press
   BTN2_SINGLE,          // Button 2 single click
+  BTN2_DOUBLE,          // Button 2 double click
   BTN2_LONG,            // Button 2 long press
 };
 
@@ -129,7 +130,7 @@ public:
     ButtonEvent e1 = btn1.poll(BTN1_SINGLE, BTN1_DOUBLE, BTN1_LONG);
     if (e1 != BTN_NONE) return e1;
 
-    ButtonEvent e2 = btn2.poll(BTN2_SINGLE, BTN_NONE, BTN2_LONG);
+    ButtonEvent e2 = btn2.poll(BTN2_SINGLE, BTN_NONE, BTN_NONE);
     return e2;
   }
 };

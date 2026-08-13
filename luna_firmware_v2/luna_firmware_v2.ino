@@ -875,8 +875,8 @@ void setup() {
   display.createSprite(SCREEN_WIDTH, SCREEN_HEIGHT);
   display.fillSprite(TFT_BLACK);
   
-  // Make bootloading logo alone always invert
-  tft.invertDisplay(!negativeDisplay);
+  // Set display inversion to match negativeDisplay setting (normal colors/white bg for Mr. Luna, inverted/black bg for Ms. Luna)
+  tft.invertDisplay(negativeDisplay);
 
   // Apply saved brightness setting
   #ifdef TFT_BL

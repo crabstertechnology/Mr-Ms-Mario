@@ -2069,8 +2069,8 @@ class _MainDashboardState extends State<MainDashboard> {
                 ),
               ),
               const SizedBox(height: 20),
-              // Show Intercom & Music Player only if speaker hardware is present (v2) or disconnected
-              if (!ble.isConnected || ble.hasSpeaker) ...[
+              // Show Intercom & Music Player only if speaker hardware is present (v2)
+              if (ble.isConnected && ble.hasSpeaker) ...[
                 _buildIntercomAndMusicSection(ble),
                 const SizedBox(height: 20),
               ],

@@ -119,8 +119,8 @@ class BLEService with ChangeNotifier {
   String get activeExpressionLabel => _activeExpressionLabel;
   List<String> get consoleLogs => _consoleLogs;
   String get serverIp => _serverIp;
-  bool get hasSpeaker => !_isConnected || _audioStreamChar != null;
-  String get hardwareVersionString => !_isConnected ? "Disconnected" : (_audioStreamChar != null ? "Luna v2 (With Speaker)" : "Luna v1 (No Speaker)");
+  bool get hasSpeaker => false;
+  String get hardwareVersionString => !_isConnected ? "Disconnected" : "Luna v1 (No Speaker)";
 
   // Companion Getters
   BluetoothDevice? get companionDevice => _companionDevice;
@@ -131,8 +131,8 @@ class BLEService with ChangeNotifier {
   double get companionBatteryVoltage => _companionBatteryVoltage;
   int get companionActiveExpressionId => _companionActiveExpressionId;
   String get companionActiveExpressionLabel => _companionActiveExpressionLabel;
-  bool get companionHasSpeaker => !_isCompanionConnected || _companionAudioStreamChar != null;
-  String get companionHardwareVersionString => !_isCompanionConnected ? "Disconnected" : (_companionAudioStreamChar != null ? "Luna v2 (With Speaker)" : "Luna v1 (No Speaker)");
+  bool get companionHasSpeaker => false;
+  String get companionHardwareVersionString => !_isCompanionConnected ? "Disconnected" : "Luna v1 (No Speaker)";
 
   void setServerIp(String ip) {
     if (_serverIp != ip) {
