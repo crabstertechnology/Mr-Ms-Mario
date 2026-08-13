@@ -14,6 +14,7 @@ extern void handleBLEAudio(SoundEffect sound);
 extern void handleBLEText(String text);
 
 extern bool negativeDisplay;
+extern String robotVariant;
 
 class LunaAudio;
 extern LunaAudio audio;
@@ -108,7 +109,7 @@ public:
     if (isInitialized) return;
 
     // Initialize BLE Device
-    BLEDevice::init(negativeDisplay ? "Ms. Luna Robot" : "Mr. Luna Robot");
+    BLEDevice::init((robotVariant == "mr_luna") ? "Mr. Luna Robot" : "Ms. Luna Robot");
 
     // Create BLE Server
     pServer = BLEDevice::createServer();

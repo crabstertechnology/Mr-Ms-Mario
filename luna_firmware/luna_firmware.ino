@@ -440,12 +440,19 @@ void handleRobotCommand(String text) {
     }
     Serial.println("Relationship status updated: " + relType);
   } else if (text.startsWith("MODEL:")) {
-    robotVariant = text.substring(6);
-    robotVariant.trim();
-    preferences.begin("luna", false);
-    preferences.putString("robot_var", robotVariant);
-    preferences.end();
-    Serial.println("OK:ModelVariantUpdated:" + robotVariant);
+    String newVariant = text.substring(6);
+    newVariant.trim();
+    if (newVariant != robotVariant) {
+      robotVariant = newVariant;
+      preferences.begin("luna", false);
+      preferences.putString("robot_var", robotVariant);
+      preferences.end();
+      Serial.println("OK:ModelVariantUpdated:" + robotVariant);
+      delay(500);
+      ESP.restart();
+    } else {
+      Serial.println("OK:ModelVariantAlreadyMatching:" + robotVariant);
+    }
   } else if (text.startsWith("CAL:")) {
     // Command format: CAL:type,time,title
     String payload = text.substring(4);
@@ -757,7 +764,7 @@ void applySettings(String payload) {
   }
 
   ble.setBLEActive(bleActive);
-  tft.invertDisplay(negativeDisplay);
+  tft.invertDisplay(negativeDisplay ? false : true);
   
   #ifdef TFT_BL
   analogWriteFrequency(TFT_BL, 24000); // 24 kHz high-frequency PWM
@@ -1197,7 +1204,15 @@ void handleBtn1Single() {
 }
 
 void handleBtn1Double() {
-  // Double-click Button 1 disabled as screen cycling is moved to Button 2 single-click
+  lastInteractionTime = millis();
+  
+  // Clear any settings menu activation states
+  settingsActive = false;
+  optionSelected = false;
+
+  currentScreen = SCREEN_CLOCK;
+  audio.playSound(SOUND_POWERUP);
+  Serial.println("[BTN1 DBL] Switched directly to CLOCK screen");
 }
 
 void handleBtn1Long() {
