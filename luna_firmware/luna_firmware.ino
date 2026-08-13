@@ -47,6 +47,8 @@ bool negativeDisplay = false; // SSD1306 display color inversion
 int clockStyle = 0; // clock style selector (0 to 3)
 int oledBrightness = 2; // screen brightness (1: Low, 2: Med, 3: High)
 bool settingsActive = false;
+bool notificationsActive = false;
+bool notificationSelected = false;
 int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
 volatile bool hardwareLoopbackActive = false;
 bool optionSelected = false;
@@ -1191,10 +1193,22 @@ void handleBtn1Single() {
     audio.playSound(SOUND_CHIRP);
     Serial.println("[BTN1] Cycled clock style");
   } else if (currentScreen == SCREEN_NOTIFICATIONS) {
-    // Cycles notifications list
-    face.cycleNotificationView();
-    audio.playSound(SOUND_CHIRP);
-    Serial.println("[BTN1] Cycled notifications");
+    if (!notificationsActive) {
+      if (face.getNotificationCount() > 0) {
+        notificationsActive = true;
+        face.setCurrentNotifViewIdx(0);
+        notificationSelected = false;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN1] Notifications screen ACTIVATED");
+      }
+    } else {
+      if (!notificationSelected) {
+        notificationSelected = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.printf("[BTN1] Opened notification %d\n", face.getCurrentNotifViewIdx());
+      }
+    }
+    return;
   } else if (currentScreen == SCREEN_CALENDAR) {
     // Cycles calendar events/view
     face.cycleCalendarView();
@@ -1209,6 +1223,8 @@ void handleBtn1Double() {
   // Clear any settings menu activation states
   settingsActive = false;
   optionSelected = false;
+  notificationsActive = false;
+  notificationSelected = false;
 
   currentScreen = SCREEN_CLOCK;
   audio.playSound(SOUND_POWERUP);
@@ -1234,6 +1250,23 @@ void handleBtn1Long() {
       currentScreen = SCREEN_FACE;
       audio.playSound(SOUND_STARTUP);
       Serial.println("[BTN1 LONG] Exited Settings to FACE");
+    }
+    return;
+  }
+
+  if (currentScreen == SCREEN_NOTIFICATIONS) {
+    if (notificationSelected) {
+      notificationSelected = false;
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println("[BTN1 LONG] Exited notification detail view");
+    } else if (notificationsActive) {
+      notificationsActive = false;
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println("[BTN1 LONG] Deactivated notifications screen");
+    } else {
+      currentScreen = SCREEN_FACE;
+      audio.playSound(SOUND_STARTUP);
+      Serial.println("[BTN1 LONG] Exited Notifications to FACE");
     }
     return;
   }
@@ -1271,6 +1304,16 @@ void handleBtn2Single() {
     return;
   }
 
+  if (currentScreen == SCREEN_NOTIFICATIONS && notificationsActive) {
+    if (!notificationSelected) {
+      int nextIdx = (face.getCurrentNotifViewIdx() + 1) % face.getNotificationCount();
+      face.setCurrentNotifViewIdx(nextIdx);
+      audio.playSound(SOUND_CHIRP);
+      Serial.printf("[BTN2] Notifications DOWN -> index %d\n", nextIdx);
+    }
+    return;
+  }
+
   // Cycles screens: Clock -> Notifications -> Calendar -> Settings -> Face -> Clock
   SmartwatchScreen nextScreen;
   if (currentScreen == SCREEN_FACE) {
@@ -1281,13 +1324,16 @@ void handleBtn2Single() {
     nextScreen = SCREEN_CALENDAR;
   } else if (currentScreen == SCREEN_CALENDAR) {
     nextScreen = SCREEN_SETTINGS;
-    settingsActive = false; // ensure settings start inactive/view-only when cycled to
-    optionSelected = false;
   } else {
     nextScreen = SCREEN_FACE;
   }
 
   currentScreen = nextScreen;
+  settingsActive = false; 
+  optionSelected = false;
+  notificationsActive = false;
+  notificationSelected = false;
+
   hardwareLoopbackActive = false;
   audio.micStreaming = false;
   audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;

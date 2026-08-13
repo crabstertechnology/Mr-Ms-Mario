@@ -31,6 +31,8 @@ extern volatile bool hardwareLoopbackActive;
 extern int menuOption;
 extern bool optionSelected;
 extern bool settingsActive;
+extern bool notificationsActive;
+extern bool notificationSelected;
 extern unsigned int touchCount;
 extern SmartwatchScreen currentScreen;
 
@@ -359,6 +361,10 @@ public:
       currentNotifViewIdx = (currentNotifViewIdx + 1) % notificationCount;
     }
   }
+
+  int getNotificationCount() const { return notificationCount; }
+  int getCurrentNotifViewIdx() const { return currentNotifViewIdx; }
+  void setCurrentNotifViewIdx(int idx) { currentNotifViewIdx = idx; }
 
   // ------------------ Smartwatch Calendar Events ------------------
   void addCalendarEvent(String type, String timeStr, String title) {
@@ -689,53 +695,117 @@ public:
       return;
     }
     
-    NotificationItem& notif = notificationHistory[currentNotifViewIdx];
-    
-    // Glowing Card Container
-    display.drawRoundRect(6, 26, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 10, LUNA_CYAN);
-    display.drawRoundRect(7, 27, SCREEN_WIDTH - 14, SCREEN_HEIGHT - 34, 9, LUNA_GLASS);
-    display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, LUNA_DARK);
-    
-    // Header
-    display.setTextColor(LUNA_PINK);
-    display.setTextSize(2);
-    display.setCursor(14, 34);
-    String title = notif.title;
-    if (title.length() > 10) title = title.substring(0, 8) + "...";
-    display.print(title);
-    
-    display.setTextColor(LUNA_CYAN);
-    display.setTextSize(2);
-    display.setCursor(SCREEN_WIDTH - 76, 34);
-    display.print(notif.timeStr);
-    
-    display.drawFastHLine(12, 54, SCREEN_WIDTH - 24, LUNA_GLASS);
-    
-    // Body Text
-    display.setTextColor(TFT_WHITE);
-    display.setTextSize(2);
-    int yStart = 64;
-    int charsPerLine = (SCREEN_WIDTH - 28) / 12;
-    int line = 0;
-    int maxLines = (SCREEN_HEIGHT - 106) / 20;
-    if (maxLines < 4) maxLines = 4;
-    for (unsigned int i = 0; i < notif.body.length() && line < maxLines; i += charsPerLine) {
-      unsigned int endIdx = i + charsPerLine;
-      if (endIdx > notif.body.length()) endIdx = notif.body.length();
-      String lineStr = notif.body.substring(i, endIdx);
-      display.setCursor(14, yStart + line * 20);
-      display.print(lineStr);
-      line++;
+    // Draw Detail View or List View depending on selection
+    if (notificationSelected) {
+      NotificationItem& notif = notificationHistory[currentNotifViewIdx];
+      
+      // Glowing Card Container
+      display.drawRoundRect(6, 26, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 10, LUNA_CYAN);
+      display.drawRoundRect(7, 27, SCREEN_WIDTH - 14, SCREEN_HEIGHT - 34, 9, LUNA_GLASS);
+      display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, LUNA_DARK);
+      
+      // Header
+      display.setTextColor(LUNA_PINK);
+      display.setTextSize(2);
+      display.setCursor(14, 34);
+      String title = notif.title;
+      if (title.length() > 10) title = title.substring(0, 8) + "...";
+      display.print(title);
+      
+      display.setTextColor(LUNA_CYAN);
+      display.setTextSize(2);
+      display.setCursor(SCREEN_WIDTH - 76, 34);
+      display.print(notif.timeStr);
+      
+      display.drawFastHLine(12, 54, SCREEN_WIDTH - 24, LUNA_GLASS);
+      
+      // Body Text
+      display.setTextColor(TFT_WHITE);
+      display.setTextSize(2);
+      int yStart = 64;
+      int charsPerLine = (SCREEN_WIDTH - 28) / 12;
+      int line = 0;
+      int maxLines = (SCREEN_HEIGHT - 106) / 20;
+      if (maxLines < 4) maxLines = 4;
+      for (unsigned int i = 0; i < notif.body.length() && line < maxLines; i += charsPerLine) {
+        unsigned int endIdx = i + charsPerLine;
+        if (endIdx > notif.body.length()) endIdx = notif.body.length();
+        String lineStr = notif.body.substring(i, endIdx);
+        display.setCursor(14, yStart + line * 20);
+        display.print(lineStr);
+        line++;
+      }
+      
+      // Indicator
+      display.setTextColor(LUNA_PINK);
+      display.setTextSize(1);
+      char footerBuf[16];
+      snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentNotifViewIdx + 1, notificationCount);
+      int footerW = strlen(footerBuf) * 6;
+      display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 20);
+      display.print(footerBuf);
+    } else {
+      // List View: Draw list of up to 5 stored notifications
+      // Header
+      display.setTextColor(LUNA_PINK);
+      display.setTextSize(2);
+      display.setCursor(14, 32);
+      display.print("Notifications");
+      
+      display.drawFastHLine(12, 52, SCREEN_WIDTH - 24, LUNA_GLASS);
+      
+      for (int i = 0; i < notificationCount && i < 5; i++) {
+        int y = 58 + i * 33;
+        NotificationItem& notif = notificationHistory[i];
+        
+        if (notificationsActive && i == currentNotifViewIdx) {
+          // Highlight card background
+          display.fillRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_GLASS);
+          display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_CYAN);
+        } else {
+          // Subtle border for inactive items
+          display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, 0x10A2);
+        }
+        
+        // Title/Sender text
+        display.setCursor(16, y + 2);
+        display.setTextSize(2);
+        display.setTextColor(TFT_WHITE);
+        String shortTitle = notif.title;
+        if (shortTitle.length() > 11) shortTitle = shortTitle.substring(0, 9) + "..";
+        display.print(shortTitle);
+        
+        // Time text
+        display.setCursor(SCREEN_WIDTH - 55, y + 2);
+        display.setTextSize(1);
+        display.setTextColor(LUNA_CYAN);
+        display.print(notif.timeStr);
+        
+        // Body snippet text
+        display.setCursor(16, y + 18);
+        display.setTextSize(1);
+        display.setTextColor(0xAD55);
+        String snippet = notif.body;
+        if (snippet.length() > 28) snippet = snippet.substring(0, 26) + "...";
+        display.print(snippet);
+      }
+      
+      // Bottom Tip / Footer
+      display.setTextSize(1);
+      if (notificationsActive) {
+        display.setTextColor(LUNA_PINK);
+        const char* tip = "B1: Read | B2: Next | B1 L: Exit";
+        int tipW = strlen(tip) * 6;
+        display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 16);
+        display.print(tip);
+      } else {
+        display.setTextColor(0xAD55);
+        const char* tip = "Press B1 to read messages";
+        int tipW = strlen(tip) * 6;
+        display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 16);
+        display.print(tip);
+      }
     }
-    
-    // Indicator
-    display.setTextColor(LUNA_PINK);
-    display.setTextSize(1);
-    char footerBuf[16];
-    snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentNotifViewIdx + 1, notificationCount);
-    int footerW = strlen(footerBuf) * 6;
-    display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 20);
-    display.print(footerBuf);
   }
 
   void drawCalendarEvents() {
