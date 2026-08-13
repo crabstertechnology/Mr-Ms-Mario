@@ -41,7 +41,17 @@ private:
   }
 
 public:
-  LunaAudio(int pin) : buzzerPin(pin) {
+  enum AudioMode {
+    AUDIO_MODE_SYNTH = 0,
+    AUDIO_MODE_STREAM
+  };
+  
+  volatile AudioMode audioMode;
+  volatile bool micStreaming;
+  volatile bool prebuffering;
+  volatile bool directLoopback;
+
+  LunaAudio() : buzzerPin(BUZZER_PIN) {
     queueHead = 0;
     queueTail = 0;
     queueCount = 0;
@@ -49,19 +59,39 @@ public:
     currentNoteEndTime = 0;
     interNoteGapDuration = 15; // 15ms gap between notes
     inGap = false;
+    audioMode = AUDIO_MODE_SYNTH;
+    micStreaming = false;
+    prebuffering = true;
+    directLoopback = false;
+  }
+
+  void begin() {
     pinMode(buzzerPin, OUTPUT);
+  }
+
+  void update() {
+    if (!isPlaying) return;
+
+    unsigned long now = millis();
+    if (now >= currentNoteEndTime) {
+      if (!inGap) {
+        noTone(buzzerPin);
+        currentNoteEndTime = now + interNoteGapDuration;
+        inGap = true;
+      } else {
+        playNextNote();
+      }
+    }
   }
 
   void playSound(SoundEffect effect, int speedPercent = 100) {
     clearQueue();
     
-    // Scale the gap between notes based on speed
     interNoteGapDuration = (15 * 100) / speedPercent;
     if (interNoteGapDuration < 1) interNoteGapDuration = 1;
     
     switch (effect) {
       case SOUND_JUMP:
-        // Sliding frequencies from 200Hz to 1200Hz
         for (uint16_t f = 200; f < 1100; f += 60) {
           enqueueNote(f, 15);
         }
@@ -69,7 +99,7 @@ public:
 
       case SOUND_COIN:
         enqueueNote(988, 80);   // B5
-        enqueueNote(0, 10);     // Brief pause
+        enqueueNote(0, 10);     // Pause
         enqueueNote(1319, 280);  // E6
         break;
 
@@ -111,33 +141,32 @@ public:
         break;
 
       case SOUND_STARTUP: {
-        // Classic Mario overworld theme melody sequence scaled by speedPercent
         auto eq = [this, speedPercent](uint16_t freq, uint16_t dur) {
           enqueueNote(freq, (dur * 100) / speedPercent);
         };
-        eq(659, 50); eq(0, 10);   // E5 50 10
-        eq(659, 50); eq(0, 10);   // E5 50 10
-        eq(659, 50); eq(0, 30);   // E5 50 30
-        eq(523, 50); eq(0, 10);   // C5 50 10
-        eq(659, 50); eq(0, 30);   // E5 50 30
-        eq(784, 50); eq(0, 50);   // G5 50 50
-        eq(392, 50); eq(0, 50);   // G4 50 50
-        eq(523, 50); eq(0, 10);   // C5 50 10
-        eq(392, 50); eq(0, 30);   // G4 50 30
-        eq(330, 50); eq(0, 10);   // E4 50 10
-        eq(440, 50); eq(0, 10);   // A4 50 10
-        eq(494, 50); eq(0, 10);   // B4 50 10
-        eq(466, 50); eq(0, 10);   // AS4 50 10
-        eq(440, 50); eq(0, 30);   // A4 50 30
-        eq(392, 50); eq(0, 20);   // G4 50 20
-        eq(659, 50); eq(0, 10);   // E5 50 10
-        eq(784, 50); eq(0, 10);   // G5 50 10
-        eq(880, 50); eq(0, 10);   // A5 50 10
-        eq(698, 50); eq(0, 10);   // F5 50 10
-        eq(784, 50); eq(0, 10);   // G5 50 10
-        eq(659, 50); eq(0, 10);   // E5 50 10
-        eq(523, 50); eq(0, 10);   // C5 50 10
-        eq(494, 50); eq(0, 50);   // B4 50 50
+        eq(659, 50); eq(0, 10);
+        eq(659, 50); eq(0, 10);
+        eq(659, 50); eq(0, 30);
+        eq(523, 50); eq(0, 10);
+        eq(659, 50); eq(0, 30);
+        eq(784, 50); eq(0, 50);
+        eq(392, 50); eq(0, 50);
+        eq(523, 50); eq(0, 10);
+        eq(392, 50); eq(0, 30);
+        eq(330, 50); eq(0, 10);
+        eq(440, 50); eq(0, 10);
+        eq(494, 50); eq(0, 10);
+        eq(466, 50); eq(0, 10);
+        eq(440, 50); eq(0, 30);
+        eq(392, 50); eq(0, 20);
+        eq(659, 50); eq(0, 10);
+        eq(784, 50); eq(0, 10);
+        eq(880, 50); eq(0, 10);
+        eq(698, 50); eq(0, 10);
+        eq(784, 50); eq(0, 10);
+        eq(659, 50); eq(0, 10);
+        eq(523, 50); eq(0, 10);
+        eq(494, 50); eq(0, 50);
         break;
       }
 
@@ -145,14 +174,14 @@ public:
         auto eq = [this, speedPercent](uint16_t freq, uint16_t dur) {
           enqueueNote(freq, (dur * 100) / speedPercent);
         };
-        eq(740, 80); eq(0, 20);   // F#5
-        eq(698, 80); eq(0, 20);   // F5
-        eq(622, 80); eq(0, 20);   // D#5
-        eq(587, 80); eq(0, 20);   // D5
-        eq(740, 80); eq(0, 20);   // F#5
-        eq(698, 80); eq(0, 20);   // F5
-        eq(622, 80); eq(0, 20);   // D#5
-        eq(587, 160);             // D5
+        eq(740, 80); eq(0, 20);
+        eq(698, 80); eq(0, 20);
+        eq(622, 80); eq(0, 20);
+        eq(587, 80); eq(0, 20);
+        eq(740, 80); eq(0, 20);
+        eq(698, 80); eq(0, 20);
+        eq(622, 80); eq(0, 20);
+        eq(587, 160);
         break;
       }
 
@@ -160,21 +189,21 @@ public:
         auto eq = [this, speedPercent](uint16_t freq, uint16_t dur) {
           enqueueNote(freq, (dur * 100) / speedPercent);
         };
-        eq(131, 80); eq(0, 40);   // C4
-        eq(262, 80); eq(0, 40);   // C5
-        eq(110, 80); eq(0, 40);   // A3
-        eq(220, 80); eq(0, 40);   // A4
-        eq(117, 80); eq(0, 40);   // AS3
-        eq(233, 80); eq(0, 40);   // AS4
+        eq(131, 80); eq(0, 40);
+        eq(262, 80); eq(0, 40);
+        eq(110, 80); eq(0, 40);
+        eq(220, 80); eq(0, 40);
+        eq(117, 80); eq(0, 40);
+        eq(233, 80); eq(0, 40);
         break;
       }
 
       case SOUND_THEMECHANGE:
-        enqueueNote(523, 60);    // C5
+        enqueueNote(523, 60);
         enqueueNote(0, 10);
-        enqueueNote(659, 60);    // E5
+        enqueueNote(659, 60);
         enqueueNote(0, 10);
-        enqueueNote(784, 80);    // G5
+        enqueueNote(784, 80);
         break;
         
       default:
@@ -208,21 +237,13 @@ public:
     inGap = false;
   }
 
-  void update() {
-    if (!isPlaying) return;
-
-    unsigned long now = millis();
-    if (now >= currentNoteEndTime) {
-      if (!inGap) {
-        // Stop playing note and start a brief silent gap for note separation
-        noTone(buzzerPin);
-        currentNoteEndTime = now + interNoteGapDuration;
-        inGap = true;
-      } else {
-        // Gap finished, play next note
-        playNextNote();
-      }
-    }
+  void setVolume(int vol) {}
+  void setBassBoost(int level) {}
+  void startMusicStream() {}
+  void stopMusicStream() {}
+  void writeTxStream(const uint8_t* data, size_t len) {}
+  bool getRxItem(uint8_t* buffer, size_t* size) {
+    return false;
   }
 };
 

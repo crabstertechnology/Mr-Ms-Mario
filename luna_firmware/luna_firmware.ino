@@ -1,3 +1,7 @@
+#include <WiFi.h>
+#include <Network.h>
+#include <WiFiUdp.h>
+#include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
@@ -9,17 +13,22 @@
 #include "bluetooth.h"
 #include "interaction.h"
 
+#define BUTTON1_PIN BTN_EXPR_PIN
+#define BUTTON2_PIN BTN_SETTINGS_PIN
+
 // Forward declaration for network callbacks
 void handleRobotCommand(String cmd);
 
 #include "luna_network.h"
 
 // Hardware Interface Objects
-Adafruit_ST7789 display(&SPI, TFT_CS, TFT_DC, TFT_RST);
-LunaFace face(display);
-LunaAudio audio(BUZZER_PIN);
+Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
+GFXcanvas16 display(SCREEN_WIDTH, SCREEN_HEIGHT);
+LunaFace face(tft, display);
+LunaAudio audio;
+volatile int micAmplitude = 0;
 LunaBLE ble;
-LunaInteraction interaction(BTN_EXPR_PIN, BTN_SETTINGS_PIN);
+LunaInteraction interaction;   // dual-button handler (BTN_EXPR_PIN + BTN_SETTINGS_PIN)
 LunaNetwork network;
 
 // NVS Settings Persistence
@@ -34,13 +43,14 @@ int gifIntro = 1;        // intro GIF expression (0-6)
 int touchSingle = 2;     // action for single tap: 0=default, 1=clock, 2=skip_anim, 3=ble_toggle, 10-16=specific expr
 int touchDouble = 0;     // action for double tap
 int touchLong = 0;       // action for long press
-bool negativeDisplay = false; // ST7789 display color inversion
+bool negativeDisplay = false; // SSD1306 display color inversion
 int clockStyle = 0; // clock style selector (0 to 3)
 int oledBrightness = 2; // screen brightness (1: Low, 2: Med, 3: High)
-bool inSettingsMenu = false;
-bool settingsMenuChanged = false;
+bool settingsActive = false;
 int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
+volatile bool hardwareLoopbackActive = false;
 bool optionSelected = false;
+SmartwatchScreen currentScreen = SCREEN_FACE;
 
 // System State Variables
 unsigned int touchCount = 0;
@@ -60,25 +70,7 @@ bool mapsActive = false;
 bool isRelationCommEnabled = true;
 String companionMac = "";
 String relType = "";
-String robotVariant = "mr_luna";
-
-bool isCompanionPaired() {
-  return (companionMac.length() > 0 && companionMac != "none" && relType.length() > 0 && relType != "none");
-}
-
-bool isRelationshipActive() {
-  return isRelationCommEnabled && isCompanionPaired();
-}
-
-// Relationship Action Mappings
-int relTapExpr = 1; // Default Happy
-int relTapSound = 2; // Default Coin
-int relDoubleExpr = 6; // Default Wink
-int relDoubleSound = 6; // Default Jump
-int relTripleExpr = 4; // Default Surprised
-int relTripleSound = 8;
-int relLongExpr = 5; // Default Sleeping
-int relLongSound = 4; // Default Powerdown
+String robotVariant = "ms_luna";
 
 struct NVSEventItem {
   String type;
@@ -126,6 +118,7 @@ void loadCalendarEventsFromNVS() {
         nvsEvents[i].time = val.substring(sep1 + 1, sep2);
         nvsEvents[i].title = val.substring(sep2 + 1);
         nvsEvents[i].active = true;
+        face.addCalendarEvent(nvsEvents[i].type, nvsEvents[i].time, nvsEvents[i].title);
       }
     }
   }
@@ -152,11 +145,11 @@ void checkHardwareScheduledAlarms() {
         lastTriggeredAlarmMinute = rtcMinute;
         isReminderRinging = true;
         lastReminderSoundTime = millis();
-        String typeLabel = nvsEvents[i].type;
-        if (typeLabel.length() > 0) {
-          typeLabel[0] = toupper(typeLabel[0]);
+        String formattedType = nvsEvents[i].type;
+        if (formattedType.length() > 0) {
+          formattedType[0] = toupper(formattedType[0]);
         }
-        face.setNotificationText(typeLabel + ": " + nvsEvents[i].title);
+        face.setDetailedNotification(formattedType, nvsEvents[i].title, rtcHour, rtcMinute);
         if (nvsEvents[i].type == "birthday") {
           audio.playSound(SOUND_POWERUP);
         } else if (nvsEvents[i].type == "alarm") {
@@ -170,6 +163,25 @@ void checkHardwareScheduledAlarms() {
     }
   }
 }
+
+bool isCompanionPaired() {
+  return (companionMac.length() > 0 && companionMac != "none" && relType.length() > 0 && relType != "none");
+}
+
+bool isRelationshipActive() {
+  return isRelationCommEnabled && isCompanionPaired();
+}
+
+// Relationship Action Mappings
+int relTapExpr = 1; // Default Happy
+int relTapSound = 2; // Default Coin
+int relDoubleExpr = 6; // Default Wink
+int relDoubleSound = 6; // Default Jump
+int relTripleExpr = 4; // Default Surprised
+int relTripleSound = 8;
+int relLongExpr = 5; // Default Sleeping
+int relLongSound = 4; // Default Powerdown
+
 
 void parseAndSyncTime(String timeStr) {
   int firstColon = timeStr.indexOf(':');
@@ -447,6 +459,7 @@ void handleRobotCommand(String text) {
       Serial.println("Calendar Event: type=" + type + ", time=" + time + ", title=" + title);
       
       // Save in RAM and NVS persistent Flash memory
+      face.addCalendarEvent(type, time, title);
       saveCalendarEventToNVS(type, time, title);
     }
   } else if (text.startsWith("ALARM:")) {
@@ -503,6 +516,8 @@ void handleRobotCommand(String text) {
     bool shouldBeep = (!mapsActive) || (dirUpper != face.getMapDirection());
     
     mapsActive = true;
+    currentScreen = SCREEN_MAPS;  // <-- CRITICAL: actually show the map screen
+    lastInteractionTime = millis(); // reset inactivity timer so map stays visible
     face.setMapNavigation(dirUpper, distance, description);
     
     if (shouldBeep) {
@@ -510,6 +525,61 @@ void handleRobotCommand(String text) {
     }
     
     activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
+  } else if (text == "CALL:START") {
+    audio.micStreaming = true;
+    audio.audioMode = LunaAudio::AUDIO_MODE_STREAM;
+    face.setStateLabel("CALL");
+    Serial.println("VoIP Call started");
+  } else if (text == "CALL:STOP") {
+    audio.micStreaming = false;
+    audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+    face.setStateLabel("IDLE");
+    Serial.println("VoIP Call stopped");
+  } else if (text == "LOOPBACK:START") {
+    audio.directLoopback = true;
+    audio.micStreaming = false;     // BLE streaming off; direct i2s_write handles output
+    audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH; // Keep TX task silent
+    hardwareLoopbackActive = true;
+    face.setStateLabel("TEST");
+    audio.playSound(SOUND_POWERUP);
+    Serial.println("Loopback test started (direct i2s path)");
+  } else if (text == "LOOPBACK:STOP") {
+    audio.directLoopback = false;
+    audio.micStreaming = false;
+    audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+    hardwareLoopbackActive = false;
+    face.setStateLabel("IDLE");
+    audio.playSound(SOUND_POWERDOWN);
+    Serial.println("Loopback test stopped");
+  } else if (text == "MUSIC:START") {
+    audio.micStreaming = false;
+    audio.startMusicStream();
+    face.setStateLabel("MUSIC");
+    Serial.println("Music mode started");
+  } else if (text == "MUSIC:STOP") {
+    audio.stopMusicStream();
+    face.setStateLabel("IDLE");
+    Serial.println("Music mode stopped");
+  } else if (text.startsWith("VOL:")) {
+    int vol = text.substring(4).toInt();
+    vol = constrain(vol, 0, 100);
+    audio.setVolume(vol);
+    Serial.print("Volume set to: ");
+    Serial.println(vol);
+  } else if (text.startsWith("BASS:")) {
+    int bass = text.substring(5).toInt();
+    bass = constrain(bass, 0, 10);
+    audio.setBassBoost(bass);
+    Serial.print("Bass boost set to: ");
+    Serial.println(bass);
+  } else if (text.startsWith("AUDIO_MODE:")) {
+    String mode = text.substring(11);
+    if (mode == "STREAM") {
+      audio.audioMode = LunaAudio::AUDIO_MODE_STREAM;
+    } else {
+      audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+    }
+    Serial.println("Audio mode set to: " + mode);
   } else if (text.startsWith("REL_COMM:")) {
     int val = text.substring(9).toInt();
     isRelationCommEnabled = (val == 1);
@@ -574,8 +644,8 @@ void handleRobotCommand(String text) {
         body.trim();
         
         face.headerText = title + " - " + body;
-        if (face.headerText.length() > 21) {
-          face.headerText = face.headerText.substring(0, 18) + "...";
+        if (face.headerText.length() > 20) {
+          face.headerText = face.headerText.substring(0, 17) + "...";
         }
         face.setExpression((Expression)exprVal);
         activeNotificationDurationMs = notificationDurationMs;
@@ -592,15 +662,15 @@ void handleRobotCommand(String text) {
       String notifBody = payload.substring(sep + 1);
       notifTitle.trim();
       notifBody.trim();
-      face.setDetailedNotification(notifTitle, notifBody);
+      face.setDetailedNotification(notifTitle, notifBody, rtcHour, rtcMinute);
     } else {
-      face.setNotificationText(payload);
+      face.setNotificationText(payload, rtcHour, rtcMinute);
     }
     audio.playSound(SOUND_CHIRP);
     activeNotificationDurationMs = notificationDurationMs;
   } else {
     // Normal text message notification
-    face.setNotificationText(text);
+    face.setNotificationText(text, rtcHour, rtcMinute);
     audio.playSound(SOUND_CHIRP); // alert user
     activeNotificationDurationMs = notificationDurationMs;
   }
@@ -687,11 +757,14 @@ void applySettings(String payload) {
   }
 
   ble.setBLEActive(bleActive);
-  display.invertDisplay(negativeDisplay ? false : true);
+  tft.invertDisplay(negativeDisplay);
   
-  if (oledBrightness == 1) analogWrite(TFT_BLK, 50);
-  else if (oledBrightness == 2) analogWrite(TFT_BLK, 150);
-  else analogWrite(TFT_BLK, 255);
+  #ifdef TFT_BL
+  analogWriteFrequency(TFT_BL, 24000); // 24 kHz high-frequency PWM
+  if (oledBrightness == 1) analogWrite(TFT_BL, 30);
+  else if (oledBrightness == 2) analogWrite(TFT_BL, 128);
+  else analogWrite(TFT_BL, 255);
+  #endif
   
   Serial.print("NegativeDisplay set to: ");
   Serial.println(negativeDisplay ? "ON" : "OFF");
@@ -720,17 +793,13 @@ void applySettings(String payload) {
   preferences.end();
 
   audio.playSound(SOUND_POWERUP);
-  settingsMenuChanged = true;
 }
 
 void setup() {
   Serial.begin(115200);
-  Serial.setTxTimeoutMs(0); // Prevent serial write blocking when monitor is not open
   delay(100); // Faster boot!
-  Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
-  Serial.println(FIRMWARE_VERSION);
-
-  // Load persistence settings from NVS Preferences
+  
+  // 1. Load persistence settings from NVS Preferences first
   preferences.begin("luna", false);
   bleActive = true; // Always ON
   gifSpeed = preferences.getInt("speed", 100);
@@ -739,7 +808,7 @@ void setup() {
   touchSingle = preferences.getInt("tchSing", 2);  // default: skip animation
   touchDouble = preferences.getInt("tchDoub", 0);
   touchLong = preferences.getInt("tchLong", 0);
-  robotVariant = preferences.getString("robot_var", "mr_luna");
+  robotVariant = preferences.getString("robot_var", "ms_luna");
   negativeDisplay = preferences.getBool("neg", (robotVariant == "ms_luna"));
   clockStyle = preferences.getInt("clkStyle", 0);
   oledBrightness = preferences.getInt("oledBright", 2);
@@ -763,6 +832,20 @@ void setup() {
   relLongSound = preferences.getInt("rLonSd", 4);
   preferences.end();
 
+  loadCalendarEventsFromNVS();
+
+  // 2. Start Bluetooth BLE Server first when heap memory is maximum and unfragmented
+  bleActive = true;
+  ble.init();
+  Serial.println(negativeDisplay ? "BLE Server Started as 'Ms. Luna Robot'." : "BLE Server Started as 'Mr. Luna Robot'.");
+
+  // 3. Initialize audio and other hardware pins
+  audio.begin();
+  interaction.begin();   // sets up both buttons with INPUT_PULLUP (active-low)
+
+  Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
+  Serial.println(FIRMWARE_VERSION);
+
   // Set the GIF speed delay and default expression
   face.setFrameDelay(gifSpeed);
   if (defaultGif == 99) {
@@ -781,17 +864,11 @@ void setup() {
     }
   }
 
-  // Initialize control pins and backlight
+  // Perform Hardware Reset
   pinMode(TFT_DC, OUTPUT);
   pinMode(TFT_RST, OUTPUT);
   pinMode(TFT_BLK, OUTPUT);
-  if (oledBrightness == 1) analogWrite(TFT_BLK, 50);
-  else if (oledBrightness == 2) analogWrite(TFT_BLK, 150);
-  else analogWrite(TFT_BLK, 255);
-  Serial.println("💡 Display Backlight Initialized");
-
-  // Hardware Reset (matching working SPI direct test code)
-  Serial.println("Performing Hardware Reset...");
+  
   digitalWrite(TFT_RST, HIGH);
   delay(50);
   digitalWrite(TFT_RST, LOW);
@@ -801,33 +878,39 @@ void setup() {
 
   // Initialize Hardware SPI on custom pins
   SPI.begin(TFT_SCL, -1, TFT_SDA, -1);
-  Serial.println("📡 Hardware SPI Initialized (SCLK: 4, MOSI: 6)");
   
-  // Initialize ST7789 Display in SPI MODE 3 (matching working SPI direct test code)
-  display.init(240, 240, SPI_MODE3);
-  display.setSPISpeed(20000000UL); // 20MHz SPI frequency
-  display.setRotation(1);
+  // Initialize ST7789 Display in SPI MODE 3
+  tft.init(240, 240, SPI_MODE3);
+  tft.setSPISpeed(20000000UL); // 20 MHz SPI speed
+  tft.setRotation(2);          // Rotate right to make it vertical!
   
-  // Apply saved invert setting immediately after display init (correct colors via IPS inversion)
-  display.invertDisplay(negativeDisplay ? false : true);
-
-  // Display initial loading face
-  display.fillScreen(ST77XX_BLACK);
-  display.setTextSize(2);
-  display.setTextColor(ST77XX_WHITE);
-  display.setCursor(10, 110);
-  display.print(negativeDisplay ? "Loading Ms. Luna..." : "Loading Mr. Luna...");
+  tft.invertDisplay(false);   // No inversion during logo — gives white background on IPS
+  tft.fillScreen(ST77XX_WHITE);
   
-  loadCalendarEventsFromNVS();
+  display.fillScreen(ST77XX_WHITE);
+  
+  // Apply saved brightness setting
+  if (oledBrightness == 1) analogWrite(TFT_BLK, 30);
+  else if (oledBrightness == 2) analogWrite(TFT_BLK, 128);
+  else analogWrite(TFT_BLK, 255);
 
-  // Start Bluetooth BLE Server (always on)
-  bleActive = true;
-  ble.init();
-  Serial.println(negativeDisplay ? "BLE Server Started as 'Ms. Luna Robot'." : "BLE Server Started as 'Mr. Luna Robot'.");
+  // Display startup logo on white background
+  tft.drawRGBBitmap(0, 0, image_logo_pixels, 240, 240);
 
-  // Boot sequence animation & sound
-  delay(100); // Faster boot!
+  // Play startup sound immediately so it plays while loading the logo
   audio.playSound(SOUND_STARTUP, introSoundSpeed);
+
+
+  // Show logo for 3 seconds while playing the startup sound and ignoring/clearing touches
+  unsigned long bootStart = millis();
+  while (millis() - bootStart < 3000) {
+    audio.update();
+    interaction.update(); // read to clear/ignore early boot noise
+    delay(1);
+  }
+
+  // Restore saved invert setting for standard operation
+  tft.invertDisplay(negativeDisplay ? false : true);
   
   // Set intro speed
   face.setFrameDelay(gifIntroSpeed);
@@ -984,9 +1067,238 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
     }
   }
 }
+// =============================================================================
+// Helper function to adjust Settings options (Direction: +1 for Up/Increment, -1 for Down/Decrement)
+// =============================================================================
+void adjustOption(int option, int direction) {
+  switch (option) {
+    case 0: // BLE
+      bleActive = true;
+      audio.playSound(SOUND_CHIRP);
+      break;
+    case 1: // GIF Speed
+      if (direction > 0) {
+        gifSpeed += 20;
+        if (gifSpeed > 300) gifSpeed = 20;
+      } else {
+        gifSpeed -= 20;
+        if (gifSpeed < 20) gifSpeed = 300;
+      }
+      face.setFrameDelay(gifSpeed);
+      audio.playSound(SOUND_CHIRP);
+      break;
+    case 2: // Clock Style
+      if (direction > 0) {
+        clockStyle = (clockStyle + 1) % 3;
+      } else {
+        clockStyle = (clockStyle - 1 + 3) % 3;
+      }
+      audio.playSound(SOUND_CHIRP);
+      break;
+    case 3: // Invert Display
+      negativeDisplay = !negativeDisplay;
+      tft.invertDisplay(negativeDisplay ? false : true);
+      audio.playSound(SOUND_CHIRP);
+      break;
+    case 4: // Brightness
+      if (direction > 0) {
+        oledBrightness = (oledBrightness % 3) + 1;
+      } else {
+        oledBrightness--;
+        if (oledBrightness < 1) oledBrightness = 3;
+      }
+      if (oledBrightness == 1) analogWrite(TFT_BLK, 30);
+      else if (oledBrightness == 2) analogWrite(TFT_BLK, 128);
+      else analogWrite(TFT_BLK, 255);
+      audio.playSound(SOUND_CHIRP);
+      break;
+    case 5: // Loopback test
+      hardwareLoopbackActive = !hardwareLoopbackActive;
+      audio.directLoopback = hardwareLoopbackActive;
+      audio.micStreaming = false;
+      audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+      if (hardwareLoopbackActive) { face.setStateLabel("TEST"); audio.playSound(SOUND_POWERUP); }
+      else                        { face.setStateLabel("IDLE"); audio.playSound(SOUND_POWERDOWN); }
+      break;
+    case 6: // Save settings
+      {
+        preferences.begin("luna", false);
+        preferences.putBool("ble",       bleActive);
+        preferences.putInt("speed",      gifSpeed);
+        preferences.putInt("clkStyle",   clockStyle);
+        preferences.putBool("neg",       negativeDisplay);
+        preferences.putInt("oledBright", oledBrightness);
+        preferences.end();
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN] Settings SAVED");
+        optionSelected = false; // deselect
+      }
+      break;
+    case 7: // Exit settings
+      optionSelected = false;
+      currentScreen  = SCREEN_FACE;
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println("[BTN] Exited Settings");
+      break;
+  }
+}
+
+// =============================================================================
+// Button 1 handlers
+// =============================================================================
+void handleBtn1Single() {
+  lastInteractionTime = millis();
+
+  if (currentScreen == SCREEN_SETTINGS) {
+    if (!settingsActive) {
+      // If settings menu is not activated/selected yet, press Button 1 to select/activate it
+      settingsActive = true;
+      menuOption = 0;
+      optionSelected = false;
+      audio.playSound(SOUND_POWERUP);
+      Serial.println("[BTN1] Settings screen ACTIVATED");
+    } else {
+      if (!optionSelected) {
+        // If settings is active but we are not editing an option, press Button 1 to enter/select it
+        optionSelected = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.printf("[BTN1] Enters option %d\n", menuOption);
+      } else {
+        // If we are actively editing an option, press Button 1 to decrement value
+        adjustOption(menuOption, -1);
+        Serial.printf("[BTN1] Decremented option %d value\n", menuOption);
+      }
+    }
+    return;
+  }
+
+  // Button 1 single click on other screens:
+  if (currentScreen == SCREEN_FACE) {
+    // Next expression/animation
+    cycleExpression();
+    audio.playSound(SOUND_COIN);
+    Serial.println("[BTN1] Next expression");
+  } else if (currentScreen == SCREEN_CLOCK) {
+    // Cycles clock styles
+    clockStyle = (clockStyle + 1) % 3;
+    audio.playSound(SOUND_CHIRP);
+    Serial.println("[BTN1] Cycled clock style");
+  } else if (currentScreen == SCREEN_NOTIFICATIONS) {
+    // Cycles notifications list
+    face.cycleNotificationView();
+    audio.playSound(SOUND_CHIRP);
+    Serial.println("[BTN1] Cycled notifications");
+  } else if (currentScreen == SCREEN_CALENDAR) {
+    // Cycles calendar events/view
+    face.cycleCalendarView();
+    audio.playSound(SOUND_CHIRP);
+    Serial.println("[BTN1] Cycled calendar");
+  }
+}
+
+void handleBtn1Double() {
+  // Double-click Button 1 disabled as screen cycling is moved to Button 2 single-click
+}
+
+void handleBtn1Long() {
+  lastInteractionTime = millis();
+
+  if (currentScreen == SCREEN_SETTINGS) {
+    if (optionSelected) {
+      // If inside a setting, deselect and return to menu navigation
+      optionSelected = false;
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println("[BTN1 LONG] Deselected setting option");
+    } else if (settingsActive) {
+      // If not inside a setting but menu is active, deactivate menu navigation
+      settingsActive = false;
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println("[BTN1 LONG] Deactivated settings screen");
+    } else {
+      // If settings screen is completely inactive, return to Face screen
+      currentScreen = SCREEN_FACE;
+      audio.playSound(SOUND_STARTUP);
+      Serial.println("[BTN1 LONG] Exited Settings to FACE");
+    }
+    return;
+  }
+
+  if (currentScreen != SCREEN_FACE) {
+    // Return to face screen
+    currentScreen = SCREEN_FACE;
+    hardwareLoopbackActive = false;
+    audio.micStreaming = false;
+    audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+    audio.prebuffering = true;
+    face.setStateLabel("IDLE");
+    audio.playSound(SOUND_STARTUP);
+    Serial.println("[BTN1 LONG] Return to FACE screen");
+  }
+}
+
+// =============================================================================
+// Button 2 handlers
+// =============================================================================
+void handleBtn2Single() {
+  lastInteractionTime = millis();
+
+  if (currentScreen == SCREEN_SETTINGS && settingsActive) {
+    if (!optionSelected) {
+      // If active and not selected: Move highlight DOWN
+      menuOption = (menuOption + 1) % 8;
+      audio.playSound(SOUND_CHIRP);
+      Serial.printf("[BTN2] Settings DOWN -> option %d\n", menuOption);
+    } else {
+      // If active and selected: Adjust option value UP (increment)
+      adjustOption(menuOption, 1);
+      Serial.printf("[BTN2] Incremented option %d value\n", menuOption);
+    }
+    return;
+  }
+
+  // Cycles screens: Clock -> Notifications -> Calendar -> Settings -> Face -> Clock
+  SmartwatchScreen nextScreen;
+  if (currentScreen == SCREEN_FACE) {
+    nextScreen = SCREEN_CLOCK;
+  } else if (currentScreen == SCREEN_CLOCK) {
+    nextScreen = SCREEN_NOTIFICATIONS;
+  } else if (currentScreen == SCREEN_NOTIFICATIONS) {
+    nextScreen = SCREEN_CALENDAR;
+  } else if (currentScreen == SCREEN_CALENDAR) {
+    nextScreen = SCREEN_SETTINGS;
+    settingsActive = false; // ensure settings start inactive/view-only when cycled to
+    optionSelected = false;
+  } else {
+    nextScreen = SCREEN_FACE;
+  }
+
+  currentScreen = nextScreen;
+  hardwareLoopbackActive = false;
+  audio.micStreaming = false;
+  audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+  audio.prebuffering = true;
+  face.setStateLabel("IDLE");
+  audio.playSound(SOUND_COIN);
+  Serial.printf("[BTN2] Cycled screen to %d\n", currentScreen);
+}
+
+void handleBtn2Long() {
+  // Disabled
+}
 
 void loop() {
   unsigned long now = millis();
+
+  // ── 0. Poll unified button handler ──────────────────────────────────────
+  ButtonEvent btnEvt = interaction.update();
+  switch (btnEvt) {
+    case BTN1_SINGLE: handleBtn1Single(); break;
+    case BTN1_DOUBLE: handleBtn1Double(); break;
+    case BTN1_LONG:   handleBtn1Long();   break;
+    case BTN2_SINGLE: handleBtn2Single(); break;
+    case BTN2_LONG:   handleBtn2Long();   break;
+    default: break;
+  }
 
   // 1. Maintain BLE stack status and connection advertisement
   ble.handleConnectionState();
@@ -996,6 +1308,17 @@ void loop() {
 
   // 2. Refresh non-blocking audio synthesizer
   audio.update();
+
+  // 2.1. If BLE mic streaming is active, route mic audio to BLE (loopback uses direct i2s path, not this)
+  if (audio.micStreaming && !audio.directLoopback) {
+    uint8_t micBuf[256];
+    size_t micSize = 0;
+    while (audio.getRxItem(micBuf, &micSize)) {
+      if (micSize > 0) {
+        ble.sendAudioStream(micBuf, micSize);
+      }
+    }
+  }
 
   // 2.7. Poll companion network stack
   network.update();
@@ -1045,207 +1368,9 @@ void loop() {
     }
   }
 
-  bool isLongPressSettings = false;
-  int btnEvent = interaction.update(isLongPressSettings);
-  TouchEvent touchEvent = TOUCH_NONE;
-  if (btnEvent == 1) {
-    touchEvent = TOUCH_TAP;
-  } else if (btnEvent == 2) {
-    if (inSettingsMenu) {
-      touchEvent = TOUCH_LONG_PRESS; // select/deselect in settings
-    } else {
-      touchEvent = TOUCH_TRIPLE_TAP; // enter settings menu
-    }
-  } else if (isLongPressSettings) {
-    if (!inSettingsMenu) {
-      touchEvent = TOUCH_LONG_PRESS; // sleep/wake in normal mode
-    }
-  }
+  // Note: All navigation is now handled by the physical button event dispatcher
+  // at the top of loop() via interaction.update() + handleBtn1/2 functions.
 
-  if (touchEvent != TOUCH_NONE) {
-    lastInteractionTime = now; // reset inactivity clock
-    lastExpressionCycleTime = now; // reset expression cycle timer
-
-    bool relActive = isRelationshipActive();
-
-    if (relActive) {
-      if (touchEvent == TOUCH_TAP) {
-        String logMsg = "TOUCH_REL:TAP|" + String(relTapExpr) + "|" + String(relTapSound);
-        ble.sendLog(logMsg);
-        Serial.println(logMsg);
-        face.headerText = "Sent: " + getExpressionName(relTapExpr);
-        face.setExpression((Expression)relTapExpr);
-        activeNotificationDurationMs = notificationDurationMs;
-      } else if (touchEvent == TOUCH_DOUBLE_TAP) {
-        String logMsg = "TOUCH_REL:DOUBLE|" + String(relDoubleExpr) + "|" + String(relDoubleSound);
-        ble.sendLog(logMsg);
-        Serial.println(logMsg);
-        face.headerText = "Sent: " + getExpressionName(relDoubleExpr);
-        face.setExpression((Expression)relDoubleExpr);
-        activeNotificationDurationMs = notificationDurationMs;
-      } else if (touchEvent == TOUCH_TRIPLE_TAP) {
-        // Open local settings menu (triple tap always opens settings menu)
-        inSettingsMenu = true;
-        settingsMenuChanged = true;
-        menuOption = 0;
-        optionSelected = false;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("Local Settings Menu opened via Relationship mode.");
-      } else if (touchEvent == TOUCH_LONG_PRESS) {
-        String logMsg = "TOUCH_REL:LONG|" + String(relLongExpr) + "|" + String(relLongSound);
-        ble.sendLog(logMsg);
-        Serial.println(logMsg);
-        face.headerText = "Sent: " + getExpressionName(relLongExpr);
-        face.setExpression((Expression)relLongExpr);
-        activeNotificationDurationMs = notificationDurationMs;
-      }
-    } else {
-      face.headerText = "";
-    }
-
-    if (isAlarmRinging || isReminderRinging) {
-      isAlarmRinging = false;
-      isReminderRinging = false;
-      audio.playSound(SOUND_COIN); // play coin sound to confirm dismissal
-      if (isCycleMode) {
-        cycleExpression();
-      } else {
-        if (defaultGif >= 100) {
-          face.setGifIndex(defaultGif - 100);
-          face.setExpression(EXPR_ALL_GIF);
-        } else {
-          face.setExpression((Expression)defaultGif);
-        }
-      }
-      face.setStateLabel("IDLE");
-      ble.sendLog("ALARM:DISMISS");
-      Serial.println("Alarm/Reminder dismissed by hardware touch button.");
-    } else if (isAsleep && !inSettingsMenu) {
-      // Any touch wakes the robot up
-      isAsleep = false;
-      face.setExpression(EXPR_IDLE);
-      audio.playSound(SOUND_CHIRP);
-      Serial.println(negativeDisplay ? "Ms. Luna Woke Up!" : "Mr. Luna Woke Up!");
-    } else if (face.getExpression() == EXPR_CLOCK) {
-      // Any touch exits clock mode
-      face.setExpression(EXPR_IDLE);
-      audio.playSound(SOUND_CHIRP);
-      Serial.println("Exited clock mode");
-    } else {
-      if (inSettingsMenu) {
-        // Settings Menu Touch Logic
-        settingsMenuChanged = true;
-        if (optionSelected) {
-          // Adjusting an option value
-          if (touchEvent == TOUCH_TAP) {
-            if (menuOption == 0) { // BLE on/off toggle
-              // BLE is always ON, do not toggle
-              bleActive = true;
-              audio.playSound(SOUND_CHIRP);
-            } else if (menuOption == 1) { // GIF speed control
-              gifSpeed += 20;
-              if (gifSpeed > 300) {
-                gifSpeed = 20;
-              }
-              face.setFrameDelay(gifSpeed);
-              audio.playSound(SOUND_CHIRP);
-            } else if (menuOption == 2) { // Clock Style
-              clockStyle = (clockStyle + 1) % 4;
-              audio.playSound(SOUND_CHIRP);
-            } else if (menuOption == 3) { // Invert/Negative display
-              negativeDisplay = !negativeDisplay;
-              display.invertDisplay(negativeDisplay ? false : true);
-              audio.playSound(SOUND_CHIRP);
-            } else if (menuOption == 4) { // Brightness
-              oledBrightness = (oledBrightness % 3) + 1;
-              if (oledBrightness == 1) analogWrite(TFT_BLK, 50);
-              else if (oledBrightness == 2) analogWrite(TFT_BLK, 150);
-              else analogWrite(TFT_BLK, 255);
-              audio.playSound(SOUND_CHIRP);
-            }
-          } else if (touchEvent == TOUCH_LONG_PRESS) {
-            // Long press deselecting option
-            optionSelected = false;
-            audio.playSound(SOUND_COIN);
-          }
-        } else {
-          // Navigating the menu options
-          if (touchEvent == TOUCH_TAP) {
-            // Single tap cycles options
-            menuOption = (menuOption + 1) % 7;
-            audio.playSound(SOUND_CHIRP);
-          } else if (touchEvent == TOUCH_LONG_PRESS) {
-            // Long press selects options
-            if (menuOption == 5) { // SAVE
-              preferences.begin("luna", false);
-              preferences.putBool("ble", bleActive);
-              preferences.putInt("speed", gifSpeed);
-              preferences.putInt("defGif", defaultGif);
-              preferences.putInt("intGif", gifIntro);
-              preferences.putInt("tchSing", touchSingle);
-              preferences.putInt("tchDoub", touchDouble);
-              preferences.putInt("tchLong", touchLong);
-              preferences.putBool("neg", negativeDisplay);
-              preferences.putInt("clkStyle", clockStyle);
-              preferences.putInt("oledBright", oledBrightness);
-              preferences.end();
-              
-              // Apply settings immediately
-              if (oledBrightness == 1) analogWrite(TFT_BLK, 50);
-              else if (oledBrightness == 2) analogWrite(TFT_BLK, 150);
-              else analogWrite(TFT_BLK, 255);
-              
-              audio.playSound(SOUND_POWERUP);
-              optionSelected = false; // deselect
-            } else if (menuOption == 6) { // EXIT
-              inSettingsMenu = false;
-              audio.playSound(SOUND_POWERDOWN);
-            } else {
-              // Option select (0 to 4)
-              optionSelected = true;
-              audio.playSound(SOUND_COIN);
-            }
-          }
-        }
-      } else {
-        // Normal state controls
-        if (!relActive) {
-          switch (touchEvent) {
-            case TOUCH_TAP:
-              touchCount++;
-              Serial.print("Touch count (Single Tap): ");
-              Serial.println(touchCount);
-              executeTouchAction(touchSingle, TOUCH_TAP);
-              break;
-
-            case TOUCH_DOUBLE_TAP:
-              touchCount += 2;
-              Serial.print("Touch count (Double Tap): ");
-              Serial.println(touchCount);
-              executeTouchAction(touchDouble, TOUCH_DOUBLE_TAP);
-              break;
-
-            case TOUCH_TRIPLE_TAP:
-              // Open local settings menu
-              inSettingsMenu = true;
-              settingsMenuChanged = true;
-              menuOption = 0;
-              optionSelected = false;
-              audio.playSound(SOUND_POWERUP);
-              Serial.println("Local Settings Menu opened.");
-              break;
-
-            case TOUCH_LONG_PRESS:
-              executeTouchAction(touchLong, TOUCH_LONG_PRESS);
-              break;
-
-            default:
-              break;
-          }
-        }
-      }
-    }
-  }
 
   // 3.5. Update Software Real-Time Clock (drift-free)
   if (now - lastRtcMillis >= 1000) {
@@ -1264,33 +1389,33 @@ void loop() {
     }
   }
 
-  // 3.6. Expression cycling and transitions (play once for all-gifs cycle, timeout for static reactions)
-  if (!inSettingsMenu && !isAsleep && face.getExpression() != EXPR_CLOCK) {
-    if (inIntroPhase) {
-      if (face.isGifFinished()) {
-        face.clearGifFinished();
-        inIntroPhase = false;
-        face.setFrameDelay(gifSpeed);
-        if (isCycleMode) {
-          cycleExpression();
+  // 3.6. Expression cycling and transitions
+  if (inIntroPhase) {
+    currentScreen = SCREEN_FACE; // Force face screen on boot for intro animation
+    if (face.isGifFinished()) {
+      face.clearGifFinished();
+      inIntroPhase = false;
+      face.setFrameDelay(gifSpeed);
+      currentScreen = SCREEN_FACE; // Switch to face after boot!
+      if (isCycleMode) {
+        cycleExpression();
+      } else {
+        if (defaultGif >= 100) {
+          face.setGifIndex(defaultGif - 100);
+          face.setExpression(EXPR_ALL_GIF);
         } else {
-          if (defaultGif >= 100) {
-            face.setGifIndex(defaultGif - 100);
-            face.setExpression(EXPR_ALL_GIF);
-          } else {
-            face.setExpression((Expression)defaultGif);
-          }
+          face.setExpression((Expression)defaultGif);
         }
-        lastExpressionCycleTime = now;
       }
-    } else {
+      lastExpressionCycleTime = now;
+    }
+  } else {
+    // Regular operation expression cycling (only when on SCREEN_FACE screen)
+    if (currentScreen == SCREEN_FACE && !isAsleep) {
       if (face.getExpression() == EXPR_ALL_GIF) {
         if (face.isGifFinished()) {
           face.clearGifFinished();
-          if (mapsActive) {
-            face.setExpression(EXPR_MAP);
-            lastExpressionCycleTime = now;
-          } else if (isCycleMode) {
+          if (isCycleMode) {
             // Only switch to a different random GIF if at least 8 seconds has elapsed since last cycle!
             if (now - lastExpressionCycleTime >= 8000) {
               cycleExpression();
@@ -1300,11 +1425,9 @@ void loop() {
         }
       } else {
         // Return to random emoji cycling/default expression after notification duration
-        if (face.getExpression() != EXPR_MAP && !isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
+        if (!isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
           face.headerText = ""; // Clear header overlay
-          if (mapsActive) {
-            face.setExpression(EXPR_MAP);
-          } else if (isCycleMode) {
+          if (isCycleMode) {
             cycleExpression();
           } else {
             if (defaultGif >= 100) {
@@ -1336,8 +1459,14 @@ void loop() {
     }
   }
 
-  // 4. Inactivity Timer (Timeout to Sleep) - DISABLED
-  // (We do not automatically transition to EXPR_SLEEPING via inactivity timer)
+  // 4. Inactivity Timer: Auto-return to Face screen after 15 seconds of no interaction in UI modes
+  if (currentScreen != SCREEN_FACE && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive) {
+    if (now - lastInteractionTime >= 15000) {
+      currentScreen = SCREEN_FACE;
+      lastExpressionCycleTime = now;
+      Serial.println("Inactivity timeout: Returning to GIF expressions screen.");
+    }
+  }
 
   // 5. Periodic status updates to BLE client
   if (bleActive && ble.isConnected() && (now - lastStatusUpdateTime > STATUS_UPDATE_INTERVAL)) {
@@ -1348,42 +1477,16 @@ void loop() {
     ble.updateStatus(uptimeSec, touchCount, mockBatteryVolts, face.getExpression(), face.getStateLabel());
   }
 
-  // Update GIF frame states on every loop iteration for microsecond precision
-  bool faceChanged = false;
-  if (!inSettingsMenu) {
-    faceChanged = face.update();
-  }
+  // Update GIF frame states on every loop iteration
+  face.update();
 
-  // Draw the display under these conditions:
-  // 1. In settings menu (draw at 40fps rate / every 25ms)
-  // 2. Face changed (frame advanced or text scrolled)
-  // 3. Current clock second changed while on clock/map screens
-  // 4. Fallback redraw every 500ms
+  // Draw the display at ~30fps rate
   static int lastDrawnSecond = -1;
-  bool timeUpdated = (rtcSecond != lastDrawnSecond);
-
   static unsigned long lastDisplayDrawTime = 0;
-  bool forceRedraw = (now - lastDisplayDrawTime >= 500);
-
-  static bool wasInSettingsMenu = false;
-  if (inSettingsMenu) {
-    wasInSettingsMenu = true;
-    // Redraw settings menu only when settings menu content changed
-    if (settingsMenuChanged) {
-      lastDisplayDrawTime = now;
-      face.drawSettingsMenu(menuOption, optionSelected, bleActive, gifSpeed, clockStyle, negativeDisplay, oledBrightness);
-      settingsMenuChanged = false;
-    }
-  } else {
-    bool justExitedSettings = wasInSettingsMenu;
-    if (justExitedSettings) {
-      wasInSettingsMenu = false;
-      display.fillScreen(ST77XX_BLACK); // Clean up settings text from background
-    }
-    if (faceChanged || ((face.getExpression() == EXPR_CLOCK || face.getExpression() == EXPR_MAP) && timeUpdated) || forceRedraw || justExitedSettings) {
-      lastDisplayDrawTime = now;
-      lastDrawnSecond = rtcSecond;
-      face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
-    }
+  if (now - lastDisplayDrawTime >= 33) {
+    lastDisplayDrawTime = now;
+    lastDrawnSecond = rtcSecond;
+    face.setConnectivityStatus(ble.isConnected(), network.isWifiConnected());
+    face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
   }
 }
