@@ -63,6 +63,7 @@ LunaGames games;
 
 // System State Variables
 unsigned int touchCount = 0;
+float batteryVolts = 3.82f;
 unsigned long lastInteractionTime = 0;
 const unsigned long SLEEP_TIMEOUT = 45000; // 45 seconds of inactivity -> sleep
 bool isAsleep = false;
@@ -765,10 +766,24 @@ void applySettings(String payload) {
       if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
         face.setGifIndex(gifIdx);
         face.setExpression(EXPR_ALL_GIF);
+        
+        char nameBuf[32];
+        strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIdx].name));
+        face.setStateLabel(String(nameBuf));
       }
     } else {
       face.setDefaultExpression((Expression)defaultGif);
       face.setExpression((Expression)defaultGif);
+      switch ((Expression)defaultGif) {
+        case EXPR_IDLE: face.setStateLabel("IDLE"); break;
+        case EXPR_HAPPY: face.setStateLabel("HAPPY"); break;
+        case EXPR_SAD: face.setStateLabel("SAD"); break;
+        case EXPR_ANGRY: face.setStateLabel("ANGRY"); break;
+        case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
+        case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
+        case EXPR_WINK: face.setStateLabel("WINK"); break;
+        default: face.setStateLabel("IDLE"); break;
+      }
     }
   }
 
@@ -858,6 +873,9 @@ void setup() {
   // 3. Initialize audio and other hardware pins
   audio.begin();
   interaction.begin();   // sets up both buttons with INPUT_PULLUP (active-low)
+  pinMode(BATTERY_PIN, INPUT); // Initialize battery monitoring pin
+  // Initial battery read (2x 10k divider ratio is 1:2. Multiply by 2.0 to get battery voltage)
+  batteryVolts = (analogReadMilliVolts(BATTERY_PIN) * 2.0f) / 1000.0f;
 
   Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
   Serial.println(FIRMWARE_VERSION);
@@ -1167,7 +1185,7 @@ void handleBtn1Single() {
     } else {
       if (!gamePlaying) {
         // Red button (Button 1) cycles games menu down
-        gameMenuOption = (gameMenuOption + 1) % 3;
+        gameMenuOption = (gameMenuOption + 1) % 8;
         audio.playSound(SOUND_CHIRP);
         Serial.printf("[BTN1] Games Menu DOWN -> option %d\n", gameMenuOption);
       }
@@ -1238,21 +1256,7 @@ void handleBtn1Long() {
   lastInteractionTime = millis();
 
   if (currentScreen == SCREEN_GAMES) {
-    if (gamePlaying) {
-      // Long press BTN1 exits the active game back to arcade menu
-      gamePlaying = false;
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println("[BTN1 LONG] Exited active game back to Arcade menu");
-    } else if (gamesActive) {
-      // Exits arcade menu to main games screen
-      gamesActive = false;
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println("[BTN1 LONG] Deactivated games arcade menu");
-    } else {
-      currentScreen = SCREEN_FACE;
-      audio.playSound(SOUND_STARTUP);
-      Serial.println("[BTN1 LONG] Exited Games to FACE");
-    }
+    // Long press to go back is removed as requested by the user
     return;
   }
 
@@ -1307,18 +1311,47 @@ void handleBtn2Single() {
         gamePlaying = true;
         audio.playSound(SOUND_POWERUP);
         Serial.println("[BTN2] Started Game 2: Flappy Mochy");
+      } else if (gameMenuOption == 2) {
+        games.resetSnake();
+        gameSelected = 3;
+        gamePlaying = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN2] Started Game 3: Retro Snake");
+      } else if (gameMenuOption == 3) {
+        games.resetSpaceInvaders();
+        gameSelected = 4;
+        gamePlaying = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN2] Started Game 4: Space Invaders");
+      } else if (gameMenuOption == 4) {
+        games.resetPong();
+        gameSelected = 5;
+        gamePlaying = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN2] Started Game 5: Pong Challenge");
+      } else if (gameMenuOption == 5) {
+        games.resetBreakout();
+        gameSelected = 6;
+        gamePlaying = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN2] Started Game 6: Brick Breaker");
+      } else if (gameMenuOption == 6) {
+        games.resetMemoryMatch();
+        gameSelected = 7;
+        gamePlaying = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN2] Started Game 7: Memory Match");
       } else {
         gamesActive = false;
         audio.playSound(SOUND_POWERDOWN);
         Serial.println("[BTN2] Exited Games Menu");
       }
     } else {
-      // Game is playing: Button 2 action (Coin Catcher: Right, Flappy Mochy: Exit/Reset)
-      if (gameSelected == 2) {
-        // In Flappy Mochy, pressing Button 2 exits back to the Arcade menu
+      // Game is playing: Button 2 action
+      if (games.canExitActiveGame()) {
         gamePlaying = false;
         audio.playSound(SOUND_POWERDOWN);
-        Serial.println("[BTN2] Exited Flappy Mochy back to Arcade menu");
+        Serial.println("[BTN2] Exited active game back to Arcade menu");
       }
     }
     return;
@@ -1363,8 +1396,57 @@ void handleBtn2Single() {
   Serial.printf("[BTN2] Cycled screen to %d\n", currentScreen);
 }
 
-void handleBtn2Long() {
-  // Disabled
+void updateStateLabel() {
+  if (currentScreen == SCREEN_FACE) {
+    Expression expr = face.getExpression();
+    switch (expr) {
+      case EXPR_IDLE: face.setStateLabel("IDLE"); break;
+      case EXPR_HAPPY: face.setStateLabel("HAPPY"); break;
+      case EXPR_SAD: face.setStateLabel("SAD"); break;
+      case EXPR_ANGRY: face.setStateLabel("ANGRY"); break;
+      case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
+      case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
+      case EXPR_WINK: face.setStateLabel("WINK"); break;
+      case EXPR_ALL_GIF: {
+        int gifIdx = face.getGifIndex();
+        if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
+          char nameBuf[32];
+          strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIdx].name));
+          face.setStateLabel(String(nameBuf));
+        } else {
+          face.setStateLabel("IDLE");
+        }
+        break;
+      }
+      default: face.setStateLabel("IDLE"); break;
+    }
+  } else if (currentScreen == SCREEN_GAMES) {
+    if (gamePlaying) {
+      const char* gameNames[] = {
+        "COIN CATCHER", "FLAPPY MOCHY", "RETRO SNAKE", "SPACE INVADERS",
+        "PONG CHALLENGE", "BRICK BREAKER", "MEMORY MATCH"
+      };
+      if (gameSelected >= 1 && gameSelected <= 7) {
+        face.setStateLabel(gameNames[gameSelected - 1]);
+      } else {
+        face.setStateLabel("ARCADE");
+      }
+    } else if (gamesActive) {
+      face.setStateLabel("ARCADE MENU");
+    } else {
+      face.setStateLabel("ARCADE");
+    }
+  } else if (currentScreen == SCREEN_CLOCK) {
+    face.setStateLabel("CLOCK");
+  } else if (currentScreen == SCREEN_NOTIFICATIONS) {
+    face.setStateLabel("NOTIFS");
+  } else if (currentScreen == SCREEN_CALENDAR) {
+    face.setStateLabel("CALENDAR");
+  } else if (currentScreen == SCREEN_MAPS) {
+    face.setStateLabel("MAPS");
+  } else {
+    face.setStateLabel("IDLE");
+  }
 }
 
 void loop() {
@@ -1553,8 +1635,10 @@ void loop() {
     lastStatusUpdateTime = now;
     
     unsigned long uptimeSec = now / 1000;
-    float mockBatteryVolts = 3.82f;
-    ble.updateStatus(uptimeSec, touchCount, mockBatteryVolts, face.getExpression(), face.getStateLabel());
+    // 1:2 divider with 2x 10k Ohm resistors. Multiply by 2.0 to get battery voltage.
+    batteryVolts = (analogReadMilliVolts(BATTERY_PIN) * 2.0f) / 1000.0f;
+    updateStateLabel();
+    ble.updateStatus(uptimeSec, touchCount, batteryVolts, face.getExpression(), face.getStateLabel());
   }
 
   // Update GIF frame states on every loop iteration

@@ -16,6 +16,7 @@
 #define BTN_SETTINGS_PIN 9  // Button 2: Enter Settings / Confirm Option
 
 #define BUZZER_PIN 5        // Buzzer pin
+#define BATTERY_PIN 0       // GPIO 0 (ADC1_CH0) for battery monitoring
 
 // ST7789 Display Settings (Resolution: 240x240)
 #define SCREEN_WIDTH 240

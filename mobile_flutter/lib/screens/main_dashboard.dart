@@ -1333,7 +1333,8 @@ class _MainDashboardState extends State<MainDashboard> {
             case 6: activeGifId = 'wink';     activeLabel = 'Wink';      break;
             case 7: activeGifId = 'clock';    activeLabel = 'Clock';     break;
             default:
-              // Keep local state for unknown expressions
+              // Keep local state for unknown expressions, but show raw label (e.g. ARCADE, SNAKE, etc.)
+              activeLabel = rawLabel;
               break;
           }
         }

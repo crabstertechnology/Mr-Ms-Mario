@@ -44,6 +44,7 @@ extern bool gamePlaying;
 extern int gameSelected;
 extern LunaGames games;
 extern LunaAudio audio;
+extern float batteryVolts;
 
 class LunaFace {
 private:
@@ -565,20 +566,43 @@ public:
     display.setCursor(14, 10);
     display.print(tBuf);                          // 5 chars × 6px = 30px, ends at x=44
 
-    // ── Right zone: tiny icons (4 chars, 24px wide) at far right ─────────
-    //   battery outline 16px + 2px nub, starts at x=SCREEN_WIDTH-36
+    // ── Right zone: battery and connectivity ─────────
     int bx = SCREEN_WIDTH - 36;
+    
+    // Draw battery outline
     display.drawRect(bx, 9, 16, 10, TFT_LIGHTGREY);
     display.fillRect(bx + 16, 11, 2, 6, TFT_LIGHTGREY);
-    display.fillRect(bx + 2, 11, 10, 6, TFT_GREEN);
+    
+    // Calculate battery percentage from voltage (3.3V to 4.2V range)
+    int batteryPct = ((batteryVolts - 3.3f) / 0.9f) * 100;
+    if (batteryPct > 100) batteryPct = 100;
+    if (batteryPct < 0) batteryPct = 0;
+    
+    // Proportional fill width (max 12 pixels)
+    int fillWidth = (batteryPct * 12) / 100;
+    uint16_t batteryColor = TFT_GREEN;
+    if (batteryPct < 20) {
+      batteryColor = TFT_RED;
+    } else if (batteryPct < 55) {
+      batteryColor = TFT_YELLOW;
+    }
+    if (fillWidth > 0) {
+      display.fillRect(bx + 2, 11, fillWidth, 6, batteryColor);
+    }
 
-    // BLE dot (4px before battery)
+    // Battery percentage text next to icon
+    display.setTextColor(TFT_WHITE, 0x10A2);
+    display.setTextSize(1);
+    display.setCursor(bx - 26, 10);
+    display.print(String(batteryPct) + "%");
+
+    // BLE dot (shifted left to make room for text)
     uint16_t bleColor = bleConnectedStatus  ? (uint16_t)0x5DFF : (uint16_t)TFT_DARKGREY;
-    display.fillCircle(bx - 8, 13, 3, bleColor);
+    display.fillCircle(bx - 34, 13, 3, bleColor);
 
-    // WiFi dot
+    // WiFi dot (shifted left to make room for text)
     uint16_t wifiColor = wifiConnectedStatus ? (uint16_t)TFT_GREEN : (uint16_t)TFT_DARKGREY;
-    display.fillCircle(bx - 16, 13, 3, wifiColor);
+    display.fillCircle(bx - 44, 13, 3, wifiColor);
 
     // ── Centre zone: screen name – clamped so it never overlaps sides ─────
     display.setTextColor(TFT_YELLOW, 0x10A2);
@@ -1616,19 +1640,24 @@ public:
             display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 10, 0x0821);
             display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, 0x07FF);
 
+            // Large Title
+            display.setTextSize(2);
+            display.setTextColor(0xFDA0, 0x0821); // Neon Orange
+            display.setCursor(54, 60);
+            display.print("LUNA ARCADE");
+            
+            // Draw divider
+            display.drawFastHLine(20, 85, SCREEN_WIDTH - 40, 0x18E3);
+
+            // Subtitle instructions
             display.setTextSize(2);
             display.setTextColor(TFT_WHITE, 0x0821);
-            display.setCursor(60, 80);
-            display.print("LUNA ARCADE");
-
-            display.setTextSize(1);
-            display.setTextColor(0xFDA0, 0x0821); // Orange
-            display.setCursor(44, 130);
-            display.print("Press Button 1 to Start");
-
-            display.setTextColor(TFT_DARKGREY, 0x0821);
-            display.setCursor(44, 180);
-            display.print("Press Button 2 to Cycle");
+            display.setCursor(24, 115);
+            display.print("BTN1: START");
+            
+            display.setTextColor(TFT_LIGHTGREY, 0x0821);
+            display.setCursor(24, 155);
+            display.print("BTN2: CYCLE");
           } else {
             if (!gamePlaying) {
               games.drawMenu(display);
@@ -1637,6 +1666,16 @@ public:
                 games.updateAndDrawCoinCatcher(display, audio);
               } else if (gameSelected == 2) {
                 games.updateAndDrawFlappyMochy(display, audio);
+              } else if (gameSelected == 3) {
+                games.updateAndDrawSnake(display, audio);
+              } else if (gameSelected == 4) {
+                games.updateAndDrawSpaceInvaders(display, audio);
+              } else if (gameSelected == 5) {
+                games.updateAndDrawPong(display, audio);
+              } else if (gameSelected == 6) {
+                games.updateAndDrawBreakout(display, audio);
+              } else if (gameSelected == 7) {
+                games.updateAndDrawMemoryMatch(display, audio);
               }
             }
           }
