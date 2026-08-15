@@ -2211,9 +2211,7 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   Widget _buildDiagnosticsCard(BLEService ble) {
-    final batteryPct = ble.isConnected
-        ? (((ble.batteryVoltage - 3.3) / 0.9) * 100).clamp(0.0, 100.0).toInt()
-        : 0;
+    final batteryPct = ble.batteryPercentage;
 
     String formatUptime(int seconds) {
       if (seconds <= 0) return "--";
@@ -3752,9 +3750,7 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   Widget _buildRobotStatusGrid(RobotProfile robot, BLEService ble) {
-    final batteryPct = ble.isConnected
-        ? (((ble.batteryVoltage - 3.3) / 0.9) * 100).clamp(0.0, 100.0).toInt()
-        : 0;
+    final batteryPct = ble.batteryPercentage;
 
     return GridView.count(
       crossAxisCount: 2,

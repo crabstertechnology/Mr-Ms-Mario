@@ -1630,13 +1630,25 @@ void loop() {
     }
   }
 
+  // Periodic battery read (every 1 second)
+  static unsigned long lastBatteryReadTime = 0;
+  if (now - lastBatteryReadTime > 1000) {
+    lastBatteryReadTime = now;
+    // 1:2 divider with 2x 10k Ohm resistors. Multiply by 2.0 to get battery voltage.
+    float rawVolts = (analogReadMilliVolts(BATTERY_PIN) * 2.0f) / 1000.0f;
+    // Apply low-pass Exponential Moving Average filter to smooth fluctuations
+    if (batteryVolts == 3.82f) {
+      batteryVolts = rawVolts; // first read override
+    } else {
+      batteryVolts = 0.9f * batteryVolts + 0.1f * rawVolts;
+    }
+  }
+
   // 5. Periodic status updates to BLE client
   if (bleActive && ble.isConnected() && (now - lastStatusUpdateTime > STATUS_UPDATE_INTERVAL)) {
     lastStatusUpdateTime = now;
     
     unsigned long uptimeSec = now / 1000;
-    // 1:2 divider with 2x 10k Ohm resistors. Multiply by 2.0 to get battery voltage.
-    batteryVolts = (analogReadMilliVolts(BATTERY_PIN) * 2.0f) / 1000.0f;
     updateStateLabel();
     ble.updateStatus(uptimeSec, touchCount, batteryVolts, face.getExpression(), face.getStateLabel());
   }

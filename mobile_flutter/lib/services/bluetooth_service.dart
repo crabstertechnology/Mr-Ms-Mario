@@ -115,6 +115,38 @@ class BLEService with ChangeNotifier {
   int get uptimeSeconds => _uptimeSeconds;
   int get touchCount => _touchCount;
   double get batteryVoltage => _batteryVoltage;
+  int get batteryPercentage {
+    if (!_isConnected || _batteryVoltage <= 0.0) return 0;
+    double pct = 0.0;
+    final v = _batteryVoltage;
+    if (v >= 4.15) {
+      pct = 100.0;
+    } else if (v >= 4.05) {
+      pct = 90.0 + (v - 4.05) * 100.0;
+    } else if (v >= 3.95) {
+      pct = 80.0 + (v - 3.95) * 100.0;
+    } else if (v >= 3.87) {
+      pct = 70.0 + (v - 3.87) * 125.0;
+    } else if (v >= 3.82) {
+      pct = 60.0 + (v - 3.82) * 200.0;
+    } else if (v >= 3.79) {
+      pct = 50.0 + (v - 3.79) * 333.0;
+    } else if (v >= 3.75) {
+      pct = 40.0 + (v - 3.75) * 250.0;
+    } else if (v >= 3.72) {
+      pct = 30.0 + (v - 3.72) * 333.0;
+    } else if (v >= 3.68) {
+      pct = 20.0 + (v - 3.68) * 250.0;
+    } else if (v >= 3.60) {
+      pct = 10.0 + (v - 3.60) * 125.0;
+    } else if (v >= 3.30) {
+      pct = (v - 3.30) * 33.3;
+    } else {
+      pct = 0.0;
+    }
+    return pct.clamp(0.0, 100.0).toInt();
+  }
+
   int get activeExpressionId => _activeExpressionId;
   String get activeExpressionLabel => _activeExpressionLabel;
   List<String> get consoleLogs => _consoleLogs;
@@ -129,6 +161,37 @@ class BLEService with ChangeNotifier {
   int get companionUptimeSeconds => _companionUptimeSeconds;
   int get companionTouchCount => _companionTouchCount;
   double get companionBatteryVoltage => _companionBatteryVoltage;
+  int get companionBatteryPercentage {
+    if (!_isCompanionConnected || _companionBatteryVoltage <= 0.0) return 0;
+    double pct = 0.0;
+    final v = _companionBatteryVoltage;
+    if (v >= 4.15) {
+      pct = 100.0;
+    } else if (v >= 4.05) {
+      pct = 90.0 + (v - 4.05) * 100.0;
+    } else if (v >= 3.95) {
+      pct = 80.0 + (v - 3.95) * 100.0;
+    } else if (v >= 3.87) {
+      pct = 70.0 + (v - 3.87) * 125.0;
+    } else if (v >= 3.82) {
+      pct = 60.0 + (v - 3.82) * 200.0;
+    } else if (v >= 3.79) {
+      pct = 50.0 + (v - 3.79) * 333.0;
+    } else if (v >= 3.75) {
+      pct = 40.0 + (v - 3.75) * 250.0;
+    } else if (v >= 3.72) {
+      pct = 30.0 + (v - 3.72) * 333.0;
+    } else if (v >= 3.68) {
+      pct = 20.0 + (v - 3.68) * 250.0;
+    } else if (v >= 3.60) {
+      pct = 10.0 + (v - 3.60) * 125.0;
+    } else if (v >= 3.30) {
+      pct = (v - 3.30) * 33.3;
+    } else {
+      pct = 0.0;
+    }
+    return pct.clamp(0.0, 100.0).toInt();
+  }
   int get companionActiveExpressionId => _companionActiveExpressionId;
   String get companionActiveExpressionLabel => _companionActiveExpressionLabel;
   bool get companionHasSpeaker => false;

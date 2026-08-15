@@ -573,8 +573,20 @@ public:
     display.drawRect(bx, 9, 16, 10, TFT_LIGHTGREY);
     display.fillRect(bx + 16, 11, 2, 6, TFT_LIGHTGREY);
     
-    // Calculate battery percentage from voltage (3.3V to 4.2V range)
-    int batteryPct = ((batteryVolts - 3.3f) / 0.9f) * 100;
+    // Calculate battery percentage from voltage using calibrated LiPo discharge curve
+    int batteryPct = 0;
+    if (batteryVolts >= 4.15f) batteryPct = 100;
+    else if (batteryVolts >= 4.05f) batteryPct = 90 + (batteryVolts - 4.05f) * 100;
+    else if (batteryVolts >= 3.95f) batteryPct = 80 + (batteryVolts - 3.95f) * 100;
+    else if (batteryVolts >= 3.87f) batteryPct = 70 + (batteryVolts - 3.87f) * 125;
+    else if (batteryVolts >= 3.82f) batteryPct = 60 + (batteryVolts - 3.82f) * 200;
+    else if (batteryVolts >= 3.79f) batteryPct = 50 + (batteryVolts - 3.79f) * 333;
+    else if (batteryVolts >= 3.75f) batteryPct = 40 + (batteryVolts - 3.75f) * 250;
+    else if (batteryVolts >= 3.72f) batteryPct = 30 + (batteryVolts - 3.72f) * 333;
+    else if (batteryVolts >= 3.68f) batteryPct = 20 + (batteryVolts - 3.68f) * 250;
+    else if (batteryVolts >= 3.60f) batteryPct = 10 + (batteryVolts - 3.60f) * 125;
+    else if (batteryVolts >= 3.30f) batteryPct = (batteryVolts - 3.30f) * 33;
+    else batteryPct = 0;
     if (batteryPct > 100) batteryPct = 100;
     if (batteryPct < 0) batteryPct = 0;
     
