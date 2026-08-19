@@ -585,7 +585,7 @@ public:
     else if (batteryVolts >= 3.72f) batteryPct = 30 + (batteryVolts - 3.72f) * 333;
     else if (batteryVolts >= 3.68f) batteryPct = 20 + (batteryVolts - 3.68f) * 250;
     else if (batteryVolts >= 3.60f) batteryPct = 10 + (batteryVolts - 3.60f) * 125;
-    else if (batteryVolts >= 3.30f) batteryPct = (batteryVolts - 3.30f) * 33;
+    else if (batteryVolts >= 3.30f) batteryPct = (batteryVolts - 3.30f) * 33.3f;
     else batteryPct = 0;
     if (batteryPct > 100) batteryPct = 100;
     if (batteryPct < 0) batteryPct = 0;
@@ -626,6 +626,7 @@ public:
       case SCREEN_GAMES:         nm = "ARCADE";    break;
       case SCREEN_FACE:          nm = "FACE";      break;
       case SCREEN_MAPS:          nm = "MAPS";      break;
+      case SCREEN_SETTINGS:      nm = "SETTINGS";  break;
       default:                   nm = "LUNA";      break;
     }
     int nmLen  = strlen(nm) * 6;               // size-1 chars
@@ -1071,11 +1072,11 @@ public:
 
     for (int pageIdx = 0; pageIdx < itemsPerPage; pageIdx++) {
       int optIdx = pageIdx + scrollOffset;
-      if (optIdx >= 7) break;
+      if (optIdx >= 8) break;
 
       int yPos = 46 + pageIdx * itemHeight;
 
-      bool isCurrent = (option == optIdx);
+      bool isCurrent = (option == optIdx) && settingsActive;
       if (isCurrent) {
         display.fillRoundRect(8, yPos, SCREEN_WIDTH - 16, itemHeight - 2, 6, selected ? 0x0248 : 0x18E3);
         display.drawRoundRect(8, yPos, SCREEN_WIDTH - 16, itemHeight - 2, 6, 0x07FF);
@@ -1125,17 +1126,26 @@ public:
       }
     }
 
-    // Scroll indicator dots at bottom
-    int totalItems = 7;
-    int dotAreaY = SCREEN_HEIGHT - 14;
-    int dotSpacing = 14;
-    int dotsStartX = (SCREEN_WIDTH - totalItems * dotSpacing) / 2;
-    for (int i = 0; i < totalItems; i++) {
-      if (i == option) {
-        display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY, 8, 4, 2, 0x07FF);
-      } else {
-        display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY + 1, 4, 2, 1, 0x18E3);
+    if (settingsActive) {
+      // Scroll indicator dots at bottom
+      int totalItems = 8;
+      int dotAreaY = SCREEN_HEIGHT - 14;
+      int dotSpacing = 14;
+      int dotsStartX = (SCREEN_WIDTH - totalItems * dotSpacing) / 2;
+      for (int i = 0; i < totalItems; i++) {
+        if (i == option) {
+          display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY, 8, 4, 2, 0x07FF);
+        } else {
+          display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY + 1, 4, 2, 1, 0x18E3);
+        }
       }
+    } else {
+      // Hint text
+      display.setTextSize(2);
+      display.setTextColor(0x7BCF, 0x0821);
+      String hint = "B1:Enter  B2:Next";
+      display.setCursor((SCREEN_WIDTH - hint.length() * 12) / 2, SCREEN_HEIGHT - 22);
+      display.print(hint);
     }
   }
 
@@ -1628,7 +1638,7 @@ public:
     if (popupActive) {
       drawPopup();
     } else {
-      if (currentScreen != SCREEN_FACE) {
+      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_GAMES) {
         drawStatusBar(hour, minute);
       }
       
@@ -1675,19 +1685,11 @@ public:
               games.drawMenu(display);
             } else {
               if (gameSelected == 1) {
-                games.updateAndDrawCoinCatcher(display, audio);
+                games.updateAndDrawAdventure(display, audio);
               } else if (gameSelected == 2) {
-                games.updateAndDrawFlappyMochy(display, audio);
+                games.updateAndDrawRacer(display, audio);
               } else if (gameSelected == 3) {
-                games.updateAndDrawSnake(display, audio);
-              } else if (gameSelected == 4) {
-                games.updateAndDrawSpaceInvaders(display, audio);
-              } else if (gameSelected == 5) {
-                games.updateAndDrawPong(display, audio);
-              } else if (gameSelected == 6) {
-                games.updateAndDrawBreakout(display, audio);
-              } else if (gameSelected == 7) {
-                games.updateAndDrawMemoryMatch(display, audio);
+                games.updateAndDrawSpace(display, audio);
               }
             }
           }

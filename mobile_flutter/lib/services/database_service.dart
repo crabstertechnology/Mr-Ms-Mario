@@ -16,19 +16,20 @@ class DatabaseService with ChangeNotifier {
   // Settings cached values
   bool _is12HourFormat = false;
   bool _notificationSyncEnabled = true;
-  double _gifSpeed = 100.0;
+  double _gifSpeed = 169.0;
   double _gifDelay = 0.0;
-  double _gifIntroSpeed = 100.0;
-  double _introSoundSpeed = 100.0;
+  double _gifIntroSpeed = 169.0;
+  double _introSoundSpeed = 169.0;
   bool _negativeEnabled = false;
   String _defaultGif = 'default';
   String _introGif = 'default';
   String _touchSingle = 'default';
   String _touchDouble = 'default';
   String _touchLong = 'default';
-  double _oledBrightness = 1.0;
+  double _oledBrightness = 3.0;
   double _oledContrast = 1.0;
   bool _oledInvert = false;
+  bool _silentMode = false;
   double _oledRotation = 0.0;
   int _clockStyle = 0;
   double _notificationDuration = 5.0;
@@ -77,6 +78,7 @@ class DatabaseService with ChangeNotifier {
   double get gifIntroSpeed => _gifIntroSpeed;
   double get introSoundSpeed => _introSoundSpeed;
   bool get negativeEnabled => _negativeEnabled;
+  bool get silentMode => _silentMode;
   String get defaultGif => _defaultGif;
   String get introGif => _introGif;
   String get touchSingle => _touchSingle;
@@ -177,19 +179,20 @@ class DatabaseService with ChangeNotifier {
     if (_prefs == null) return;
     _is12HourFormat = _prefs!.getBool('is12HourFormat') ?? false;
     _notificationSyncEnabled = _prefs!.getBool('notificationSyncEnabled') ?? true;
-    _gifSpeed = _prefs!.getDouble('gifSpeed') ?? 100.0;
+    _gifSpeed = 169.0;
     _gifDelay = _prefs!.getDouble('gifDelay') ?? 0.0;
-    _gifIntroSpeed = _prefs!.getDouble('gifIntroSpeed') ?? 100.0;
-    _introSoundSpeed = _prefs!.getDouble('introSoundSpeed') ?? 100.0;
+    _gifIntroSpeed = 169.0;
+    _introSoundSpeed = 169.0;
     _negativeEnabled = _prefs!.getBool('negativeEnabled') ?? false;
     _defaultGif = _prefs!.getString('defaultGif') ?? 'default';
     _introGif = _prefs!.getString('introGif') ?? 'default';
     _touchSingle = _prefs!.getString('touchSingle') ?? 'default';
     _touchDouble = _prefs!.getString('touchDouble') ?? 'default';
     _touchLong = _prefs!.getString('touchLong') ?? 'default';
-    _oledBrightness = _prefs!.getDouble('oledBrightness') ?? 1.0;
+    _oledBrightness = _prefs!.getDouble('oledBrightness') ?? 3.0;
     _oledContrast = _prefs!.getDouble('oledContrast') ?? 1.0;
     _oledInvert = _prefs!.getBool('oledInvert') ?? false;
+    _silentMode = _prefs!.getBool('silentMode') ?? false;
     _oledRotation = _prefs!.getDouble('oledRotation') ?? 0.0;
     _clockStyle = _prefs!.getInt('clockStyle') ?? 0;
     _notificationDuration = _prefs!.getDouble('notificationDuration') ?? 5.0;
@@ -286,8 +289,8 @@ class DatabaseService with ChangeNotifier {
 
   // Setters for Settings with Persistence
   Future<void> updateGifSpeed(double speed) async {
-    _gifSpeed = speed;
-    await _prefs?.setDouble('gifSpeed', speed);
+    _gifSpeed = 169.0;
+    await _prefs?.setDouble('gifSpeed', 169.0);
     notifyListeners();
   }
 
@@ -298,14 +301,14 @@ class DatabaseService with ChangeNotifier {
   }
 
   Future<void> updateGifIntroSpeed(double speed) async {
-    _gifIntroSpeed = speed;
-    await _prefs?.setDouble('gifIntroSpeed', speed);
+    _gifIntroSpeed = 169.0;
+    await _prefs?.setDouble('gifIntroSpeed', 169.0);
     notifyListeners();
   }
 
   Future<void> updateIntroSoundSpeed(double speed) async {
-    _introSoundSpeed = speed;
-    await _prefs?.setDouble('introSoundSpeed', speed);
+    _introSoundSpeed = 169.0;
+    await _prefs?.setDouble('introSoundSpeed', 169.0);
     notifyListeners();
   }
 
@@ -342,6 +345,12 @@ class DatabaseService with ChangeNotifier {
   Future<void> updateTouchLong(String val) async {
     _touchLong = val;
     await _prefs?.setString('touchLong', val);
+    notifyListeners();
+  }
+
+  Future<void> updateSilentMode(bool val) async {
+    _silentMode = val;
+    await _prefs?.setBool('silentMode', val);
     notifyListeners();
   }
 
@@ -494,19 +503,20 @@ class DatabaseService with ChangeNotifier {
   }
 
   Future<void> factoryReset() async {
-    _gifSpeed = 100.0;
+    _gifSpeed = 169.0;
     _gifDelay = 0.0;
-    _gifIntroSpeed = 100.0;
-    _introSoundSpeed = 100.0;
+    _gifIntroSpeed = 169.0;
+    _introSoundSpeed = 169.0;
     _negativeEnabled = false;
     _defaultGif = 'default';
     _introGif = 'default';
     _touchSingle = 'default';
     _touchDouble = 'default';
     _touchLong = 'default';
-    _oledBrightness = 1.0;
+    _oledBrightness = 3.0;
     _oledContrast = 1.0;
     _oledInvert = false;
+    _silentMode = false;
     _oledRotation = 0.0;
     _clockStyle = 0;
     _notificationDuration = 5.0;

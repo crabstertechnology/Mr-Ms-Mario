@@ -6,6 +6,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include <Preferences.h>
+#include <SPIFFS.h>
 
 #include "config.h"
 #include "expressions.h"
@@ -35,9 +36,9 @@ LunaNetwork network;
 // NVS Settings Persistence
 Preferences preferences;
 bool bleActive = true;
-int gifSpeed = 100;
-int gifIntroSpeed = 100;
-int introSoundSpeed = 100;
+int gifSpeed = 169;
+int gifIntroSpeed = 169;
+int introSoundSpeed = 169;
 int defaultGif = 99;      // default GIF expression (0-6, or 99 for Cycle Mode)
 bool isCycleMode = true;
 int gifIntro = 1;        // intro GIF expression (0-6)
@@ -45,6 +46,7 @@ int touchSingle = 2;     // action for single tap: 0=default, 1=clock, 2=skip_an
 int touchDouble = 0;     // action for double tap
 int touchLong = 0;       // action for long press
 bool negativeDisplay = false; // SSD1306 display color inversion
+bool silentMode = false;
 int clockStyle = 0; // clock style selector (0 to 3)
 int oledBrightness = 2; // screen brightness (1: Low, 2: Med, 3: High)
 bool settingsActive = false;
@@ -235,11 +237,21 @@ const unsigned long STATUS_UPDATE_INTERVAL = 1000; // 1 second
 
 // Global BLE Write Event Handlers (declared extern in bluetooth.h)
 void handleBLEExpressionWithLabel(Expression expr, String label) {
+  if (mapsActive) return;
   lastInteractionTime = millis();
   lastExpressionCycleTime = millis(); // Reset cycle timer on BLE action
   if (isAsleep && expr != EXPR_SLEEPING) {
     isAsleep = false;
     audio.playSound(SOUND_CHIRP);
+  }
+  
+  if (expr == EXPR_CLOCK) {
+    currentScreen = SCREEN_CLOCK;
+    face.setExpression(EXPR_CLOCK);
+    face.setStateLabel("CLOCK");
+    audio.playSound(SOUND_CHIRP);
+    Serial.println("Triggered Full Screen Clock via BLE command");
+    return;
   }
   
   if (label.length() > 0) {
@@ -305,6 +317,7 @@ void handleBLEExpression(Expression expr) {
 }
 
 void handleBLEAudio(SoundEffect sound) {
+  if (mapsActive) return;
   lastInteractionTime = millis();
   audio.playSound(sound);
 }
@@ -316,6 +329,11 @@ void handleBLEText(String text) {
 void handleRobotCommand(String text) {
   lastInteractionTime = millis();
   lastExpressionCycleTime = millis(); // Reset cycle timer on interaction
+  
+  if (mapsActive && !text.startsWith("MAP:")) {
+    Serial.println("[BLE] Ignored command because MAPS is active");
+    return;
+  }
   
   String ackId = "";
   if (text.startsWith("ACK_ID:")) {
@@ -498,6 +516,7 @@ void handleRobotCommand(String text) {
     payload.trim();
     if (payload == "EXIT") {
       mapsActive = false;
+      currentScreen = SCREEN_FACE;
       face.setExpression(EXPR_IDLE);
       lastExpressionCycleTime = millis() - activeNotificationDurationMs;
       Serial.println("Maps Navigation Exited.");
@@ -685,6 +704,65 @@ void handleRobotCommand(String text) {
     }
     audio.playSound(SOUND_CHIRP);
     activeNotificationDurationMs = notificationDurationMs;
+  } else if (text.startsWith("WP_START:")) {
+    int expectedSize = text.substring(9).toInt();
+    File f = SPIFFS.open("/wallpaper.bin", "w");
+    if (f) {
+      f.close();
+      ble.sendLog("WP_START:OK");
+      Serial.print("Wallpaper write started, expected size: ");
+      Serial.println(expectedSize);
+    } else {
+      ble.sendLog("WP_START:FAIL");
+      Serial.println("Failed to start wallpaper write");
+    }
+  } else if (text.startsWith("WP_CHUNK:")) {
+    String hexData = text.substring(9);
+    File f = SPIFFS.open("/wallpaper.bin", "a");
+    if (f) {
+      size_t hexLen = hexData.length();
+      uint8_t* tempBuf = (uint8_t*)malloc(hexLen / 2);
+      if (tempBuf) {
+        for (size_t i = 0; i < hexLen; i += 2) {
+          char high = hexData[i];
+          char low = hexData[i + 1];
+          uint8_t val = 0;
+          if (high >= '0' && high <= '9') val += (high - '0') << 4;
+          else if (high >= 'a' && high <= 'f') val += (high - 'a' + 10) << 4;
+          else if (high >= 'A' && high <= 'F') val += (high - 'A' + 10) << 4;
+          
+          if (low >= '0' && low <= '9') val += (low - '0');
+          else if (low >= 'a' && low <= 'f') val += (low - 'a' + 10);
+          else if (low >= 'A' && low <= 'F') val += (low - 'A' + 10);
+          
+          tempBuf[i / 2] = val;
+        }
+        f.write(tempBuf, hexLen / 2);
+        free(tempBuf);
+        f.close();
+        ble.sendLog("WP_CHUNK:OK");
+      } else {
+        f.close();
+        ble.sendLog("WP_CHUNK:FAIL");
+      }
+    } else {
+      ble.sendLog("WP_CHUNK:FAIL");
+    }
+  } else if (text == "WP_END") {
+    File f = SPIFFS.open("/wallpaper.bin", "r");
+    if (f) {
+      size_t finalSize = f.size();
+      f.close();
+      ble.sendLog("WP_END:OK");
+      Serial.print("Wallpaper transmission finished, size: ");
+      Serial.println(finalSize);
+    } else {
+      ble.sendLog("WP_END:FAIL");
+    }
+  } else if (text == "WP_CLEAR") {
+    SPIFFS.remove("/wallpaper.bin");
+    ble.sendLog("WP_CLEAR:OK");
+    Serial.println("Wallpaper removed");
   } else {
     // Normal text message notification
     face.setNotificationText(text, rtcHour, rtcMinute);
@@ -707,11 +785,11 @@ void drawRGBBitmapScaled(int16_t x, int16_t y, const uint16_t *bitmap, int16_t w
 
 void applySettings(String payload) {
   // Robust CSV parsing — split by commas into an array
-  // Expected format: ble,speed,defaultGif,gifIntro,touchSingle,touchDouble,touchLong,negative,introSpeed,introSoundSpeed,notifDur,remDur,birthDur,clkStyle,oledBright
-  String parts[15];
+  // Expected format: ble,speed,defaultGif,gifIntro,touchSingle,touchDouble,touchLong,negative,introSpeed,introSoundSpeed,notifDur,remDur,birthDur,clkStyle,oledBright,silentMode
+  String parts[16];
   int partCount = 0;
   int startIdx = 0;
-  for (int i = 0; i <= payload.length() && partCount < 15; i++) {
+  for (int i = 0; i <= payload.length() && partCount < 16; i++) {
     if (i == (int)payload.length() || payload[i] == ',') {
       String part = payload.substring(startIdx, i);
       part.trim();
@@ -723,9 +801,7 @@ void applySettings(String payload) {
   if (partCount < 2) return; // Need at least ble,speed
 
   bleActive   = true; // Always ON
-  gifSpeed    = parts[1].toInt();
-  if (gifSpeed < 20)  gifSpeed = 20;
-  if (gifSpeed > 500) gifSpeed = 500;
+  gifSpeed    = 169;
 
   if (partCount > 2) defaultGif  = parts[2].toInt();
   if (partCount > 3) gifIntro    = parts[3].toInt();
@@ -734,14 +810,10 @@ void applySettings(String payload) {
   if (partCount > 6) touchLong   = parts[6].toInt();
   if (partCount > 7) negativeDisplay = (parts[7].toInt() == 1);
   if (partCount > 8) {
-    gifIntroSpeed = parts[8].toInt();
-    if (gifIntroSpeed < 20)  gifIntroSpeed = 20;
-    if (gifIntroSpeed > 500) gifIntroSpeed = 500;
+    gifIntroSpeed = 169;
   }
   if (partCount > 9) {
-    introSoundSpeed = parts[9].toInt();
-    if (introSoundSpeed < 20)  introSoundSpeed = 20;
-    if (introSoundSpeed > 500) introSoundSpeed = 500;
+    introSoundSpeed = 169;
   }
   if (partCount > 10) {
     notificationDurationMs = parts[10].toInt() * 1000;
@@ -760,6 +832,10 @@ void applySettings(String payload) {
   }
   if (partCount > 14) {
     oledBrightness = parts[14].toInt();
+  }
+  if (partCount > 15) {
+    silentMode = (parts[15].toInt() == 1);
+    audio.silentMode = silentMode;
   }
 
   // Apply settings immediately
@@ -800,13 +876,13 @@ void applySettings(String payload) {
   }
 
   ble.setBLEActive(bleActive);
-  tft.invertDisplay(negativeDisplay ? false : true);
+  tft.invertDisplay(true);
   
-  #ifdef TFT_BL
-  analogWriteFrequency(TFT_BL, 24000); // 24 kHz high-frequency PWM
-  if (oledBrightness == 1) analogWrite(TFT_BL, 30);
-  else if (oledBrightness == 2) analogWrite(TFT_BL, 128);
-  else analogWrite(TFT_BL, 255);
+  #ifdef TFT_BLK
+  analogWriteFrequency(TFT_BLK, 24000); // 24 kHz high-frequency PWM
+  if (oledBrightness == 1) analogWrite(TFT_BLK, 30);
+  else if (oledBrightness == 2) analogWrite(TFT_BLK, 128);
+  else analogWrite(TFT_BLK, 255);
   #endif
   
   Serial.print("NegativeDisplay set to: ");
@@ -833,6 +909,7 @@ void applySettings(String payload) {
   preferences.putInt("notifDur", notificationDurationMs);
   preferences.putInt("remDur", reminderDurationMs);
   preferences.putInt("birthDur", birthdayDurationMs);
+  preferences.putBool("silent", silentMode);
   preferences.end();
 
   audio.playSound(SOUND_POWERUP);
@@ -845,18 +922,20 @@ void setup() {
   // 1. Load persistence settings from NVS Preferences first
   preferences.begin("luna", false);
   bleActive = true; // Always ON
-  gifSpeed = preferences.getInt("speed", 100);
+  gifSpeed = 169;
   defaultGif = preferences.getInt("defGif", 99);
   gifIntro = preferences.getInt("intGif", 1);
   touchSingle = preferences.getInt("tchSing", 2);  // default: skip animation
   touchDouble = preferences.getInt("tchDoub", 0);
   touchLong = preferences.getInt("tchLong", 0);
   robotVariant = preferences.getString("robot_var", "ms_luna");
-  negativeDisplay = preferences.getBool("neg", (robotVariant == "ms_luna"));
+  negativeDisplay = preferences.getBool("neg", false);
   clockStyle = preferences.getInt("clkStyle", 0);
   oledBrightness = preferences.getInt("oledBright", 2);
-  gifIntroSpeed = preferences.getInt("intSpeed", 100);
-  introSoundSpeed = preferences.getInt("sndSpeed", 100);
+  silentMode = preferences.getBool("silent", false);
+  audio.silentMode = silentMode;
+  gifIntroSpeed = 169;
+  introSoundSpeed = 169;
   is12HourFormat = preferences.getBool("is12H", false);
   notificationDurationMs = preferences.getInt("notifDur", 5000);
   reminderDurationMs = preferences.getInt("remDur", 10000);
@@ -959,7 +1038,7 @@ void setup() {
   }
 
   // Restore saved invert setting for standard operation
-  tft.invertDisplay(negativeDisplay ? false : true);
+  tft.invertDisplay(true);
   
   // Set intro speed
   face.setFrameDelay(gifIntroSpeed);
@@ -996,6 +1075,10 @@ void setup() {
     Serial.println(" frames)");
   }
   Serial.println("=============================");
+  if (!SPIFFS.begin(true)) {
+    Serial.println("SPIFFS Mount Failed");
+  }
+  games.begin();
   network.init();
 }
 
@@ -1071,6 +1154,7 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
   } else {
     // Custom actions
     if (actionType == 1) {
+      currentScreen = SCREEN_CLOCK;
       face.setExpression(EXPR_CLOCK);
       audio.playSound(SOUND_CHIRP);
       Serial.println("Triggered Full Screen Clock");
@@ -1126,14 +1210,8 @@ void adjustOption(int option, int direction) {
       audio.playSound(SOUND_CHIRP);
       break;
     case 1: // GIF Speed
-      if (direction > 0) {
-        gifSpeed += 20;
-        if (gifSpeed > 300) gifSpeed = 20;
-      } else {
-        gifSpeed -= 20;
-        if (gifSpeed < 20) gifSpeed = 300;
-      }
-      face.setFrameDelay(gifSpeed);
+      gifSpeed = 169;
+      face.setFrameDelay(169);
       audio.playSound(SOUND_CHIRP);
       break;
     case 2: // Clock Style
@@ -1146,7 +1224,7 @@ void adjustOption(int option, int direction) {
       break;
     case 3: // Invert Display
       negativeDisplay = !negativeDisplay;
-      tft.invertDisplay(negativeDisplay ? false : true);
+      tft.invertDisplay(true);
       audio.playSound(SOUND_CHIRP);
       break;
     case 4: // Brightness
@@ -1161,7 +1239,14 @@ void adjustOption(int option, int direction) {
       else analogWrite(TFT_BLK, 255);
       audio.playSound(SOUND_CHIRP);
       break;
-    case 5: // Save settings
+    case 5: // Silent / Buzzer Mode
+      silentMode = !silentMode;
+      audio.silentMode = silentMode;
+      if (!silentMode) {
+        audio.playSound(SOUND_CHIRP);
+      }
+      break;
+    case 6: // Save settings
       {
         preferences.begin("luna", false);
         preferences.putBool("ble",       bleActive);
@@ -1169,14 +1254,22 @@ void adjustOption(int option, int direction) {
         preferences.putInt("clkStyle",   clockStyle);
         preferences.putBool("neg",       negativeDisplay);
         preferences.putInt("oledBright", oledBrightness);
+        preferences.putBool("silent",    silentMode);
         preferences.end();
         audio.playSound(SOUND_POWERUP);
         Serial.println("[BTN] Settings SAVED");
+        
+        // Notify app about changes!
+        String silentValStr = silentMode ? "1" : "0";
+        String negValStr = negativeDisplay ? "1" : "0";
+        ble.sendLog("SET_SYNC:" + String(clockStyle) + "," + String(oledBrightness) + "," + negValStr + "," + silentValStr);
+
         optionSelected = false; // deselect
       }
       break;
-    case 6: // Exit settings
+    case 7: // Exit settings
       optionSelected = false;
+      settingsActive = false;
       currentScreen  = SCREEN_FACE;
       audio.playSound(SOUND_POWERDOWN);
       Serial.println("[BTN] Exited Settings");
@@ -1189,6 +1282,26 @@ void adjustOption(int option, int direction) {
 // =============================================================================
 void handleBtn1Single() {
   lastInteractionTime = millis();
+  if (mapsActive) return;
+
+  if (currentScreen == SCREEN_SETTINGS) {
+    if (!settingsActive) {
+      settingsActive = true;
+      menuOption = 0;
+      optionSelected = false;
+      audio.playSound(SOUND_POWERUP);
+      Serial.println("[BTN1] Settings screen ACTIVATED");
+    } else {
+      if (!optionSelected) {
+        menuOption = (menuOption + 1) % 8;
+        audio.playSound(SOUND_CHIRP);
+        Serial.printf("[BTN1] Settings Option down -> %d\n", menuOption);
+      } else {
+        adjustOption(menuOption, -1);
+      }
+    }
+    return;
+  }
 
   if (currentScreen == SCREEN_GAMES) {
     if (!gamesActive) {
@@ -1200,7 +1313,7 @@ void handleBtn1Single() {
     } else {
       if (!gamePlaying) {
         // Red button (Button 1) cycles games menu down
-        gameMenuOption = (gameMenuOption + 1) % 8;
+        gameMenuOption = (gameMenuOption + 1) % 4;
         audio.playSound(SOUND_CHIRP);
         Serial.printf("[BTN1] Games Menu DOWN -> option %d\n", gameMenuOption);
       }
@@ -1246,8 +1359,13 @@ void handleBtn1Single() {
 
 void handleBtn1Double() {
   lastInteractionTime = millis();
+  if (mapsActive) return;
   
   if (currentScreen == SCREEN_GAMES) {
+    if (gamePlaying) {
+      Serial.println("[BTN1 DBL] Ignored double-click exit because game is playing");
+      return;
+    }
     gamesActive = false;
     gamePlaying = false;
     currentScreen = SCREEN_FACE;
@@ -1269,6 +1387,7 @@ void handleBtn1Double() {
 
 void handleBtn1Long() {
   lastInteractionTime = millis();
+  if (mapsActive) return;
 
   if (currentScreen == SCREEN_GAMES) {
     // Long press to go back is removed as requested by the user
@@ -1294,6 +1413,8 @@ void handleBtn1Long() {
 
   if (currentScreen != SCREEN_FACE) {
     // Return to face screen
+    settingsActive = false;
+    optionSelected = false;
     currentScreen = SCREEN_FACE;
     hardwareLoopbackActive = false;
     audio.micStreaming = false;
@@ -1310,52 +1431,29 @@ void handleBtn1Long() {
 // =============================================================================
 void handleBtn2Single() {
   lastInteractionTime = millis();
+  if (mapsActive) return;
 
   if (currentScreen == SCREEN_GAMES && gamesActive) {
     if (!gamePlaying) {
       // Yellow button (Button 2) selects/confirms the option in games menu
       if (gameMenuOption == 0) {
-        games.resetCoinCatcher();
+        games.resetAdventure();
         gameSelected = 1;
         gamePlaying = true;
         audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 1: Coin Catcher");
+        Serial.println("[BTN2] Started Game 1: Luna Adventure");
       } else if (gameMenuOption == 1) {
-        games.resetFlappyMochy();
+        games.resetRacer();
         gameSelected = 2;
         gamePlaying = true;
         audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 2: Flappy Mochy");
+        Serial.println("[BTN2] Started Game 2: Luna Racer");
       } else if (gameMenuOption == 2) {
-        games.resetSnake();
+        games.resetSpace();
         gameSelected = 3;
         gamePlaying = true;
         audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 3: Retro Snake");
-      } else if (gameMenuOption == 3) {
-        games.resetSpaceInvaders();
-        gameSelected = 4;
-        gamePlaying = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 4: Space Invaders");
-      } else if (gameMenuOption == 4) {
-        games.resetPong();
-        gameSelected = 5;
-        gamePlaying = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 5: Pong Challenge");
-      } else if (gameMenuOption == 5) {
-        games.resetBreakout();
-        gameSelected = 6;
-        gamePlaying = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 6: Brick Breaker");
-      } else if (gameMenuOption == 6) {
-        games.resetMemoryMatch();
-        gameSelected = 7;
-        gamePlaying = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 7: Memory Match");
+        Serial.println("[BTN2] Started Game 3: Luna Space");
       } else {
         gamesActive = false;
         audio.playSound(SOUND_POWERDOWN);
@@ -1368,6 +1466,19 @@ void handleBtn2Single() {
         audio.playSound(SOUND_POWERDOWN);
         Serial.println("[BTN2] Exited active game back to Arcade menu");
       }
+    }
+    return;
+  }
+
+  if (currentScreen == SCREEN_SETTINGS && settingsActive) {
+    if (menuOption == 6) { // SAVE SETTINGS
+      adjustOption(6, 1);
+    } else if (menuOption == 7) { // EXIT MENU
+      adjustOption(7, 1);
+    } else {
+      optionSelected = !optionSelected;
+      audio.playSound(SOUND_CHIRP);
+      Serial.printf("[BTN2] Option selection toggled: %s\n", optionSelected ? "Selected" : "Deselected");
     }
     return;
   }
@@ -1392,6 +1503,8 @@ void handleBtn2Single() {
     nextScreen = SCREEN_CALENDAR;
   } else if (currentScreen == SCREEN_CALENDAR) {
     nextScreen = SCREEN_GAMES;
+  } else if (currentScreen == SCREEN_GAMES) {
+    nextScreen = SCREEN_SETTINGS;
   } else {
     nextScreen = SCREEN_FACE;
   }
@@ -1459,6 +1572,8 @@ void updateStateLabel() {
     face.setStateLabel("CALENDAR");
   } else if (currentScreen == SCREEN_MAPS) {
     face.setStateLabel("MAPS");
+  } else if (currentScreen == SCREEN_SETTINGS) {
+    face.setStateLabel("SETTINGS");
   } else {
     face.setStateLabel("IDLE");
   }
@@ -1637,7 +1752,7 @@ void loop() {
   }
 
   // 4. Inactivity Timer: Auto-return to Face screen after 15 seconds of no interaction in UI modes
-  if (currentScreen != SCREEN_FACE && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive) {
+  if (currentScreen != SCREEN_FACE && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive && !gamePlaying) {
     if (now - lastInteractionTime >= 15000) {
       currentScreen = SCREEN_FACE;
       lastExpressionCycleTime = now;

@@ -1,9 +1,10 @@
-﻿#ifndef GAMES_H
+#ifndef GAMES_H
 #define GAMES_H
 
 #include <Arduino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
+#include <Preferences.h>
 #include "config.h"
 #include "audio.h"
 
@@ -15,275 +16,427 @@ extern int gameSelected;
 
 class LunaGames {
 private:
-  // --- Game 1 (Coin Catcher) State ---
-  int playerX;
-  int playerY;
-  const int playerWidth = 36;
-  const int playerHeight = 14;
-  int coinX;
-  int coinY;
-  float coinSpeed;
-  int score1;
-  int lives1;
-  bool gameOver1;
+  // High scores
+  int advHighScore;
+  int racHighScore;
+  int spcHighScore;
 
-  // --- Game 2 (Flappy Mochy) State ---
-  float birdY;
-  float birdVelocity;
-  const float gravity = 0.45f;
-  const float jumpStrength = -5.8f;
-  const int birdX = 60;
-  const int birdRadius = 9;
-  int pipeX;
-  const int pipeWidth = 36;
-  int gapY;
-  const int gapHeight = 70;
-  float pipeSpeed;
-  int score2;
-  bool gameOver2;
-  bool gameStarted2;
-  bool lastBtn1State;
+  // --- Game 1: Luna Adventure State ---
+  float advPlayerX;
+  float advPlayerY;
+  float advPlayerVX;
+  float advPlayerVY;
+  bool advIsJumping;
+  int advLives;
+  int advScore;
+  bool advGameOver;
+  int advPowerState; // 0: Normal, 1: Super, 2: Fire
+  float advCameraX;
+  unsigned long advInvincibleTime;
+  int advLevelState; // 0: Play, 1: Flag slide, 2: Walk to castle, 3: Stage Clear screen
+  int advCurrentLevel; // 1, 2, 3
+  unsigned long advLevelTransitionTimer;
+  int advWalkFrame;
+  int advMoveState; // -1 = backward, 0 = stopped, 1 = forward
+  unsigned long advBtn1PressTime;
+  bool advBtn1Active;
+  bool advLastBtn1;
 
-  // --- Game 3 (Retro Snake) State ---
-  int snakeX[30];
-  int snakeY[30];
-  int snakeLength;
-  int snakeDir; // 0: Up, 1: Right, 2: Down, 3: Left
-  int foodX;
-  int foodY;
-  int score3;
-  bool gameOver3;
-  unsigned long lastSnakeUpdate;
-  bool lastBtn2State;
+  // Level platforms
+  int advNumPlats;
+  float advPlatX[8];
+  float advPlatY[8];
+  float advPlatW[8];
+  float advPlatH[8];
 
-  // --- Game 4 (Space Invaders) State ---
-  int invaderX[10];
-  int invaderY[10];
-  bool invaderAlive[10];
-  int invaderDir;
-  int invaderCount;
-  int laserX;
-  int laserY;
-  bool laserActive;
-  int playerInvX;
-  int score4;
-  bool gameOver4;
-  bool gameWon4;
-  unsigned long lastInvaderUpdate;
-  unsigned long lastLaserUpdate;
+  // Level blocks
+  float advBlockX[6];
+  float advBlockY[6];
+  int advBlockType[6]; // 0: Brick, 1: ? Block
+  int advBlockItem[6]; // 0: Coin, 1: Mushroom, 2: Fire Flower
+  bool advBlockHit[6];
+  bool advBlockActive[6];
 
-  // --- Game 5 (Pong Challenge) State ---
-  float ballX;
-  float ballY;
-  float ballVX;
-  float ballVY;
-  int paddlePlayerY;
-  int paddleCpuY;
-  int scorePlayer;
-  int scoreCpu;
-  bool gameOver5;
-  bool gameWon5;
+  // Coins
+  float advCoinX[6];
+  float advCoinY[6];
+  bool advCoinActive[6];
 
-  // --- Game 6 (Breakout) State ---
-  float breakBallX;
-  float breakBallY;
-  float breakBallVX;
-  float breakBallVY;
-  int breakPaddleX;
-  bool brickActive[15];
-  int score6;
-  int lives6;
-  bool gameOver6;
-  bool gameWon6;
+  // Enemies
+  float advEnemyX[4];
+  float advEnemyY[4];
+  int advEnemyType[4]; // 0: Goomba, 1: Koopa, 2: Winged Koopa
+  bool advEnemyActive[4];
+  int advEnemyDir[4];
+  float advEnemyVY[4];
 
-  // --- Game 7 (Memory Match) State ---
-  int cards[8];
-  int cardState[8];
-  int cursorIndex;
-  int firstSelected;
-  unsigned long matchTimer;
-  bool matchingInProgress;
-  int score7;
-  bool gameOver7;
-  bool lastBtn1StateMM;
-  bool lastBtn2StateMM;
+  // Mushroom / Fire Flower power-up item
+  float advMushX;
+  float advMushY;
+  float advMushVX;
+  int advMushType; // 1: Mushroom, 2: Fire Flower
+  bool advMushActive;
+
+  // Player Fireballs
+  float advFireballX[3];
+  float advFireballY[3];
+  float advFireballVX[3];
+  float advFireballVY[3];
+  bool advFireballActive[3];
+  unsigned long advLastFireTime;
+
+  // Boss Bowser
+  bool advBossActive;
+  int advBossHP;
+  float advBossX;
+  float advBossY;
+  int advBossDir;
+  unsigned long advBossLastJump;
+  unsigned long advBossLastFire;
+  float advBossFireX[3];
+  float advBossFireY[3];
+  float advBossFireVX[3];
+  bool advBossFireActive[3];
+  bool advBridgeCollapsed;
+
+  // --- Game 2: Luna Racer State ---
+  float racPlayerX;
+  float racPlayerY;
+  float racSpeed;
+  bool racNitroActive;
+  float racNitroFuel;
+  float racRoadScroll;
+  int racScore;
+  bool racGameOver;
+  
+  // Traffic Cars
+  float racCarX[4];
+  float racCarY[4];
+  float racCarSpeed[4];
+  int racCarColor[4];
+  bool racCarActive[4];
+
+  // --- Game 3: Luna Space State ---
+  float spcPlayerX;
+  float spcPlayerY;
+  int spcScore;
+  int spcHealth;
+  bool spcGameOver;
+  unsigned long spcLastShoot;
+  unsigned long spcShieldTime;
+  unsigned long spcSmartBombCooldown;
+  
+  // Lasers
+  float spcLaserX[6];
+  float spcLaserY[6];
+  bool spcLaserActive[6];
+  
+  // Enemies
+  float spcEnemyX[8];
+  float spcEnemyY[8];
+  bool spcEnemyActive[8];
+  int spcEnemyHP[8];
+  int spcEnemyType[8];
+  unsigned long spcEnemyLastShoot[8];
+  
+  // Enemy lasers
+  float spcEnemyLaserX[4];
+  float spcEnemyLaserY[4];
+  bool spcEnemyLaserActive[4];
+  
+  // Particles
+  float spcPartX[15];
+  float spcPartY[15];
+  float spcPartVX[15];
+  float spcPartVY[15];
+  int spcPartLife[15];
+  bool spcPartActive[15];
+  
+  // Powerups
+  float spcPowerX;
+  float spcPowerY;
+  int spcPowerType;
+  bool spcPowerActive;
+  bool spcSpreadActive;
+  
+  // Boss Spacecraft
+  bool spcBossActive;
+  int spcBossHP;
+  float spcBossX;
+  float spcBossY;
+  int spcBossDir;
+  unsigned long spcBossLastShoot;
+
+  // Buttons input helper
+  bool lastBtn1;
+  bool lastBtn2;
 
 public:
   LunaGames() {
-    resetCoinCatcher();
-    resetFlappyMochy();
-    resetSnake();
-    resetSpaceInvaders();
-    resetPong();
-    resetBreakout();
-    resetMemoryMatch();
-    lastBtn1State = false;
-    lastBtn2State = false;
+    advHighScore = 0;
+    racHighScore = 0;
+    spcHighScore = 0;
+    advLives = 3;
+    advScore = 0;
+    advCurrentLevel = 1;
+    resetAdventure();
+    resetRacer();
+    resetSpace();
+    lastBtn1 = false;
+    lastBtn2 = false;
   }
 
-  // â”€â”€ Layout constants for 128Ã—160 display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Status bar occupies y=0..26 (drawn by drawStatusBar externally)
-  // Game outer border: x=2, y=28, w=124, h=130  â†’  bottom = y=158
-  // Score bar: y=30..54  (24 px tall)
-  // Divider:   y=54
-  // Play area: x=4, y=56, w=120, h=98  â†’  bottom = y=154
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  static const int G_X = 4;     // play area left
-  static const int G_Y = 56;    // play area top
-  static const int G_W = 120;   // play area width
-  static const int G_H = 98;    // play area height
-  static const int G_B = 154;   // play area bottom (G_Y + G_H)
-  static const int G_R = 124;   // play area right  (G_X + G_W)
+#if SCREEN_WIDTH == 240
+  static const int G_X = 0;
+  static const int G_Y = 58;
+  static const int G_W = 240;
+  static const int G_H = 182;
+  static const int G_B = 240;
+  static const int G_R = 240;
+#else
+  static const int G_X = 0;
+  static const int G_Y = 22;
+  static const int G_W = 128;
+  static const int G_H = 138;
+  static const int G_B = 160;
+  static const int G_R = 128;
+#endif
 
-  void resetCoinCatcher() {
-    playerX = (SCREEN_WIDTH - playerWidth) / 2;
-    playerY = G_B - 20;                      // 10 px above play area bottom
-    coinX   = random(G_X + 8, G_R - 8);
-    coinY   = G_Y + 10;
-    coinSpeed = 2.0f;
-    score1 = 0;
-    lives1 = 3;
-    gameOver1 = false;
+  void begin() {
+    Preferences prefs;
+    prefs.begin("luna_scores", true);
+    advHighScore = prefs.getInt("adv", 0);
+    racHighScore = prefs.getInt("rac", 0);
+    spcHighScore = prefs.getInt("spc", 0);
+    prefs.end();
   }
 
-  void resetFlappyMochy() {
-    birdY        = G_Y + G_H / 2.0f;
-    birdVelocity = 0.0f;
-    pipeX        = SCREEN_WIDTH + 10;
-    gapY         = G_Y + 30 + random(0, G_H - 60);
-    pipeSpeed    = 2.0f;
-    score2       = 0;
-    gameOver2    = false;
-    gameStarted2 = false;
-  }
-
-  void resetSnake() {
-    snakeLength = 4;
-    snakeDir = 1;
-    // Grid: 19 cols Ã— 14 rows of 6 px cells, origin (G_X+2, G_Y+2)
-    for (int i = 0; i < snakeLength; i++) {
-      snakeX[i] = 5 - i;
-      snakeY[i] = 4;
+  void saveHighScore(const char* key, int& highScore, int currentScore) {
+    if (currentScore > highScore) {
+      highScore = currentScore;
+      Preferences prefs;
+      prefs.begin("luna_scores", false);
+      prefs.putInt(key, highScore);
+      prefs.end();
     }
-    foodX = random(0, 19);
-    foodY = random(0, 14);
-    score3 = 0;
-    gameOver3 = false;
-    lastSnakeUpdate = millis();
-    lastBtn2State   = false;
   }
 
-  void resetSpaceInvaders() {
-    playerInvX   = G_X + G_W / 2 - 8;
-    invaderDir   = 1;
-    invaderCount = 10;
-    laserActive  = false;
-    score4       = 0;
-    gameOver4    = false;
-    gameWon4     = false;
-    // 2 rows of 5 invaders, each 12 px wide, 8 px gap â†’ step=20
-    for (int i = 0; i < 5; i++) {
-      invaderX[i]    = G_X + 4 + i * 22;
-      invaderY[i]    = G_Y + 8;
-      invaderAlive[i] = true;
+  void resetAdventureForLevel() {
+    advPlayerX = 20;
+    advPlayerY = G_B - 20;
+    advPlayerVX = 0;
+    advPlayerVY = 0;
+    advIsJumping = false;
+    advCameraX = 0;
+    advLevelState = 0;
+    advLastFireTime = 0;
+    advBridgeCollapsed = false;
+    advInvincibleTime = 0;
+    advWalkFrame = 0;
+    advMoveState = 1;
+    advBtn1Active = false;
+    advBtn1PressTime = 0;
+    advLastBtn1 = false;
+    
+    for (int i = 0; i < 3; i++) {
+      advFireballActive[i] = false;
+      advBossFireActive[i] = false;
     }
-    for (int i = 5; i < 10; i++) {
-      invaderX[i]    = G_X + 4 + (i - 5) * 22;
-      invaderY[i]    = G_Y + 22;
-      invaderAlive[i] = true;
+    
+    advMushActive = false;
+    
+    if (advCurrentLevel == 1) {
+      // Level 1: Forest
+      advNumPlats = 5;
+      advPlatX[0] = 0; advPlatY[0] = G_B - 14; advPlatW[0] = 180; advPlatH[0] = 14;
+      advPlatX[1] = 215; advPlatY[1] = G_B - 14; advPlatW[1] = 85; advPlatH[1] = 14;
+      advPlatX[2] = 330; advPlatY[2] = G_B - 14; advPlatW[2] = 150; advPlatH[2] = 14;
+      advPlatX[3] = 100; advPlatY[3] = G_B - 40; advPlatW[3] = 40; advPlatH[3] = 8;
+      advPlatX[4] = 230; advPlatY[4] = G_B - 45; advPlatW[4] = 40; advPlatH[4] = 8;
+      
+      // Blocks
+      advBlockX[0] = 90; advBlockY[0] = G_B - 40; advBlockType[0] = 1; advBlockItem[0] = 0; advBlockHit[0] = false; advBlockActive[0] = true;
+      advBlockX[1] = 110; advBlockY[1] = G_B - 40; advBlockType[1] = 0; advBlockItem[1] = 0; advBlockHit[1] = false; advBlockActive[1] = true;
+      advBlockX[2] = 130; advBlockY[2] = G_B - 40; advBlockType[2] = 1; advBlockItem[2] = 1; advBlockHit[2] = false; advBlockActive[2] = true; // mushroom
+      advBlockX[3] = 240; advBlockY[3] = G_B - 45; advBlockType[3] = 0; advBlockItem[3] = 0; advBlockHit[3] = false; advBlockActive[3] = true;
+      advBlockX[4] = 260; advBlockY[4] = G_B - 45; advBlockType[4] = 1; advBlockItem[4] = 0; advBlockHit[4] = false; advBlockActive[4] = true;
+      advBlockX[5] = 280; advBlockY[5] = G_B - 45; advBlockType[5] = 0; advBlockItem[5] = 0; advBlockHit[5] = false; advBlockActive[5] = true;
+      
+      // Coins
+      for (int i = 0; i < 4; i++) {
+        advCoinX[i] = 80 + i * 90;
+        advCoinY[i] = G_B - 40 - (i % 2) * 20;
+        advCoinActive[i] = true;
+      }
+      for (int i = 4; i < 6; i++) advCoinActive[i] = false;
+      
+      // Enemies
+      advEnemyX[0] = 140; advEnemyY[0] = G_B - 14; advEnemyType[0] = 0; advEnemyActive[0] = true; advEnemyDir[0] = -1; advEnemyVY[0] = 0;
+      advEnemyX[1] = 225; advEnemyY[1] = G_B - 14; advEnemyType[1] = 0; advEnemyActive[1] = true; advEnemyDir[1] = -1; advEnemyVY[1] = 0;
+      advEnemyX[2] = 270; advEnemyY[2] = G_B - 14; advEnemyType[2] = 0; advEnemyActive[2] = true; advEnemyDir[2] = -1; advEnemyVY[2] = 0;
+      advEnemyX[3] = 350; advEnemyY[3] = G_B - 14; advEnemyType[3] = 0; advEnemyActive[3] = true; advEnemyDir[3] = -1; advEnemyVY[3] = 0;
+      
+      advBossActive = false;
+    } 
+    else if (advCurrentLevel == 2) {
+      // Level 2: Sky
+      advNumPlats = 5;
+      advPlatX[0] = 0; advPlatY[0] = G_B - 20; advPlatW[0] = 60; advPlatH[0] = 8;
+      advPlatX[1] = 90; advPlatY[1] = G_B - 40; advPlatW[1] = 60; advPlatH[1] = 8;
+      advPlatX[2] = 180; advPlatY[2] = G_B - 60; advPlatW[2] = 60; advPlatH[2] = 8;
+      advPlatX[3] = 270; advPlatY[3] = G_B - 40; advPlatW[3] = 60; advPlatH[3] = 8;
+      advPlatX[4] = 350; advPlatY[4] = G_B - 20; advPlatW[4] = 100; advPlatH[4] = 14;
+      
+      // Blocks
+      advBlockX[0] = 100; advBlockY[0] = G_B - 65; advBlockType[0] = 1; advBlockItem[0] = 2; advBlockHit[0] = false; advBlockActive[0] = true; // fire flower
+      advBlockX[1] = 120; advBlockY[1] = G_B - 65; advBlockType[1] = 0; advBlockItem[1] = 0; advBlockHit[1] = false; advBlockActive[1] = true;
+      advBlockX[2] = 190; advBlockY[2] = G_B - 85; advBlockType[2] = 0; advBlockItem[2] = 0; advBlockHit[2] = false; advBlockActive[2] = true;
+      advBlockX[3] = 210; advBlockY[3] = G_B - 85; advBlockType[3] = 1; advBlockItem[3] = 0; advBlockHit[3] = false; advBlockActive[3] = true;
+      advBlockX[4] = 280; advBlockY[4] = G_B - 65; advBlockType[4] = 0; advBlockItem[4] = 0; advBlockHit[4] = false; advBlockActive[4] = true;
+      advBlockX[5] = 300; advBlockY[5] = G_B - 65; advBlockType[5] = 1; advBlockItem[5] = 0; advBlockHit[5] = false; advBlockActive[5] = true;
+      
+      // Coins
+      for (int i = 0; i < 6; i++) {
+        advCoinX[i] = 100 + i * 50;
+        advCoinY[i] = G_B - 50 - (i % 2) * 15;
+        advCoinActive[i] = true;
+      }
+      
+      // Enemies
+      advEnemyX[0] = 110; advEnemyY[0] = G_B - 40; advEnemyType[0] = 0; advEnemyActive[0] = true; advEnemyDir[0] = -1; advEnemyVY[0] = 0;
+      advEnemyX[1] = 200; advEnemyY[1] = G_B - 60; advEnemyType[1] = 1; advEnemyActive[1] = true; advEnemyDir[1] = -1; advEnemyVY[1] = 0;
+      advEnemyX[2] = 290; advEnemyY[2] = G_B - 40; advEnemyType[2] = 2; advEnemyActive[2] = true; advEnemyDir[2] = -1; advEnemyVY[2] = 0; // Winged
+      advEnemyX[3] = 360; advEnemyY[3] = G_B - 20; advEnemyType[3] = 1; advEnemyActive[3] = true; advEnemyDir[3] = -1; advEnemyVY[3] = 0;
+      
+      advBossActive = false;
+    } 
+    else {
+      // Level 3: Bowser's Castle
+      advNumPlats = 5;
+      advPlatX[0] = 0; advPlatY[0] = G_B - 14; advPlatW[0] = 120; advPlatH[0] = 14;
+      advPlatX[1] = 140; advPlatY[1] = G_B - 35; advPlatW[1] = 80; advPlatH[1] = 10;
+      advPlatX[2] = 240; advPlatY[2] = G_B - 14; advPlatW[2] = 110; advPlatH[2] = 14; // Bridge
+      advPlatX[3] = 350; advPlatY[3] = G_B - 14; advPlatW[3] = 100; advPlatH[3] = 14; // golden axe
+      advPlatX[4] = 80; advPlatY[4] = G_B - 60; advPlatW[4] = 60; advPlatH[4] = 8;
+      
+      // Blocks
+      advBlockX[0] = 70; advBlockY[0] = G_B - 35; advBlockType[0] = 0; advBlockItem[0] = 0; advBlockHit[0] = false; advBlockActive[0] = true;
+      advBlockX[1] = 160; advBlockY[1] = G_B - 55; advBlockType[1] = 1; advBlockItem[1] = 2; advBlockHit[1] = false; advBlockActive[1] = true; // fire flower
+      advBlockX[2] = 200; advBlockY[2] = G_B - 55; advBlockType[2] = 0; advBlockItem[2] = 0; advBlockHit[2] = false; advBlockActive[2] = true;
+      advBlockX[3] = 210; advBlockY[3] = G_B - 55; advBlockType[3] = 0; advBlockItem[3] = 0; advBlockHit[3] = false; advBlockActive[3] = true;
+      advBlockX[4] = 270; advBlockY[4] = G_B - 45; advBlockType[4] = 0; advBlockItem[4] = 0; advBlockHit[4] = false; advBlockActive[4] = true;
+      advBlockX[5] = 290; advBlockY[5] = G_B - 45; advBlockType[5] = 0; advBlockItem[5] = 0; advBlockHit[5] = false; advBlockActive[5] = true;
+      
+      // Coins
+      for (int i = 0; i < 4; i++) {
+        advCoinX[i] = 140 + i * 20;
+        advCoinY[i] = G_B - 55;
+        advCoinActive[i] = true;
+      }
+      for (int i = 4; i < 6; i++) advCoinActive[i] = false;
+      
+      // Enemies
+      advEnemyX[0] = 80; advEnemyY[0] = G_B - 14; advEnemyType[0] = 1; advEnemyActive[0] = true; advEnemyDir[0] = -1; advEnemyVY[0] = 0;
+      advEnemyX[1] = 150; advEnemyY[1] = G_B - 35; advEnemyType[1] = 0; advEnemyActive[1] = true; advEnemyDir[1] = -1; advEnemyVY[1] = 0;
+      advEnemyX[2] = 200; advEnemyY[2] = G_B - 35; advEnemyType[2] = 0; advEnemyActive[2] = true; advEnemyDir[2] = -1; advEnemyVY[2] = 0;
+      advEnemyX[3] = 250; advEnemyY[3] = G_B - 14; advEnemyType[3] = 1; advEnemyActive[3] = true; advEnemyDir[3] = -1; advEnemyVY[3] = 0;
+      
+      // Bowser
+      advBossActive = true;
+      advBossHP = 5;
+      advBossX = 290;
+      advBossY = G_B - 24;
+      advBossDir = -1;
+      advBossLastJump = millis();
+      advBossLastFire = millis();
     }
-    lastInvaderUpdate = millis();
-    lastLaserUpdate   = millis();
   }
 
-  void resetPong() {
-    ballX        = G_X + G_W / 2.0f;
-    ballY        = G_Y + G_H / 2.0f;
-    ballVX       = random(0, 2) == 0 ? -2.5f : 2.5f;
-    ballVY       = random(-15, 16) / 10.0f;
-    paddlePlayerY = G_Y + G_H / 2 - 12;
-    paddleCpuY    = G_Y + G_H / 2 - 12;
-    scorePlayer  = 0;
-    scoreCpu     = 0;
-    gameOver5    = false;
-    gameWon5     = false;
+  void resetAdventure() {
+    advGameOver = false;  // CRITICAL: clear game-over flag on every reset
+    advLives = 3;
+    advScore = 0;
+    advCurrentLevel = 1;
+    advPowerState = 0;
+    resetAdventureForLevel();
   }
 
-  void resetBreakout() {
-    // Bricks: 5 cols Ã— 3 rows, each 20Ã—8, gap 2 â†’ step 22
-    breakPaddleX = G_X + G_W / 2 - 14;
-    breakBallX   = G_X + G_W / 2.0f;
-    breakBallY   = G_B - 20.0f;
-    breakBallVX  = 2.0f;
-    breakBallVY  = -2.5f;
-    score6       = 0;
-    lives6       = 3;
-    gameOver6    = false;
-    gameWon6     = false;
-    for (int i = 0; i < 15; i++) brickActive[i] = true;
+  void resetRacer() {
+    racPlayerX = G_X + G_W / 2;
+    racPlayerY = G_B - 20;
+    racSpeed = 3.0f;
+    racNitroActive = false;
+    racNitroFuel = 100.0f;
+    racRoadScroll = 0;
+    racScore = 0;
+    racGameOver = false;
+    
+    for (int i = 0; i < 4; i++) {
+      racCarX[i] = G_X + 24 + random(0, 3) * (G_W - 48)/3;
+      racCarY[i] = G_Y - 30 - i * 60;
+      racCarSpeed[i] = 1.5f + random(0, 20) / 10.0f;
+      racCarColor[i] = i % 3;
+      racCarActive[i] = true;
+    }
   }
 
-  void resetMemoryMatch() {
-    int tempCards[] = {0, 0, 1, 1, 2, 2, 3, 3};
-    for (int i = 0; i < 8; i++) {
-      int r = random(i, 8);
-      int temp = tempCards[i];
-      tempCards[i] = tempCards[r];
-      tempCards[r] = temp;
-    }
-    for (int i = 0; i < 8; i++) {
-      cards[i] = tempCards[i];
-      cardState[i] = 0;
-    }
-    cursorIndex = 0;
-    firstSelected = -1;
-    matchingInProgress = false;
-    score7 = 0;
-    gameOver7 = false;
-    lastBtn1StateMM = false;
-    lastBtn2StateMM = false;
+  void resetSpace() {
+    spcPlayerX = G_X + G_W / 2;
+    spcPlayerY = G_B - 14;
+    spcScore = 0;
+    spcHealth = 3;
+    spcGameOver = false;
+    spcLastShoot = 0;
+    spcShieldTime = 0;
+    spcSmartBombCooldown = 0;
+    spcSpreadActive = false;
+    
+    for (int i = 0; i < 6; i++) spcLaserActive[i] = false;
+    for (int i = 0; i < 8; i++) spcEnemyActive[i] = false;
+    for (int i = 0; i < 4; i++) spcEnemyLaserActive[i] = false;
+    for (int i = 0; i < 15; i++) spcPartActive[i] = false;
+    
+    spcPowerActive = false;
+    spcBossActive = false;
+    spcBossHP = 20;
+    spcBossX = G_X + G_W / 2;
+    spcBossY = G_Y + 15;
+    spcBossDir = 1;
+    spcBossLastShoot = 0;
   }
 
   bool canExitActiveGame() {
-    if (gameSelected == 1) return gameOver1;
-    if (gameSelected == 2) return (!gameStarted2 || gameOver2);
-    if (gameSelected == 3) return gameOver3;
-    if (gameSelected == 4) return gameOver4;
-    if (gameSelected == 5) return gameOver5;
-    if (gameSelected == 6) return gameOver6;
-    if (gameSelected == 7) return gameOver7;
+    if (gameSelected == 1) return advGameOver;
+    if (gameSelected == 2) return racGameOver;
+    if (gameSelected == 3) return spcGameOver;
     return false;
   }
 
-  void drawGameOverScreen(GFXcanvas16& display, int score) {
+  void drawGameOverScreen(GFXcanvas16& display, int score, int highScore) {
     extern String robotVariant;
     uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
     uint16_t themeBg  = TFT_WHITE;
     uint16_t themeText = 0x2104;
 
-    // Fill screen area
-    display.fillRect(0, 22, 128, 138, themeBg);
+    display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
 
-    // "GAME OVER"
-    display.setTextSize(2);
-    display.setTextColor(TFT_RED, themeBg);
-    display.setCursor((128 - 9*12) / 2, 48);
+    display.setTextSize(SCREEN_WIDTH == 240 ? 3 : 2);
+    display.setTextColor(TFT_RED);
+    display.setCursor((SCREEN_WIDTH - 9 * (SCREEN_WIDTH == 240 ? 18 : 12)) / 2, SCREEN_WIDTH == 240 ? 65 : 48);
     display.print("GAME OVER");
 
-    // Score line
-    display.setTextSize(1);
-    display.setTextColor(themeText, themeBg);
-    char scoreBuf[24];
-    snprintf(scoreBuf, sizeof(scoreBuf), "SCORE: %d", score);
-    int scoreW = strlen(scoreBuf) * 6;
-    display.setCursor((128 - scoreW) / 2, 80);
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeText);
+    char scoreBuf[32];
+    snprintf(scoreBuf, sizeof(scoreBuf), "SC:%d HI:%d", score, highScore);
+    int scoreW = strlen(scoreBuf) * (SCREEN_WIDTH == 240 ? 12 : 6);
+    display.setCursor((SCREEN_WIDTH - scoreW) / 2, SCREEN_WIDTH == 240 ? 115 : 80);
     display.print(scoreBuf);
 
-    // Navigation buttons
-    display.setTextColor(themeAccent, themeBg);
-    display.setCursor((128 - 13*6) / 2, 108);
+    display.setTextColor(themeAccent);
+    display.setCursor((SCREEN_WIDTH - 13 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 160 : 108);
     display.print("B1:PLAY AGAIN");
-    display.setCursor((128 - 14*6) / 2, 124);
+    display.setCursor((SCREEN_WIDTH - 14 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 190 : 124);
     display.print("B2:BACK 2 MENU");
   }
 
@@ -291,783 +444,1245 @@ public:
     extern String robotVariant;
     uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
     uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // light pastel bg
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2;
     uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xD69A;
 
-    // Fill screen area y=22..159 with pure white
-    display.fillRect(0, 22, 128, 138, themeBg);
+    display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
+
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeAccent);
+    display.setCursor((SCREEN_WIDTH - 11 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 30 : 12);
+    display.print("LUNA ARCADE");
+    display.drawFastHLine(6, SCREEN_WIDTH == 240 ? 54 : 24, SCREEN_WIDTH - 12, themeBorder);
 
     const char* gameNames[] = {
-      "1.COIN CATCH",
-      "2.FLAPPY MOCHY",
-      "3.RETRO SNAKE",
-      "4.SPACE INVAD",
-      "5.PONG CHALL",
-      "6.BREAKOUT",
-      "7.MEMO MATCH",
-      "8.EXIT ARCADE"
+      "1.LUNA ADVENTURE",
+      "2.LUNA RACER",
+      "3.LUNA SPACE",
+      "4.EXIT ARCADE"
     };
 
-    // Calculate scroll offset (visible items)
-    int startVisible = gameMenuOption - 2;
-    if (startVisible < 0) startVisible = 0;
-    if (startVisible > 3) startVisible = 3;
+    int spacing = SCREEN_WIDTH == 240 ? 32 : 22;
+    int startY = SCREEN_WIDTH == 240 ? 66 : 32;
 
-    // Draw 5 menu items starting at y=28 with 22px spacing
-    for (int i = 0; i < 5; i++) {
-      int idx = startVisible + i;
-      if (idx >= 8) break;
-      int yPos = 28 + i * 22;
+    for (int idx = 0; idx < 4; idx++) {
+      int yPos = startY + idx * spacing;
       bool sel = (gameMenuOption == idx);
       
       if (sel) {
-        // Subtle clean select pill
-        display.fillRoundRect(6, yPos, 104, 18, 4, themeCardBg);
-        display.drawRoundRect(6, yPos, 104, 18, 4, themeAccent);
+        display.fillRoundRect(6, yPos, SCREEN_WIDTH - 24, SCREEN_WIDTH == 240 ? 28 : 18, 4, themeCardBg);
+        display.drawRoundRect(6, yPos, SCREEN_WIDTH - 24, SCREEN_WIDTH == 240 ? 28 : 18, 4, themeAccent);
         display.setTextColor(themeAccent);
       } else {
         display.setTextColor(themeText);
       }
       
-      display.setTextSize(1);
-      display.setCursor(14, yPos + 5);
+      display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+      display.setCursor(14, yPos + (SCREEN_WIDTH == 240 ? 6 : 5));
       display.print(gameNames[idx]);
     }
 
-    // Scrollbar on right
-    display.fillRect(118, 28, 2, 106, 0xEF5C);
-    int thumbY = 28 + (gameMenuOption * (106 - 18)) / 7;
-    display.fillRect(118, thumbY, 2, 18, themeAccent);
-
-    // Clean footer
     display.setTextSize(1);
     display.setTextColor(0x7BCF);
-    display.setCursor(8, 146);
+    display.setCursor(8, SCREEN_HEIGHT - 14);
     display.print("B1:Scroll  B2:Play");
   }
 
-  void updateAndDrawCoinCatcher(GFXcanvas16& display, LunaAudio& audio) {
+  void updateAndDrawAdventure(GFXcanvas16& display, LunaAudio& audio) {
     extern String robotVariant;
     uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
     uint16_t themeBg     = TFT_WHITE;
     uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xCE79;
 
-    if (!gameOver1) {
-      if (digitalRead(BTN_EXPR_PIN) == LOW) {
-        playerX -= 6;
-        if (playerX < G_X) playerX = G_X;
-      }
-      if (digitalRead(BTN_SETTINGS_PIN) == LOW) {
-        playerX += 6;
-        if (playerX > G_R - playerWidth) playerX = G_R - playerWidth;
-      }
-      coinY += (int)coinSpeed;
-      if (coinY + 5 >= playerY && coinY - 5 <= playerY + playerHeight &&
-          coinX + 5 >= playerX && coinX - 5 <= playerX + playerWidth) {
-        audio.playSound(SOUND_COIN);
-        score1++;
-        coinSpeed += 0.25f;
-        if (coinSpeed > 7.0f) coinSpeed = 7.0f;
-        coinY = G_Y + 8;
-        coinX = random(G_X + 6, G_R - 6);
-      } else if (coinY > G_B) {
-        audio.playSound(SOUND_POWERDOWN);
-        if (--lives1 <= 0) { gameOver1 = true; audio.playSound(SOUND_GAMEOVER); }
-        else { coinY = G_Y + 8; coinX = random(G_X + 6, G_R - 6); }
-      }
-    } else {
-      bool b = (digitalRead(BTN_EXPR_PIN) == LOW);
-      if (b && !lastBtn1State) resetCoinCatcher();
-      lastBtn1State = b;
-    }
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+    int pHeight = advPowerState > 0 ? 14 : 10;
 
-    // Clean & Borderless frame
-    display.fillRect(0, 22, 128, 138, themeBg);
-    display.drawRect(G_X - 1, G_Y - 1, G_W + 2, G_H + 2, themeBorder);
+    // Dynamic background color
+    uint16_t skyColor = 0x7E5F; // Sky blue for Forest
+    if (advCurrentLevel == 2) skyColor = 0x000F; // Dark blue/violet for Sky
+    else if (advCurrentLevel == 3) skyColor = 0x1800; // Dark castle grey
 
-    // Score bar (y=31..54)
-    display.setTextSize(1);
-    display.setTextColor(themeText);
-    display.setCursor(8, 36);
-    display.printf("SCORE:%03d", score1);
-    // Lives (hearts) right side
-    for (int i = 0; i < 3; i++) {
-      int hx = 84 + i * 13;
-      if (i < lives1) {
-        display.fillCircle(hx-2, 36, 2, TFT_RED);
-        display.fillCircle(hx+2, 36, 2, TFT_RED);
-        display.fillTriangle(hx-4, 37, hx+4, 37, hx, 42, TFT_RED);
-      } else {
-        display.fillCircle(hx, 38, 3, themeBorder);
-      }
-    }
-    display.drawFastHLine(4, 54, 120, themeBorder);
-
-    if (!gameOver1) {
-      // Coin: radius 5
-      display.fillCircle(coinX, coinY, 5, 0xFDA0);
-      display.drawCircle(coinX, coinY, 5, themeText);
-      display.fillCircle(coinX, coinY, 2, TFT_YELLOW);
-      // Paddle
-      display.fillRoundRect(playerX, playerY, playerWidth, playerHeight, 3, themeAccent);
-      display.fillRoundRect(playerX+3, playerY+3, playerWidth-6, playerHeight-6, 2, themeBg);
-    } else {
-      drawGameOverScreen(display, score1);
-    }
-  }
-
-  void updateAndDrawFlappyMochy(GFXcanvas16& display, LunaAudio& audio) {
-    extern String robotVariant;
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104;
-    uint16_t themeBorder = 0xCE79;
-
-    // birdX is const=60; gap half = 22 px; pipe width=16
-    const int PW = 16;
-    const int GH = 44;  // gap half
-
-    bool currentBtn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    if (!gameOver2) {
-      if (currentBtn1 && !lastBtn1State) {
-        if (!gameStarted2) gameStarted2 = true;
-        birdVelocity = jumpStrength;
-        audio.playSound(SOUND_JUMP);
-      }
-      if (gameStarted2) {
-        birdVelocity += gravity;
-        birdY += birdVelocity;
-        if (birdY + 5 >= G_B)  { birdY = G_B - 5; gameOver2 = true; audio.playSound(SOUND_GAMEOVER); }
-        if (birdY - 5 <= G_Y)  { birdY = G_Y + 5; birdVelocity = 0; }
-        pipeX -= (int)pipeSpeed;
-        if (pipeX + PW < G_X) {
-          pipeX = G_R + 4;
-          gapY  = G_Y + GH + random(0, G_H - GH*2);
-          score2++;
-          audio.playSound(SOUND_COIN);
-          pipeSpeed += 0.15f;
-          if (pipeSpeed > 5.0f) pipeSpeed = 5.0f;
+    if (!advGameOver) {
+      if (advLevelState == 0) { // Playing mode
+        // Jump action (Button B / Btn 2 / BTN_SETTINGS_PIN)
+        if (btn2 && !advIsJumping) {
+          advPlayerVY = -6.2f;
+          advIsJumping = true;
+          audio.playSound(SOUND_JUMP);
         }
-        if (birdX + 5 >= pipeX && birdX - 5 <= pipeX + PW) {
-          if ((int)birdY - 5 <= gapY - GH || (int)birdY + 5 >= gapY + GH) {
-            gameOver2 = true; audio.playSound(SOUND_GAMEOVER);
+
+        // Input Handling for Button 1 (A / BTN_EXPR_PIN): Tap to Stop/Forward, Long Press to Move Left
+        if (btn1) {
+          if (!advLastBtn1) { // Just pressed
+            advBtn1PressTime = millis();
+            advBtn1Active = true;
+          } else if (advBtn1Active && (millis() - advBtn1PressTime > 400)) { // Long Press threshold met (400ms)
+            advMoveState = -1; // Move backward (left)
+            advBtn1Active = false; // Consume long press event
+          }
+        } else { // Released
+          if (advLastBtn1) { // Just released
+            if (advBtn1Active) { // Released before 400ms threshold -> Tap event
+              if (advMoveState != 0) {
+                advMoveState = 0; // Stop
+              } else {
+                advMoveState = 1; // Move forward (right)
+              }
+            }
+            advBtn1Active = false;
           }
         }
-      }
-    } else {
-      if (currentBtn1 && !lastBtn1State) resetFlappyMochy();
-    }
-    lastBtn1State = currentBtn1;
+        advLastBtn1 = btn1;
 
-    // Clean & Borderless frame
-    display.fillRect(0, 22, 128, 138, themeBg);
-    display.drawRect(G_X - 1, G_Y - 1, G_W + 2, G_H + 2, themeBorder);
-    // Score bar
-    display.setTextSize(1);
-    display.setTextColor(themeText);
-    display.setCursor(8, 36);
-    display.printf("SCORE:%03d", score2);
-    display.drawFastHLine(4, 54, 120, themeBorder);
-
-    if (gameStarted2 && !gameOver2) {
-      // Top pipe
-      display.fillRect(pipeX, G_Y, PW, gapY - GH - G_Y, TFT_GREEN);
-      display.drawRect(pipeX, G_Y, PW, gapY - GH - G_Y, 0x03E0);
-      // Bottom pipe
-      display.fillRect(pipeX, gapY + GH, PW, G_B - (gapY + GH), TFT_GREEN);
-      display.drawRect(pipeX, gapY + GH, PW, G_B - (gapY + GH), 0x03E0);
-    }
-    // Bird
-    display.fillCircle(birdX, (int)birdY, 5, TFT_YELLOW);
-    display.drawCircle(birdX, (int)birdY, 5, 0x7E00);
-    display.fillCircle(birdX+2, (int)birdY-2, 1, themeText);
-    display.fillTriangle(birdX+5, (int)birdY-1, birdX+9, (int)birdY, birdX+5, (int)birdY+1, 0xFD20);
-
-    if (!gameStarted2 && !gameOver2) {
-      display.setTextSize(1);
-      display.setTextColor(themeText);
-      display.setCursor((128-12*6)/2, 90);
-      display.print("FLAPPY MOCHY");
-      display.setTextColor(themeAccent);
-      display.setCursor((128-9*6)/2, 108);
-      display.print("B1: Flap!");
-      display.setCursor(20, 135);
-      display.print("B2: Exit");
-    }
-
-    if (gameOver2) {
-      drawGameOverScreen(display, score2);
-    }
-  }
-
-  void updateAndDrawSnake(GFXcanvas16& display, LunaAudio& audio) {
-    extern String robotVariant;
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg = TFT_WHITE;
-    uint16_t themeText = 0x2104;
-    uint16_t themeBorder = 0xCE79;
-
-    bool currentBtn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool currentBtn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
-
-    if (!gameOver3) {
-      if (currentBtn1 && !lastBtn1State) {
-        snakeDir = (snakeDir + 3) % 4;
-        audio.playSound(SOUND_CHIRP);
-      }
-      if (currentBtn2 && !lastBtn2State) {
-        snakeDir = (snakeDir + 1) % 4;
-        audio.playSound(SOUND_CHIRP);
-      }
-
-      if (millis() - lastSnakeUpdate > 250) {
-        lastSnakeUpdate = millis();
-
-        int nextX = snakeX[0];
-        int nextY = snakeY[0];
-        if (snakeDir == 0) nextY--;
-        else if (snakeDir == 1) nextX++;
-        else if (snakeDir == 2) nextY++;
-        else if (snakeDir == 3) nextX--;
-
-        if (nextX < 0 || nextX >= 18 || nextY < 0 || nextY >= 15) {
-          gameOver3 = true;
-          audio.playSound(SOUND_GAMEOVER);
+        // Apply movement velocity based on move state
+        if (advMoveState == 1) {
+          advPlayerVX = 1.1f; // Moderate speed
+          advWalkFrame = (millis() / 150) % 2;
+        } else if (advMoveState == -1) {
+          advPlayerVX = -1.1f; // Move backward
+          advWalkFrame = (millis() / 150) % 2;
+        } else {
+          advPlayerVX = 0.0f; // Stopped
+          advWalkFrame = 0;
         }
-        for (int i = 0; i < snakeLength; i++) {
-          if (snakeX[i] == nextX && snakeY[i] == nextY) {
-            gameOver3 = true;
+
+        // Auto fire fireballs if player is in Fire state and moving
+        if (advPowerState == 2 && advMoveState != 0 && (millis() - advLastFireTime > 500)) {
+          advLastFireTime = millis();
+          for (int i = 0; i < 3; i++) {
+            if (!advFireballActive[i]) {
+              advFireballActive[i] = true;
+              advFireballX[i] = advCameraX + advPlayerX + 6;
+              advFireballY[i] = advPlayerY - (advPowerState > 0 ? 10 : 6);
+              advFireballVX[i] = (advMoveState < 0) ? -4.0f : 4.0f;
+              advFireballVY[i] = 1.0f;
+              audio.playSound(SOUND_CHIRP);
+              break;
+            }
+          }
+        }
+
+        // Apply player gravity
+        advPlayerVY += 0.4f;
+        advPlayerY += advPlayerVY;
+
+        // Platform collisions
+        float absPlayerX = advCameraX + advPlayerX;
+        bool landed = false;
+        
+        for (int i = 0; i < advNumPlats; i++) {
+          // If bridge is collapsed, skip bridge platform (index 2 in Level 3)
+          if (advCurrentLevel == 3 && i == 2 && advBridgeCollapsed) continue;
+
+          float py = advPlatY[i];
+          float px1 = advPlatX[i];
+          float px2 = advPlatX[i] + advPlatW[i];
+
+          // Check if falling onto the top of platform
+          if (absPlayerX + 4 >= px1 && absPlayerX - 4 <= px2) {
+            if (advPlayerVY >= 0 && advPlayerY >= py && advPlayerY - advPlayerVY <= py + 4) {
+              advPlayerY = py;
+              advPlayerVY = 0;
+              advIsJumping = false;
+              landed = true;
+            }
+          }
+        }
+
+        // Fall in pit / lava (deadly bounds)
+        if (advPlayerY > G_B + 10) {
+          audio.playSound(SOUND_POWERDOWN);
+          advLives--;
+          if (advLives <= 0) {
+            advGameOver = true;
             audio.playSound(SOUND_GAMEOVER);
-          }
-        }
-
-        if (!gameOver3) {
-          if (nextX == foodX && nextY == foodY) {
-            audio.playSound(SOUND_COIN);
-            score3++;
-            if (snakeLength < 30) {
-              snakeLength++;
-            }
-            for (int i = snakeLength - 1; i > 0; i--) {
-              snakeX[i] = snakeX[i-1];
-              snakeY[i] = snakeY[i-1];
-            }
-            snakeX[0] = nextX;
-            snakeY[0] = nextY;
-            foodX = random(0, 18);
-            foodY = random(0, 15);
+            saveHighScore("adv", advHighScore, advScore);
           } else {
-            for (int i = snakeLength - 1; i > 0; i--) {
-              snakeX[i] = snakeX[i-1];
-              snakeY[i] = snakeY[i-1];
-            }
-            snakeX[0] = nextX;
-            snakeY[0] = nextY;
+            resetAdventureForLevel();
           }
         }
-      }
-    } else {
-      if (currentBtn1 && !lastBtn1State) {
-        resetSnake();
-      }
-    }
-    lastBtn1State = currentBtn1;
-    lastBtn2State = currentBtn2;
 
-    // Clean & Borderless frame
-    display.fillRect(0, 22, 128, 138, themeBg);
-    display.drawRect(G_X - 1, G_Y - 1, G_W + 2, G_H + 2, themeBorder);
-    // Score bar
-    display.setTextSize(1); display.setTextColor(themeText);
-    display.setCursor(8, 36);
-    display.printf("SNAKE:%03d", score3);
-    display.drawFastHLine(4, 54, 120, themeBorder);
+        // Hit blocks from underneath
+        if (advPlayerVY < 0) {
+          for (int i = 0; i < 6; i++) {
+            if (advBlockActive[i]) {
+              float bx1 = advBlockX[i];
+              float bx2 = advBlockX[i] + 12;
+              float by = advBlockY[i];
+              
+              if (absPlayerX + 3 >= bx1 && absPlayerX - 3 <= bx2) {
+                if (advPlayerY - pHeight <= by + 12 && advPlayerY - pHeight - advPlayerVY >= by + 6) {
+                  advPlayerVY = 0.5f; // Bounce back down
+                  audio.playSound(SOUND_CHIRP);
 
-    if (!gameOver3) {
-      // Grid: 19 cols Ã— 14 rows Ã— 6 px cells, origin G_X+1, G_Y+1
-      display.drawRect(G_X, G_Y, G_W, G_H, themeBorder);
-      // Food
-      display.fillCircle(G_X + 1 + foodX*6 + 3, G_Y + 1 + foodY*6 + 3, 2, TFT_RED);
-      // Snake segments
-      for (int i = 0; i < snakeLength; i++) {
-        display.fillRoundRect(G_X + 1 + snakeX[i]*6, G_Y + 1 + snakeY[i]*6, 5, 5, 1,
-                              (i==0) ? themeAccent : 0x03E0);
-      }
-    } else {
-      drawGameOverScreen(display, score3);
-    }
-  }
-
-  void updateAndDrawSpaceInvaders(GFXcanvas16& display, LunaAudio& audio) {
-    extern String robotVariant;
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg = TFT_WHITE;
-    uint16_t themeText = 0x2104;
-    uint16_t themeBorder = 0xCE79;
-
-    bool currentBtn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-
-    if (!gameOver4) {
-      if (digitalRead(BTN_EXPR_PIN) == LOW) {
-        playerInvX -= 4;
-      if (playerInvX < G_X)         playerInvX = G_X;
-      if (playerInvX > G_R - 16)  playerInvX = G_R - 16;
-      }
-
-      if (millis() - lastInvaderUpdate > 400) {
-        lastInvaderUpdate = millis();
-        bool hitWall = false;
-        for (int i = 0; i < 10; i++) {
-          if (invaderAlive[i]) {
-            invaderX[i] += invaderDir * 6;
-            if (invaderX[i] < 12 || invaderX[i] > SCREEN_WIDTH - 28) {
-              hitWall = true;
-            }
-          }
-        }
-        if (hitWall) {
-          invaderDir = -invaderDir;
-          for (int i = 0; i < 10; i++) {
-            if (invaderAlive[i]) {
-              invaderY[i] += 6;
-              if (invaderY[i] >= SCREEN_HEIGHT - 32) {
-                gameOver4 = true;
-                audio.playSound(SOUND_GAMEOVER);
+                  if (advBlockType[i] == 0) { // Brick block
+                    if (advPowerState > 0) { // Super/Fire breaks it
+                      advBlockActive[i] = false;
+                      advScore += 50;
+                    }
+                  } 
+                  else if (advBlockType[i] == 1 && !advBlockHit[i]) { // ? block
+                    advBlockHit[i] = true;
+                    if (advBlockItem[i] == 0) { // Coin
+                      advScore += 10;
+                      audio.playSound(SOUND_COIN);
+                    } else { // Mushroom or Fire Flower
+                      advMushActive = true;
+                      advMushX = advBlockX[i];
+                      advMushY = advBlockY[i] - 12;
+                      advMushVX = 1.0f;
+                      advMushType = advBlockItem[i];
+                    }
+                  }
+                }
               }
             }
           }
         }
-      }
 
-      if (!laserActive) {
-        laserX = playerInvX + 10;
-        laserY = SCREEN_HEIGHT - 22;
-        laserActive = true;
-        audio.playSound(SOUND_CHIRP);
-      } else {
-        if (millis() - lastLaserUpdate > 30) {
-          lastLaserUpdate = millis();
-          laserY -= 6;
-          for (int i = 0; i < 10; i++) {
-            if (invaderAlive[i]) {
-              if (laserX >= invaderX[i] && laserX <= invaderX[i] + 16 &&
-                  laserY >= invaderY[i] && laserY <= invaderY[i] + 10) {
-                invaderAlive[i] = false;
-                laserActive = false;
-                score4 += 10;
-                invaderCount--;
-                audio.playSound(SOUND_COIN);
-                if (invaderCount == 0) {
-                  gameWon4 = true;
-                  gameOver4 = true;
-                  audio.playSound(SOUND_POWERUP);
+        // Camera follow (scrolls in both directions)
+        advCameraX += advPlayerVX;
+        if (advCameraX < 0) {
+          advCameraX = 0;
+        }
+        if (advCameraX >= 400.0f) {
+          advCameraX = 400.0f;
+        }
+
+        // Flagpole intersection (Level Win triggers at X = 370)
+        if (absPlayerX >= 370.0f) {
+          advLevelState = 1;
+          advPlayerVX = 0;
+          audio.playSound(SOUND_POWERUP);
+        }
+
+        // Update Mushroom/Power-up physics
+        if (advMushActive) {
+          if (advMushType == 1) { // Mushroom moves
+            advMushX += advMushVX;
+            // Check platform floor for Mushroom
+            bool mushOnGround = false;
+            for (int i = 0; i < advNumPlats; i++) {
+              if (advMushX >= advPlatX[i] && advMushX <= advPlatX[i] + advPlatW[i]) {
+                if (advMushY >= advPlatY[i] - 12 && advMushY <= advPlatY[i]) {
+                  advMushY = advPlatY[i] - 12;
+                  mushOnGround = true;
                 }
+              }
+            }
+            if (!mushOnGround) advMushY += 1.5f;
+
+            // Reverse direction on block obstacle
+            for (int i = 0; i < 6; i++) {
+              if (advBlockActive[i] && abs(advMushX - advBlockX[i]) < 12 && abs(advMushY - advBlockY[i]) < 8) {
+                advMushVX = -advMushVX;
+              }
+            }
+          }
+
+          // Player eats power-up item
+          if (abs(absPlayerX - (advMushX + 6)) < 12 && abs(advPlayerY - (advMushY + 6)) < 14) {
+            advMushActive = false;
+            audio.playSound(SOUND_POWERUP);
+            if (advMushType == 1) { // Mushroom
+              if (advPowerState == 0) advPowerState = 1;
+              advScore += 100;
+            } else { // Fire Flower
+              advPowerState = 2;
+              advScore += 200;
+            }
+          }
+
+          if (advMushX - advCameraX < G_X - 10 || advMushX - advCameraX > G_R + 10) {
+            advMushActive = false;
+          }
+        }
+
+        // Update Player Fireballs
+        for (int i = 0; i < 3; i++) {
+          if (advFireballActive[i]) {
+            advFireballX[i] += advFireballVX[i];
+            advFireballVY[i] += 0.3f;
+            advFireballY[i] += advFireballVY[i];
+
+            // Platform collision for fireballs
+            for (int p = 0; p < advNumPlats; p++) {
+              if (advFireballX[i] >= advPlatX[p] && advFireballX[i] <= advPlatX[p] + advPlatW[p]) {
+                if (advFireballVY[i] >= 0 && advFireballY[i] >= advPlatY[p] - 4 && advFireballY[i] <= advPlatY[p] + 4) {
+                  advFireballY[i] = advPlatY[p] - 4;
+                  advFireballVY[i] = -2.5f; // bounce
+                }
+              }
+            }
+
+            // Fireball hits Enemy
+            for (int e = 0; e < 4; e++) {
+              if (advEnemyActive[e]) {
+                if (abs(advFireballX[i] - advEnemyX[e]) < 12 && abs(advFireballY[i] - (advEnemyY[e] - 6)) < 10) {
+                  advFireballActive[i] = false;
+                  advEnemyActive[e] = false;
+                  advScore += 100;
+                  audio.playSound(SOUND_COIN);
+                }
+              }
+            }
+
+            // Fireball hits Bowser Boss
+            if (advBossActive && abs(advFireballX[i] - advBossX) < 16 && abs(advFireballY[i] - advBossY) < 16) {
+              advFireballActive[i] = false;
+              advBossHP--;
+              audio.playSound(SOUND_JUMP);
+              if (advBossHP <= 0) {
+                advBossActive = false;
+                advScore += 500;
+                advLevelState = 1; // trigger win flagpole style transition
+                audio.playSound(SOUND_POWERUP);
+              }
+            }
+
+            if (advFireballX[i] - advCameraX > G_R || advFireballY[i] > G_B) {
+              advFireballActive[i] = false;
+            }
+          }
+        }
+
+        // Update Coins
+        for (int i = 0; i < 6; i++) {
+          if (advCoinActive[i]) {
+            if (abs(absPlayerX - advCoinX[i]) < 12 && abs(advPlayerY - advCoinY[i]) < 12) {
+              advCoinActive[i] = false;
+              advScore += 10;
+              audio.playSound(SOUND_COIN);
+            }
+          }
+        }
+
+        // Update Enemies
+        for (int i = 0; i < 4; i++) {
+          if (advEnemyActive[i]) {
+            advEnemyX[i] += advEnemyDir[i] * 0.7f;
+            
+            // Goomba & Koopa movement boundaries
+            float spawnRange = 35.0f;
+            float spawnX = 140 + i * 80;
+            if (advCurrentLevel == 2) spawnX = 110 + i * 80;
+            else if (advCurrentLevel == 3) spawnX = 80 + i * 60;
+            
+            if (advEnemyX[i] < spawnX - spawnRange) advEnemyDir[i] = 1;
+            if (advEnemyX[i] > spawnX + spawnRange) advEnemyDir[i] = -1;
+
+            // Winged Koopa hopping mechanics
+            if (advEnemyType[i] == 2) {
+              advEnemyVY[i] += 0.2f;
+              advEnemyY[i] += advEnemyVY[i];
+              bool enemyOnPlat = false;
+              for (int p = 0; p < advNumPlats; p++) {
+                if (advEnemyX[i] >= advPlatX[p] && advEnemyX[i] <= advPlatX[p] + advPlatW[p]) {
+                  if (advEnemyY[i] >= advPlatY[p]) {
+                    advEnemyY[i] = advPlatY[p];
+                    enemyOnPlat = true;
+                  }
+                }
+              }
+              if (enemyOnPlat) advEnemyVY[i] = -3.0f; // Hop again
+            }
+
+            // Overlap check with player
+            float screenEnemyX = advEnemyX[i] - advCameraX;
+            if (screenEnemyX > G_X - 10 && screenEnemyX < G_R + 10) {
+              if (abs(advPlayerX - screenEnemyX) < 10 && abs(advPlayerY - advEnemyY[i]) < 10) {
+                // If landing on top of the enemy
+                if (advPlayerVY > 0 && advPlayerY < advEnemyY[i] - 2) {
+                  advEnemyActive[i] = false;
+                  advPlayerVY = -3.5f;
+                  advScore += 100;
+                  audio.playSound(SOUND_COIN);
+                } 
+                // Getting hit by enemy
+                else if (millis() > advInvincibleTime) {
+                  if (advPowerState > 0) {
+                    advPowerState--;
+                    advInvincibleTime = millis() + 1500;
+                    audio.playSound(SOUND_POWERDOWN);
+                  } else {
+                    audio.playSound(SOUND_POWERDOWN);
+                    advLives--;
+                    if (advLives <= 0) {
+                      advGameOver = true;
+                      audio.playSound(SOUND_GAMEOVER);
+                      saveHighScore("adv", advHighScore, advScore);
+                    } else {
+                      resetAdventureForLevel();
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Update Boss Bowser in Level 3
+        if (advBossActive && advCurrentLevel == 3) {
+          // Move left/right on bridge
+          advBossX += advBossDir * 0.7f;
+          if (advBossX < 250) advBossDir = 1;
+          if (advBossX > 320) advBossDir = -1;
+
+          // Bridge axe collapse
+          if (absPlayerX >= 350.0f && !advBridgeCollapsed) {
+            advBridgeCollapsed = true;
+            advBossActive = false;
+            advLevelState = 1; // triggers flag slide/level clear transition
+            audio.playSound(SOUND_GAMEOVER);
+          }
+
+          // Bowser jumps
+          if (millis() - advBossLastJump > 2200) {
+            advBossLastJump = millis();
+            advBossY = G_B - 45;
+          }
+          if (advBossY < G_B - 24) {
+            advBossY += 0.8f;
+          } else {
+            advBossY = G_B - 24;
+          }
+
+          // Bowser fire breathing
+          if (millis() - advBossLastFire > 2000) {
+            advBossLastFire = millis();
+            for (int f = 0; f < 3; f++) {
+              if (!advBossFireActive[f]) {
+                advBossFireActive[f] = true;
+                advBossFireX[f] = advBossX - 10;
+                advBossFireY[f] = advBossY + random(-4, 5);
+                advBossFireVX[f] = -2.2f;
                 break;
               }
             }
           }
-          if (laserY < 58) {
-            laserActive = false;
+
+          // Update Bowser Fireballs
+          for (int f = 0; f < 3; f++) {
+            if (advBossFireActive[f]) {
+              advBossFireX[f] += advBossFireVX[f];
+              if (advBossFireX[f] < advCameraX) {
+                advBossFireActive[f] = false;
+              }
+              // Hit player check
+              float screenFireX = advBossFireX[f] - advCameraX;
+              if (abs(advPlayerX - screenFireX) < 10 && abs(advPlayerY - advBossFireY[f]) < 10) {
+                advBossFireActive[f] = false;
+                if (millis() > advInvincibleTime) {
+                  if (advPowerState > 0) {
+                    advPowerState--;
+                    advInvincibleTime = millis() + 1500;
+                    audio.playSound(SOUND_POWERDOWN);
+                  } else {
+                    audio.playSound(SOUND_POWERDOWN);
+                    advLives--;
+                    if (advLives <= 0) {
+                      advGameOver = true;
+                      audio.playSound(SOUND_GAMEOVER);
+                      saveHighScore("adv", advHighScore, advScore);
+                    } else {
+                      resetAdventureForLevel();
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // Bowser physical touch player
+          float screenBossX = advBossX - advCameraX;
+          if (abs(advPlayerX - screenBossX) < 14 && abs(advPlayerY - advBossY) < 16) {
+            if (advPlayerVY > 0 && advPlayerY < advBossY - 4) {
+              advBossHP--;
+              advPlayerVY = -4.0f;
+              audio.playSound(SOUND_JUMP);
+              if (advBossHP <= 0) {
+                advBossActive = false;
+                advScore += 500;
+                advLevelState = 1;
+                audio.playSound(SOUND_POWERUP);
+              }
+            } else if (millis() > advInvincibleTime) {
+              if (advPowerState > 0) {
+                advPowerState--;
+                advInvincibleTime = millis() + 1500;
+                audio.playSound(SOUND_POWERDOWN);
+              } else {
+                audio.playSound(SOUND_POWERDOWN);
+                advLives--;
+                if (advLives <= 0) {
+                  advGameOver = true;
+                  audio.playSound(SOUND_GAMEOVER);
+                  saveHighScore("adv", advHighScore, advScore);
+                } else {
+                  resetAdventureForLevel();
+                }
+              }
+            }
+          }
+        }
+      } 
+      else if (advLevelState == 1) { // Flagpole slide animation
+        advPlayerY += 1.2f;
+        if (advPlayerY >= G_B - 14) {
+          advPlayerY = G_B - 14;
+          advLevelState = 2; // Start walking to castle door
+        }
+      } 
+      else if (advLevelState == 2) { // Walking to Castle Door
+        advPlayerX += 1.0f;
+        advWalkFrame = (millis() / 120) % 2;
+        if (advPlayerX >= 110) { // reaches castle entrance screen right
+          advLevelState = 3;
+          advLevelTransitionTimer = millis();
+        }
+      } 
+      else if (advLevelState == 3) { // Delay before Stage transition
+        if (millis() - advLevelTransitionTimer > 2000) {
+          if (advCurrentLevel < 3) {
+            advCurrentLevel++;
+            resetAdventureForLevel();
+          } else {
+            // Defeated Level 3: Victory!
+            advLives = 99;
+            advGameOver = true;
+            saveHighScore("adv", advHighScore, advScore);
           }
         }
       }
     } else {
-      if (currentBtn1 && !lastBtn1State) {
-        resetSpaceInvaders();
+      if (btn1 && !lastBtn1) {
+        resetAdventure();
       }
     }
-    lastBtn1State = currentBtn1;
+    lastBtn1 = btn1;
+    lastBtn2 = btn2;
 
-    // Clean & Borderless frame
-    display.fillRect(0, 22, 128, 138, themeBg);
-    display.drawRect(G_X - 1, G_Y - 1, G_W + 2, G_H + 2, themeBorder);
-    display.setTextSize(1); display.setTextColor(themeText);
-    display.setCursor(8, 36); display.printf("SPACE:%03d", score4);
-    display.drawFastHLine(4, 54, 120, themeBorder);
-
-    if (!gameOver4) {
-      // Player ship at bottom
-      display.fillTriangle(playerInvX+6, G_B-2, playerInvX, G_B+6, playerInvX+12, G_B+6, TFT_GREEN);
-      if (laserActive) display.drawFastVLine(laserX, laserY, 5, 0xFDA0);
-      for (int i = 0; i < 10; i++) {
-        if (invaderAlive[i]) {
-          display.fillRect(invaderX[i], invaderY[i], 12, 8, TFT_RED);
-          display.fillRect(invaderX[i]+3, invaderY[i]+2, 2, 2, themeBg);
-          display.fillRect(invaderX[i]+7, invaderY[i]+2, 2, 2, themeBg);
-        }
-      }
-    } else {
-      if (gameWon4) {
-        display.setTextSize(2); display.setTextColor(TFT_GREEN, themeBg);
-        display.setCursor((128-8*12)/2, 70); display.print("VICTORY!");
-        display.setTextSize(1); display.setTextColor(themeText, themeBg);
-        display.setCursor((128-10*6)/2, 100); display.printf("SCORE:%d", score4);
-        display.setTextColor(themeAccent, themeBg);
-        display.setCursor((128-11*6)/2, 118); display.print("B1:Re-Play");
-        display.setCursor((128-7*6)/2, 134);  display.print("B2:Exit");
-      } else { drawGameOverScreen(display, score4); }
+    // RENDER GAMEPLAY
+    display.fillScreen(skyColor);
+    
+    // UI Header
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeText);
+    display.setCursor(6, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("WORLD 1-%d", advCurrentLevel);
+    display.setCursor(SCREEN_WIDTH/2 - 25, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("PTS:%04d", advScore);
+    
+    int lifeX = SCREEN_WIDTH - (SCREEN_WIDTH == 240 ? 54 : 32);
+    for (int i = 0; i < 3; i++) {
+      int hx = lifeX + i * (SCREEN_WIDTH == 240 ? 14 : 7);
+      int hy = SCREEN_WIDTH == 240 ? 42 : 10;
+      display.fillCircle(hx, hy, SCREEN_WIDTH == 240 ? 3 : 2, i < advLives ? TFT_RED : themeBorder);
     }
-  }
+    display.drawFastHLine(0, G_Y - 1, SCREEN_WIDTH, themeBorder);
 
-  void updateAndDrawPong(GFXcanvas16& display, LunaAudio& audio) {
-    extern String robotVariant;
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg = TFT_WHITE;
-    uint16_t themeText = 0x2104;
-    uint16_t themeBorder = 0xCE79;
-
-    bool currentBtn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-
-    if (!gameOver5) {
-      if (digitalRead(BTN_EXPR_PIN) == LOW) {
-        paddlePlayerY -= 4;
-        if (paddlePlayerY < 58) paddlePlayerY = 58;
-      }
-      if (digitalRead(BTN_SETTINGS_PIN) == LOW) {
-        paddlePlayerY += 4;
-        if (paddlePlayerY > SCREEN_HEIGHT - 42) paddlePlayerY = SCREEN_HEIGHT - 42;
-      }
-
-      ballX += ballVX;
-      ballY += ballVY;
-
-      if (ballY <= 58) {
-        ballY = 58;
-        ballVY = -ballVY;
-        audio.playSound(SOUND_CHIRP);
-      } else if (ballY >= SCREEN_HEIGHT - 12) {
-        ballY = SCREEN_HEIGHT - 12;
-        ballVY = -ballVY;
-        audio.playSound(SOUND_CHIRP);
-      }
-
-      if (ballVX < 0 && ballX <= 24 && ballX >= 18 && ballY >= paddlePlayerY && ballY <= paddlePlayerY + 20) {
-        ballVX = -ballVX * 1.05f;
-        ballVY += ((ballY - (paddlePlayerY + 10)) / 10.0f) * 2.0f;
-        ballX = 25;
-        audio.playSound(SOUND_JUMP);
-      }
-
-      if (ballVX > 0 && ballX >= SCREEN_WIDTH - 28 && ballX <= SCREEN_WIDTH - 22 && ballY >= paddleCpuY && ballY <= paddleCpuY + 20) {
-        ballVX = -ballVX * 1.05f;
-        ballVY += ((ballY - (paddleCpuY + 10)) / 10.0f) * 2.0f;
-        ballX = SCREEN_WIDTH - 29;
-        audio.playSound(SOUND_JUMP);
-      }
-
-      if (ballY > paddleCpuY + 10) {
-        paddleCpuY += 2;
-      } else if (ballY < paddleCpuY + 10) {
-        paddleCpuY -= 2;
-      }
-      paddleCpuY = constrain(paddleCpuY, 58, SCREEN_HEIGHT - 42);
-
-      if (ballX < 12) {
-        scoreCpu++;
-        audio.playSound(SOUND_POWERDOWN);
-        if (scoreCpu >= 5) {
-          gameOver5 = true;
-          gameWon5 = false;
-          audio.playSound(SOUND_GAMEOVER);
-        } else {
-          ballX = SCREEN_WIDTH / 2;
-          ballY = (SCREEN_HEIGHT - 36) / 2 + 30;
-          ballVX = 3.0f;
-          ballVY = random(-15, 16) / 10.0f;
+    if (!advGameOver && advLevelState < 3) {
+      // 1. Drawing parallax clouds/hills (Forest/Sky only)
+      if (advCurrentLevel < 3) {
+        for (int i = 0; i < 3; i++) {
+          // Clouds
+          float cx = (i * 120) - ((int)(advCameraX * 0.3f) % 120);
+          display.fillRoundRect(cx, G_Y + 10 + i * 8, 25, 8, 3, TFT_WHITE);
+          
+          // Hills (only in Level 1)
+          if (advCurrentLevel == 1) {
+            float hx = (i * 160) - ((int)(advCameraX * 0.6f) % 160);
+            display.fillTriangle(hx, G_B - 14, hx + 30, G_B - 50, hx + 60, G_B - 14, 0x96E9); // green-blue hill
+          }
         }
-      } else if (ballX > SCREEN_WIDTH - 12) {
-        scorePlayer++;
-        audio.playSound(SOUND_COIN);
-        if (scorePlayer >= 5) {
-          gameOver5 = true;
-          gameWon5 = true;
+      } else { // Castle decorations
+        display.fillRect(0, G_Y, SCREEN_WIDTH, G_H, 0x1800); // darker background
+        // draw lava glow details
+        for (int x = 0; x < SCREEN_WIDTH; x += 30) {
+          display.fillTriangle(x, G_B - 10, x + 15, G_B - 25, x + 30, G_B - 10, TFT_ORANGE);
+        }
+      }
+
+      // 2. Draw platforms
+      for (int i = 0; i < advNumPlats; i++) {
+        if (advCurrentLevel == 3 && i == 2 && advBridgeCollapsed) continue; // collapsed bridge disappears
+
+        float sx = advPlatX[i] - advCameraX;
+        if (sx + advPlatW[i] >= 0 && sx <= G_R) {
+          uint16_t platCol = (advCurrentLevel == 3) ? 0x50C6 : (advCurrentLevel == 2 ? TFT_WHITE : 0x7240); // dark grey/cloud/dirt
+          display.fillRect(sx, advPlatY[i], advPlatW[i], advPlatH[i], platCol);
+          display.drawRect(sx, advPlatY[i], advPlatW[i], advPlatH[i], themeText);
+        }
+      }
+
+      // 3. Draw blocks
+      for (int i = 0; i < 6; i++) {
+        if (advBlockActive[i]) {
+          float sx = advBlockX[i] - advCameraX;
+          if (sx + 12 >= 0 && sx <= G_R) {
+            if (advBlockType[i] == 0) { // Brick block
+              display.fillRect(sx, advBlockY[i], 12, 12, 0xB269); // brown-red brick color
+              display.drawRect(sx, advBlockY[i], 12, 12, themeText);
+              display.drawFastHLine(sx, advBlockY[i]+4, 12, themeText);
+              display.drawFastHLine(sx, advBlockY[i]+8, 12, themeText);
+            } else { // Question mark block
+              display.fillRect(sx, advBlockY[i], 12, 12, advBlockHit[i] ? 0x7BEF : TFT_YELLOW);
+              display.drawRect(sx, advBlockY[i], 12, 12, themeText);
+              if (!advBlockHit[i]) {
+                display.setCursor(sx + 4, advBlockY[i] + 2);
+                display.setTextColor(themeText);
+                display.setTextSize(1);
+                display.print("?");
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Draw flagpole and castle (Level 1 and 2 end)
+      float sFlagX = 370 - advCameraX;
+      if (sFlagX >= -30 && sFlagX <= G_R) {
+        display.drawFastVLine(sFlagX, G_Y + 10, G_H - 24, themeText); // pole
+        display.fillCircle(sFlagX, G_Y + 10, 3, TFT_YELLOW); // golden ball top
+        
+        // sliding flag
+        float flagY = G_Y + 15;
+        if (advLevelState == 1) flagY = advPlayerY - pHeight;
+        display.fillTriangle(sFlagX - 10, flagY, sFlagX, flagY - 5, sFlagX, flagY + 5, TFT_RED);
+      }
+
+      // Draw castle at end
+      float sCastleX = 400 - advCameraX;
+      if (sCastleX >= -40 && sCastleX <= G_R) {
+        display.fillRect(sCastleX, G_B - 40, 40, 26, 0x50C6); // grey castle wall
+        display.fillRect(sCastleX + 14, G_B - 20, 12, 20, themeText); // black castle door entrance
+        display.drawRect(sCastleX, G_B - 40, 40, 26, themeText);
+      }
+
+      // 5. Draw Active Mushroom/Powerup
+      if (advMushActive) {
+        float smx = advMushX - advCameraX;
+        if (smx >= -12 && smx <= G_R) {
+          if (advMushType == 1) { // Mushroom
+            display.fillCircle(smx + 6, advMushY + 6, 5, TFT_RED);
+            display.fillRect(smx + 4, advMushY + 6, 4, 6, TFT_WHITE);
+          } else { // Fire Flower
+            uint16_t flColors[] = {TFT_RED, TFT_YELLOW, TFT_GREEN};
+            display.fillCircle(smx + 6, advMushY + 6, 5, flColors[(millis()/150)%3]);
+            display.drawFastVLine(smx + 6, advMushY + 9, 3, TFT_GREEN);
+          }
+        }
+      }
+
+      // 6. Draw Player Fireballs
+      for (int i = 0; i < 3; i++) {
+        if (advFireballActive[i]) {
+          float sfx = advFireballX[i] - advCameraX;
+          if (sfx >= -4 && sfx <= G_R) {
+            display.fillCircle(sfx, advFireballY[i], 3, TFT_ORANGE);
+            display.drawCircle(sfx, advFireballY[i], 3, TFT_RED);
+          }
+        }
+      }
+
+      // 7. Draw Coins
+      for (int i = 0; i < 6; i++) {
+        if (advCoinActive[i]) {
+          float scx = advCoinX[i] - advCameraX;
+          if (scx >= -10 && scx <= G_R) {
+            // Spinner animation
+            int coinFrame = (millis() / 150) % 4;
+            int cw = (coinFrame == 0 || coinFrame == 2) ? 6 : ((coinFrame == 1) ? 2 : 8);
+            display.fillEllipse(scx, advCoinY[i], cw/2, 4, TFT_YELLOW);
+            display.drawEllipse(scx, advCoinY[i], cw/2, 4, 0xFDA0);
+          }
+        }
+      }
+
+      // 8. Draw Enemies
+      for (int i = 0; i < 4; i++) {
+        if (advEnemyActive[i]) {
+          float sex = advEnemyX[i] - advCameraX;
+          if (sex >= -12 && sex <= G_R) {
+            if (advEnemyType[i] == 0) { // Goomba
+              display.fillCircle(sex, advEnemyY[i] - 5, 5, 0x9300); // brown cap
+              display.fillRect(sex - 3, advEnemyY[i] - 3, 6, 3, TFT_WHITE); // stem
+              display.fillRect(sex - 4, advEnemyY[i] - 1, 8, 2, TFT_BLACK); // feet
+            } 
+            else if (advEnemyType[i] == 1) { // Koopa
+              display.fillRect(sex - 4, advEnemyY[i] - 8, 8, 6, TFT_GREEN); // green shell
+              display.fillCircle(sex, advEnemyY[i] - 10, 3, TFT_YELLOW); // head
+              display.drawFastHLine(sex - 3, advEnemyY[i] - 2, 6, TFT_BLACK); // feet
+            }
+            else { // Winged Koopa
+              display.fillRect(sex - 4, advEnemyY[i] - 8, 8, 6, TFT_GREEN);
+              display.fillCircle(sex, advEnemyY[i] - 10, 3, TFT_YELLOW);
+              // wing drawing
+              display.fillTriangle(sex + 4, advEnemyY[i] - 12, sex + 8, advEnemyY[i] - 14, sex + 4, advEnemyY[i] - 8, TFT_WHITE);
+            }
+          }
+        }
+      }
+
+      // 9. Draw Bowser Boss & Boss Fireballs (Level 3)
+      if (advBossActive && advCurrentLevel == 3) {
+        float sbx = advBossX - advCameraX;
+        display.fillRect(sbx - 8, advBossY - 16, 16, 16, 0x93A0); // Bowser dark green shell
+        display.fillCircle(sbx, advBossY - 18, 6, TFT_YELLOW); // yellow head/mouth
+        display.fillRect(sbx - 12, advBossY - 6, 24, 6, 0x4B20); // feet/claws
+        
+        // draw boss red spikes
+        display.fillTriangle(sbx - 8, advBossY - 14, sbx - 12, advBossY - 18, sbx - 4, advBossY - 14, TFT_RED);
+        display.fillTriangle(sbx + 4, advBossY - 14, sbx, advBossY - 18, sbx + 8, advBossY - 14, TFT_RED);
+
+        // boss health bar
+        display.fillRect(sbx - 15, advBossY - 26, 30, 4, TFT_BLACK);
+        display.fillRect(sbx - 15, advBossY - 26, advBossHP * 30 / 5, 4, TFT_RED);
+
+        // draw Golden Axe victory trigger
+        float sAxeX = 350 - advCameraX;
+        if (sAxeX >= -10 && sAxeX <= G_R) {
+          display.fillRect(sAxeX - 2, G_B - 25, 4, 11, TFT_YELLOW);
+          display.fillCircle(sAxeX, G_B - 25, 4, TFT_RED);
+        }
+
+        // Bowser Fireballs
+        for (int f = 0; f < 3; f++) {
+          if (advBossFireActive[f]) {
+            float sbfx = advBossFireX[f] - advCameraX;
+            if (sbfx >= -6 && sbfx <= G_R) {
+              display.fillCircle(sbfx, advBossFireY[f], 4, TFT_ORANGE);
+              display.drawCircle(sbfx, advBossFireY[f], 4, TFT_RED);
+            }
+          }
+        }
+      }
+
+      // 10. Draw Player
+      bool isInvincibleFlashing = (millis() < advInvincibleTime) && ((millis() / 80) % 2 == 0);
+      if (!isInvincibleFlashing) {
+        // Draw body box
+        uint16_t pCol = themeAccent;
+        if (advPowerState == 1) pCol = 0xFDA0; // Super Orange
+        else if (advPowerState == 2) pCol = TFT_WHITE; // Fire White
+        
+        display.fillRect(advPlayerX - 4, advPlayerY - pHeight, 8, pHeight, pCol);
+        display.fillCircle(advPlayerX, advPlayerY - pHeight, 3, TFT_YELLOW); // head
+        
+        // draw tiny cap (red for mario style)
+        display.drawFastHLine(advPlayerX - 3, advPlayerY - pHeight - 4, 6, TFT_RED);
+        display.fillRect(advPlayerX - 1, advPlayerY - pHeight - 5, 3, 2, TFT_RED);
+
+        // walking legs animation
+        if (advPlayerVX > 0 && !advIsJumping) {
+          if (advWalkFrame == 0) {
+            display.drawFastHLine(advPlayerX - 4, advPlayerY - 1, 3, TFT_BLACK);
+          } else {
+            display.drawFastHLine(advPlayerX + 1, advPlayerY - 1, 3, TFT_BLACK);
+          }
+        }
+      }
+    } 
+    else if (advLevelState == 3) {
+      // "STAGE CLEAR" transition screen
+      display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, TFT_BLACK);
+      display.setTextSize(SCREEN_WIDTH == 240 ? 3 : 2);
+      display.setTextColor(TFT_GREEN);
+      display.setCursor((SCREEN_WIDTH - 11 * (SCREEN_WIDTH == 240 ? 18 : 12)) / 2, SCREEN_WIDTH == 240 ? 90 : 60);
+      display.print("STAGE CLEAR");
+      
+      display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor((SCREEN_WIDTH - 10 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 140 : 100);
+      display.printf("SCORE: %04d", advScore);
+    } 
+    else {
+      // Game Over / Victory Screen
+      if (advLives == 99) {
+        display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
+        display.setTextSize(SCREEN_WIDTH == 240 ? 3 : 2);
+        display.setTextColor(TFT_GREEN);
+        display.setCursor((SCREEN_WIDTH - 8 * (SCREEN_WIDTH == 240 ? 18 : 12)) / 2, G_Y + 20);
+        display.print("VICTORY!");
+        
+        display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+        display.setTextColor(themeText);
+        display.setCursor(20, G_Y + 60);
+        display.print("BOWSER DEFEATED!");
+        
+        display.setTextColor(themeAccent);
+        display.setCursor(20, G_Y + 90);
+        display.print("B1: PLAY AGAIN");
+
+        // B1 tap = Play Again from Victory
+        if (btn1 && !advLastBtn1) {
+          resetAdventure();
           audio.playSound(SOUND_POWERUP);
+        }
+      } else {
+        drawGameOverScreen(display, advScore, advHighScore);
+
+        // B1 tap = Play Again from Game Over
+        if (btn1 && !advLastBtn1) {
+          resetAdventure();
+          audio.playSound(SOUND_POWERUP);
+        }
+      }
+    }
+    // Always track button state so edge detection works across all game states
+    advLastBtn1 = btn1;
+  }
+
+  void updateAndDrawRacer(GFXcanvas16& display, LunaAudio& audio) {
+    extern String robotVariant;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104;
+    uint16_t themeBorder = 0xCE79;
+
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+
+    if (!racGameOver) {
+      if (btn1 && btn2) {
+        if (racNitroFuel > 0) {
+          racNitroActive = true;
+          racSpeed = 8.0f;
+          racNitroFuel -= 0.5f;
+          if (millis() % 200 < 100) {
+            audio.playSound(SOUND_JUMP);
+          }
         } else {
-          ballX = SCREEN_WIDTH / 2;
-          ballY = (SCREEN_HEIGHT - 36) / 2 + 30;
-          ballVX = -3.0f;
-          ballVY = random(-15, 16) / 10.0f;
+          racNitroActive = false;
+          racSpeed = 4.0f;
+        }
+      } else {
+        racNitroActive = false;
+        racSpeed = 4.0f;
+      }
+
+      if (btn1 && !btn2) {
+        racPlayerX -= 3;
+        if (racPlayerX < G_X + 16) racPlayerX = G_X + 16;
+      } else if (btn2 && !btn1) {
+        racPlayerX += 3;
+        if (racPlayerX > G_R - 16 - 8) racPlayerX = G_R - 16 - 8;
+      }
+
+      racRoadScroll += racSpeed;
+      if (racRoadScroll >= 40) racRoadScroll = 0;
+      racScore += racSpeed / 5;
+
+      for (int i = 0; i < 4; i++) {
+        if (racCarActive[i]) {
+          racCarY[i] += (racSpeed - racCarSpeed[i]);
+          
+          if (racCarY[i] > G_B + 10) {
+            racCarY[i] = G_Y - 30;
+            racCarX[i] = G_X + 20 + random(0, 3) * (G_W - 48)/3;
+            racCarSpeed[i] = 1.0f + random(0, 20) / 10.0f;
+            racCarActive[i] = true;
+          }
+
+          if (abs(racPlayerX - (racCarX[i] + 4)) < 8 && abs(racPlayerY - (racCarY[i] + 7)) < 14) {
+            racGameOver = true;
+            audio.playSound(SOUND_GAMEOVER);
+            saveHighScore("rac", racHighScore, racScore);
+          }
         }
       }
     } else {
-      if (currentBtn1 && !lastBtn1State) {
-        resetPong();
+      if (btn1 && !lastBtn1) {
+        resetRacer();
       }
     }
-    lastBtn1State = currentBtn1;
+    lastBtn1 = btn1;
+    lastBtn2 = btn2;
 
-    // Pong: horizontal play (ball bounces top/bottom, paddles on left/right)
-    display.fillRect(0, 22, 128, 138, themeBg);
-    display.drawRect(G_X - 1, G_Y - 1, G_W + 2, G_H + 2, themeBorder);
-    display.setTextSize(1); display.setTextColor(themeText);
-    display.setCursor(8, 36); display.printf("Y:%d CPU:%d", scorePlayer, scoreCpu);
-    display.drawFastHLine(4, 54, 120, themeBorder);
+    display.fillScreen(0x39E7);
 
-    if (!gameOver5) {
-      // Centre dashed line
-      for (int y = G_Y; y < G_B; y += 8)
-        display.drawFastVLine(64, y, 4, themeBorder);
-      // Paddles
-      display.fillRect(G_X,    paddlePlayerY, 4, 24, themeAccent);
-      display.fillRect(G_R-4,  paddleCpuY,    4, 24, TFT_RED);
-      // Ball
-      display.fillCircle((int)ballX, (int)ballY, 3, 0xFDA0);
-    } else {
-      if (gameWon5) {
-        display.setTextSize(2); display.setTextColor(TFT_GREEN, themeBg);
-        display.setCursor((128-8*12)/2, 70); display.print("VICTORY!");
-        display.setTextSize(1); display.setTextColor(themeText, themeBg);
-        display.setCursor((128-10*6)/2, 100); display.printf("YOU: %d", scorePlayer);
-        display.setTextColor(themeAccent, themeBg);
-        display.setCursor((128-11*6)/2, 118); display.print("B1:Re-Play");
-        display.setCursor((128-7*6)/2, 134);  display.print("B2:Exit");
-      } else { drawGameOverScreen(display, scorePlayer); }
+    display.fillRect(G_X + 16, G_Y, G_W - 32, G_H, 0x4208);
+    display.drawFastVLine(G_X + 16, G_Y, G_H, TFT_WHITE);
+    display.drawFastVLine(G_R - 16, G_Y, G_H, TFT_WHITE);
+
+    for (int y = G_Y - 20; y < G_B; y += 40) {
+      float scrollY = y + (int)racRoadScroll;
+      if (scrollY >= G_Y && scrollY < G_B - 20) {
+        display.fillRect(G_X + G_W / 2 - 1, scrollY, 2, 20, TFT_YELLOW);
+      }
+    }
+
+    uint16_t carColors[] = {TFT_RED, TFT_BLUE, TFT_GREEN};
+    for (int i = 0; i < 4; i++) {
+      if (racCarActive[i] && racCarY[i] >= G_Y && racCarY[i] < G_B) {
+        display.fillRect(racCarX[i], racCarY[i], 8, 14, carColors[racCarColor[i]]);
+        display.fillRect(racCarX[i] + 2, racCarY[i] + 3, 4, 3, TFT_CYAN);
+        display.fillRect(racCarX[i] + 1, racCarY[i] + 11, 2, 2, TFT_RED);
+        display.fillRect(racCarX[i] + 5, racCarY[i] + 11, 2, 2, TFT_RED);
+      }
+    }
+
+    display.fillRect(racPlayerX, racPlayerY, 8, 14, 0xFDA0);
+    display.fillRect(racPlayerX + 2, racPlayerY + 3, 4, 3, TFT_WHITE);
+    display.fillRect(racPlayerX + 1, racPlayerY + 11, 2, 2, TFT_RED);
+    display.fillRect(racPlayerX + 5, racPlayerY + 11, 2, 2, TFT_RED);
+
+    if (racNitroActive && (millis() % 100 < 50)) {
+      display.fillTriangle(racPlayerX + 2, racPlayerY + 14, racPlayerX + 4, racPlayerY + 20, racPlayerX + 6, racPlayerY + 14, TFT_ORANGE);
+    }
+
+    display.fillRect(0, 0, SCREEN_WIDTH, G_Y, themeBg);
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeText);
+    display.setCursor(6, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("DIST:%04d", racScore);
+
+    display.setCursor(SCREEN_WIDTH / 2 + 10, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.print("NTR:");
+    display.drawRect(SCREEN_WIDTH - 36, SCREEN_WIDTH == 240 ? 39 : 9, 30, SCREEN_WIDTH == 240 ? 10 : 5, themeBorder);
+    display.fillRect(SCREEN_WIDTH - 35, SCREEN_WIDTH == 240 ? 40 : 10, (int)(racNitroFuel * 28.0f / 100.0f), SCREEN_WIDTH == 240 ? 8 : 3, TFT_RED);
+    display.drawFastHLine(0, G_Y - 1, SCREEN_WIDTH, themeBorder);
+
+    if (racGameOver) {
+      drawGameOverScreen(display, racScore, racHighScore);
     }
   }
 
-  void updateAndDrawBreakout(GFXcanvas16& display, LunaAudio& audio) {
+  void updateAndDrawSpace(GFXcanvas16& display, LunaAudio& audio) {
     extern String robotVariant;
     uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg = TFT_WHITE;
-    uint16_t themeText = 0x2104;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xCE79;
 
-    bool currentBtn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
 
-    if (!gameOver6) {
-      if (digitalRead(BTN_EXPR_PIN) == LOW) {
-        breakPaddleX -= 5;
-        if (breakPaddleX < 12) breakPaddleX = 12;
-      }
-      if (digitalRead(BTN_SETTINGS_PIN) == LOW) {
-        breakPaddleX += 5;
-        if (breakPaddleX > SCREEN_WIDTH - 12 - 28) breakPaddleX = SCREEN_WIDTH - 12 - 28;
-      }
-
-      breakBallX += breakBallVX;
-      breakBallY += breakBallVY;
-
-      if (breakBallX <= 14) {
-        breakBallX = 14;
-        breakBallVX = -breakBallVX;
-        audio.playSound(SOUND_CHIRP);
-      } else if (breakBallX >= SCREEN_WIDTH - 14) {
-        breakBallX = SCREEN_WIDTH - 14;
-        breakBallVX = -breakBallVX;
-        audio.playSound(SOUND_CHIRP);
-      }
-
-      if (breakBallY <= 58) {
-        breakBallY = 58;
-        breakBallVY = -breakBallVY;
-        audio.playSound(SOUND_CHIRP);
-      }
-
-      if (breakBallVY > 0 && breakBallY >= SCREEN_HEIGHT - 20 && breakBallY <= SCREEN_HEIGHT - 14 &&
-          breakBallX >= breakPaddleX && breakBallX <= breakPaddleX + 28) {
-        breakBallVY = -breakBallVY;
-        breakBallVX = ((breakBallX - (breakPaddleX + 14)) / 14.0f) * 3.5f;
-        audio.playSound(SOUND_JUMP);
-      }
-
-      if (breakBallY > SCREEN_HEIGHT - 12) {
-        lives6--;
-        audio.playSound(SOUND_POWERDOWN);
-        if (lives6 <= 0) {
-          gameOver6 = true;
-          gameWon6 = false;
-          audio.playSound(SOUND_GAMEOVER);
-        } else {
-          breakBallX = breakPaddleX + 14;
-          breakBallY = SCREEN_HEIGHT - 36;
-          breakBallVX = 2.5f;
-          breakBallVY = -3.0f;
+    if (!spcGameOver) {
+      if (btn1 && btn2 && (millis() - spcSmartBombCooldown > 8000)) {
+        spcSmartBombCooldown = millis();
+        audio.playSound(SOUND_GAMEOVER);
+        for (int i = 0; i < 4; i++) spcEnemyLaserActive[i] = false;
+        for (int i = 0; i < 8; i++) {
+          if (spcEnemyActive[i]) {
+            spcEnemyHP[i]--;
+            if (spcEnemyHP[i] <= 0) {
+              spcEnemyActive[i] = false;
+              spcScore += 20;
+            }
+          }
+        }
+        if (spcBossActive) spcBossHP -= 3;
+        for (int p = 0; p < 15; p++) {
+          spcPartActive[p] = true;
+          spcPartX[p] = G_X + G_W/2;
+          spcPartY[p] = G_Y + G_H/2;
+          spcPartVX[p] = random(-40, 41) / 10.0f;
+          spcPartVY[p] = random(-40, 41) / 10.0f;
+          spcPartLife[p] = 12;
         }
       }
+      else if (btn1 && !btn2) {
+        spcPlayerX -= 3;
+        if (spcPlayerX < G_X + 8) spcPlayerX = G_X + 8;
+      }
+      else if (btn2 && !btn1) {
+        spcPlayerX += 3;
+        if (spcPlayerX > G_R - 8) spcPlayerX = G_R - 8;
+      }
 
-      bool anyBrickRemaining = false;
-      for (int r = 0; r < 3; r++) {
-        for (int c = 0; c < 5; c++) {
-          int idx = c + r * 5;
-          if (brickActive[idx]) {
-            anyBrickRemaining = true;
-            int bx = 16 + c * 20;
-            int by = 70 + r * 12;
-            if (breakBallX + 3 >= bx && breakBallX - 3 <= bx + 18 &&
-                breakBallY + 3 >= by && breakBallY - 3 <= by + 8) {
-              brickActive[idx] = false;
-              breakBallVY = -breakBallVY;
-              score6 += 10;
-              audio.playSound(SOUND_COIN);
+      if (millis() - spcLastShoot > 350) {
+        spcLastShoot = millis();
+        audio.playSound(SOUND_CHIRP);
+        if (spcSpreadActive) {
+          float angles[] = {-1.0f, 0.0f, 1.0f};
+          for (int a = 0; a < 3; a++) {
+            for (int i = 0; i < 6; i++) {
+              if (!spcLaserActive[i]) {
+                spcLaserActive[i] = true;
+                spcLaserX[i] = spcPlayerX + angles[a] * 4.0f;
+                spcLaserY[i] = spcPlayerY - 8;
+                break;
+              }
+            }
+          }
+        } else {
+          for (int i = 0; i < 6; i++) {
+            if (!spcLaserActive[i]) {
+              spcLaserActive[i] = true;
+              spcLaserX[i] = spcPlayerX;
+              spcLaserY[i] = spcPlayerY - 8;
               break;
             }
           }
         }
       }
 
-      if (!anyBrickRemaining) {
-        gameWon6 = true;
-        gameOver6 = true;
-        audio.playSound(SOUND_POWERUP);
-      }
-    } else {
-      if (currentBtn1 && !lastBtn1State) {
-        resetBreakout();
-      }
-    }
-    lastBtn1State = currentBtn1;
-
-    // Breakout draw
-    display.fillRect(0, 22, 128, 138, themeBg);
-    display.drawRect(G_X - 1, G_Y - 1, G_W + 2, G_H + 2, themeBorder);
-    display.setTextSize(1); display.setTextColor(themeText);
-    display.setCursor(8, 36); display.printf("BRK:%03d", score6);
-    // Lives dots
-    for (int i = 0; i < 3; i++)
-      display.fillCircle(88 + i*12, 38, 3, i < lives6 ? TFT_RED : themeBorder);
-    display.drawFastHLine(4, 54, 120, themeBorder);
-
-    if (!gameOver6) {
-      // Paddle
-      display.fillRoundRect(breakPaddleX, G_B - 6, 28, 5, 2, themeAccent);
-      // Ball
-      display.fillCircle((int)breakBallX, (int)breakBallY, 3, 0xFDA0);
-      // Bricks: 5c Ã— 3r, bx=G_X+2, w=20, gap=2â†’step22; by=G_Y+4, h=8, gap=2â†’step10
-      uint16_t rowColors[] = {TFT_RED, TFT_ORANGE, TFT_GREEN};
-      for (int r = 0; r < 3; r++) {
-        for (int c = 0; c < 5; c++) {
-          int idx = c + r*5;
-          if (brickActive[idx]) {
-            int bx = G_X + 2 + c*22;
-            int by = G_Y + 4 + r*10;
-            display.fillRect(bx, by, 20, 8, rowColors[r]);
-            display.drawRect(bx, by, 20, 8, themeBg);
-          }
-        }
-      }
-    } else {
-      if (gameWon6) {
-        display.setTextSize(2); display.setTextColor(TFT_GREEN, themeBg);
-        display.setCursor((128-8*12)/2, 70); display.print("VICTORY!");
-        display.setTextSize(1); display.setTextColor(themeText, themeBg);
-        display.setCursor((128-10*6)/2, 100); display.printf("SCORE:%d", score6);
-        display.setTextColor(themeAccent, themeBg);
-        display.setCursor((128-11*6)/2, 118); display.print("B1:Re-Play");
-        display.setCursor((128-7*6)/2, 134);  display.print("B2:Exit");
-      } else { drawGameOverScreen(display, score6); }
-    }
-  }
-
-  void updateAndDrawMemoryMatch(GFXcanvas16& display, LunaAudio& audio) {
-    extern String robotVariant;
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg = TFT_WHITE;
-    uint16_t themeText = 0x2104;
-    uint16_t themeBorder = 0xCE79;
-
-    bool currentBtn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool currentBtn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
-
-    if (!gameOver7) {
-      if (currentBtn1 && !lastBtn1StateMM) {
-        if (!matchingInProgress) {
-          cursorIndex = (cursorIndex + 1) % 8;
-          audio.playSound(SOUND_CHIRP);
-        }
-      }
-
-      if (currentBtn2 && !lastBtn2StateMM) {
-        if (!matchingInProgress && cardState[cursorIndex] == 0) {
-          cardState[cursorIndex] = 1;
-          audio.playSound(SOUND_JUMP);
-          if (firstSelected == -1) {
-            firstSelected = cursorIndex;
-          } else {
-            matchingInProgress = true;
-            matchTimer = millis();
+      for (int i = 0; i < 6; i++) {
+        if (spcLaserActive[i]) {
+          spcLaserY[i] -= 4.0f;
+          if (spcLaserY[i] < G_Y) {
+            spcLaserActive[i] = false;
           }
         }
       }
 
-      if (matchingInProgress && millis() - matchTimer > 1000) {
-        matchingInProgress = false;
-        int secondSelected = -1;
-        for (int i = 0; i < 8; i++) {
-          if (cardState[i] == 1 && i != firstSelected) {
-            secondSelected = i;
-            break;
+      for (int i = 0; i < 4; i++) {
+        if (spcEnemyLaserActive[i]) {
+          spcEnemyLaserY[i] += 2.5f;
+          if (spcEnemyLaserY[i] > G_B) {
+            spcEnemyLaserActive[i] = false;
           }
-        }
-        if (secondSelected != -1) {
-          score7++;
-          if (cards[firstSelected] == cards[secondSelected]) {
-            cardState[firstSelected] = 2;
-            cardState[secondSelected] = 2;
-            audio.playSound(SOUND_COIN);
-            bool allSolved = true;
-            for (int i = 0; i < 8; i++) {
-              if (cardState[i] != 2) allSolved = false;
+
+          if (abs(spcEnemyLaserX[i] - spcPlayerX) < 10 && spcEnemyLaserY[i] >= spcPlayerY - 6 && spcEnemyLaserY[i] <= spcPlayerY + 4) {
+            spcEnemyLaserActive[i] = false;
+            if (millis() > spcShieldTime) {
+              audio.playSound(SOUND_POWERDOWN);
+              spcHealth--;
+              if (spcHealth <= 0) {
+                spcGameOver = true;
+                audio.playSound(SOUND_GAMEOVER);
+                saveHighScore("spc", spcHighScore, spcScore);
+              }
+            } else {
+              audio.playSound(SOUND_COIN);
             }
-            if (allSolved) {
-              gameOver7 = true;
-              audio.playSound(SOUND_POWERUP);
-            }
-          } else {
-            cardState[firstSelected] = 0;
-            cardState[secondSelected] = 0;
-            audio.playSound(SOUND_POWERDOWN);
           }
         }
-        firstSelected = -1;
       }
-    } else {
-      if (currentBtn1 && !lastBtn1StateMM) {
-        resetMemoryMatch();
-      }
-    }
-    lastBtn1StateMM = currentBtn1;
-    lastBtn2StateMM = currentBtn2;
 
-    // Memory Match draw
-    display.fillRect(0, 22, 128, 138, themeBg);
-    display.drawRect(G_X - 1, G_Y - 1, G_W + 2, G_H + 2, themeBorder);
-    display.setTextSize(1); display.setTextColor(themeText);
-    display.setCursor(8, 36); display.printf("TRIES:%03d", score7);
-    display.drawFastHLine(4, 54, 120, themeBorder);
-
-    if (!gameOver7) {
-      // 4 cols Ã— 2 rows. Cell 26Ã—34 px. Grid starts at x=6, y=58. Gap=2
+      bool anyEnemyOnScreen = false;
       for (int i = 0; i < 8; i++) {
-        int col = i % 4, row = i / 4;
-        int cx = 6  + col * 30;
-        int cy = 58 + row * 38;
-        int cw = 26, ch = 34;
-        if (cardState[i] == 0) {
-          display.fillRoundRect(cx, cy, cw, ch, 3, 0xF7BE);
-          display.drawRoundRect(cx, cy, cw, ch, 3, themeText);
-          display.drawCircle(cx+cw/2, cy+ch/2, 4, themeAccent);
-        } else {
-          display.fillRoundRect(cx, cy, cw, ch, 3, themeBg);
-          display.drawRoundRect(cx, cy, cw, ch, 3, cardState[i]==2 ? TFT_GREEN : themeAccent);
-          int sx = cx+cw/2, sy = cy+ch/2, v = cards[i];
-          if      (v==0) { display.fillCircle(sx-3,sy-3,3,TFT_RED); display.fillCircle(sx+3,sy-3,3,TFT_RED); display.fillTriangle(sx-5,sy,sx+5,sy,sx,sy+6,TFT_RED); }
-          else if (v==1) { display.fillTriangle(sx,sy-5,sx-4,sy+3,sx+4,sy+3,TFT_YELLOW); display.fillTriangle(sx,sy+5,sx-4,sy-3,sx+4,sy-3,TFT_YELLOW); }
-          else if (v==2) { display.fillTriangle(sx,sy-5,sx-4,sy,sx+4,sy,TFT_CYAN);   display.fillTriangle(sx,sy+5,sx-4,sy,sx+4,sy,TFT_CYAN); }
-          else            { display.fillRect(sx-4,sy-4,8,8,TFT_ORANGE); }
+        if (spcEnemyActive[i]) {
+          anyEnemyOnScreen = true;
+          spcEnemyY[i] += 0.5f;
+          spcEnemyX[i] += sin(millis() / 200.0f + i) * 0.8f;
+          
+          if (spcEnemyY[i] > G_B + 10) {
+            spcEnemyActive[i] = false;
+            spcHealth--;
+            if (spcHealth <= 0) {
+              spcGameOver = true;
+              audio.playSound(SOUND_GAMEOVER);
+              saveHighScore("spc", spcHighScore, spcScore);
+            }
+          }
+
+          if (millis() - spcEnemyLastShoot[i] > 3000) {
+            spcEnemyLastShoot[i] = millis();
+            for (int el = 0; el < 4; el++) {
+              if (!spcEnemyLaserActive[el]) {
+                spcEnemyLaserActive[el] = true;
+                spcEnemyLaserX[el] = spcEnemyX[i];
+                spcEnemyLaserY[el] = spcEnemyY[i] + 4;
+                break;
+              }
+            }
+          }
+
+          for (int l = 0; l < 6; l++) {
+            if (spcLaserActive[l]) {
+              if (abs(spcLaserX[l] - spcEnemyX[i]) < 10 && abs(spcLaserY[l] - spcEnemyY[i]) < 8) {
+                spcLaserActive[l] = false;
+                spcEnemyHP[i]--;
+                audio.playSound(SOUND_JUMP);
+                if (spcEnemyHP[i] <= 0) {
+                  spcEnemyActive[i] = false;
+                  spcScore += 20;
+                  if (random(0, 10) < 3 && !spcPowerActive) {
+                    spcPowerActive = true;
+                    spcPowerX = spcEnemyX[i];
+                    spcPowerY = spcEnemyY[i];
+                    spcPowerType = random(0, 2);
+                  }
+                  for (int p = 0; p < 3; p++) {
+                    int pIdx = random(0, 15);
+                    spcPartActive[pIdx] = true;
+                    spcPartX[pIdx] = spcEnemyX[i];
+                    spcPartY[pIdx] = spcEnemyY[i];
+                    spcPartVX[pIdx] = random(-20, 21) / 10.0f;
+                    spcPartVY[pIdx] = random(-20, 21) / 10.0f;
+                    spcPartLife[pIdx] = 6;
+                  }
+                }
+              }
+            }
+          }
         }
-        if (i == cursorIndex && !matchingInProgress)
-          display.drawRoundRect(cx-2, cy-2, cw+4, ch+4, 5, 0xFDA0);
+      }
+
+      if (!anyEnemyOnScreen && !spcBossActive) {
+        if (spcScore >= 180) {
+          spcBossActive = true;
+          spcBossHP = 20;
+        } else {
+          for (int i = 0; i < 4; i++) {
+            spcEnemyActive[i] = true;
+            spcEnemyX[i] = G_X + 20 + i * (G_W - 40)/4;
+            spcEnemyY[i] = G_Y - 20;
+            spcEnemyHP[i] = 1;
+            spcEnemyType[i] = i % 2;
+            spcEnemyLastShoot[i] = millis();
+          }
+        }
+      }
+
+      if (spcPowerActive) {
+        spcPowerY += 1.2f;
+        if (spcPowerY > G_B) spcPowerActive = false;
+        
+        if (abs(spcPowerX - spcPlayerX) < 12 && abs(spcPowerY - spcPlayerY) < 12) {
+          spcPowerActive = false;
+          audio.playSound(SOUND_POWERUP);
+          if (spcPowerType == 0) spcSpreadActive = true;
+          else spcShieldTime = millis() + 5000;
+        }
+      }
+
+      for (int i = 0; i < 15; i++) {
+        if (spcPartActive[i]) {
+          spcPartX[i] += spcPartVX[i];
+          spcPartY[i] += spcPartVY[i];
+          spcPartLife[i]--;
+          if (spcPartLife[i] <= 0) spcPartActive[i] = false;
+        }
+      }
+
+      if (spcBossActive) {
+        spcBossX += spcBossDir * 0.8f;
+        if (spcBossX < G_X + 20) spcBossDir = 1;
+        if (spcBossX > G_R - 20) spcBossDir = -1;
+
+        if (millis() - spcBossLastShoot > 1800) {
+          spcBossLastShoot = millis();
+          for (int l = 0; l < 2; l++) {
+            for (int el = 0; el < 4; el++) {
+              if (!spcEnemyLaserActive[el]) {
+                spcEnemyLaserActive[el] = true;
+                spcEnemyLaserX[el] = spcBossX + (l == 0 ? -10 : 10);
+                spcEnemyLaserY[el] = spcBossY + 6;
+                break;
+              }
+            }
+          }
+        }
+
+        for (int l = 0; l < 6; l++) {
+          if (spcLaserActive[l]) {
+            if (abs(spcLaserX[l] - spcBossX) < 18 && abs(spcLaserY[l] - spcBossY) < 12) {
+              spcLaserActive[l] = false;
+              spcBossHP--;
+              audio.playSound(SOUND_JUMP);
+              if (spcBossHP <= 0) {
+                spcBossActive = false;
+                spcScore += 200;
+                spcGameOver = true;
+                spcHealth = 99;
+                audio.playSound(SOUND_POWERUP);
+                saveHighScore("spc", spcHighScore, spcScore);
+              }
+            }
+          }
+        }
       }
     } else {
-      display.setTextSize(2); display.setTextColor(TFT_GREEN, themeBg);
-      display.setCursor((128-8*12)/2, 70); display.print("VICTORY!");
-      display.setTextSize(1); display.setTextColor(themeText, themeBg);
-      display.setCursor((128-10*6)/2, 100); display.printf("TRIES:%d", score7);
-      display.setTextColor(themeAccent, themeBg);
-      display.setCursor((128-11*6)/2, 118); display.print("B1:Re-Play");
-      display.setCursor((128-7*6)/2, 134);  display.print("B2:Exit");
+      if (btn1 && !lastBtn1) {
+        resetSpace();
+      }
+    }
+    lastBtn1 = btn1;
+    lastBtn2 = btn2;
+
+    display.fillScreen(0x0002);
+
+    for (int i = 0; i < 8; i++) {
+      int sx = (i * 27) % G_W;
+      int sy = (G_Y + (i * 35) + (millis() / 20)) % G_H + G_Y;
+      display.drawPixel(sx, sy, 0x7BEF);
+    }
+
+    for (int i = 0; i < 6; i++) {
+      if (spcLaserActive[i]) {
+        display.drawFastVLine(spcLaserX[i], spcLaserY[i], 6, TFT_CYAN);
+      }
+    }
+
+    for (int i = 0; i < 4; i++) {
+      if (spcEnemyLaserActive[i]) {
+        display.drawFastVLine(spcEnemyLaserX[i], spcEnemyLaserY[i], 5, TFT_RED);
+      }
+    }
+
+    for (int i = 0; i < 8; i++) {
+      if (spcEnemyActive[i]) {
+        display.fillTriangle(spcEnemyX[i], spcEnemyY[i]+6, spcEnemyX[i]-6, spcEnemyY[i]-4, spcEnemyX[i]+6, spcEnemyY[i]-4, TFT_MAGENTA);
+      }
+    }
+
+    if (spcPowerActive) {
+      display.fillRect(spcPowerX - 4, spcPowerY - 4, 8, 8, spcPowerType == 0 ? TFT_YELLOW : TFT_GREEN);
+      display.setTextColor(TFT_BLACK);
+      display.setTextSize(1);
+      display.setCursor(spcPowerX - 3, spcPowerY - 3);
+      display.print(spcPowerType == 0 ? "W" : "S");
+    }
+
+    for (int i = 0; i < 15; i++) {
+      if (spcPartActive[i]) {
+        display.drawPixel(spcPartX[i], spcPartY[i], TFT_YELLOW);
+      }
+    }
+
+    if (spcBossActive) {
+      display.fillRoundRect(spcBossX - 16, spcBossY - 8, 32, 16, 4, TFT_RED);
+      display.fillRect(spcBossX - 4, spcBossY + 8, 8, 4, TFT_YELLOW);
+      
+      display.drawFastHLine(spcBossX - 15, spcBossY - 14, 30, TFT_BLACK);
+      display.drawFastHLine(spcBossX - 15, spcBossY - 14, spcBossHP * 30 / 20, TFT_GREEN);
+    }
+
+    display.fillTriangle(spcPlayerX, spcPlayerY - 8, spcPlayerX - 6, spcPlayerY + 4, spcPlayerX + 6, spcPlayerY + 4, themeAccent);
+    
+    if (millis() < spcShieldTime) {
+      display.drawCircle(spcPlayerX, spcPlayerY - 2, 10, TFT_GREEN);
+    }
+
+    display.fillRect(0, 0, SCREEN_WIDTH, G_Y, themeBg);
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeText);
+    display.setCursor(6, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("SC:%03d", spcScore);
+
+    int lifeX = SCREEN_WIDTH - (SCREEN_WIDTH == 240 ? 54 : 32);
+    for (int i = 0; i < 3; i++) {
+      int hx = lifeX + i * (SCREEN_WIDTH == 240 ? 14 : 7);
+      int hy = SCREEN_WIDTH == 240 ? 42 : 10;
+      display.fillCircle(hx, hy, SCREEN_WIDTH == 240 ? 3 : 2, i < spcHealth ? TFT_RED : themeBorder);
+    }
+    display.drawFastHLine(0, G_Y - 1, SCREEN_WIDTH, themeBorder);
+
+    if (spcGameOver) {
+      if (spcHealth == 99) {
+        display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
+        display.setTextSize(SCREEN_WIDTH == 240 ? 3 : 2);
+        display.setTextColor(TFT_GREEN);
+        display.setCursor((SCREEN_WIDTH - 8 * (SCREEN_WIDTH == 240 ? 18 : 12)) / 2, G_Y + 20);
+        display.print("VICTORY!");
+        
+        display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+        display.setTextColor(themeText);
+        display.setCursor(20, G_Y + 60);
+        display.print("SPACE BOSS DESTROYED!");
+        
+        display.setTextColor(themeAccent);
+        display.setCursor(20, G_Y + 90);
+        display.print("B1: PLAY AGAIN");
+      } else {
+        drawGameOverScreen(display, spcScore, spcHighScore);
+      }
     }
   }
 };

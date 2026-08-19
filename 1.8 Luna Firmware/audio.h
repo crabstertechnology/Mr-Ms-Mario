@@ -50,6 +50,7 @@ public:
   volatile bool micStreaming;
   volatile bool prebuffering;
   volatile bool directLoopback;
+  volatile bool silentMode;
 
   LunaAudio() : buzzerPin(BUZZER_PIN) {
     queueHead = 0;
@@ -63,6 +64,7 @@ public:
     micStreaming = false;
     prebuffering = true;
     directLoopback = false;
+    silentMode = false;
   }
 
   void begin() {
@@ -85,6 +87,7 @@ public:
   }
 
   void playSound(SoundEffect effect, int speedPercent = 100) {
+    if (silentMode) return;
     clearQueue();
     
     interNoteGapDuration = (15 * 100) / speedPercent;

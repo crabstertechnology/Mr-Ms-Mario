@@ -68,7 +68,10 @@ enum SmartwatchScreen {
   SCREEN_GAMES,
   SCREEN_FACE,
   SCREEN_MAPS,
+  SCREEN_CARD,   // Digital Business Card / QR Code screen
+  SCREEN_SETTINGS,
   SCREEN_MAX
 };
+
 
 #endif // CONFIG_H

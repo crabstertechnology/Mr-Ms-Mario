@@ -11,7 +11,7 @@ import time
 import serial
 import serial.tools.list_ports
 
-HTTP_PORT = 8300
+HTTP_PORT = 8000
 WS_PORT = 8301
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
@@ -215,6 +215,7 @@ def run_compile_worker(sketch_path, fqbn):
             "status": "success" if success else "failed"
         })
         print(f"[Compiler] Finished with code {rc}")
+        return success
     except Exception as e:
         broadcast_message({
             "type": "compile_output",
@@ -224,6 +225,7 @@ def run_compile_worker(sketch_path, fqbn):
             "type": "compile_status",
             "status": "failed"
         })
+        return False
 
 def run_flash_worker(sketch_path, port, fqbn):
     print(f"[Flasher] Flashing {sketch_path} to {port} for {fqbn}")
@@ -257,6 +259,7 @@ def run_flash_worker(sketch_path, port, fqbn):
             "status": "success" if success else "failed"
         })
         print(f"[Flasher] Finished with code {rc}")
+        return success
     except Exception as e:
         broadcast_message({
             "type": "flash_output",
@@ -266,6 +269,7 @@ def run_flash_worker(sketch_path, port, fqbn):
             "type": "flash_status",
             "status": "failed"
         })
+        return False
 
 
 # ----------------- WEBSOCKET HANDLER -----------------
@@ -399,6 +403,13 @@ def start_ws_server():
 # ----------------- HTTP SERVER HANDLER -----------------
 
 class FlashDashboardServer(http.server.SimpleHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
     def do_GET(self):
         if self.path == '/' or self.path == '/index.html':
             self.send_response(200)
@@ -412,7 +423,108 @@ class FlashDashboardServer(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 self.wfile.write(f"Error loading dashboard: {e}".encode('utf-8'))
             return
+        elif self.path == '/api/robots':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            sketches = scan_workspace_sketches()
+            self.wfile.write(json.dumps(sketches).encode('utf-8'))
+            return
         return super().do_GET()
+
+    def do_POST(self):
+        if self.path == '/api/compile':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                # Compile default 1.8 sketch
+                target_dir = os.path.join(DIRECTORY, "1.8 Luna Firmware")
+                sketch_path = os.path.join(target_dir, "1.8 Luna Firmware.ino")
+                fqbn = "esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc"
+                
+                success = run_compile_worker(sketch_path, fqbn)
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": success}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
+            return
+
+        elif self.path == '/api/upload_wallpaper':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                variant = payload.get("variant", "1.8")
+                code = payload.get("code", "")
+                
+                # Determine paths
+                if variant == "2" or variant == "1.3":
+                    target_dir = os.path.join(DIRECTORY, "1.3 Luna Firmware")
+                    fqbn = "esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc"
+                else:
+                    target_dir = os.path.join(DIRECTORY, "1.8 Luna Firmware")
+                    fqbn = "esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc"
+                
+                # Save wallpaper_image.h
+                header_path = os.path.join(target_dir, "wallpaper_image.h")
+                with open(header_path, "w", encoding="utf-8") as f:
+                    f.write(code)
+                
+                print(f"[Server] Saved wallpaper to {header_path}")
+                
+                # Triggers auto-compile and flash
+                sketch_path = os.path.join(target_dir, os.path.basename(target_dir) + ".ino")
+                
+                # Detect port
+                port = None
+                ports = scan_serial_ports()
+                esp_ports = [p['port'] for p in ports if p['is_esp']]
+                if esp_ports:
+                    port = esp_ports[0]
+                elif ports:
+                    port = ports[0]['port']
+                
+                if not port:
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"success": False, "error": "No serial port detected"}).encode('utf-8'))
+                    return
+                
+                # Trigger compile and upload in background threads
+                def build_and_flash():
+                    # 1. Compile
+                    success = run_compile_worker(sketch_path, fqbn)
+                    if not success:
+                        return
+                    # 2. Flash
+                    run_flash_worker(sketch_path, port, fqbn)
+                
+                threading.Thread(target=build_and_flash, daemon=True).start()
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "port": port}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
+            return
 
 
 # ----------------- MAIN RUNNER -----------------

@@ -92,6 +92,7 @@ class BLEService with ChangeNotifier {
   bool isPrimaryCommEnabled = true;
   bool isCompanionCommEnabled = true;
   void Function(String eventType, int expr, int sound)? onPrimaryTouchTriggered;
+  void Function(int clockStyle, int brightness, bool negative, bool silent)? onSettingsSyncedFromWatch;
 
   // Console log entries
   final List<String> _consoleLogs = [];
@@ -641,6 +642,12 @@ class BLEService with ChangeNotifier {
           _parseStatusData(value);
         });
         addLog("Status notifications enabled.", "BLE");
+        try {
+          final initVal = await _statusChar!.read();
+          _parseStatusData(initVal);
+        } catch (e) {
+          addLog("Failed to read initial status: $e", "WARNING");
+        }
       }
 
       if (_audioStreamChar != null) {
@@ -669,27 +676,63 @@ class BLEService with ChangeNotifier {
               targetVariant = primary['variant'] as String;
             }
           }
-          final negEnabled = prefs.getBool('negativeEnabled') ?? (targetVariant == 'ms_luna');
+          final negEnabled = prefs.getBool('negativeEnabled') ?? false;
+          final silentModeVal = prefs.getBool('silentMode') ?? false;
 
-          addLog("Pushing app primary variant ($targetVariant) & negative display ($negEnabled) to hardware...", "BLE");
+          final speedMsVal = (prefs.getDouble('gifSpeed') ?? 169.0).toInt();
+          final introSpeedMsVal = (prefs.getDouble('gifIntroSpeed') ?? 169.0).toInt();
+          final introSoundSpeedVal = (prefs.getDouble('introSoundSpeed') ?? 169.0).toInt();
+          final oledBrightnessVal = (prefs.getDouble('oledBrightness') ?? 3.0).round();
+          final clockStyleVal = prefs.getInt('clockStyle') ?? 0;
+
+          final defaultGifStr = prefs.getString('defaultGif') ?? 'default';
+          final introGifStr = prefs.getString('introGif') ?? 'default';
+          final touchSingleStr = prefs.getString('touchSingle') ?? 'default';
+          final touchDoubleStr = prefs.getString('touchDouble') ?? 'default';
+          final touchLongStr = prefs.getString('touchLong') ?? 'default';
+
+          const animKeys = ['happy', 'angry', 'relaxed', 'sad', 'scared', 'surprised', 'neutral'];
+
+          int getExpressionValue(String val) {
+            if (val == 'cycle') return 99;
+            if (val == 'default') return 0;
+            final idx = animKeys.indexOf(val);
+            return idx != -1 ? 100 + idx : 0;
+          }
+
+          int getTouchActionValue(String val) {
+            if (val == 'default') return 0;
+            if (val == 'clock') return 1;
+            if (val == 'skip_anim') return 2;
+            if (val == 'bt_toggle') return 3;
+            final idx = animKeys.indexOf(val);
+            return idx != -1 ? 20 + idx : 0;
+          }
+
+          final notificationDurationSecVal = (prefs.getDouble('notificationDuration') ?? 5.0).round();
+          final reminderDurationSecVal = (prefs.getDouble('reminderDuration') ?? 10.0).round();
+          final birthdayDurationSecVal = (prefs.getDouble('birthdayDuration') ?? 15.0).round();
+
+          addLog("Pushing app primary variant ($targetVariant) & negative display ($negEnabled) & silentMode ($silentModeVal) to hardware...", "BLE");
           await transmitModelVariant(targetVariant);
           
           await transmitSaveSettings(
             bleEnabled: true,
-            speedMs: prefs.getInt('animation_speed') ?? 100,
-            defaultGif: prefs.getInt('default_gif') ?? 99,
-            introGif: prefs.getInt('intro_gif') ?? 0,
-            touchSingle: prefs.getInt('touch_single') ?? 2,
-            touchDouble: prefs.getInt('touch_double') ?? 0,
-            touchLong: prefs.getInt('touch_long') ?? 0,
+            speedMs: speedMsVal,
+            defaultGif: getExpressionValue(defaultGifStr),
+            introGif: getExpressionValue(introGifStr),
+            touchSingle: getTouchActionValue(touchSingleStr),
+            touchDouble: getTouchActionValue(touchDoubleStr),
+            touchLong: getTouchActionValue(touchLongStr),
             negativeEnabled: negEnabled,
-            introSpeedMs: prefs.getInt('intro_speed') ?? 100,
-            introSoundSpeed: prefs.getInt('intro_sound_speed') ?? 100,
-            notificationDurationSec: prefs.getInt('notif_duration') ?? 5,
-            reminderDurationSec: prefs.getInt('reminder_duration') ?? 10,
-            birthdayDurationSec: prefs.getInt('birthday_duration') ?? 15,
-            clockStyle: prefs.getInt('clock_style') ?? 0,
-            oledBrightness: prefs.getInt('oled_brightness') ?? 2,
+            introSpeedMs: introSpeedMsVal,
+            introSoundSpeed: introSoundSpeedVal,
+            notificationDurationSec: notificationDurationSecVal,
+            reminderDurationSec: reminderDurationSecVal,
+            birthdayDurationSec: birthdayDurationSecVal,
+            clockStyle: clockStyleVal,
+            oledBrightness: oledBrightnessVal,
+            silentMode: silentModeVal,
           );
         } catch (e) {
           addLog("Failed to sync app settings to hardware on connect: $e", "WARNING");
@@ -737,6 +780,18 @@ class BLEService with ChangeNotifier {
         } else if (logMsg.startsWith("TOUCH:")) {
           final event = logMsg.substring(6); // TAP, DOUBLE, TRIPLE, LONG
           _triggerRelationshipAction(fromPrimary: true, eventType: event);
+        } else if (logMsg.startsWith("SET_SYNC:")) {
+          final payload = logMsg.substring(9);
+          final parts = payload.split(',');
+          if (parts.length >= 4) {
+            final clockStyle = int.tryParse(parts[0]) ?? 0;
+            final oledBrightness = int.tryParse(parts[1]) ?? 3;
+            final negativeDisplay = (parts[2] == "1");
+            final silent = (parts[3] == "1");
+            if (onSettingsSyncedFromWatch != null) {
+              onSettingsSyncedFromWatch!(clockStyle, oledBrightness, negativeDisplay, silent);
+            }
+          }
         }
         
         _robotEventsController.add(logMsg);
@@ -911,10 +966,12 @@ class BLEService with ChangeNotifier {
     required int birthdayDurationSec,
     required int clockStyle,
     required int oledBrightness,
+    required bool silentMode,
   }) async {
     final bleVal = bleEnabled ? "1" : "0";
     final negVal = negativeEnabled ? "1" : "0";
-    final payloadStr = 'SET:$bleVal,$speedMs,$defaultGif,$introGif,$touchSingle,$touchDouble,$touchLong,$negVal,$introSpeedMs,$introSoundSpeed,$notificationDurationSec,$reminderDurationSec,$birthdayDurationSec,$clockStyle,$oledBrightness';
+    final silentVal = silentMode ? "1" : "0";
+    final payloadStr = 'SET:$bleVal,$speedMs,$defaultGif,$introGif,$touchSingle,$touchDouble,$touchLong,$negVal,$introSpeedMs,$introSoundSpeed,$notificationDurationSec,$reminderDurationSec,$birthdayDurationSec,$clockStyle,$oledBrightness,$silentVal';
     await _writeTextWithAck(payloadStr, "Settings Sync");
   }
 
@@ -997,6 +1054,174 @@ class BLEService with ChangeNotifier {
   Future<void> transmitBass(int level) async {
     final clamped = level.clamp(0, 10);
     await _writeTextWithAck('BASS:$clamped', "Bass $clamped");
+  }
+
+  /// Sends a business card URL to Luna and waits for a QR_SAVED:OK log confirmation.
+  Future<bool> transmitBusinessCardUrl(String url) async {
+    if (!_isConnected) {
+      addLog("Cannot sync business card: Device not connected", "ERROR");
+      return false;
+    }
+    
+    final completer = Completer<bool>();
+    StreamSubscription? sub;
+    Timer? timeoutTimer;
+    
+    sub = robotEvents.listen((event) {
+      if (event == "QR_SAVED:OK") {
+        if (!completer.isCompleted) {
+          timeoutTimer?.cancel();
+          sub?.cancel();
+          completer.complete(true);
+        }
+      } else if (event == "QR_SAVED:FAIL" || event == "QR_SAVED:INVALID") {
+        if (!completer.isCompleted) {
+          timeoutTimer?.cancel();
+          sub?.cancel();
+          completer.complete(false);
+        }
+      }
+    });
+    
+    timeoutTimer = Timer(const Duration(seconds: 5), () {
+      if (!completer.isCompleted) {
+        sub?.cancel();
+        completer.complete(false);
+      }
+    });
+    
+    try {
+      await _writeTextWithAck('QRCARD:$url', "Business Card URL");
+      return await completer.future;
+    } catch (e) {
+      timeoutTimer.cancel();
+      sub.cancel();
+      addLog("Failed to sync business card URL: $e", "ERROR");
+      return false;
+    }
+  }
+
+  /// Clears the stored business card URL on Luna.
+  Future<bool> transmitClearBusinessCard() async {
+    if (!_isConnected) return false;
+    
+    final completer = Completer<bool>();
+    StreamSubscription? sub;
+    Timer? timeoutTimer;
+    
+    sub = robotEvents.listen((event) {
+      if (event == "QR_CLEARED:OK") {
+        if (!completer.isCompleted) {
+          timeoutTimer?.cancel();
+          sub?.cancel();
+          completer.complete(true);
+        }
+      }
+    });
+    
+    timeoutTimer = Timer(const Duration(seconds: 5), () {
+      if (!completer.isCompleted) {
+        sub?.cancel();
+        completer.complete(false);
+      }
+    });
+    
+    try {
+      await _writeTextWithAck('QRCARD:CLEAR', "Clear Business Card");
+      return await completer.future;
+    } catch (e) {
+      timeoutTimer.cancel();
+      sub.cancel();
+      return false;
+    }
+  }
+
+  // ─── Direct BLE write helper (no ACK_ID prefix) ───────────────────────────
+  // Used for wallpaper transfers where the ACK_ID prefix would inflate the
+  // packet beyond the negotiated BLE MTU.
+  Future<bool> _writeRaw(String text) async {
+    if (!_isConnected || _textChar == null) return false;
+    try {
+      final payload = utf8.encode(text);
+      await _textChar!.write(payload, withoutResponse: false);
+      return true;
+    } catch (e) {
+      addLog("Raw write error: $e", "ERROR");
+      return false;
+    }
+  }
+
+  // ─── Wait for a specific log event on the robotEvents stream ────────────────
+  Future<bool> _waitForEvent(String expected, {int timeoutMs = 10000}) async {
+    final completer = Completer<bool>();
+    StreamSubscription? sub;
+    Timer? timer;
+
+    sub = robotEvents.listen((event) {
+      final e = event.trim();
+      if (e == expected) {
+        if (!completer.isCompleted) {
+          timer?.cancel();
+          sub?.cancel();
+          completer.complete(true);
+        }
+      } else if (e.endsWith(":FAIL") && expected.contains(e.split(":").first)) {
+        if (!completer.isCompleted) {
+          timer?.cancel();
+          sub?.cancel();
+          completer.complete(false);
+        }
+      }
+    });
+
+    timer = Timer(Duration(milliseconds: timeoutMs), () {
+      if (!completer.isCompleted) {
+        sub?.cancel();
+        completer.complete(false);
+      }
+    });
+
+    return completer.future;
+  }
+
+  /// Starts wallpaper transmission.
+  Future<bool> transmitWallpaperStart(int expectedSize) async {
+    if (!_isConnected || _textChar == null) return false;
+    final future = _waitForEvent('WP_START:OK', timeoutMs: 10000);
+    await Future.delayed(const Duration(milliseconds: 30)); // let listener attach
+    final ok = await _writeRaw('WP_START:$expectedSize');
+    if (!ok) return false;
+    return future;
+  }
+
+  /// Sends one chunk of wallpaper hex data. Keep hexData ≤ 60 chars.
+  Future<bool> transmitWallpaperChunk(String hexData) async {
+    if (!_isConnected || _textChar == null) return false;
+    final future = _waitForEvent('WP_CHUNK:OK', timeoutMs: 12000);
+    await Future.delayed(const Duration(milliseconds: 20));
+    final ok = await _writeRaw('WP_CHUNK:$hexData');
+    if (!ok) return false;
+    return future;
+  }
+
+  /// Concludes wallpaper transmission.
+  Future<bool> transmitWallpaperEnd() async {
+    if (!_isConnected || _textChar == null) return false;
+    final future = _waitForEvent('WP_END:OK', timeoutMs: 10000);
+    await Future.delayed(const Duration(milliseconds: 30));
+    final ok = await _writeRaw('WP_END');
+    if (!ok) return false;
+    return future;
+  }
+
+  /// Clears wallpaper on the smartwatch.
+  Future<bool> transmitWallpaperClear() async {
+    if (!_isConnected || _textChar == null) return false;
+    final future = _waitForEvent('WP_CLEAR:OK', timeoutMs: 8000);
+    await Future.delayed(const Duration(milliseconds: 30));
+    final ok = await _writeRaw('WP_CLEAR');
+    if (!ok) return false;
+    return future;
   }
 
   @override

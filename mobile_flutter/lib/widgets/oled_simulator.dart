@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +14,7 @@ class OLEDSimulator extends StatefulWidget {
   final String activeLabel;
   final String? marqueeText; // If set, displays scrolling marquee instead of GIF
   final bool? invertColor; // If set, overrides db.oledInvert
+  final Uint8List? wallpaperBytes; // Selected wallpaper preview bytes
 
   const OLEDSimulator({
     Key? key,
@@ -20,6 +22,7 @@ class OLEDSimulator extends StatefulWidget {
     required this.activeLabel,
     this.marqueeText,
     this.invertColor,
+    this.wallpaperBytes,
   }) : super(key: key);
 
   @override
@@ -137,8 +140,8 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
 
     final isMiss = db.primaryRobot?.variant == 'ms_luna';
     final oledThemeColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFF00F0FF);
-    final oledColor = invertVal ? Colors.black : oledThemeColor;
-    final oledBgColor = invertVal ? oledThemeColor : const Color(0xFF000000);
+    final oledColor = invertVal ? oledThemeColor : Colors.white;
+    final oledBgColor = invertVal ? Colors.white : oledThemeColor;
 
     // Transform degrees to quarter turns for RotatedBox
     int quarterTurns = (rotationVal / 90.0).round() % 4;
@@ -274,7 +277,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
           ),
         );
       } else if (db.clockStyle == 3) {
-        // STYLE 3: Retro Grid
+        // STYLE 3: Custom Photo Wallpaper Clock
         String timeStr;
         if (db.is12HourFormat) {
           int hour = now.hour % 12;
@@ -289,62 +292,63 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
           timeStr = "$hh:$mm:$ss";
         }
 
-        final progressWidth = (now.second * 110) / 60;
+        final hasWallpaper = widget.wallpaperBytes != null;
 
         screenContent = Center(
           child: Container(
             width: 128,
             height: 64,
             decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: oledColor, width: 1),
-                bottom: BorderSide(color: oledColor, width: 1),
-              ),
+              color: hasWallpaper ? Colors.black : const Color(0xFF1E293B),
+              image: hasWallpaper
+                  ? DecorationImage(
+                      image: MemoryImage(widget.wallpaperBytes!),
+                      fit: BoxFit.cover,
+                    )
+                  : const DecorationImage(
+                      image: AssetImage('assets/logo.png'),
+                      fit: BoxFit.contain,
+                      opacity: 0.15,
+                    ),
             ),
             child: Stack(
               children: [
                 Positioned(
-                  top: 6,
+                  top: 10,
                   left: 0,
                   right: 0,
                   child: Center(
                     child: Text(
                       timeStr,
                       style: GoogleFonts.pressStart2p(
-                        color: oledColor,
-                        fontSize: 9,
+                        color: Colors.white,
+                        fontSize: 8,
                         fontWeight: FontWeight.bold,
+                        shadows: const [
+                          Shadow(color: Colors.black, offset: Offset(1, 1), blurRadius: 1),
+                        ],
                       ),
                     ),
                   ),
                 ),
                 Positioned(
-                  top: 22,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Text(
-                      dayDateStr,
-                      style: GoogleFonts.pressStart2p(
-                        color: oledColor,
-                        fontSize: 6,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 6,
-                  left: 9,
+                  bottom: 10,
+                  left: 14,
+                  right: 14,
                   child: Container(
-                    width: 110,
-                    height: 6,
+                    padding: const EdgeInsets.symmetric(vertical: 2),
                     decoration: BoxDecoration(
-                      border: Border.all(color: oledColor, width: 1),
+                      color: (db.primaryRobot?.variant == 'mr_luna' ? const Color(0xFF0074D9) : const Color(0xFFEC4899)).withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      width: progressWidth,
-                      color: oledColor,
+                    child: Center(
+                      child: Text(
+                        dayDateStr,
+                        style: GoogleFonts.pressStart2p(
+                          color: Colors.white,
+                          fontSize: 5,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -514,30 +518,24 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
               height: 64,
               padding: const EdgeInsets.only(top: 8),
               child: ColorFiltered(
-                colorFilter: ColorFilter.mode(
-                  oledThemeColor,
-                  BlendMode.modulate,
+                colorFilter: ColorFilter.matrix(
+                  invertVal
+                      ? [
+                          (oledThemeColor.red / 255.0) - 1.0, 0.0, 0.0, 0.0, 255.0,
+                          0.0, (oledThemeColor.green / 255.0) - 1.0, 0.0, 0.0, 255.0,
+                          0.0, 0.0, (oledThemeColor.blue / 255.0) - 1.0, 0.0, 255.0,
+                          0.0, 0.0, 0.0, 1.0, 0.0,
+                        ]
+                      : [
+                          1.0 - (oledThemeColor.red / 255.0), 0.0, 0.0, 0.0, oledThemeColor.red.toDouble(),
+                          0.0, 1.0 - (oledThemeColor.green / 255.0), 0.0, 0.0, oledThemeColor.green.toDouble(),
+                          0.0, 0.0, 1.0 - (oledThemeColor.blue / 255.0), 0.0, oledThemeColor.blue.toDouble(),
+                          0.0, 0.0, 0.0, 1.0, 0.0,
+                        ],
                 ),
-                child: ColorFiltered(
-                  colorFilter: ColorFilter.matrix(
-                    invertVal
-                        ? const [
-                            -1.0, 0.0, 0.0, 0.0, 255.0,
-                            0.0, -1.0, 0.0, 0.0, 255.0,
-                            0.0, 0.0, -1.0, 0.0, 255.0,
-                            0.0, 0.0, 0.0, 1.0, 0.0,
-                          ]
-                        : const [
-                            1.0, 0.0, 0.0, 0.0, 0.0,
-                            0.0, 1.0, 0.0, 0.0, 0.0,
-                            0.0, 0.0, 1.0, 0.0, 0.0,
-                            0.0, 0.0, 0.0, 1.0, 0.0,
-                          ],
-                  ),
-                  child: Opacity(
-                    opacity: brightnessVal.clamp(0.0, 1.0),
-                    child: imageWidget,
-                  ),
+                child: Opacity(
+                  opacity: brightnessVal.clamp(0.0, 1.0),
+                  child: imageWidget,
                 ),
               ),
             ),

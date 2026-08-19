@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -26,6 +28,8 @@ import '../widgets/pixel_editor.dart';
 import '../widgets/luna_background.dart';
 import 'package:gif/gif.dart';
 import 'login_screen.dart';
+import 'business_card_screen.dart';
+
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -255,6 +259,10 @@ class _MainDashboardState extends State<MainDashboard> {
   String? _uploadedFileBase64;
   int _uploadedFrameCount = 8;
   double _uploadCompression = 30.0;
+  Uint8List? _selectedWallpaperBytes;
+  String? _selectedWallpaperName;
+  bool _isUploadingWallpaper = false;
+  double _wallpaperUploadProgress = 0.0;
   AlarmModel? _ringingAlarm;
   Timer? _alarmSoundTimer;
   StreamSubscription? _robotEventsSub;
@@ -352,6 +360,22 @@ class _MainDashboardState extends State<MainDashboard> {
           }
         }
         firebase.sendCloudTrigger(eventType, expr, sound, customLabel: customLabel);
+      }
+    };
+
+    ble.onSettingsSyncedFromWatch = (clockStyle, brightness, negative, silent) async {
+      if (mounted) {
+        final db = Provider.of<DatabaseService>(context, listen: false);
+        await db.updateClockStyle(clockStyle);
+        await db.updateOledBrightness(brightness.toDouble());
+        await db.updateNegativeEnabled(negative);
+        await db.updateSilentMode(silent);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Settings synchronized from watch (Buzzer: ${silent ? 'Muted' : 'Sound On'})"),
+            backgroundColor: Colors.green.shade700,
+          ),
+        );
       }
     };
 
@@ -1117,6 +1141,7 @@ class _MainDashboardState extends State<MainDashboard> {
       birthdayDurationSec: db.birthdayDuration.round(),
       clockStyle: db.clockStyle,
       oledBrightness: db.oledBrightness.round(),
+      silentMode: db.silentMode,
     );
 
     setState(() {
@@ -1385,6 +1410,7 @@ class _MainDashboardState extends State<MainDashboard> {
       {'icon': Icons.audiotrack, 'label': 'Sounds'},
       {'icon': Icons.cloud_sync, 'label': 'Luna Link'},
       {'icon': Icons.calendar_month, 'label': 'Calendar'},
+      {'icon': Icons.contact_mail, 'label': 'Card'},
       {'icon': Icons.person, 'label': 'Profile'},
     ];
 
@@ -1419,7 +1445,7 @@ class _MainDashboardState extends State<MainDashboard> {
               onTap: () {
                 setState(() {
                   _activeTabIdx = idx;
-                  if (idx == 5) {
+                  if (idx == 6) {
                     _currentSettingsSection = 'categories';
                   }
                 });
@@ -1713,7 +1739,7 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () => setState(() => _activeTabIdx = 5),
+                onTap: () => setState(() => _activeTabIdx = 6),
                 child: CircleAvatar(
                   radius: 17,
                   backgroundImage: NetworkImage(
@@ -2034,6 +2060,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 activeGifId: activeGifId,
                 activeLabel: activeLabel,
                 marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
+                wallpaperBytes: _selectedWallpaperBytes,
               ),
             ),
             const SizedBox(height: 20),
@@ -2092,6 +2119,8 @@ class _MainDashboardState extends State<MainDashboard> {
           child: _buildCalendarPanel(db, ble),
         );
       case 5:
+        return const BusinessCardScreen();
+      case 6:
         return SingleChildScrollView(
           key: const PageStorageKey('profile_scroll'),
           padding: const EdgeInsets.only(top: 10, bottom: 20),
@@ -2924,42 +2953,6 @@ class _MainDashboardState extends State<MainDashboard> {
                 _syncSettingsToRobot(db, ble);
               }),
               const SizedBox(height: 16),
-
-              // GIF frame delay ms
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Eye Frame Delay Duration", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
-                  Text("${db.gifSpeed.toInt()} ms", style: GoogleFonts.firaCode(color: Colors.yellow, fontSize: 12, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              Slider(
-                value: db.gifSpeed,
-                min: 20,
-                max: 300,
-                activeColor: const Color(0xFFE53935),
-                onChanged: (val) => db.updateGifSpeed(val),
-                onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
-              ),
-              const SizedBox(height: 12),
-
-              // Intro GIF Speed
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Intro GIF Playback Speed", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
-                  Text("${db.gifIntroSpeed.toInt()} ms", style: GoogleFonts.firaCode(color: Colors.yellow, fontSize: 12, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              Slider(
-                value: db.gifIntroSpeed,
-                min: 20,
-                max: 300,
-                activeColor: const Color(0xFFE53935),
-                onChanged: (val) => db.updateGifIntroSpeed(val),
-                onChangeEnd: (val) => _syncSettingsToRobot(db, ble),
-              ),
-              const SizedBox(height: 12),
               // Intro Sound Speed
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -3036,7 +3029,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           DropdownMenuItem(value: 0, child: Text("Classic Border")),
                           DropdownMenuItem(value: 1, child: Text("Minimalist")),
                           DropdownMenuItem(value: 2, child: Text("Analog Split")),
-                          DropdownMenuItem(value: 3, child: Text("Retro Grid")),
+                          DropdownMenuItem(value: 3, child: Text("Custom Wallpaper")),
                         ],
                         onChanged: (val) async {
                           if (val != null) {
@@ -3086,6 +3079,42 @@ class _MainDashboardState extends State<MainDashboard> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              // Buzzer Mode control
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Buzzer Mode", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
+                  Container(
+                    width: 140,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.black.withOpacity(0.06)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<bool>(
+                        value: db.silentMode,
+                        dropdownColor: Colors.white,
+                        style: GoogleFonts.outfit(color: textColor, fontSize: 12),
+                        icon: const Icon(Icons.arrow_drop_down, color: textColor60),
+                        isExpanded: true,
+                        items: const [
+                          DropdownMenuItem(value: false, child: Text("Sound On")),
+                          DropdownMenuItem(value: true, child: Text("Silent Mode")),
+                        ],
+                        onChanged: (val) async {
+                          if (val != null) {
+                            await db.updateSilentMode(val);
+                            _syncSettingsToRobot(db, ble);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -3117,6 +3146,133 @@ class _MainDashboardState extends State<MainDashboard> {
                 await db.updateTouchLong(val);
                 _syncSettingsToRobot(db, ble);
               }),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        // Smartwatch Custom Wallpaper Manager
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "SMARTWATCH WALLPAPER",
+                style: GoogleFonts.outfit(color: const Color(0xFFFFCDD2), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+              ),
+              const SizedBox(height: 16),
+              if (_selectedWallpaperBytes != null) ...[
+                Text(
+                  "Selected: $_selectedWallpaperName",
+                  style: GoogleFonts.outfit(color: textColor, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Size: ${(_selectedWallpaperBytes!.length / 1024).toStringAsFixed(1)} KB",
+                  style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (_isUploadingWallpaper) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: _wallpaperUploadProgress,
+                    backgroundColor: Colors.black12,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
+                    minHeight: 8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Uploading: ${(_wallpaperUploadProgress * 100).toInt()}%",
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.firaCode(color: Colors.yellow, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _pickAndProcessWallpaper(db),
+                        icon: const Icon(Icons.photo_library),
+                        label: const Text("SELECT IMAGE"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          textStyle: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    if (_selectedWallpaperBytes != null) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: !ble.isConnected ? null : () => _uploadWallpaper(ble),
+                          icon: const Icon(Icons.bluetooth),
+                          label: const Text("BLE UPLOAD"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            textStyle: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _compileAndFlashViaServer(ble),
+                          icon: const Icon(Icons.computer),
+                          label: const Text("PC FLASH"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.indigoAccent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            textStyle: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: !ble.isConnected ? null : () async {
+                          final cleared = await ble.transmitWallpaperClear();
+                          if (cleared) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Wallpaper cleared from watch!"),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Failed to clear wallpaper."),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.delete_forever),
+                        label: const Text("CLEAR WATCH WALLPAPER"),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: const BorderSide(color: Colors.redAccent),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          textStyle: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -3205,6 +3361,251 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
+  Future<ui.Image> resizeImage(Uint8List imageBytes, int targetWidth, int targetHeight) async {
+    final codec = await ui.instantiateImageCodec(imageBytes);
+    final frameInfo = await codec.getNextFrame();
+    final originalImage = frameInfo.image;
+    
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final paint = ui.Paint()..filterQuality = ui.FilterQuality.high;
+    
+    canvas.drawImageRect(
+      originalImage,
+      ui.Rect.fromLTWH(0, 0, originalImage.width.toDouble(), originalImage.height.toDouble()),
+      ui.Rect.fromLTWH(0, 0, targetWidth.toDouble(), targetHeight.toDouble()),
+      paint,
+    );
+    
+    final picture = recorder.endRecording();
+    return await picture.toImage(targetWidth, targetHeight);
+  }
+
+  Future<Uint8List> convertImageToRGB565(ui.Image image) async {
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (byteData == null) throw Exception("Failed to get raw RGBA bytes");
+    
+    final width = image.width;
+    final height = image.height;
+    final rgbaBytes = byteData.buffer.asUint8List();
+    
+    final rgb565Bytes = Uint8List(width * height * 2);
+    final rgb565Data = ByteData.view(rgb565Bytes.buffer);
+    
+    int srcIdx = 0;
+    int dstIdx = 0;
+    for (int i = 0; i < width * height; i++) {
+      final r = rgbaBytes[srcIdx];
+      final g = rgbaBytes[srcIdx + 1];
+      final b = rgbaBytes[srcIdx + 2];
+      
+      final r5 = (r >> 3) & 0x1F;
+      final g6 = (g >> 2) & 0x3F;
+      final b5 = (b >> 3) & 0x1F;
+      
+      final color16 = (r5 << 11) | (g6 << 5) | b5;
+      rgb565Data.setUint16(dstIdx, color16, Endian.little);
+      
+      srcIdx += 4;
+      dstIdx += 2;
+    }
+    return rgb565Bytes;
+  }
+
+  Future<void> _pickAndProcessWallpaper(DatabaseService db) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      
+      final file = result.files.first;
+      final bytes = file.bytes ?? (file.path != null ? await File(file.path!).readAsBytes() : null);
+      if (bytes == null) return;
+      
+      final robot = db.primaryRobot;
+      final int targetW = (robot?.firmwareVersion == 2) ? 240 : 128;
+      final int targetH = (robot?.firmwareVersion == 2) ? 240 : 160;
+      
+      // Launch custom cropping dialog
+      final croppedBytes = await showDialog<Uint8List>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => WallpaperCropDialog(
+          imageBytes: bytes,
+          targetW: targetW,
+          targetH: targetH,
+        ),
+      );
+      if (croppedBytes == null) return; // User cancelled
+      
+      setState(() {
+        _selectedWallpaperBytes = croppedBytes;
+        _selectedWallpaperName = file.name;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Wallpaper cropped & loaded: ${file.name} ($targetW x $targetH)"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error processing image: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _compileAndFlashViaServer(BLEService ble) async {
+    if (_selectedWallpaperBytes == null) return;
+
+    setState(() {
+      _isUploadingWallpaper = true;
+      _wallpaperUploadProgress = 0.0;
+    });
+
+    try {
+      final robot = Provider.of<DatabaseService>(context, listen: false).primaryRobot;
+      final int targetW = (robot?.firmwareVersion == 2) ? 240 : 128;
+      final int targetH = (robot?.firmwareVersion == 2) ? 240 : 160;
+
+      // 1. Convert bytes to C++ header array string
+      final buffer = StringBuffer();
+      buffer.writeln("// Luna Smartwatch Custom Wallpaper - ${targetW}x${targetH} RGB565");
+      buffer.writeln("// Auto-generated by Luna Companion App.");
+      buffer.writeln("#ifndef WALLPAPER_IMAGE_H");
+      buffer.writeln("#define WALLPAPER_IMAGE_H");
+      buffer.writeln("#include <pgmspace.h>");
+      buffer.writeln("#define WALLPAPER_WIDTH  $targetW");
+      buffer.writeln("#define WALLPAPER_HEIGHT $targetH");
+      buffer.writeln("#define WALLPAPER_IS_DEFAULT 0");
+      buffer.writeln("const uint16_t wallpaper_data[${targetW * targetH}] PROGMEM = {");
+
+      for (int i = 0; i < _selectedWallpaperBytes!.length; i += 2) {
+        final b1 = _selectedWallpaperBytes![i];
+        final b2 = _selectedWallpaperBytes![i + 1];
+        final val = (b2 << 8) | b1;
+        buffer.write("0x${val.toRadixString(16).padLeft(4, '0')},");
+        if ((i ~/ 2 + 1) % 12 == 0) {
+          buffer.writeln();
+        }
+      }
+      buffer.writeln("\n};");
+      buffer.writeln("#endif");
+
+      final codeString = buffer.toString();
+
+      // 2. POST to compilation server
+      final serverUrl = Uri.parse('http://${ble.serverIp}:8000/api/upload_wallpaper');
+      final response = await http.post(
+        serverUrl,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'variant': robot?.firmwareVersion == 2 ? '1.3' : '1.8',
+          'code': codeString,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Wallpaper C++ code sent to server on port ${data['port']}! Compilation & flashing started."),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          throw Exception(data['error'] ?? "Unknown server error");
+        }
+      } else {
+        throw Exception("Server returned HTTP ${response.statusCode}");
+      }
+    } catch (e) {
+      _showErrorDialog(
+        "Connection Failed",
+        "Could not send wallpaper to local server at http://${ble.serverIp}:8000.\n\n"
+        "Make sure 'python flash_server.py' is running on your computer.\n\n"
+        "Error details: $e"
+      );
+    } finally {
+      setState(() {
+        _isUploadingWallpaper = false;
+      });
+    }
+  }
+
+  Future<void> _uploadWallpaper(BLEService ble) async {
+    if (_selectedWallpaperBytes == null) return;
+    
+    setState(() {
+      _isUploadingWallpaper = true;
+      _wallpaperUploadProgress = 0.0;
+    });
+    
+    try {
+      final size = _selectedWallpaperBytes!.length;
+      
+      final started = await ble.transmitWallpaperStart(size);
+      if (!started) {
+        throw Exception("Failed to start wallpaper transmission on the watch.");
+      }
+      
+      final hexString = _selectedWallpaperBytes!.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      
+      // 60 hex chars = 30 raw bytes. BLE packet = "WP_CHUNK:" + 60 = 69 bytes.
+      // Fits guaranteed under any Android BLE MTU (min ~50 bytes after negotiation).
+      const chunkSize = 60;
+      final totalChunks = (hexString.length / chunkSize).ceil();
+      
+      for (int i = 0; i < totalChunks; i++) {
+        final start = i * chunkSize;
+        final end = (start + chunkSize < hexString.length) ? start + chunkSize : hexString.length;
+        final chunk = hexString.substring(start, end);
+        
+        final chunkSent = await ble.transmitWallpaperChunk(chunk);
+        if (!chunkSent) {
+          throw Exception("Failed to transmit wallpaper chunk ${i + 1}/$totalChunks.");
+        }
+        
+        setState(() {
+          _wallpaperUploadProgress = (i + 1) / totalChunks;
+        });
+        
+        // Give the ESP32 SPIFFS time to flush before next chunk
+        await Future.delayed(const Duration(milliseconds: 80));
+      }
+      
+      final ended = await ble.transmitWallpaperEnd();
+      if (!ended) {
+        throw Exception("Failed to finalize wallpaper transmission on the watch.");
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Wallpaper uploaded successfully!"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Upload failed: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isUploadingWallpaper = false;
+      });
+    }
+  }
+
 
 
   // ================= NEW TAB 0: HOME DASHBOARD PANEL =================
@@ -3278,7 +3679,7 @@ class _MainDashboardState extends State<MainDashboard> {
             activeGifId: activeGifId,
             activeLabel: activeLabel,
             marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
-            invertColor: isMiss || db.oledInvert, 
+            invertColor: db.oledInvert, 
           ),
         ),
         const SizedBox(height: 20),
@@ -3897,7 +4298,7 @@ class _MainDashboardState extends State<MainDashboard> {
     final List<Map<String, dynamic>> actions = [
       {
         'icon': Icons.watch_later,
-        'label': 'Clock',
+        'label': 'Show Clock',
         'color': const Color(0xFFE53935),
         'onTap': () => ble.transmitExpression(8, ""), // 8 is EXPR_CLOCK
       },
@@ -7693,5 +8094,232 @@ class ButtonStripePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class WallpaperCropDialog extends StatefulWidget {
+  final Uint8List imageBytes;
+  final int targetW;
+  final int targetH;
+
+  const WallpaperCropDialog({
+    Key? key,
+    required this.imageBytes,
+    required this.targetW,
+    required this.targetH,
+  }) : super(key: key);
+
+  @override
+  _WallpaperCropDialogState createState() => _WallpaperCropDialogState();
+}
+
+class _WallpaperCropDialogState extends State<WallpaperCropDialog> {
+  ui.Image? _decodedImage;
+  final TransformationController _transformationController = TransformationController();
+  bool _initialized = false;
+  double _viewportW = 0.0;
+  double _viewportH = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _decodeImage();
+  }
+
+  Future<void> _decodeImage() async {
+    final codec = await ui.instantiateImageCodec(widget.imageBytes);
+    final frameInfo = await codec.getNextFrame();
+    setState(() {
+      _decodedImage = frameInfo.image;
+    });
+  }
+
+  void _initializeMatrix(double containerWidth, double containerHeight) {
+    if (_decodedImage == null || _initialized) return;
+
+    // Viewport size matches target aspect ratio, fitting inside the screen container
+    final double targetAspect = widget.targetW / widget.targetH;
+    final double containerAspect = containerWidth / containerHeight;
+
+    if (containerAspect > targetAspect) {
+      _viewportH = containerHeight * 0.8;
+      _viewportW = _viewportH * targetAspect;
+    } else {
+      _viewportW = containerWidth * 0.8;
+      _viewportH = _viewportW / targetAspect;
+    }
+
+    // Set initial scale to fill the crop window
+    final double imgW = _decodedImage!.width.toDouble();
+    final double imgH = _decodedImage!.height.toDouble();
+    final double scale = (_viewportW / imgW > _viewportH / imgH) ? (_viewportW / imgW) : (_viewportH / imgH);
+
+    final double tx = (_viewportW - imgW * scale) / 2;
+    final double ty = (_viewportH - imgH * scale) / 2;
+
+    _transformationController.value = Matrix4.identity()
+      ..translate(tx, ty)
+      ..scale(scale);
+
+    _initialized = true;
+  }
+
+  Future<Uint8List> _convertImageToRGB565(ui.Image image) async {
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (byteData == null) throw Exception("Failed to get raw RGBA bytes");
+    
+    final width = image.width;
+    final height = image.height;
+    final rgbaBytes = byteData.buffer.asUint8List();
+    
+    final rgb565Bytes = Uint8List(width * height * 2);
+    final rgb565Data = ByteData.view(rgb565Bytes.buffer);
+    
+    int srcIdx = 0;
+    int dstIdx = 0;
+    for (int i = 0; i < width * height; i++) {
+      final r = rgbaBytes[srcIdx];
+      final g = rgbaBytes[srcIdx + 1];
+      final b = rgbaBytes[srcIdx + 2];
+      
+      final r5 = (r >> 3) & 0x1F;
+      final g6 = (g >> 2) & 0x3F;
+      final b5 = (b >> 3) & 0x1F;
+      
+      final rgb565 = (r5 << 11) | (g6 << 5) | b5;
+      rgb565Data.setUint16(dstIdx, rgb565, Endian.little);
+      
+      srcIdx += 4;
+      dstIdx += 2;
+    }
+    return rgb565Bytes;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_decodedImage == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A), // Slate 900
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white24),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Adjust Wallpaper",
+              style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Drag to pan. Pinch with two fingers to zoom.",
+              style: GoogleFonts.outfit(
+                color: Colors.white70,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Crop Window Container
+            SizedBox(
+              height: 300,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final double width = constraints.maxWidth;
+                  final double height = constraints.maxHeight;
+                  
+                  _initializeMatrix(width, height);
+
+                  return Center(
+                    child: Container(
+                      width: _viewportW,
+                      height: _viewportH,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFF00F0FF), width: 2), // Neon cyan border
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: ClipRect(
+                        child: InteractiveViewer(
+                          transformationController: _transformationController,
+                          minScale: 0.05,
+                          maxScale: 10.0,
+                          boundaryMargin: const EdgeInsets.all(1000),
+                          child: SizedBox(
+                            width: _decodedImage!.width.toDouble(),
+                            height: _decodedImage!.height.toDouble(),
+                            child: RawImage(
+                              image: _decodedImage,
+                              fit: BoxFit.fill,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text("CANCEL", style: GoogleFonts.outfit(color: Colors.white70)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () async {
+                    // Extract cropped image bytes!
+                    final matrix = _transformationController.value;
+                    final double scale = matrix.storage[0];
+                    final double tx = matrix.storage[12];
+                    final double ty = matrix.storage[13];
+
+                    final double cx1 = -tx / scale;
+                    final double cy1 = -ty / scale;
+                    final double cx2 = (_viewportW - tx) / scale;
+                    final double cy2 = (_viewportH - ty) / scale;
+
+                    final recorder = ui.PictureRecorder();
+                    final canvas = ui.Canvas(recorder);
+                    final paint = ui.Paint()..filterQuality = ui.FilterQuality.high;
+
+                    canvas.drawImageRect(
+                      _decodedImage!,
+                      ui.Rect.fromLTRB(cx1, cy1, cx2, cy2),
+                      ui.Rect.fromLTWH(0, 0, widget.targetW.toDouble(), widget.targetH.toDouble()),
+                      paint,
+                    );
+
+                    final picture = recorder.endRecording();
+                    final croppedUiImage = await picture.toImage(widget.targetW, widget.targetH);
+                    final bytes = await _convertImageToRGB565(croppedUiImage);
+
+                    Navigator.of(context).pop(bytes);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00F0FF),
+                    foregroundColor: Colors.black,
+                  ),
+                  child: Text("CROP & SAVE", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 

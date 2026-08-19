@@ -68,6 +68,7 @@ enum SmartwatchScreen {
   SCREEN_GAMES,
   SCREEN_FACE,
   SCREEN_MAPS,
+  SCREEN_SETTINGS,
   SCREEN_MAX
 };
 
