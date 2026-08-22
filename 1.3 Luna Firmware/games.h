@@ -17,89 +17,15 @@ extern int gameSelected;
 class LunaGames {
 private:
   // High scores
-  int advHighScore;
   int racHighScore;
   int spcHighScore;
+  int flapHighScore;
+  int catHighScore;
+  int jumpHighScore;
+  int stkHighScore;
+  int memHighScore;
 
-  // --- Game 1: Luna Adventure State ---
-  float advPlayerX;
-  float advPlayerY;
-  float advPlayerVX;
-  float advPlayerVY;
-  bool advIsJumping;
-  int advLives;
-  int advScore;
-  bool advGameOver;
-  int advPowerState; // 0: Normal, 1: Super, 2: Fire
-  float advCameraX;
-  unsigned long advInvincibleTime;
-  int advLevelState; // 0: Play, 1: Flag slide, 2: Walk to castle, 3: Stage Clear screen
-  int advCurrentLevel; // 1, 2, 3
-  unsigned long advLevelTransitionTimer;
-  int advWalkFrame;
-  int advMoveState; // -1 = backward, 0 = stopped, 1 = forward
-  unsigned long advBtn1PressTime;
-  bool advBtn1Active;
-  bool advLastBtn1;
-
-  // Level platforms
-  int advNumPlats;
-  float advPlatX[8];
-  float advPlatY[8];
-  float advPlatW[8];
-  float advPlatH[8];
-
-  // Level blocks
-  float advBlockX[6];
-  float advBlockY[6];
-  int advBlockType[6]; // 0: Brick, 1: ? Block
-  int advBlockItem[6]; // 0: Coin, 1: Mushroom, 2: Fire Flower
-  bool advBlockHit[6];
-  bool advBlockActive[6];
-
-  // Coins
-  float advCoinX[6];
-  float advCoinY[6];
-  bool advCoinActive[6];
-
-  // Enemies
-  float advEnemyX[4];
-  float advEnemyY[4];
-  int advEnemyType[4]; // 0: Goomba, 1: Koopa, 2: Winged Koopa
-  bool advEnemyActive[4];
-  int advEnemyDir[4];
-  float advEnemyVY[4];
-
-  // Mushroom / Fire Flower power-up item
-  float advMushX;
-  float advMushY;
-  float advMushVX;
-  int advMushType; // 1: Mushroom, 2: Fire Flower
-  bool advMushActive;
-
-  // Player Fireballs
-  float advFireballX[3];
-  float advFireballY[3];
-  float advFireballVX[3];
-  float advFireballVY[3];
-  bool advFireballActive[3];
-  unsigned long advLastFireTime;
-
-  // Boss Bowser
-  bool advBossActive;
-  int advBossHP;
-  float advBossX;
-  float advBossY;
-  int advBossDir;
-  unsigned long advBossLastJump;
-  unsigned long advBossLastFire;
-  float advBossFireX[3];
-  float advBossFireY[3];
-  float advBossFireVX[3];
-  bool advBossFireActive[3];
-  bool advBridgeCollapsed;
-
-  // --- Game 2: Luna Racer State ---
+  // --- Game 1: Luna Racer State ---
   float racPlayerX;
   float racPlayerY;
   float racSpeed;
@@ -108,15 +34,13 @@ private:
   float racRoadScroll;
   int racScore;
   bool racGameOver;
-  
-  // Traffic Cars
   float racCarX[4];
   float racCarY[4];
   float racCarSpeed[4];
   int racCarColor[4];
   bool racCarActive[4];
 
-  // --- Game 3: Luna Space State ---
+  // --- Game 2: Luna Space State ---
   float spcPlayerX;
   float spcPlayerY;
   int spcScore;
@@ -125,41 +49,29 @@ private:
   unsigned long spcLastShoot;
   unsigned long spcShieldTime;
   unsigned long spcSmartBombCooldown;
-  
-  // Lasers
   float spcLaserX[6];
   float spcLaserY[6];
   bool spcLaserActive[6];
-  
-  // Enemies
   float spcEnemyX[8];
   float spcEnemyY[8];
   bool spcEnemyActive[8];
   int spcEnemyHP[8];
   int spcEnemyType[8];
   unsigned long spcEnemyLastShoot[8];
-  
-  // Enemy lasers
   float spcEnemyLaserX[4];
   float spcEnemyLaserY[4];
   bool spcEnemyLaserActive[4];
-  
-  // Particles
   float spcPartX[15];
   float spcPartY[15];
   float spcPartVX[15];
   float spcPartVY[15];
   int spcPartLife[15];
   bool spcPartActive[15];
-  
-  // Powerups
   float spcPowerX;
   float spcPowerY;
   int spcPowerType;
   bool spcPowerActive;
   bool spcSpreadActive;
-  
-  // Boss Spacecraft
   bool spcBossActive;
   int spcBossHP;
   float spcBossX;
@@ -167,21 +79,70 @@ private:
   int spcBossDir;
   unsigned long spcBossLastShoot;
 
-  // Buttons input helper
+  // --- Game 3: Flappy Mochy State ---
+  float flapPlayerY;
+  float flapPlayerVY;
+  float flapPipeX;
+  float flapPipeGapY;
+  int flapScore;
+  bool flapGameOver;
+
+  // --- Game 4: Coin Catcher State ---
+  float catPlayerX;
+  float catCoinsX[3];
+  float catCoinsY[3];
+  bool catCoinsActive[3];
+  bool catIsBomb[3];
+  int catScore;
+  int catLives;
+  bool catGameOver;
+
+  // --- Game 5: Mochy Jump State ---
+  float jumpPlayerX;
+  float jumpPlayerY;
+  float jumpPlayerVY;
+  float jumpPlatX[5];
+  float jumpPlatY[5];
+  int jumpScore;
+  bool jumpGameOver;
+
+  // --- Game 6: Stacker State ---
+  float stkBlockX;
+  float stkBlockW;
+  float stkBlockY;
+  float stkSpeed;
+  int stkDir;
+  float stkBaseX;
+  int stkScore;
+  bool stkGameOver;
+  int stkStackHeight;
+  float stkStackX[12];
+  float stkStackW[12];
+
+  // --- Game 7: Memory Matrix State ---
+  int memSeq[16];
+  int memSeqLen;
+  int memSeqStep;
+  int memPlayerStep;
+  int memSelectedTile;
+  int memState; // 0: showing sequence, 1: player input
+  unsigned long memTimer;
+  int memScore;
+  bool memGameOver;
+
+  // Input helpers
   bool lastBtn1;
   bool lastBtn2;
 
 public:
   LunaGames() {
-    advHighScore = 0;
     racHighScore = 0;
     spcHighScore = 0;
-    advLives = 3;
-    advScore = 0;
-    advCurrentLevel = 1;
-    resetAdventure();
-    resetRacer();
-    resetSpace();
+    flapHighScore = 0;
+    catHighScore = 0;
+    jumpHighScore = 0;
+    stkHighScore = 0;
+    memHighScore = 0;
     lastBtn1 = false;
     lastBtn2 = false;
   }
@@ -205,9 +166,13 @@ public:
   void begin() {
     Preferences prefs;
     prefs.begin("luna_scores", true);
-    advHighScore = prefs.getInt("adv", 0);
     racHighScore = prefs.getInt("rac", 0);
     spcHighScore = prefs.getInt("spc", 0);
+    flapHighScore = prefs.getInt("flap", 0);
+    catHighScore = prefs.getInt("cat", 0);
+    jumpHighScore = prefs.getInt("jump", 0);
+    stkHighScore = prefs.getInt("stk", 0);
+    memHighScore = prefs.getInt("mem", 0);
     prefs.end();
   }
 
@@ -221,160 +186,21 @@ public:
     }
   }
 
-  void resetAdventureForLevel() {
-    advPlayerX = 20;
-    advPlayerY = G_B - 20;
-    advPlayerVX = 0;
-    advPlayerVY = 0;
-    advIsJumping = false;
-    advCameraX = 0;
-    advLevelState = 0;
-    advLastFireTime = 0;
-    advBridgeCollapsed = false;
-    advInvincibleTime = 0;
-    advWalkFrame = 0;
-    advMoveState = 1;
-    advBtn1Active = false;
-    advBtn1PressTime = 0;
-    advLastBtn1 = false;
-    
-    for (int i = 0; i < 3; i++) {
-      advFireballActive[i] = false;
-      advBossFireActive[i] = false;
-    }
-    
-    advMushActive = false;
-    
-    if (advCurrentLevel == 1) {
-      // Level 1: Forest
-      advNumPlats = 5;
-      advPlatX[0] = 0; advPlatY[0] = G_B - 14; advPlatW[0] = 180; advPlatH[0] = 14;
-      advPlatX[1] = 215; advPlatY[1] = G_B - 14; advPlatW[1] = 85; advPlatH[1] = 14;
-      advPlatX[2] = 330; advPlatY[2] = G_B - 14; advPlatW[2] = 150; advPlatH[2] = 14;
-      advPlatX[3] = 100; advPlatY[3] = G_B - 40; advPlatW[3] = 40; advPlatH[3] = 8;
-      advPlatX[4] = 230; advPlatY[4] = G_B - 45; advPlatW[4] = 40; advPlatH[4] = 8;
-      
-      // Blocks
-      advBlockX[0] = 90; advBlockY[0] = G_B - 40; advBlockType[0] = 1; advBlockItem[0] = 0; advBlockHit[0] = false; advBlockActive[0] = true;
-      advBlockX[1] = 110; advBlockY[1] = G_B - 40; advBlockType[1] = 0; advBlockItem[1] = 0; advBlockHit[1] = false; advBlockActive[1] = true;
-      advBlockX[2] = 130; advBlockY[2] = G_B - 40; advBlockType[2] = 1; advBlockItem[2] = 1; advBlockHit[2] = false; advBlockActive[2] = true; // mushroom
-      advBlockX[3] = 240; advBlockY[3] = G_B - 45; advBlockType[3] = 0; advBlockItem[3] = 0; advBlockHit[3] = false; advBlockActive[3] = true;
-      advBlockX[4] = 260; advBlockY[4] = G_B - 45; advBlockType[4] = 1; advBlockItem[4] = 0; advBlockHit[4] = false; advBlockActive[4] = true;
-      advBlockX[5] = 280; advBlockY[5] = G_B - 45; advBlockType[5] = 0; advBlockItem[5] = 0; advBlockHit[5] = false; advBlockActive[5] = true;
-      
-      // Coins
-      for (int i = 0; i < 4; i++) {
-        advCoinX[i] = 80 + i * 90;
-        advCoinY[i] = G_B - 40 - (i % 2) * 20;
-        advCoinActive[i] = true;
-      }
-      for (int i = 4; i < 6; i++) advCoinActive[i] = false;
-      
-      // Enemies
-      advEnemyX[0] = 140; advEnemyY[0] = G_B - 14; advEnemyType[0] = 0; advEnemyActive[0] = true; advEnemyDir[0] = -1; advEnemyVY[0] = 0;
-      advEnemyX[1] = 225; advEnemyY[1] = G_B - 14; advEnemyType[1] = 0; advEnemyActive[1] = true; advEnemyDir[1] = -1; advEnemyVY[1] = 0;
-      advEnemyX[2] = 270; advEnemyY[2] = G_B - 14; advEnemyType[2] = 0; advEnemyActive[2] = true; advEnemyDir[2] = -1; advEnemyVY[2] = 0;
-      advEnemyX[3] = 350; advEnemyY[3] = G_B - 14; advEnemyType[3] = 0; advEnemyActive[3] = true; advEnemyDir[3] = -1; advEnemyVY[3] = 0;
-      
-      advBossActive = false;
-    } 
-    else if (advCurrentLevel == 2) {
-      // Level 2: Sky
-      advNumPlats = 5;
-      advPlatX[0] = 0; advPlatY[0] = G_B - 20; advPlatW[0] = 60; advPlatH[0] = 8;
-      advPlatX[1] = 90; advPlatY[1] = G_B - 40; advPlatW[1] = 60; advPlatH[1] = 8;
-      advPlatX[2] = 180; advPlatY[2] = G_B - 60; advPlatW[2] = 60; advPlatH[2] = 8;
-      advPlatX[3] = 270; advPlatY[3] = G_B - 40; advPlatW[3] = 60; advPlatH[3] = 8;
-      advPlatX[4] = 350; advPlatY[4] = G_B - 20; advPlatW[4] = 100; advPlatH[4] = 14;
-      
-      // Blocks
-      advBlockX[0] = 100; advBlockY[0] = G_B - 65; advBlockType[0] = 1; advBlockItem[0] = 2; advBlockHit[0] = false; advBlockActive[0] = true; // fire flower
-      advBlockX[1] = 120; advBlockY[1] = G_B - 65; advBlockType[1] = 0; advBlockItem[1] = 0; advBlockHit[1] = false; advBlockActive[1] = true;
-      advBlockX[2] = 190; advBlockY[2] = G_B - 85; advBlockType[2] = 0; advBlockItem[2] = 0; advBlockHit[2] = false; advBlockActive[2] = true;
-      advBlockX[3] = 210; advBlockY[3] = G_B - 85; advBlockType[3] = 1; advBlockItem[3] = 0; advBlockHit[3] = false; advBlockActive[3] = true;
-      advBlockX[4] = 280; advBlockY[4] = G_B - 65; advBlockType[4] = 0; advBlockItem[4] = 0; advBlockHit[4] = false; advBlockActive[4] = true;
-      advBlockX[5] = 300; advBlockY[5] = G_B - 65; advBlockType[5] = 1; advBlockItem[5] = 0; advBlockHit[5] = false; advBlockActive[5] = true;
-      
-      // Coins
-      for (int i = 0; i < 6; i++) {
-        advCoinX[i] = 100 + i * 50;
-        advCoinY[i] = G_B - 50 - (i % 2) * 15;
-        advCoinActive[i] = true;
-      }
-      
-      // Enemies
-      advEnemyX[0] = 110; advEnemyY[0] = G_B - 40; advEnemyType[0] = 0; advEnemyActive[0] = true; advEnemyDir[0] = -1; advEnemyVY[0] = 0;
-      advEnemyX[1] = 200; advEnemyY[1] = G_B - 60; advEnemyType[1] = 1; advEnemyActive[1] = true; advEnemyDir[1] = -1; advEnemyVY[1] = 0;
-      advEnemyX[2] = 290; advEnemyY[2] = G_B - 40; advEnemyType[2] = 2; advEnemyActive[2] = true; advEnemyDir[2] = -1; advEnemyVY[2] = 0; // Winged
-      advEnemyX[3] = 360; advEnemyY[3] = G_B - 20; advEnemyType[3] = 1; advEnemyActive[3] = true; advEnemyDir[3] = -1; advEnemyVY[3] = 0;
-      
-      advBossActive = false;
-    } 
-    else {
-      // Level 3: Bowser's Castle
-      advNumPlats = 5;
-      advPlatX[0] = 0; advPlatY[0] = G_B - 14; advPlatW[0] = 120; advPlatH[0] = 14;
-      advPlatX[1] = 140; advPlatY[1] = G_B - 35; advPlatW[1] = 80; advPlatH[1] = 10;
-      advPlatX[2] = 240; advPlatY[2] = G_B - 14; advPlatW[2] = 110; advPlatH[2] = 14; // Bridge
-      advPlatX[3] = 350; advPlatY[3] = G_B - 14; advPlatW[3] = 100; advPlatH[3] = 14; // golden axe
-      advPlatX[4] = 80; advPlatY[4] = G_B - 60; advPlatW[4] = 60; advPlatH[4] = 8;
-      
-      // Blocks
-      advBlockX[0] = 70; advBlockY[0] = G_B - 35; advBlockType[0] = 0; advBlockItem[0] = 0; advBlockHit[0] = false; advBlockActive[0] = true;
-      advBlockX[1] = 160; advBlockY[1] = G_B - 55; advBlockType[1] = 1; advBlockItem[1] = 2; advBlockHit[1] = false; advBlockActive[1] = true; // fire flower
-      advBlockX[2] = 200; advBlockY[2] = G_B - 55; advBlockType[2] = 0; advBlockItem[2] = 0; advBlockHit[2] = false; advBlockActive[2] = true;
-      advBlockX[3] = 210; advBlockY[3] = G_B - 55; advBlockType[3] = 0; advBlockItem[3] = 0; advBlockHit[3] = false; advBlockActive[3] = true;
-      advBlockX[4] = 270; advBlockY[4] = G_B - 45; advBlockType[4] = 0; advBlockItem[4] = 0; advBlockHit[4] = false; advBlockActive[4] = true;
-      advBlockX[5] = 290; advBlockY[5] = G_B - 45; advBlockType[5] = 0; advBlockItem[5] = 0; advBlockHit[5] = false; advBlockActive[5] = true;
-      
-      // Coins
-      for (int i = 0; i < 4; i++) {
-        advCoinX[i] = 140 + i * 20;
-        advCoinY[i] = G_B - 55;
-        advCoinActive[i] = true;
-      }
-      for (int i = 4; i < 6; i++) advCoinActive[i] = false;
-      
-      // Enemies
-      advEnemyX[0] = 80; advEnemyY[0] = G_B - 14; advEnemyType[0] = 1; advEnemyActive[0] = true; advEnemyDir[0] = -1; advEnemyVY[0] = 0;
-      advEnemyX[1] = 150; advEnemyY[1] = G_B - 35; advEnemyType[1] = 0; advEnemyActive[1] = true; advEnemyDir[1] = -1; advEnemyVY[1] = 0;
-      advEnemyX[2] = 200; advEnemyY[2] = G_B - 35; advEnemyType[2] = 0; advEnemyActive[2] = true; advEnemyDir[2] = -1; advEnemyVY[2] = 0;
-      advEnemyX[3] = 250; advEnemyY[3] = G_B - 14; advEnemyType[3] = 1; advEnemyActive[3] = true; advEnemyDir[3] = -1; advEnemyVY[3] = 0;
-      
-      // Bowser
-      advBossActive = true;
-      advBossHP = 5;
-      advBossX = 290;
-      advBossY = G_B - 24;
-      advBossDir = -1;
-      advBossLastJump = millis();
-      advBossLastFire = millis();
-    }
-  }
-
-  void resetAdventure() {
-    advGameOver = false;  // CRITICAL: clear game-over flag on every reset
-    advLives = 3;
-    advScore = 0;
-    advCurrentLevel = 1;
-    advPowerState = 0;
-    resetAdventureForLevel();
-  }
-
   void resetRacer() {
-    racPlayerX = G_X + G_W / 2;
-    racPlayerY = G_B - 20;
-    racSpeed = 3.0f;
+    int carW = SCREEN_WIDTH == 240 ? 16 : 8;
+    int carH = SCREEN_WIDTH == 240 ? 28 : 14;
+    racPlayerX = G_X + G_W / 2 - carW / 2;
+    racPlayerY = G_B - carH - 6;
+    racSpeed = SCREEN_WIDTH == 240 ? 3.0f : 2.5f;
     racNitroActive = false;
     racNitroFuel = 100.0f;
     racRoadScroll = 0;
     racScore = 0;
     racGameOver = false;
-    
     for (int i = 0; i < 4; i++) {
-      racCarX[i] = G_X + 24 + random(0, 3) * (G_W - 48)/3;
+      racCarX[i] = G_X + 24 + random(0, 3) * (G_W - 48)/3 - carW / 2;
       racCarY[i] = G_Y - 30 - i * 60;
-      racCarSpeed[i] = 1.5f + random(0, 20) / 10.0f;
+      racCarSpeed[i] = 1.2f + random(0, 20) / 10.0f;
       racCarColor[i] = i % 3;
       racCarActive[i] = true;
     }
@@ -382,7 +208,7 @@ public:
 
   void resetSpace() {
     spcPlayerX = G_X + G_W / 2;
-    spcPlayerY = G_B - 14;
+    spcPlayerY = G_B - (SCREEN_WIDTH == 240 ? 20 : 12);
     spcScore = 0;
     spcHealth = 3;
     spcGameOver = false;
@@ -390,12 +216,10 @@ public:
     spcShieldTime = 0;
     spcSmartBombCooldown = 0;
     spcSpreadActive = false;
-    
     for (int i = 0; i < 6; i++) spcLaserActive[i] = false;
     for (int i = 0; i < 8; i++) spcEnemyActive[i] = false;
     for (int i = 0; i < 4; i++) spcEnemyLaserActive[i] = false;
     for (int i = 0; i < 15; i++) spcPartActive[i] = false;
-    
     spcPowerActive = false;
     spcBossActive = false;
     spcBossHP = 20;
@@ -405,10 +229,78 @@ public:
     spcBossLastShoot = 0;
   }
 
+  void resetFlappy() {
+    flapPlayerY = G_Y + G_H / 2;
+    flapPlayerVY = 0;
+    flapPipeX = G_R;
+    int gapH = SCREEN_WIDTH == 240 ? 50 : 35;
+    flapPipeGapY = G_Y + 20 + random(0, G_H - gapH - 40);
+    flapScore = 0;
+    flapGameOver = false;
+  }
+
+  void resetCatcher() {
+    int basketW = SCREEN_WIDTH == 240 ? 24 : 16;
+    catPlayerX = G_X + G_W / 2 - basketW / 2;
+    catScore = 0;
+    catLives = 3;
+    catGameOver = false;
+    for (int i = 0; i < 3; i++) {
+      catCoinsX[i] = G_X + 16 + random(0, G_W - 48);
+      catCoinsY[i] = G_Y - 20 - i * 50;
+      catCoinsActive[i] = true;
+      catIsBomb[i] = (random(0, 10) < 3);
+    }
+  }
+
+  void resetJump() {
+    jumpPlayerX = G_X + G_W / 2;
+    jumpPlayerY = G_B - 40;
+    jumpPlayerVY = -5.0f;
+    jumpScore = 0;
+    jumpGameOver = false;
+    for (int i = 0; i < 5; i++) {
+      jumpPlatX[i] = G_X + 10 + random(0, G_W - 50);
+      jumpPlatY[i] = G_B - 15 - i * 36;
+    }
+  }
+
+  void resetStacker() {
+    stkBlockW = SCREEN_WIDTH == 240 ? 60 : 40;
+    stkBlockX = G_X + (G_W - stkBlockW) / 2;
+    stkBlockY = G_B - (SCREEN_WIDTH == 240 ? 20 : 12);
+    stkSpeed = SCREEN_WIDTH == 240 ? 3.5f : 2.0f;
+    stkDir = 1;
+    stkBaseX = stkBlockX;
+    stkStackHeight = 0;
+    stkScore = 0;
+    stkGameOver = false;
+    for (int i = 0; i < 12; i++) {
+      stkStackX[i] = 0;
+      stkStackW[i] = 0;
+    }
+  }
+
+  void resetMemory() {
+    memSeqLen = 1;
+    memSeqStep = 0;
+    memPlayerStep = 0;
+    memSelectedTile = 4;
+    memState = 0;
+    memSeq[0] = random(0, 9);
+    memTimer = millis();
+    memScore = 0;
+    memGameOver = false;
+  }
+
   bool canExitActiveGame() {
-    if (gameSelected == 1) return advGameOver;
-    if (gameSelected == 2) return racGameOver;
-    if (gameSelected == 3) return spcGameOver;
+    if (gameSelected == 1) return racGameOver;
+    if (gameSelected == 2) return spcGameOver;
+    if (gameSelected == 3) return flapGameOver;
+    if (gameSelected == 4) return catGameOver;
+    if (gameSelected == 5) return jumpGameOver;
+    if (gameSelected == 6) return stkGameOver;
+    if (gameSelected == 7) return memGameOver;
     return false;
   }
 
@@ -422,7 +314,7 @@ public:
 
     display.setTextSize(SCREEN_WIDTH == 240 ? 3 : 2);
     display.setTextColor(TFT_RED);
-    display.setCursor((SCREEN_WIDTH - 9 * (SCREEN_WIDTH == 240 ? 18 : 12)) / 2, SCREEN_WIDTH == 240 ? 65 : 48);
+    display.setCursor((SCREEN_WIDTH - 9 * (SCREEN_WIDTH == 240 ? 18 : 12)) / 2, SCREEN_WIDTH == 240 ? 65 : 36);
     display.print("GAME OVER");
 
     display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
@@ -430,13 +322,13 @@ public:
     char scoreBuf[32];
     snprintf(scoreBuf, sizeof(scoreBuf), "SC:%d HI:%d", score, highScore);
     int scoreW = strlen(scoreBuf) * (SCREEN_WIDTH == 240 ? 12 : 6);
-    display.setCursor((SCREEN_WIDTH - scoreW) / 2, SCREEN_WIDTH == 240 ? 115 : 80);
+    display.setCursor((SCREEN_WIDTH - scoreW) / 2, SCREEN_WIDTH == 240 ? 115 : 72);
     display.print(scoreBuf);
 
     display.setTextColor(themeAccent);
     display.setCursor((SCREEN_WIDTH - 13 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 160 : 108);
     display.print("B1:PLAY AGAIN");
-    display.setCursor((SCREEN_WIDTH - 14 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 190 : 124);
+    display.setCursor((SCREEN_WIDTH - 14 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 190 : 126);
     display.print("B2:BACK 2 MENU");
   }
 
@@ -457,785 +349,64 @@ public:
     display.drawFastHLine(6, SCREEN_WIDTH == 240 ? 54 : 24, SCREEN_WIDTH - 12, themeBorder);
 
     const char* gameNames[] = {
-      "1.LUNA ADVENTURE",
-      "2.LUNA RACER",
-      "3.LUNA SPACE",
-      "4.EXIT ARCADE"
+      "1.LUNA RACER",
+      "2.LUNA SPACE",
+      "3.FLAPPY MOCHY",
+      "4.COIN CATCHER",
+      "5.MOCHY JUMP",
+      "6.STACKER",
+      "7.MEMORY MATRIX",
+      "8.EXIT ARCADE"
     };
 
-    int spacing = SCREEN_WIDTH == 240 ? 32 : 22;
-    int startY = SCREEN_WIDTH == 240 ? 66 : 32;
+    int itemsPerPage = 4;
+    int scrollOffset = 0;
+    if (gameMenuOption >= itemsPerPage) {
+      scrollOffset = gameMenuOption - itemsPerPage + 1;
+    }
 
-    for (int idx = 0; idx < 4; idx++) {
+    int spacing = SCREEN_WIDTH == 240 ? 32 : 20;
+    int startY = SCREEN_WIDTH == 240 ? 66 : 30;
+
+    for (int idx = 0; idx < itemsPerPage; idx++) {
+      int optIdx = idx + scrollOffset;
+      if (optIdx >= 8) break;
+
       int yPos = startY + idx * spacing;
-      bool sel = (gameMenuOption == idx);
+      bool sel = (gameMenuOption == optIdx);
       
       if (sel) {
-        display.fillRoundRect(6, yPos, SCREEN_WIDTH - 24, SCREEN_WIDTH == 240 ? 28 : 18, 4, themeCardBg);
-        display.drawRoundRect(6, yPos, SCREEN_WIDTH - 24, SCREEN_WIDTH == 240 ? 28 : 18, 4, themeAccent);
+        display.fillRoundRect(6, yPos, SCREEN_WIDTH - 24, SCREEN_WIDTH == 240 ? 28 : 17, 4, themeCardBg);
+        display.drawRoundRect(6, yPos, SCREEN_WIDTH - 24, SCREEN_WIDTH == 240 ? 28 : 17, 4, themeAccent);
         display.setTextColor(themeAccent);
       } else {
         display.setTextColor(themeText);
       }
       
-      display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
       display.setCursor(14, yPos + (SCREEN_WIDTH == 240 ? 6 : 5));
-      display.print(gameNames[idx]);
+      display.print(gameNames[optIdx]);
+    }
+
+    // Scroll dots
+    int dotAreaY = SCREEN_WIDTH == 240 ? 202 : 122;
+    int dotSpacing = SCREEN_WIDTH == 240 ? 12 : 8;
+    int dotsStartX = (SCREEN_WIDTH - 8 * dotSpacing) / 2;
+    for (int i = 0; i < 8; i++) {
+      if (i == gameMenuOption) {
+        display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY, SCREEN_WIDTH == 240 ? 8 : 5, SCREEN_WIDTH == 240 ? 4 : 2, 1, themeAccent);
+      } else {
+        display.fillRoundRect(dotsStartX + i * dotSpacing + 2, dotAreaY + 1, SCREEN_WIDTH == 240 ? 4 : 2, SCREEN_WIDTH == 240 ? 2 : 1, 1, themeBorder);
+      }
     }
 
     display.setTextSize(1);
     display.setTextColor(0x7BCF);
-    display.setCursor(8, SCREEN_HEIGHT - 14);
-    display.print("B1:Scroll  B2:Play");
+    String hint = "B1:Scroll  B2:Play";
+    display.setCursor((SCREEN_WIDTH - hint.length() * 6) / 2, SCREEN_WIDTH == 240 ? 214 : 140);
+    display.print(hint);
   }
 
-  void updateAndDrawAdventure(GFXcanvas16& display, LunaAudio& audio) {
-    extern String robotVariant;
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104;
-    uint16_t themeBorder = 0xCE79;
-
-    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
-    int pHeight = advPowerState > 0 ? 14 : 10;
-
-    // Dynamic background color
-    uint16_t skyColor = 0x7E5F; // Sky blue for Forest
-    if (advCurrentLevel == 2) skyColor = 0x000F; // Dark blue/violet for Sky
-    else if (advCurrentLevel == 3) skyColor = 0x1800; // Dark castle grey
-
-    if (!advGameOver) {
-      if (advLevelState == 0) { // Playing mode
-        // Jump action (Button B / Btn 2 / BTN_SETTINGS_PIN)
-        if (btn2 && !advIsJumping) {
-          advPlayerVY = -6.2f;
-          advIsJumping = true;
-          audio.playSound(SOUND_JUMP);
-        }
-
-        // Input Handling for Button 1 (A / BTN_EXPR_PIN): Tap to Stop/Forward, Long Press to Move Left
-        if (btn1) {
-          if (!advLastBtn1) { // Just pressed
-            advBtn1PressTime = millis();
-            advBtn1Active = true;
-          } else if (advBtn1Active && (millis() - advBtn1PressTime > 400)) { // Long Press threshold met (400ms)
-            advMoveState = -1; // Move backward (left)
-            advBtn1Active = false; // Consume long press event
-          }
-        } else { // Released
-          if (advLastBtn1) { // Just released
-            if (advBtn1Active) { // Released before 400ms threshold -> Tap event
-              if (advMoveState != 0) {
-                advMoveState = 0; // Stop
-              } else {
-                advMoveState = 1; // Move forward (right)
-              }
-            }
-            advBtn1Active = false;
-          }
-        }
-        advLastBtn1 = btn1;
-
-        // Apply movement velocity based on move state
-        if (advMoveState == 1) {
-          advPlayerVX = 1.1f; // Moderate speed
-          advWalkFrame = (millis() / 150) % 2;
-        } else if (advMoveState == -1) {
-          advPlayerVX = -1.1f; // Move backward
-          advWalkFrame = (millis() / 150) % 2;
-        } else {
-          advPlayerVX = 0.0f; // Stopped
-          advWalkFrame = 0;
-        }
-
-        // Auto fire fireballs if player is in Fire state and moving
-        if (advPowerState == 2 && advMoveState != 0 && (millis() - advLastFireTime > 500)) {
-          advLastFireTime = millis();
-          for (int i = 0; i < 3; i++) {
-            if (!advFireballActive[i]) {
-              advFireballActive[i] = true;
-              advFireballX[i] = advCameraX + advPlayerX + 6;
-              advFireballY[i] = advPlayerY - (advPowerState > 0 ? 10 : 6);
-              advFireballVX[i] = (advMoveState < 0) ? -4.0f : 4.0f;
-              advFireballVY[i] = 1.0f;
-              audio.playSound(SOUND_CHIRP);
-              break;
-            }
-          }
-        }
-
-        // Apply player gravity
-        advPlayerVY += 0.4f;
-        advPlayerY += advPlayerVY;
-
-        // Platform collisions
-        float absPlayerX = advCameraX + advPlayerX;
-        bool landed = false;
-        
-        for (int i = 0; i < advNumPlats; i++) {
-          // If bridge is collapsed, skip bridge platform (index 2 in Level 3)
-          if (advCurrentLevel == 3 && i == 2 && advBridgeCollapsed) continue;
-
-          float py = advPlatY[i];
-          float px1 = advPlatX[i];
-          float px2 = advPlatX[i] + advPlatW[i];
-
-          // Check if falling onto the top of platform
-          if (absPlayerX + 4 >= px1 && absPlayerX - 4 <= px2) {
-            if (advPlayerVY >= 0 && advPlayerY >= py && advPlayerY - advPlayerVY <= py + 4) {
-              advPlayerY = py;
-              advPlayerVY = 0;
-              advIsJumping = false;
-              landed = true;
-            }
-          }
-        }
-
-        // Fall in pit / lava (deadly bounds)
-        if (advPlayerY > G_B + 10) {
-          audio.playSound(SOUND_POWERDOWN);
-          advLives--;
-          if (advLives <= 0) {
-            advGameOver = true;
-            audio.playSound(SOUND_GAMEOVER);
-            saveHighScore("adv", advHighScore, advScore);
-          } else {
-            resetAdventureForLevel();
-          }
-        }
-
-        // Hit blocks from underneath
-        if (advPlayerVY < 0) {
-          for (int i = 0; i < 6; i++) {
-            if (advBlockActive[i]) {
-              float bx1 = advBlockX[i];
-              float bx2 = advBlockX[i] + 12;
-              float by = advBlockY[i];
-              
-              if (absPlayerX + 3 >= bx1 && absPlayerX - 3 <= bx2) {
-                if (advPlayerY - pHeight <= by + 12 && advPlayerY - pHeight - advPlayerVY >= by + 6) {
-                  advPlayerVY = 0.5f; // Bounce back down
-                  audio.playSound(SOUND_CHIRP);
-
-                  if (advBlockType[i] == 0) { // Brick block
-                    if (advPowerState > 0) { // Super/Fire breaks it
-                      advBlockActive[i] = false;
-                      advScore += 50;
-                    }
-                  } 
-                  else if (advBlockType[i] == 1 && !advBlockHit[i]) { // ? block
-                    advBlockHit[i] = true;
-                    if (advBlockItem[i] == 0) { // Coin
-                      advScore += 10;
-                      audio.playSound(SOUND_COIN);
-                    } else { // Mushroom or Fire Flower
-                      advMushActive = true;
-                      advMushX = advBlockX[i];
-                      advMushY = advBlockY[i] - 12;
-                      advMushVX = 1.0f;
-                      advMushType = advBlockItem[i];
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // Camera follow (scrolls in both directions)
-        advCameraX += advPlayerVX;
-        if (advCameraX < 0) {
-          advCameraX = 0;
-        }
-        if (advCameraX >= 400.0f) {
-          advCameraX = 400.0f;
-        }
-
-        // Flagpole intersection (Level Win triggers at X = 370)
-        if (absPlayerX >= 370.0f) {
-          advLevelState = 1;
-          advPlayerVX = 0;
-          audio.playSound(SOUND_POWERUP);
-        }
-
-        // Update Mushroom/Power-up physics
-        if (advMushActive) {
-          if (advMushType == 1) { // Mushroom moves
-            advMushX += advMushVX;
-            // Check platform floor for Mushroom
-            bool mushOnGround = false;
-            for (int i = 0; i < advNumPlats; i++) {
-              if (advMushX >= advPlatX[i] && advMushX <= advPlatX[i] + advPlatW[i]) {
-                if (advMushY >= advPlatY[i] - 12 && advMushY <= advPlatY[i]) {
-                  advMushY = advPlatY[i] - 12;
-                  mushOnGround = true;
-                }
-              }
-            }
-            if (!mushOnGround) advMushY += 1.5f;
-
-            // Reverse direction on block obstacle
-            for (int i = 0; i < 6; i++) {
-              if (advBlockActive[i] && abs(advMushX - advBlockX[i]) < 12 && abs(advMushY - advBlockY[i]) < 8) {
-                advMushVX = -advMushVX;
-              }
-            }
-          }
-
-          // Player eats power-up item
-          if (abs(absPlayerX - (advMushX + 6)) < 12 && abs(advPlayerY - (advMushY + 6)) < 14) {
-            advMushActive = false;
-            audio.playSound(SOUND_POWERUP);
-            if (advMushType == 1) { // Mushroom
-              if (advPowerState == 0) advPowerState = 1;
-              advScore += 100;
-            } else { // Fire Flower
-              advPowerState = 2;
-              advScore += 200;
-            }
-          }
-
-          if (advMushX - advCameraX < G_X - 10 || advMushX - advCameraX > G_R + 10) {
-            advMushActive = false;
-          }
-        }
-
-        // Update Player Fireballs
-        for (int i = 0; i < 3; i++) {
-          if (advFireballActive[i]) {
-            advFireballX[i] += advFireballVX[i];
-            advFireballVY[i] += 0.3f;
-            advFireballY[i] += advFireballVY[i];
-
-            // Platform collision for fireballs
-            for (int p = 0; p < advNumPlats; p++) {
-              if (advFireballX[i] >= advPlatX[p] && advFireballX[i] <= advPlatX[p] + advPlatW[p]) {
-                if (advFireballVY[i] >= 0 && advFireballY[i] >= advPlatY[p] - 4 && advFireballY[i] <= advPlatY[p] + 4) {
-                  advFireballY[i] = advPlatY[p] - 4;
-                  advFireballVY[i] = -2.5f; // bounce
-                }
-              }
-            }
-
-            // Fireball hits Enemy
-            for (int e = 0; e < 4; e++) {
-              if (advEnemyActive[e]) {
-                if (abs(advFireballX[i] - advEnemyX[e]) < 12 && abs(advFireballY[i] - (advEnemyY[e] - 6)) < 10) {
-                  advFireballActive[i] = false;
-                  advEnemyActive[e] = false;
-                  advScore += 100;
-                  audio.playSound(SOUND_COIN);
-                }
-              }
-            }
-
-            // Fireball hits Bowser Boss
-            if (advBossActive && abs(advFireballX[i] - advBossX) < 16 && abs(advFireballY[i] - advBossY) < 16) {
-              advFireballActive[i] = false;
-              advBossHP--;
-              audio.playSound(SOUND_JUMP);
-              if (advBossHP <= 0) {
-                advBossActive = false;
-                advScore += 500;
-                advLevelState = 1; // trigger win flagpole style transition
-                audio.playSound(SOUND_POWERUP);
-              }
-            }
-
-            if (advFireballX[i] - advCameraX > G_R || advFireballY[i] > G_B) {
-              advFireballActive[i] = false;
-            }
-          }
-        }
-
-        // Update Coins
-        for (int i = 0; i < 6; i++) {
-          if (advCoinActive[i]) {
-            if (abs(absPlayerX - advCoinX[i]) < 12 && abs(advPlayerY - advCoinY[i]) < 12) {
-              advCoinActive[i] = false;
-              advScore += 10;
-              audio.playSound(SOUND_COIN);
-            }
-          }
-        }
-
-        // Update Enemies
-        for (int i = 0; i < 4; i++) {
-          if (advEnemyActive[i]) {
-            advEnemyX[i] += advEnemyDir[i] * 0.7f;
-            
-            // Goomba & Koopa movement boundaries
-            float spawnRange = 35.0f;
-            float spawnX = 140 + i * 80;
-            if (advCurrentLevel == 2) spawnX = 110 + i * 80;
-            else if (advCurrentLevel == 3) spawnX = 80 + i * 60;
-            
-            if (advEnemyX[i] < spawnX - spawnRange) advEnemyDir[i] = 1;
-            if (advEnemyX[i] > spawnX + spawnRange) advEnemyDir[i] = -1;
-
-            // Winged Koopa hopping mechanics
-            if (advEnemyType[i] == 2) {
-              advEnemyVY[i] += 0.2f;
-              advEnemyY[i] += advEnemyVY[i];
-              bool enemyOnPlat = false;
-              for (int p = 0; p < advNumPlats; p++) {
-                if (advEnemyX[i] >= advPlatX[p] && advEnemyX[i] <= advPlatX[p] + advPlatW[p]) {
-                  if (advEnemyY[i] >= advPlatY[p]) {
-                    advEnemyY[i] = advPlatY[p];
-                    enemyOnPlat = true;
-                  }
-                }
-              }
-              if (enemyOnPlat) advEnemyVY[i] = -3.0f; // Hop again
-            }
-
-            // Overlap check with player
-            float screenEnemyX = advEnemyX[i] - advCameraX;
-            if (screenEnemyX > G_X - 10 && screenEnemyX < G_R + 10) {
-              if (abs(advPlayerX - screenEnemyX) < 10 && abs(advPlayerY - advEnemyY[i]) < 10) {
-                // If landing on top of the enemy
-                if (advPlayerVY > 0 && advPlayerY < advEnemyY[i] - 2) {
-                  advEnemyActive[i] = false;
-                  advPlayerVY = -3.5f;
-                  advScore += 100;
-                  audio.playSound(SOUND_COIN);
-                } 
-                // Getting hit by enemy
-                else if (millis() > advInvincibleTime) {
-                  if (advPowerState > 0) {
-                    advPowerState--;
-                    advInvincibleTime = millis() + 1500;
-                    audio.playSound(SOUND_POWERDOWN);
-                  } else {
-                    audio.playSound(SOUND_POWERDOWN);
-                    advLives--;
-                    if (advLives <= 0) {
-                      advGameOver = true;
-                      audio.playSound(SOUND_GAMEOVER);
-                      saveHighScore("adv", advHighScore, advScore);
-                    } else {
-                      resetAdventureForLevel();
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // Update Boss Bowser in Level 3
-        if (advBossActive && advCurrentLevel == 3) {
-          // Move left/right on bridge
-          advBossX += advBossDir * 0.7f;
-          if (advBossX < 250) advBossDir = 1;
-          if (advBossX > 320) advBossDir = -1;
-
-          // Bridge axe collapse
-          if (absPlayerX >= 350.0f && !advBridgeCollapsed) {
-            advBridgeCollapsed = true;
-            advBossActive = false;
-            advLevelState = 1; // triggers flag slide/level clear transition
-            audio.playSound(SOUND_GAMEOVER);
-          }
-
-          // Bowser jumps
-          if (millis() - advBossLastJump > 2200) {
-            advBossLastJump = millis();
-            advBossY = G_B - 45;
-          }
-          if (advBossY < G_B - 24) {
-            advBossY += 0.8f;
-          } else {
-            advBossY = G_B - 24;
-          }
-
-          // Bowser fire breathing
-          if (millis() - advBossLastFire > 2000) {
-            advBossLastFire = millis();
-            for (int f = 0; f < 3; f++) {
-              if (!advBossFireActive[f]) {
-                advBossFireActive[f] = true;
-                advBossFireX[f] = advBossX - 10;
-                advBossFireY[f] = advBossY + random(-4, 5);
-                advBossFireVX[f] = -2.2f;
-                break;
-              }
-            }
-          }
-
-          // Update Bowser Fireballs
-          for (int f = 0; f < 3; f++) {
-            if (advBossFireActive[f]) {
-              advBossFireX[f] += advBossFireVX[f];
-              if (advBossFireX[f] < advCameraX) {
-                advBossFireActive[f] = false;
-              }
-              // Hit player check
-              float screenFireX = advBossFireX[f] - advCameraX;
-              if (abs(advPlayerX - screenFireX) < 10 && abs(advPlayerY - advBossFireY[f]) < 10) {
-                advBossFireActive[f] = false;
-                if (millis() > advInvincibleTime) {
-                  if (advPowerState > 0) {
-                    advPowerState--;
-                    advInvincibleTime = millis() + 1500;
-                    audio.playSound(SOUND_POWERDOWN);
-                  } else {
-                    audio.playSound(SOUND_POWERDOWN);
-                    advLives--;
-                    if (advLives <= 0) {
-                      advGameOver = true;
-                      audio.playSound(SOUND_GAMEOVER);
-                      saveHighScore("adv", advHighScore, advScore);
-                    } else {
-                      resetAdventureForLevel();
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          // Bowser physical touch player
-          float screenBossX = advBossX - advCameraX;
-          if (abs(advPlayerX - screenBossX) < 14 && abs(advPlayerY - advBossY) < 16) {
-            if (advPlayerVY > 0 && advPlayerY < advBossY - 4) {
-              advBossHP--;
-              advPlayerVY = -4.0f;
-              audio.playSound(SOUND_JUMP);
-              if (advBossHP <= 0) {
-                advBossActive = false;
-                advScore += 500;
-                advLevelState = 1;
-                audio.playSound(SOUND_POWERUP);
-              }
-            } else if (millis() > advInvincibleTime) {
-              if (advPowerState > 0) {
-                advPowerState--;
-                advInvincibleTime = millis() + 1500;
-                audio.playSound(SOUND_POWERDOWN);
-              } else {
-                audio.playSound(SOUND_POWERDOWN);
-                advLives--;
-                if (advLives <= 0) {
-                  advGameOver = true;
-                  audio.playSound(SOUND_GAMEOVER);
-                  saveHighScore("adv", advHighScore, advScore);
-                } else {
-                  resetAdventureForLevel();
-                }
-              }
-            }
-          }
-        }
-      } 
-      else if (advLevelState == 1) { // Flagpole slide animation
-        advPlayerY += 1.2f;
-        if (advPlayerY >= G_B - 14) {
-          advPlayerY = G_B - 14;
-          advLevelState = 2; // Start walking to castle door
-        }
-      } 
-      else if (advLevelState == 2) { // Walking to Castle Door
-        advPlayerX += 1.0f;
-        advWalkFrame = (millis() / 120) % 2;
-        if (advPlayerX >= 110) { // reaches castle entrance screen right
-          advLevelState = 3;
-          advLevelTransitionTimer = millis();
-        }
-      } 
-      else if (advLevelState == 3) { // Delay before Stage transition
-        if (millis() - advLevelTransitionTimer > 2000) {
-          if (advCurrentLevel < 3) {
-            advCurrentLevel++;
-            resetAdventureForLevel();
-          } else {
-            // Defeated Level 3: Victory!
-            advLives = 99;
-            advGameOver = true;
-            saveHighScore("adv", advHighScore, advScore);
-          }
-        }
-      }
-    } else {
-      if (btn1 && !lastBtn1) {
-        resetAdventure();
-      }
-    }
-    lastBtn1 = btn1;
-    lastBtn2 = btn2;
-
-    // RENDER GAMEPLAY
-    display.fillScreen(skyColor);
-    
-    // UI Header
-    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
-    display.setTextColor(themeText);
-    display.setCursor(6, SCREEN_WIDTH == 240 ? 36 : 7);
-    display.printf("WORLD 1-%d", advCurrentLevel);
-    display.setCursor(SCREEN_WIDTH/2 - 25, SCREEN_WIDTH == 240 ? 36 : 7);
-    display.printf("PTS:%04d", advScore);
-    
-    int lifeX = SCREEN_WIDTH - (SCREEN_WIDTH == 240 ? 54 : 32);
-    for (int i = 0; i < 3; i++) {
-      int hx = lifeX + i * (SCREEN_WIDTH == 240 ? 14 : 7);
-      int hy = SCREEN_WIDTH == 240 ? 42 : 10;
-      display.fillCircle(hx, hy, SCREEN_WIDTH == 240 ? 3 : 2, i < advLives ? TFT_RED : themeBorder);
-    }
-    display.drawFastHLine(0, G_Y - 1, SCREEN_WIDTH, themeBorder);
-
-    if (!advGameOver && advLevelState < 3) {
-      // 1. Drawing parallax clouds/hills (Forest/Sky only)
-      if (advCurrentLevel < 3) {
-        for (int i = 0; i < 3; i++) {
-          // Clouds
-          float cx = (i * 120) - ((int)(advCameraX * 0.3f) % 120);
-          display.fillRoundRect(cx, G_Y + 10 + i * 8, 25, 8, 3, TFT_WHITE);
-          
-          // Hills (only in Level 1)
-          if (advCurrentLevel == 1) {
-            float hx = (i * 160) - ((int)(advCameraX * 0.6f) % 160);
-            display.fillTriangle(hx, G_B - 14, hx + 30, G_B - 50, hx + 60, G_B - 14, 0x96E9); // green-blue hill
-          }
-        }
-      } else { // Castle decorations
-        display.fillRect(0, G_Y, SCREEN_WIDTH, G_H, 0x1800); // darker background
-        // draw lava glow details
-        for (int x = 0; x < SCREEN_WIDTH; x += 30) {
-          display.fillTriangle(x, G_B - 10, x + 15, G_B - 25, x + 30, G_B - 10, TFT_ORANGE);
-        }
-      }
-
-      // 2. Draw platforms
-      for (int i = 0; i < advNumPlats; i++) {
-        if (advCurrentLevel == 3 && i == 2 && advBridgeCollapsed) continue; // collapsed bridge disappears
-
-        float sx = advPlatX[i] - advCameraX;
-        if (sx + advPlatW[i] >= 0 && sx <= G_R) {
-          uint16_t platCol = (advCurrentLevel == 3) ? 0x50C6 : (advCurrentLevel == 2 ? TFT_WHITE : 0x7240); // dark grey/cloud/dirt
-          display.fillRect(sx, advPlatY[i], advPlatW[i], advPlatH[i], platCol);
-          display.drawRect(sx, advPlatY[i], advPlatW[i], advPlatH[i], themeText);
-        }
-      }
-
-      // 3. Draw blocks
-      for (int i = 0; i < 6; i++) {
-        if (advBlockActive[i]) {
-          float sx = advBlockX[i] - advCameraX;
-          if (sx + 12 >= 0 && sx <= G_R) {
-            if (advBlockType[i] == 0) { // Brick block
-              display.fillRect(sx, advBlockY[i], 12, 12, 0xB269); // brown-red brick color
-              display.drawRect(sx, advBlockY[i], 12, 12, themeText);
-              display.drawFastHLine(sx, advBlockY[i]+4, 12, themeText);
-              display.drawFastHLine(sx, advBlockY[i]+8, 12, themeText);
-            } else { // Question mark block
-              display.fillRect(sx, advBlockY[i], 12, 12, advBlockHit[i] ? 0x7BEF : TFT_YELLOW);
-              display.drawRect(sx, advBlockY[i], 12, 12, themeText);
-              if (!advBlockHit[i]) {
-                display.setCursor(sx + 4, advBlockY[i] + 2);
-                display.setTextColor(themeText);
-                display.setTextSize(1);
-                display.print("?");
-              }
-            }
-          }
-        }
-      }
-
-      // 4. Draw flagpole and castle (Level 1 and 2 end)
-      float sFlagX = 370 - advCameraX;
-      if (sFlagX >= -30 && sFlagX <= G_R) {
-        display.drawFastVLine(sFlagX, G_Y + 10, G_H - 24, themeText); // pole
-        display.fillCircle(sFlagX, G_Y + 10, 3, TFT_YELLOW); // golden ball top
-        
-        // sliding flag
-        float flagY = G_Y + 15;
-        if (advLevelState == 1) flagY = advPlayerY - pHeight;
-        display.fillTriangle(sFlagX - 10, flagY, sFlagX, flagY - 5, sFlagX, flagY + 5, TFT_RED);
-      }
-
-      // Draw castle at end
-      float sCastleX = 400 - advCameraX;
-      if (sCastleX >= -40 && sCastleX <= G_R) {
-        display.fillRect(sCastleX, G_B - 40, 40, 26, 0x50C6); // grey castle wall
-        display.fillRect(sCastleX + 14, G_B - 20, 12, 20, themeText); // black castle door entrance
-        display.drawRect(sCastleX, G_B - 40, 40, 26, themeText);
-      }
-
-      // 5. Draw Active Mushroom/Powerup
-      if (advMushActive) {
-        float smx = advMushX - advCameraX;
-        if (smx >= -12 && smx <= G_R) {
-          if (advMushType == 1) { // Mushroom
-            display.fillCircle(smx + 6, advMushY + 6, 5, TFT_RED);
-            display.fillRect(smx + 4, advMushY + 6, 4, 6, TFT_WHITE);
-          } else { // Fire Flower
-            uint16_t flColors[] = {TFT_RED, TFT_YELLOW, TFT_GREEN};
-            display.fillCircle(smx + 6, advMushY + 6, 5, flColors[(millis()/150)%3]);
-            display.drawFastVLine(smx + 6, advMushY + 9, 3, TFT_GREEN);
-          }
-        }
-      }
-
-      // 6. Draw Player Fireballs
-      for (int i = 0; i < 3; i++) {
-        if (advFireballActive[i]) {
-          float sfx = advFireballX[i] - advCameraX;
-          if (sfx >= -4 && sfx <= G_R) {
-            display.fillCircle(sfx, advFireballY[i], 3, TFT_ORANGE);
-            display.drawCircle(sfx, advFireballY[i], 3, TFT_RED);
-          }
-        }
-      }
-
-      // 7. Draw Coins
-      for (int i = 0; i < 6; i++) {
-        if (advCoinActive[i]) {
-          float scx = advCoinX[i] - advCameraX;
-          if (scx >= -10 && scx <= G_R) {
-            // Spinner animation
-            int coinFrame = (millis() / 150) % 4;
-            int cw = (coinFrame == 0 || coinFrame == 2) ? 6 : ((coinFrame == 1) ? 2 : 8);
-            display.fillEllipse(scx, advCoinY[i], cw/2, 4, TFT_YELLOW);
-            display.drawEllipse(scx, advCoinY[i], cw/2, 4, 0xFDA0);
-          }
-        }
-      }
-
-      // 8. Draw Enemies
-      for (int i = 0; i < 4; i++) {
-        if (advEnemyActive[i]) {
-          float sex = advEnemyX[i] - advCameraX;
-          if (sex >= -12 && sex <= G_R) {
-            if (advEnemyType[i] == 0) { // Goomba
-              display.fillCircle(sex, advEnemyY[i] - 5, 5, 0x9300); // brown cap
-              display.fillRect(sex - 3, advEnemyY[i] - 3, 6, 3, TFT_WHITE); // stem
-              display.fillRect(sex - 4, advEnemyY[i] - 1, 8, 2, TFT_BLACK); // feet
-            } 
-            else if (advEnemyType[i] == 1) { // Koopa
-              display.fillRect(sex - 4, advEnemyY[i] - 8, 8, 6, TFT_GREEN); // green shell
-              display.fillCircle(sex, advEnemyY[i] - 10, 3, TFT_YELLOW); // head
-              display.drawFastHLine(sex - 3, advEnemyY[i] - 2, 6, TFT_BLACK); // feet
-            }
-            else { // Winged Koopa
-              display.fillRect(sex - 4, advEnemyY[i] - 8, 8, 6, TFT_GREEN);
-              display.fillCircle(sex, advEnemyY[i] - 10, 3, TFT_YELLOW);
-              // wing drawing
-              display.fillTriangle(sex + 4, advEnemyY[i] - 12, sex + 8, advEnemyY[i] - 14, sex + 4, advEnemyY[i] - 8, TFT_WHITE);
-            }
-          }
-        }
-      }
-
-      // 9. Draw Bowser Boss & Boss Fireballs (Level 3)
-      if (advBossActive && advCurrentLevel == 3) {
-        float sbx = advBossX - advCameraX;
-        display.fillRect(sbx - 8, advBossY - 16, 16, 16, 0x93A0); // Bowser dark green shell
-        display.fillCircle(sbx, advBossY - 18, 6, TFT_YELLOW); // yellow head/mouth
-        display.fillRect(sbx - 12, advBossY - 6, 24, 6, 0x4B20); // feet/claws
-        
-        // draw boss red spikes
-        display.fillTriangle(sbx - 8, advBossY - 14, sbx - 12, advBossY - 18, sbx - 4, advBossY - 14, TFT_RED);
-        display.fillTriangle(sbx + 4, advBossY - 14, sbx, advBossY - 18, sbx + 8, advBossY - 14, TFT_RED);
-
-        // boss health bar
-        display.fillRect(sbx - 15, advBossY - 26, 30, 4, TFT_BLACK);
-        display.fillRect(sbx - 15, advBossY - 26, advBossHP * 30 / 5, 4, TFT_RED);
-
-        // draw Golden Axe victory trigger
-        float sAxeX = 350 - advCameraX;
-        if (sAxeX >= -10 && sAxeX <= G_R) {
-          display.fillRect(sAxeX - 2, G_B - 25, 4, 11, TFT_YELLOW);
-          display.fillCircle(sAxeX, G_B - 25, 4, TFT_RED);
-        }
-
-        // Bowser Fireballs
-        for (int f = 0; f < 3; f++) {
-          if (advBossFireActive[f]) {
-            float sbfx = advBossFireX[f] - advCameraX;
-            if (sbfx >= -6 && sbfx <= G_R) {
-              display.fillCircle(sbfx, advBossFireY[f], 4, TFT_ORANGE);
-              display.drawCircle(sbfx, advBossFireY[f], 4, TFT_RED);
-            }
-          }
-        }
-      }
-
-      // 10. Draw Player
-      bool isInvincibleFlashing = (millis() < advInvincibleTime) && ((millis() / 80) % 2 == 0);
-      if (!isInvincibleFlashing) {
-        // Draw body box
-        uint16_t pCol = themeAccent;
-        if (advPowerState == 1) pCol = 0xFDA0; // Super Orange
-        else if (advPowerState == 2) pCol = TFT_WHITE; // Fire White
-        
-        display.fillRect(advPlayerX - 4, advPlayerY - pHeight, 8, pHeight, pCol);
-        display.fillCircle(advPlayerX, advPlayerY - pHeight, 3, TFT_YELLOW); // head
-        
-        // draw tiny cap (red for mario style)
-        display.drawFastHLine(advPlayerX - 3, advPlayerY - pHeight - 4, 6, TFT_RED);
-        display.fillRect(advPlayerX - 1, advPlayerY - pHeight - 5, 3, 2, TFT_RED);
-
-        // walking legs animation
-        if (advPlayerVX > 0 && !advIsJumping) {
-          if (advWalkFrame == 0) {
-            display.drawFastHLine(advPlayerX - 4, advPlayerY - 1, 3, TFT_BLACK);
-          } else {
-            display.drawFastHLine(advPlayerX + 1, advPlayerY - 1, 3, TFT_BLACK);
-          }
-        }
-      }
-    } 
-    else if (advLevelState == 3) {
-      // "STAGE CLEAR" transition screen
-      display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, TFT_BLACK);
-      display.setTextSize(SCREEN_WIDTH == 240 ? 3 : 2);
-      display.setTextColor(TFT_GREEN);
-      display.setCursor((SCREEN_WIDTH - 11 * (SCREEN_WIDTH == 240 ? 18 : 12)) / 2, SCREEN_WIDTH == 240 ? 90 : 60);
-      display.print("STAGE CLEAR");
-      
-      display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
-      display.setTextColor(TFT_WHITE);
-      display.setCursor((SCREEN_WIDTH - 10 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 140 : 100);
-      display.printf("SCORE: %04d", advScore);
-    } 
-    else {
-      // Game Over / Victory Screen
-      if (advLives == 99) {
-        display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
-        display.setTextSize(SCREEN_WIDTH == 240 ? 3 : 2);
-        display.setTextColor(TFT_GREEN);
-        display.setCursor((SCREEN_WIDTH - 8 * (SCREEN_WIDTH == 240 ? 18 : 12)) / 2, G_Y + 20);
-        display.print("VICTORY!");
-        
-        display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
-        display.setTextColor(themeText);
-        display.setCursor(20, G_Y + 60);
-        display.print("BOWSER DEFEATED!");
-        
-        display.setTextColor(themeAccent);
-        display.setCursor(20, G_Y + 90);
-        display.print("B1: PLAY AGAIN");
-
-        // B1 tap = Play Again from Victory
-        if (btn1 && !advLastBtn1) {
-          resetAdventure();
-          audio.playSound(SOUND_POWERUP);
-        }
-      } else {
-        drawGameOverScreen(display, advScore, advHighScore);
-
-        // B1 tap = Play Again from Game Over
-        if (btn1 && !advLastBtn1) {
-          resetAdventure();
-          audio.playSound(SOUND_POWERUP);
-        }
-      }
-    }
-    // Always track button state so edge detection works across all game states
-    advLastBtn1 = btn1;
-  }
-
+  // --- Game 1: Luna Racer ---
   void updateAndDrawRacer(GFXcanvas16& display, LunaAudio& audio) {
     extern String robotVariant;
     uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
@@ -1246,22 +417,25 @@ public:
     bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
     bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
 
+    int carW = SCREEN_WIDTH == 240 ? 16 : 8;
+    int carH = SCREEN_WIDTH == 240 ? 28 : 14;
+
     if (!racGameOver) {
       if (btn1 && btn2) {
         if (racNitroFuel > 0) {
           racNitroActive = true;
-          racSpeed = 8.0f;
+          racSpeed = SCREEN_WIDTH == 240 ? 8.0f : 5.0f;
           racNitroFuel -= 0.5f;
           if (millis() % 200 < 100) {
             audio.playSound(SOUND_JUMP);
           }
         } else {
           racNitroActive = false;
-          racSpeed = 4.0f;
+          racSpeed = SCREEN_WIDTH == 240 ? 4.0f : 2.5f;
         }
       } else {
         racNitroActive = false;
-        racSpeed = 4.0f;
+        racSpeed = SCREEN_WIDTH == 240 ? 4.0f : 2.5f;
       }
 
       if (btn1 && !btn2) {
@@ -1269,7 +443,7 @@ public:
         if (racPlayerX < G_X + 16) racPlayerX = G_X + 16;
       } else if (btn2 && !btn1) {
         racPlayerX += 3;
-        if (racPlayerX > G_R - 16 - 8) racPlayerX = G_R - 16 - 8;
+        if (racPlayerX > G_R - 16 - carW) racPlayerX = G_R - 16 - carW;
       }
 
       racRoadScroll += racSpeed;
@@ -1282,12 +456,13 @@ public:
           
           if (racCarY[i] > G_B + 10) {
             racCarY[i] = G_Y - 30;
-            racCarX[i] = G_X + 20 + random(0, 3) * (G_W - 48)/3;
+            racCarX[i] = G_X + 24 + random(0, 3) * (G_W - 48)/3 - carW / 2;
             racCarSpeed[i] = 1.0f + random(0, 20) / 10.0f;
             racCarActive[i] = true;
           }
 
-          if (abs(racPlayerX - (racCarX[i] + 4)) < 8 && abs(racPlayerY - (racCarY[i] + 7)) < 14) {
+          if (abs(racPlayerX - racCarX[i]) < (SCREEN_WIDTH == 240 ? 14 : 7) && 
+              abs(racPlayerY - racCarY[i]) < (SCREEN_WIDTH == 240 ? 26 : 13)) {
             racGameOver = true;
             audio.playSound(SOUND_GAMEOVER);
             saveHighScore("rac", racHighScore, racScore);
@@ -1302,36 +477,41 @@ public:
     lastBtn1 = btn1;
     lastBtn2 = btn2;
 
-    display.fillScreen(0x39E7);
-
-    display.fillRect(G_X + 16, G_Y, G_W - 32, G_H, 0x4208);
+    display.fillScreen(0x39E7); // Grass green
+    display.fillRect(G_X + 16, G_Y, G_W - 32, G_H, 0x4208); // Asphalt road
     display.drawFastVLine(G_X + 16, G_Y, G_H, TFT_WHITE);
     display.drawFastVLine(G_R - 16, G_Y, G_H, TFT_WHITE);
+
+    // Grass pattern dots
+    for (int y = G_Y; y < G_B; y += 30) {
+      display.fillRect(G_X + 4, y, 4, 4, 0x2284);
+      display.fillRect(G_R - 8, y, 4, 4, 0x2284);
+    }
 
     for (int y = G_Y - 20; y < G_B; y += 40) {
       float scrollY = y + (int)racRoadScroll;
       if (scrollY >= G_Y && scrollY < G_B - 20) {
-        display.fillRect(G_X + G_W / 2 - 1, scrollY, 2, 20, TFT_YELLOW);
+        display.fillRect(G_X + G_W / 2 - 1, scrollY, 2, SCREEN_WIDTH == 240 ? 20 : 10, TFT_YELLOW);
       }
     }
 
     uint16_t carColors[] = {TFT_RED, TFT_BLUE, TFT_GREEN};
     for (int i = 0; i < 4; i++) {
       if (racCarActive[i] && racCarY[i] >= G_Y && racCarY[i] < G_B) {
-        display.fillRect(racCarX[i], racCarY[i], 8, 14, carColors[racCarColor[i]]);
-        display.fillRect(racCarX[i] + 2, racCarY[i] + 3, 4, 3, TFT_CYAN);
-        display.fillRect(racCarX[i] + 1, racCarY[i] + 11, 2, 2, TFT_RED);
-        display.fillRect(racCarX[i] + 5, racCarY[i] + 11, 2, 2, TFT_RED);
+        display.fillRect(racCarX[i], racCarY[i], carW, carH, carColors[racCarColor[i]]);
+        display.fillRect(racCarX[i] + carW/4, racCarY[i] + carH/5, carW/2, carH/5, TFT_CYAN); // Glass
+        display.fillRect(racCarX[i] + carW/8, racCarY[i] + carH - carH/7, carW/4, carH/8, TFT_RED); // lights
+        display.fillRect(racCarX[i] + carW - 3*carW/8, racCarY[i] + carH - carH/7, carW/4, carH/8, TFT_RED);
       }
     }
 
-    display.fillRect(racPlayerX, racPlayerY, 8, 14, 0xFDA0);
-    display.fillRect(racPlayerX + 2, racPlayerY + 3, 4, 3, TFT_WHITE);
-    display.fillRect(racPlayerX + 1, racPlayerY + 11, 2, 2, TFT_RED);
-    display.fillRect(racPlayerX + 5, racPlayerY + 11, 2, 2, TFT_RED);
+    display.fillRect(racPlayerX, racPlayerY, carW, carH, 0xFDA0); // Player orange
+    display.fillRect(racPlayerX + carW/4, racPlayerY + carH/5, carW/2, carH/5, TFT_WHITE);
+    display.fillRect(racPlayerX + carW/8, racPlayerY + carH - carH/7, carW/4, carH/8, TFT_RED);
+    display.fillRect(racPlayerX + carW - 3*carW/8, racPlayerY + carH - carH/7, carW/4, carH/8, TFT_RED);
 
     if (racNitroActive && (millis() % 100 < 50)) {
-      display.fillTriangle(racPlayerX + 2, racPlayerY + 14, racPlayerX + 4, racPlayerY + 20, racPlayerX + 6, racPlayerY + 14, TFT_ORANGE);
+      display.fillTriangle(racPlayerX + carW/4, racPlayerY + carH, racPlayerX + carW/2, racPlayerY + carH + 8, racPlayerX + 3*carW/4, racPlayerY + carH, TFT_ORANGE);
     }
 
     display.fillRect(0, 0, SCREEN_WIDTH, G_Y, themeBg);
@@ -1351,6 +531,7 @@ public:
     }
   }
 
+  // --- Game 2: Luna Space ---
   void updateAndDrawSpace(GFXcanvas16& display, LunaAudio& audio) {
     extern String robotVariant;
     uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
@@ -1360,6 +541,15 @@ public:
 
     bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
     bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+
+    int pw = SCREEN_WIDTH == 240 ? 12 : 6;
+    int ph = SCREEN_WIDTH == 240 ? 16 : 8;
+    int ew = SCREEN_WIDTH == 240 ? 12 : 6;
+    int eh = SCREEN_WIDTH == 240 ? 8 : 4;
+    int playerColW = SCREEN_WIDTH == 240 ? 16 : 10;
+    int playerColH = SCREEN_WIDTH == 240 ? 12 : 6;
+    int enemyColW = SCREEN_WIDTH == 240 ? 18 : 10;
+    int enemyColH = SCREEN_WIDTH == 240 ? 14 : 8;
 
     if (!spcGameOver) {
       if (btn1 && btn2 && (millis() - spcSmartBombCooldown > 8000)) {
@@ -1387,24 +577,24 @@ public:
       }
       else if (btn1 && !btn2) {
         spcPlayerX -= 3;
-        if (spcPlayerX < G_X + 8) spcPlayerX = G_X + 8;
+        if (spcPlayerX < G_X + pw + 4) spcPlayerX = G_X + pw + 4;
       }
       else if (btn2 && !btn1) {
         spcPlayerX += 3;
-        if (spcPlayerX > G_R - 8) spcPlayerX = G_R - 8;
+        if (spcPlayerX > G_R - pw - 4) spcPlayerX = G_R - pw - 4;
       }
 
       if (millis() - spcLastShoot > 350) {
         spcLastShoot = millis();
         audio.playSound(SOUND_CHIRP);
         if (spcSpreadActive) {
-          float angles[] = {-1.0f, 0.0f, 1.0f};
+          float angles[] = {-2.0f, 0.0f, 2.0f};
           for (int a = 0; a < 3; a++) {
             for (int i = 0; i < 6; i++) {
               if (!spcLaserActive[i]) {
                 spcLaserActive[i] = true;
                 spcLaserX[i] = spcPlayerX + angles[a] * 4.0f;
-                spcLaserY[i] = spcPlayerY - 8;
+                spcLaserY[i] = spcPlayerY - ph;
                 break;
               }
             }
@@ -1414,7 +604,7 @@ public:
             if (!spcLaserActive[i]) {
               spcLaserActive[i] = true;
               spcLaserX[i] = spcPlayerX;
-              spcLaserY[i] = spcPlayerY - 8;
+              spcLaserY[i] = spcPlayerY - ph;
               break;
             }
           }
@@ -1437,7 +627,9 @@ public:
             spcEnemyLaserActive[i] = false;
           }
 
-          if (abs(spcEnemyLaserX[i] - spcPlayerX) < 10 && spcEnemyLaserY[i] >= spcPlayerY - 6 && spcEnemyLaserY[i] <= spcPlayerY + 4) {
+          if (abs(spcEnemyLaserX[i] - spcPlayerX) < playerColW && 
+              spcEnemyLaserY[i] >= spcPlayerY - playerColH && 
+              spcEnemyLaserY[i] <= spcPlayerY + playerColH/2) {
             spcEnemyLaserActive[i] = false;
             if (millis() > spcShieldTime) {
               audio.playSound(SOUND_POWERDOWN);
@@ -1477,7 +669,7 @@ public:
               if (!spcEnemyLaserActive[el]) {
                 spcEnemyLaserActive[el] = true;
                 spcEnemyLaserX[el] = spcEnemyX[i];
-                spcEnemyLaserY[el] = spcEnemyY[i] + 4;
+                spcEnemyLaserY[el] = spcEnemyY[i] + eh;
                 break;
               }
             }
@@ -1485,7 +677,8 @@ public:
 
           for (int l = 0; l < 6; l++) {
             if (spcLaserActive[l]) {
-              if (abs(spcLaserX[l] - spcEnemyX[i]) < 10 && abs(spcLaserY[l] - spcEnemyY[i]) < 8) {
+              if (abs(spcLaserX[l] - spcEnemyX[i]) < enemyColW && 
+                  abs(spcLaserY[l] - spcEnemyY[i]) < enemyColH) {
                 spcLaserActive[l] = false;
                 spcEnemyHP[i]--;
                 audio.playSound(SOUND_JUMP);
@@ -1521,7 +714,7 @@ public:
         } else {
           for (int i = 0; i < 4; i++) {
             spcEnemyActive[i] = true;
-            spcEnemyX[i] = G_X + 20 + i * (G_W - 40)/4;
+            spcEnemyX[i] = G_X + 24 + i * (G_W - 48)/4;
             spcEnemyY[i] = G_Y - 20;
             spcEnemyHP[i] = 1;
             spcEnemyType[i] = i % 2;
@@ -1534,7 +727,7 @@ public:
         spcPowerY += 1.2f;
         if (spcPowerY > G_B) spcPowerActive = false;
         
-        if (abs(spcPowerX - spcPlayerX) < 12 && abs(spcPowerY - spcPlayerY) < 12) {
+        if (abs(spcPowerX - spcPlayerX) < 16 && abs(spcPowerY - spcPlayerY) < 16) {
           spcPowerActive = false;
           audio.playSound(SOUND_POWERUP);
           if (spcPowerType == 0) spcSpreadActive = true;
@@ -1553,8 +746,8 @@ public:
 
       if (spcBossActive) {
         spcBossX += spcBossDir * 0.8f;
-        if (spcBossX < G_X + 20) spcBossDir = 1;
-        if (spcBossX > G_R - 20) spcBossDir = -1;
+        if (spcBossX < G_X + 32) spcBossDir = 1;
+        if (spcBossX > G_R - 32) spcBossDir = -1;
 
         if (millis() - spcBossLastShoot > 1800) {
           spcBossLastShoot = millis();
@@ -1562,17 +755,21 @@ public:
             for (int el = 0; el < 4; el++) {
               if (!spcEnemyLaserActive[el]) {
                 spcEnemyLaserActive[el] = true;
-                spcEnemyLaserX[el] = spcBossX + (l == 0 ? -10 : 10);
-                spcEnemyLaserY[el] = spcBossY + 6;
+                spcEnemyLaserX[el] = spcBossX + (l == 0 ? -12 : 12);
+                spcEnemyLaserY[el] = spcBossY + 8;
                 break;
               }
             }
           }
         }
 
+        int bw = SCREEN_WIDTH == 240 ? 32 : 16;
+        int bh = SCREEN_WIDTH == 240 ? 16 : 8;
+
         for (int l = 0; l < 6; l++) {
           if (spcLaserActive[l]) {
-            if (abs(spcLaserX[l] - spcBossX) < 18 && abs(spcLaserY[l] - spcBossY) < 12) {
+            if (abs(spcLaserX[l] - spcBossX) < bw + 4 && 
+                abs(spcLaserY[l] - spcBossY) < bh + 4) {
               spcLaserActive[l] = false;
               spcBossHP--;
               audio.playSound(SOUND_JUMP);
@@ -1596,8 +793,9 @@ public:
     lastBtn1 = btn1;
     lastBtn2 = btn2;
 
-    display.fillScreen(0x0002);
+    display.fillScreen(0x0002); // Deep Space dark blue
 
+    // Starfield
     for (int i = 0; i < 8; i++) {
       int sx = (i * 27) % G_W;
       int sy = (G_Y + (i * 35) + (millis() / 20)) % G_H + G_Y;
@@ -1606,24 +804,25 @@ public:
 
     for (int i = 0; i < 6; i++) {
       if (spcLaserActive[i]) {
-        display.drawFastVLine(spcLaserX[i], spcLaserY[i], 6, TFT_CYAN);
+        display.fillRect(spcLaserX[i], spcLaserY[i], 2, SCREEN_WIDTH == 240 ? 8 : 4, TFT_CYAN);
       }
     }
 
     for (int i = 0; i < 4; i++) {
       if (spcEnemyLaserActive[i]) {
-        display.drawFastVLine(spcEnemyLaserX[i], spcEnemyLaserY[i], 5, TFT_RED);
+        display.fillRect(spcEnemyLaserX[i], spcEnemyLaserY[i], 2, SCREEN_WIDTH == 240 ? 8 : 4, TFT_RED);
       }
     }
 
     for (int i = 0; i < 8; i++) {
       if (spcEnemyActive[i]) {
-        display.fillTriangle(spcEnemyX[i], spcEnemyY[i]+6, spcEnemyX[i]-6, spcEnemyY[i]-4, spcEnemyX[i]+6, spcEnemyY[i]-4, TFT_MAGENTA);
+        display.fillTriangle(spcEnemyX[i], spcEnemyY[i]+eh, spcEnemyX[i]-ew, spcEnemyY[i]-eh, spcEnemyX[i]+ew, spcEnemyY[i]-eh, TFT_MAGENTA);
       }
     }
 
     if (spcPowerActive) {
-      display.fillRect(spcPowerX - 4, spcPowerY - 4, 8, 8, spcPowerType == 0 ? TFT_YELLOW : TFT_GREEN);
+      int pwSize = SCREEN_WIDTH == 240 ? 12 : 8;
+      display.fillRect(spcPowerX - pwSize/2, spcPowerY - pwSize/2, pwSize, pwSize, spcPowerType == 0 ? TFT_YELLOW : TFT_GREEN);
       display.setTextColor(TFT_BLACK);
       display.setTextSize(1);
       display.setCursor(spcPowerX - 3, spcPowerY - 3);
@@ -1637,17 +836,19 @@ public:
     }
 
     if (spcBossActive) {
-      display.fillRoundRect(spcBossX - 16, spcBossY - 8, 32, 16, 4, TFT_RED);
-      display.fillRect(spcBossX - 4, spcBossY + 8, 8, 4, TFT_YELLOW);
+      int bw = SCREEN_WIDTH == 240 ? 32 : 16;
+      int bh = SCREEN_WIDTH == 240 ? 16 : 8;
+      display.fillRoundRect(spcBossX - bw, spcBossY - bh, bw * 2, bh * 2, 4, TFT_RED);
+      display.fillRect(spcBossX - bw/4, spcBossY + bh, bw/2, bh/2, TFT_YELLOW);
       
-      display.drawFastHLine(spcBossX - 15, spcBossY - 14, 30, TFT_BLACK);
-      display.drawFastHLine(spcBossX - 15, spcBossY - 14, spcBossHP * 30 / 20, TFT_GREEN);
+      display.drawFastHLine(spcBossX - bw + 2, spcBossY - bh - 6, (bw - 2) * 2, TFT_BLACK);
+      display.drawFastHLine(spcBossX - bw + 2, spcBossY - bh - 6, spcBossHP * (bw - 2) * 2 / 20, TFT_GREEN);
     }
 
-    display.fillTriangle(spcPlayerX, spcPlayerY - 8, spcPlayerX - 6, spcPlayerY + 4, spcPlayerX + 6, spcPlayerY + 4, themeAccent);
+    display.fillTriangle(spcPlayerX, spcPlayerY - ph, spcPlayerX - pw, spcPlayerY + ph/2, spcPlayerX + pw, spcPlayerY + ph/2, themeAccent);
     
     if (millis() < spcShieldTime) {
-      display.drawCircle(spcPlayerX, spcPlayerY - 2, 10, TFT_GREEN);
+      display.drawCircle(spcPlayerX, spcPlayerY - ph/4, SCREEN_WIDTH == 240 ? 20 : 10, TFT_GREEN);
     }
 
     display.fillRect(0, 0, SCREEN_WIDTH, G_Y, themeBg);
@@ -1683,6 +884,542 @@ public:
       } else {
         drawGameOverScreen(display, spcScore, spcHighScore);
       }
+    }
+  }
+
+  // --- Game 3: Flappy Mochy ---
+  void updateAndDrawFlappy(GFXcanvas16& display, LunaAudio& audio) {
+    extern String robotVariant;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104;
+    uint16_t themeBorder = 0xCE79;
+
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+
+    int mSize = SCREEN_WIDTH == 240 ? 8 : 4;
+    int pW = SCREEN_WIDTH == 240 ? 24 : 16;
+    int gapH = SCREEN_WIDTH == 240 ? 50 : 35;
+
+    if (!flapGameOver) {
+      if (btn2 && !lastBtn2) {
+        flapPlayerVY = SCREEN_WIDTH == 240 ? -3.8f : -2.8f;
+        audio.playSound(SOUND_JUMP);
+      }
+
+      flapPlayerVY += SCREEN_WIDTH == 240 ? 0.22f : 0.18f; // Gravity
+      flapPlayerY += flapPlayerVY;
+
+      flapPipeX -= SCREEN_WIDTH == 240 ? 2.2f : 1.5f;
+      if (flapPipeX < G_X - pW) {
+        flapPipeX = G_R;
+        flapPipeGapY = G_Y + 20 + random(0, G_H - gapH - 40);
+        flapScore++;
+        audio.playSound(SOUND_CHIRP);
+      }
+
+      if (flapPlayerY < G_Y || flapPlayerY > G_B - mSize * 2) {
+        flapGameOver = true;
+        audio.playSound(SOUND_GAMEOVER);
+        saveHighScore("flap", flapHighScore, flapScore);
+      }
+
+      if (flapPipeX > G_X + G_W / 2 - pW && flapPipeX < G_X + G_W / 2 + mSize) {
+        if (flapPlayerY < flapPipeGapY || flapPlayerY > flapPipeGapY + gapH - mSize * 2) {
+          flapGameOver = true;
+          audio.playSound(SOUND_GAMEOVER);
+          saveHighScore("flap", flapHighScore, flapScore);
+        }
+      }
+    } else {
+      if (btn1 && !lastBtn1) {
+        resetFlappy();
+      }
+    }
+    lastBtn1 = btn1;
+    lastBtn2 = btn2;
+
+    display.fillRect(G_X, G_Y, G_W, G_H, 0x7E5F); // Sky
+
+    // Draw clouds
+    display.fillCircle(SCREEN_WIDTH/6, G_Y + G_H/4, SCREEN_WIDTH/20, TFT_WHITE);
+    display.fillCircle(SCREEN_WIDTH/6 + 10, G_Y + G_H/4, SCREEN_WIDTH/15, TFT_WHITE);
+    display.fillCircle(SCREEN_WIDTH/6 + 20, G_Y + G_H/4, SCREEN_WIDTH/20, TFT_WHITE);
+
+    display.fillRect(G_X, G_B - 6, G_W, 6, 0x03E0); // grass ground
+
+    // Pipes
+    if (flapPipeX >= G_X && flapPipeX < G_R) {
+      uint16_t pipeColor = 0x1AE2;
+      // Top
+      display.fillRect(flapPipeX, G_Y, pW, flapPipeGapY - G_Y, pipeColor);
+      display.drawRect(flapPipeX, G_Y, pW, flapPipeGapY - G_Y, TFT_BLACK);
+      display.fillRect(flapPipeX - 2, flapPipeGapY - 8, pW + 4, 8, pipeColor);
+      display.drawRect(flapPipeX - 2, flapPipeGapY - 8, pW + 4, 8, TFT_BLACK);
+      // Bottom
+      display.fillRect(flapPipeX, flapPipeGapY + gapH, pW, G_B - (flapPipeGapY + gapH), pipeColor);
+      display.drawRect(flapPipeX, flapPipeGapY + gapH, pW, G_B - (flapPipeGapY + gapH), TFT_BLACK);
+      display.fillRect(flapPipeX - 2, flapPipeGapY + gapH, pW + 4, 8, pipeColor);
+      display.drawRect(flapPipeX - 2, flapPipeGapY + gapH, pW + 4, 8, TFT_BLACK);
+    }
+
+    // Player Mochy
+    int px = G_X + G_W / 2 - mSize;
+    display.fillCircle(px + mSize, flapPlayerY + mSize, mSize, TFT_YELLOW);
+    display.fillCircle(px + mSize + mSize/2, flapPlayerY + mSize/2, mSize/4, TFT_BLACK);
+    display.fillRect(px, flapPlayerY + mSize, mSize/2, mSize/3, TFT_ORANGE);
+
+    // HUD
+    display.fillRect(0, 0, SCREEN_WIDTH, G_Y, themeBg);
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeText);
+    display.setCursor(6, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("SCORE:%03d", flapScore);
+
+    display.setCursor(SCREEN_WIDTH - (SCREEN_WIDTH == 240 ? 90 : 54), SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("HI:%03d", flapHighScore);
+    display.drawFastHLine(0, G_Y - 1, SCREEN_WIDTH, themeBorder);
+
+    if (flapGameOver) {
+      drawGameOverScreen(display, flapScore, flapHighScore);
+    }
+  }
+
+  // --- Game 4: Coin Catcher ---
+  void updateAndDrawCatcher(GFXcanvas16& display, LunaAudio& audio) {
+    extern String robotVariant;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104;
+    uint16_t themeBorder = 0xCE79;
+
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+
+    int basketW = SCREEN_WIDTH == 240 ? 24 : 16;
+    int coinR = SCREEN_WIDTH == 240 ? 5 : 3;
+
+    if (!catGameOver) {
+      if (btn1) {
+        catPlayerX -= 4;
+        if (catPlayerX < G_X + 8) catPlayerX = G_X + 8;
+      }
+      if (btn2) {
+        catPlayerX += 4;
+        if (catPlayerX > G_R - basketW - 8) catPlayerX = G_R - basketW - 8;
+      }
+
+      float fallSpeed = SCREEN_WIDTH == 240 ? (2.0f + catScore / 80.0f) : (1.4f + catScore / 80.0f);
+      for (int i = 0; i < 3; i++) {
+        if (catCoinsActive[i]) {
+          catCoinsY[i] += fallSpeed;
+          
+          if (catCoinsY[i] > G_B - 6) {
+            if (!catIsBomb[i]) {
+              catLives--;
+              audio.playSound(SOUND_POWERDOWN);
+              if (catLives <= 0) {
+                catGameOver = true;
+                audio.playSound(SOUND_GAMEOVER);
+                saveHighScore("cat", catHighScore, catScore);
+              }
+            }
+            catCoinsX[i] = G_X + 16 + random(0, G_W - 48);
+            catCoinsY[i] = G_Y - 20;
+            catIsBomb[i] = (random(0, 10) < 3);
+          }
+
+          if (catCoinsY[i] >= G_B - 20 && catCoinsY[i] <= G_B - 10) {
+            if (catCoinsX[i] + coinR >= catPlayerX && catCoinsX[i] <= catPlayerX + basketW) {
+              if (catIsBomb[i]) {
+                catLives--;
+                audio.playSound(SOUND_POWERDOWN);
+                if (catLives <= 0) {
+                  catGameOver = true;
+                  audio.playSound(SOUND_GAMEOVER);
+                  saveHighScore("cat", catHighScore, catScore);
+                }
+              } else {
+                catScore += 10;
+                audio.playSound(SOUND_COIN);
+              }
+              catCoinsX[i] = G_X + 16 + random(0, G_W - 48);
+              catCoinsY[i] = G_Y - 20;
+              catIsBomb[i] = (random(0, 10) < 3);
+            }
+          }
+        }
+      }
+    } else {
+      if (btn1 && !lastBtn1) {
+        resetCatcher();
+      }
+    }
+    lastBtn1 = btn1;
+    lastBtn2 = btn2;
+
+    display.fillRect(G_X, G_Y, G_W, G_H, 0x5D1B); // Indigo/Blue sky
+    display.drawFastHLine(G_X, G_B - 8, G_W, TFT_GREEN); // green floor
+
+    // Basket
+    display.fillRoundRect(catPlayerX, G_B - 14, basketW, 6, 2, 0xC3A5);
+    display.fillRect(catPlayerX + basketW/4, G_B - 8, basketW/2, 2, 0x8200);
+
+    // Coins & Bombs
+    for (int i = 0; i < 3; i++) {
+      if (catCoinsActive[i]) {
+        if (catIsBomb[i]) {
+          display.fillCircle(catCoinsX[i] + coinR, catCoinsY[i] + coinR, coinR, TFT_BLACK);
+          display.fillRect(catCoinsX[i] + coinR - 1, catCoinsY[i] - 1, 2, 2, TFT_ORANGE);
+        } else {
+          display.fillCircle(catCoinsX[i] + coinR, catCoinsY[i] + coinR, coinR, 0xFDA0);
+          display.drawCircle(catCoinsX[i] + coinR, catCoinsY[i] + coinR, coinR, TFT_YELLOW);
+        }
+      }
+    }
+
+    // HUD
+    display.fillRect(0, 0, SCREEN_WIDTH, G_Y, themeBg);
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeText);
+    display.setCursor(6, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("SC:%03d", catScore);
+
+    int lifeX = SCREEN_WIDTH - (SCREEN_WIDTH == 240 ? 54 : 32);
+    for (int i = 0; i < 3; i++) {
+      int hx = lifeX + i * (SCREEN_WIDTH == 240 ? 14 : 7);
+      int hy = SCREEN_WIDTH == 240 ? 42 : 10;
+      display.fillCircle(hx, hy, SCREEN_WIDTH == 240 ? 3 : 2, i < catLives ? TFT_RED : themeBorder);
+    }
+    display.drawFastHLine(0, G_Y - 1, SCREEN_WIDTH, themeBorder);
+
+    if (catGameOver) {
+      drawGameOverScreen(display, catScore, catHighScore);
+    }
+  }
+
+  // --- Game 5: Mochy Jump ---
+  void updateAndDrawJump(GFXcanvas16& display, LunaAudio& audio) {
+    extern String robotVariant;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104;
+    uint16_t themeBorder = 0xCE79;
+
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+
+    int platW = SCREEN_WIDTH == 240 ? 36 : 24;
+    int pW = SCREEN_WIDTH == 240 ? 12 : 8;
+    int pH = SCREEN_WIDTH == 240 ? 16 : 10;
+
+    if (!jumpGameOver) {
+      if (btn1) {
+        jumpPlayerX -= 3.0f;
+      }
+      if (btn2) {
+        jumpPlayerX += 3.0f;
+      }
+
+      if (jumpPlayerX < G_X - pW) jumpPlayerX = G_R - pW;
+      if (jumpPlayerX > G_R + pW) jumpPlayerX = G_X - pW;
+
+      jumpPlayerVY += 0.18f;
+      jumpPlayerY += jumpPlayerVY;
+
+      if (jumpPlayerY < G_Y + G_H / 2) {
+        float diff = (G_Y + G_H / 2) - jumpPlayerY;
+        jumpPlayerY = G_Y + G_H / 2;
+        jumpScore += diff / 2;
+        
+        for (int i = 0; i < 5; i++) {
+          jumpPlatY[i] += diff;
+          if (jumpPlatY[i] > G_B) {
+            jumpPlatY[i] = G_Y - 10 + random(0, 15);
+            jumpPlatX[i] = G_X + 10 + random(0, G_W - platW - 10);
+          }
+        }
+      }
+
+      if (jumpPlayerVY > 0) {
+        for (int i = 0; i < 5; i++) {
+          if (jumpPlayerX + pW >= jumpPlatX[i] && jumpPlayerX <= jumpPlatX[i] + platW) {
+            if (jumpPlayerY + pH >= jumpPlatY[i] && jumpPlayerY + pH - 4 <= jumpPlatY[i] + 4) {
+              jumpPlayerVY = SCREEN_WIDTH == 240 ? -5.8f : -4.8f;
+              audio.playSound(SOUND_JUMP);
+              break;
+            }
+          }
+        }
+      }
+
+      if (jumpPlayerY > G_B) {
+        jumpGameOver = true;
+        audio.playSound(SOUND_GAMEOVER);
+        saveHighScore("jump", jumpHighScore, jumpScore);
+      }
+    } else {
+      if (btn1 && !lastBtn1) {
+        resetJump();
+      }
+    }
+    lastBtn1 = btn1;
+    lastBtn2 = btn2;
+
+    display.fillScreen(0x000F); // grid sheet dark background
+    for (int x = 20; x < G_W; x += 20) {
+      display.drawFastVLine(x, G_Y, G_H, 0x0842);
+    }
+    for (int y = G_Y + 20; y < G_B; y += 20) {
+      display.drawFastHLine(G_X, y, G_W, 0x0842);
+    }
+
+    // Platforms
+    for (int i = 0; i < 5; i++) {
+      display.fillRoundRect(jumpPlatX[i], jumpPlatY[i], platW, 4, 1, TFT_GREEN);
+      display.drawRoundRect(jumpPlatX[i], jumpPlatY[i], platW, 4, 1, TFT_WHITE);
+    }
+
+    // Player Jumper
+    display.fillRoundRect(jumpPlayerX, jumpPlayerY, pW, pH, 2, TFT_YELLOW);
+    display.fillCircle(jumpPlayerX + pW/3, jumpPlayerY + pH/4, 1, TFT_BLACK);
+    display.fillCircle(jumpPlayerX + 2*pW/3, jumpPlayerY + pH/4, 1, TFT_BLACK);
+
+    // HUD
+    display.fillRect(0, 0, SCREEN_WIDTH, G_Y, themeBg);
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeText);
+    display.setCursor(6, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("ALT:%04d", jumpScore);
+
+    display.setCursor(SCREEN_WIDTH - (SCREEN_WIDTH == 240 ? 90 : 54), SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("HI:%04d", jumpHighScore);
+    display.drawFastHLine(0, G_Y - 1, SCREEN_WIDTH, themeBorder);
+
+    if (jumpGameOver) {
+      drawGameOverScreen(display, jumpScore, jumpHighScore);
+    }
+  }
+
+  // --- Game 6: Stacker ---
+  void updateAndDrawStacker(GFXcanvas16& display, LunaAudio& audio) {
+    extern String robotVariant;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104;
+    uint16_t themeBorder = 0xCE79;
+
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+
+    int blockH = SCREEN_WIDTH == 240 ? 12 : 8;
+
+    if (!stkGameOver) {
+      stkBlockX += stkDir * stkSpeed;
+      if (stkBlockX < G_X + 6) {
+        stkBlockX = G_X + 6;
+        stkDir = 1;
+      }
+      if (stkBlockX + stkBlockW > G_R - 6) {
+        stkBlockX = G_R - 6 - stkBlockW;
+        stkDir = -1;
+      }
+
+      if (btn2 && !lastBtn2) {
+        if (stkStackHeight == 0) {
+          stkBaseX = stkBlockX;
+          stkStackX[0] = stkBlockX;
+          stkStackW[0] = stkBlockW;
+          stkStackHeight = 1;
+          stkScore += 10;
+          audio.playSound(SOUND_COIN);
+        } else {
+          float prevX = stkStackX[stkStackHeight - 1];
+          float prevW = stkStackW[stkStackHeight - 1];
+
+          float overlapLeft = max(stkBlockX, prevX);
+          float overlapRight = min(stkBlockX + stkBlockW, prevX + prevW);
+          float overlapW = overlapRight - overlapLeft;
+
+          if (overlapW <= 0) {
+            stkGameOver = true;
+            audio.playSound(SOUND_GAMEOVER);
+            saveHighScore("stk", stkHighScore, stkScore);
+          } else {
+            stkBlockW = overlapW;
+            stkBlockX = overlapLeft;
+            
+            if (stkStackHeight < 10) {
+              stkStackX[stkStackHeight] = overlapLeft;
+              stkStackW[stkStackHeight] = overlapW;
+              stkStackHeight++;
+            } else {
+              for (int i = 0; i < 9; i++) {
+                stkStackX[i] = stkStackX[i+1];
+                stkStackW[i] = stkStackW[i+1];
+              }
+              stkStackX[9] = overlapLeft;
+              stkStackW[9] = overlapW;
+            }
+            stkScore += 10;
+            audio.playSound(SOUND_COIN);
+            stkSpeed += 0.25f;
+          }
+        }
+      }
+    } else {
+      if (btn1 && !lastBtn1) {
+        resetStacker();
+      }
+    }
+    lastBtn1 = btn1;
+    lastBtn2 = btn2;
+
+    display.fillRect(G_X, G_Y, G_W, G_H, 0x1804); // Neon dark violet
+    for (int y = G_Y; y < G_B; y += blockH + 2) {
+      display.drawFastHLine(G_X, y, G_W, 0x2104);
+    }
+
+    for (int i = 0; i < stkStackHeight; i++) {
+      int blockY = G_B - (blockH + 2) - i * (blockH + 2);
+      display.fillRoundRect(stkStackX[i], blockY, stkStackW[i], blockH, 2, themeAccent);
+      display.drawRoundRect(stkStackX[i], blockY, stkStackW[i], blockH, 2, TFT_WHITE);
+    }
+
+    if (!stkGameOver) {
+      int curY = G_B - (blockH + 2) - stkStackHeight * (blockH + 2);
+      display.fillRoundRect(stkBlockX, curY, stkBlockW, blockH, 2, TFT_YELLOW);
+      display.drawRoundRect(stkBlockX, curY, stkBlockW, blockH, 2, TFT_WHITE);
+    }
+
+    // HUD
+    display.fillRect(0, 0, SCREEN_WIDTH, G_Y, themeBg);
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeText);
+    display.setCursor(6, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("STACK:%03d", stkScore);
+
+    display.setCursor(SCREEN_WIDTH - (SCREEN_WIDTH == 240 ? 90 : 54), SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("HIGH:%03d", stkHighScore);
+    display.drawFastHLine(0, G_Y - 1, SCREEN_WIDTH, themeBorder);
+
+    if (stkGameOver) {
+      drawGameOverScreen(display, stkScore, stkHighScore);
+    }
+  }
+
+  // --- Game 7: Memory Matrix ---
+  void updateAndDrawMemory(GFXcanvas16& display, LunaAudio& audio) {
+    extern String robotVariant;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104;
+    uint16_t themeBorder = 0xCE79;
+
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+
+    int gridSpacing = SCREEN_WIDTH == 240 ? 42 : 28;
+    int gridStartX = G_X + (G_W - 3 * gridSpacing) / 2;
+    int gridStartY = G_Y + (G_H - 3 * gridSpacing) / 2;
+
+    if (!memGameOver) {
+      if (memState == 0) {
+        unsigned long elapsed = millis() - memTimer;
+        int stepTime = 600;
+        int gapTime = 200;
+        int cycleTime = stepTime + gapTime;
+        int currentStep = elapsed / cycleTime;
+
+        if (currentStep < memSeqLen) {
+          int stepPhase = elapsed % cycleTime;
+          if (stepPhase < stepTime) {
+            memSeqStep = memSeq[currentStep];
+          } else {
+            memSeqStep = -1;
+          }
+        } else {
+          memState = 1;
+          memPlayerStep = 0;
+          memSeqStep = -1;
+        }
+      }
+      else if (memState == 1) {
+        if (btn1 && !lastBtn1) {
+          memSelectedTile = (memSelectedTile + 1) % 9;
+          audio.playSound(SOUND_CHIRP);
+        }
+
+        if (btn2 && !lastBtn2) {
+          if (memSelectedTile == memSeq[memPlayerStep]) {
+            audio.playSound(SOUND_JUMP);
+            memPlayerStep++;
+            if (memPlayerStep == memSeqLen) {
+              memScore += 10;
+              memSeqLen++;
+              if (memSeqLen > 15) memSeqLen = 15;
+              memSeq[memSeqLen - 1] = random(0, 9);
+              memState = 0;
+              memTimer = millis();
+            }
+          } else {
+            memGameOver = true;
+            audio.playSound(SOUND_GAMEOVER);
+            saveHighScore("mem", memHighScore, memScore);
+          }
+        }
+      }
+    } else {
+      if (btn1 && !lastBtn1) {
+        resetMemory();
+      }
+    }
+    lastBtn1 = btn1;
+    lastBtn2 = btn2;
+
+    display.fillRect(G_X, G_Y, G_W, G_H, 0x10A2); // Green cyber grid
+
+    for (int r = 0; r < 3; r++) {
+      for (int c = 0; c < 3; c++) {
+        int tileIdx = r * 3 + c;
+        int tx = gridStartX + c * gridSpacing + 3;
+        int ty = gridStartY + r * gridSpacing + 3;
+        int tw = gridSpacing - 6;
+        int th = gridSpacing - 6;
+
+        uint16_t tileColor = 0x0182; // Dim green
+        if (memState == 0 && memSeqStep == tileIdx) {
+          tileColor = TFT_YELLOW;
+        }
+        else if (memState == 1 && memSelectedTile == tileIdx) {
+          tileColor = themeAccent;
+        }
+
+        display.fillRoundRect(tx, ty, tw, th, 4, tileColor);
+        display.drawRoundRect(tx, ty, tw, th, 4, TFT_WHITE);
+      }
+    }
+
+    // HUD
+    display.fillRect(0, 0, SCREEN_WIDTH, G_Y, themeBg);
+    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
+    display.setTextColor(themeText);
+    display.setCursor(6, SCREEN_WIDTH == 240 ? 36 : 7);
+    display.printf("SC:%03d", memScore);
+
+    display.setCursor(SCREEN_WIDTH - (SCREEN_WIDTH == 240 ? 120 : 68), SCREEN_WIDTH == 240 ? 36 : 7);
+    if (memState == 0) {
+      display.setTextColor(TFT_RED);
+      display.print("WATCH SEQ");
+    } else {
+      display.setTextColor(0x03E0);
+      display.printf("STEP:%d/%d", memPlayerStep + 1, memSeqLen);
+    }
+    display.drawFastHLine(0, G_Y - 1, SCREEN_WIDTH, themeBorder);
+
+    if (memGameOver) {
+      drawGameOverScreen(display, memScore, memHighScore);
     }
   }
 };

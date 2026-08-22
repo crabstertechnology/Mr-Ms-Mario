@@ -14,6 +14,7 @@
 #include "bluetooth.h"
 #include "interaction.h"
 #include "games.h"
+#include "qr_card.h"
 
 #define BUTTON1_PIN BTN_EXPR_PIN
 #define BUTTON2_PIN BTN_SETTINGS_PIN
@@ -38,7 +39,7 @@ Preferences preferences;
 bool bleActive = true;
 int gifSpeed = 169;
 int gifIntroSpeed = 169;
-int introSoundSpeed = 169;
+int introSoundSpeed = 80;
 int defaultGif = 99;      // default GIF expression (0-6, or 99 for Cycle Mode)
 bool isCycleMode = true;
 int gifIntro = 1;        // intro GIF expression (0-6)
@@ -62,6 +63,7 @@ bool gamePlaying = false;
 int gameMenuOption = 0;
 int gameSelected = 0;
 LunaGames games;
+LunaQR qrCard;   // Digital Business Card QR manager
 
 // System State Variables
 unsigned int touchCount = 0;
@@ -763,6 +765,33 @@ void handleRobotCommand(String text) {
     SPIFFS.remove("/wallpaper.bin");
     ble.sendLog("WP_CLEAR:OK");
     Serial.println("Wallpaper removed");
+  } else if (text == "QRCARD:CLEAR") {
+    qrCard.clearCard();
+    if (currentScreen == SCREEN_CARD) {
+      currentScreen = SCREEN_FACE;
+    }
+    ble.sendLog("QR_CLEARED:OK");
+    Serial.println("[QR] Business card cleared from NVS.");
+  } else if (text.startsWith("QRCARD:")) {
+    // Digital Business Card sync: "QRCARD:<url>"
+    String url = text.substring(7);
+    url.trim();
+    if (url.length() > 0 && url.length() <= 255) {
+      bool saved = qrCard.saveUrl(url);
+      if (saved) {
+        currentScreen = SCREEN_CARD; // Jump to card screen to display updated QR code
+        lastInteractionTime = millis();
+        ble.sendLog("QR_SAVED:OK");  // App listens for this to confirm success
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[QR] Business card URL saved and displayed: " + url);
+      } else {
+        ble.sendLog("QR_SAVED:FAIL");
+        Serial.println("[QR] Failed to save business card URL!");
+      }
+    } else {
+      ble.sendLog("QR_SAVED:INVALID");
+      Serial.println("[QR] Invalid or empty URL received.");
+    }
   } else {
     // Normal text message notification
     face.setNotificationText(text, rtcHour, rtcMinute);
@@ -813,7 +842,7 @@ void applySettings(String payload) {
     gifIntroSpeed = 169;
   }
   if (partCount > 9) {
-    introSoundSpeed = 169;
+    introSoundSpeed = 80;
   }
   if (partCount > 10) {
     notificationDurationMs = parts[10].toInt() * 1000;
@@ -935,7 +964,7 @@ void setup() {
   silentMode = preferences.getBool("silent", false);
   audio.silentMode = silentMode;
   gifIntroSpeed = 169;
-  introSoundSpeed = 169;
+  introSoundSpeed = 80;
   is12HourFormat = preferences.getBool("is12H", false);
   notificationDurationMs = preferences.getInt("notifDur", 5000);
   reminderDurationMs = preferences.getInt("remDur", 10000);
@@ -965,8 +994,8 @@ void setup() {
   audio.begin();
   interaction.begin();   // sets up both buttons with INPUT_PULLUP (active-low)
   pinMode(BATTERY_PIN, INPUT); // Initialize battery monitoring pin
-  // Initial battery read (2x 10k divider ratio is 1:2. Multiply by 2.0 to get battery voltage)
-  batteryVolts = (analogReadMilliVolts(BATTERY_PIN) * 2.0f) / 1000.0f;
+  // Initial battery read (uses BATTERY_CALIBRATION_MULTIPLIER to account for divider ratio and impedance loading)
+  batteryVolts = (analogReadMilliVolts(BATTERY_PIN) * BATTERY_CALIBRATION_MULTIPLIER) / 1000.0f;
 
   Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
   Serial.println(FIRMWARE_VERSION);
@@ -1079,6 +1108,7 @@ void setup() {
     Serial.println("SPIFFS Mount Failed");
   }
   games.begin();
+  qrCard.begin();  // Load persisted business card URL from NVS
   network.init();
 }
 
@@ -1284,6 +1314,14 @@ void handleBtn1Single() {
   lastInteractionTime = millis();
   if (mapsActive) return;
 
+  // Button 1 always exits the QR card screen immediately
+  if (currentScreen == SCREEN_CARD) {
+    currentScreen = SCREEN_FACE;
+    audio.playSound(SOUND_POWERDOWN);
+    Serial.println("[BTN1] Exited QR Card screen");
+    return;
+  }
+
   if (currentScreen == SCREEN_SETTINGS) {
     if (!settingsActive) {
       settingsActive = true;
@@ -1313,7 +1351,7 @@ void handleBtn1Single() {
     } else {
       if (!gamePlaying) {
         // Red button (Button 1) cycles games menu down
-        gameMenuOption = (gameMenuOption + 1) % 4;
+        gameMenuOption = (gameMenuOption + 1) % 8;
         audio.playSound(SOUND_CHIRP);
         Serial.printf("[BTN1] Games Menu DOWN -> option %d\n", gameMenuOption);
       }
@@ -1436,24 +1474,18 @@ void handleBtn2Single() {
   if (currentScreen == SCREEN_GAMES && gamesActive) {
     if (!gamePlaying) {
       // Yellow button (Button 2) selects/confirms the option in games menu
-      if (gameMenuOption == 0) {
-        games.resetAdventure();
-        gameSelected = 1;
+      if (gameMenuOption >= 0 && gameMenuOption < 7) {
+        gameSelected = gameMenuOption + 1;
+        if (gameSelected == 1) games.resetRacer();
+        else if (gameSelected == 2) games.resetSpace();
+        else if (gameSelected == 3) games.resetFlappy();
+        else if (gameSelected == 4) games.resetCatcher();
+        else if (gameSelected == 5) games.resetJump();
+        else if (gameSelected == 6) games.resetStacker();
+        else if (gameSelected == 7) games.resetMemory();
         gamePlaying = true;
         audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 1: Luna Adventure");
-      } else if (gameMenuOption == 1) {
-        games.resetRacer();
-        gameSelected = 2;
-        gamePlaying = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 2: Luna Racer");
-      } else if (gameMenuOption == 2) {
-        games.resetSpace();
-        gameSelected = 3;
-        gamePlaying = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 3: Luna Space");
+        Serial.printf("[BTN2] Started Game %d\n", gameSelected);
       } else {
         gamesActive = false;
         audio.playSound(SOUND_POWERDOWN);
@@ -1493,9 +1525,11 @@ void handleBtn2Single() {
     return;
   }
 
-  // Cycles screens: Clock -> Notifications -> Calendar -> Games -> Face -> Clock
+  // Cycles screens: Face -> QR Card -> Clock -> Notifications -> Calendar -> Games -> Settings -> Face
   SmartwatchScreen nextScreen;
   if (currentScreen == SCREEN_FACE) {
+    nextScreen = SCREEN_CARD;
+  } else if (currentScreen == SCREEN_CARD) {
     nextScreen = SCREEN_CLOCK;
   } else if (currentScreen == SCREEN_CLOCK) {
     nextScreen = SCREEN_NOTIFICATIONS;
@@ -1551,8 +1585,8 @@ void updateStateLabel() {
   } else if (currentScreen == SCREEN_GAMES) {
     if (gamePlaying) {
       const char* gameNames[] = {
-        "COIN CATCHER", "FLAPPY MOCHY", "RETRO SNAKE", "SPACE INVADERS",
-        "PONG CHALLENGE", "BRICK BREAKER", "MEMORY MATCH"
+        "LUNA RACER", "LUNA SPACE", "FLAPPY MOCHY", "COIN CATCHER",
+        "MOCHY JUMP", "STACKER", "MEMORY MATRIX"
       };
       if (gameSelected >= 1 && gameSelected <= 7) {
         face.setStateLabel(gameNames[gameSelected - 1]);
@@ -1572,6 +1606,8 @@ void updateStateLabel() {
     face.setStateLabel("CALENDAR");
   } else if (currentScreen == SCREEN_MAPS) {
     face.setStateLabel("MAPS");
+  } else if (currentScreen == SCREEN_CARD) {
+    face.setStateLabel("QR CARD");
   } else if (currentScreen == SCREEN_SETTINGS) {
     face.setStateLabel("SETTINGS");
   } else {
@@ -1752,7 +1788,8 @@ void loop() {
   }
 
   // 4. Inactivity Timer: Auto-return to Face screen after 15 seconds of no interaction in UI modes
-  if (currentScreen != SCREEN_FACE && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive && !gamePlaying) {
+  // Note: SCREEN_CARD is excluded – QR must stay visible until user explicitly dismisses it
+  if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive && !gamePlaying) {
     if (now - lastInteractionTime >= 15000) {
       currentScreen = SCREEN_FACE;
       lastExpressionCycleTime = now;
@@ -1764,8 +1801,8 @@ void loop() {
   static unsigned long lastBatteryReadTime = 0;
   if (now - lastBatteryReadTime > 1000) {
     lastBatteryReadTime = now;
-    // 1:2 divider with 2x 10k Ohm resistors. Multiply by 2.0 to get battery voltage.
-    float rawVolts = (analogReadMilliVolts(BATTERY_PIN) * 2.0f) / 1000.0f;
+    // Multiply by BATTERY_CALIBRATION_MULTIPLIER to get calibrated battery voltage.
+    float rawVolts = (analogReadMilliVolts(BATTERY_PIN) * BATTERY_CALIBRATION_MULTIPLIER) / 1000.0f;
     // Apply low-pass Exponential Moving Average filter to smooth fluctuations
     if (batteryVolts == 3.82f) {
       batteryVolts = rawVolts; // first read override

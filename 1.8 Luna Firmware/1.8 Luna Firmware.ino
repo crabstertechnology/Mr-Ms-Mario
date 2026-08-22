@@ -1358,7 +1358,7 @@ void handleBtn1Single() {
     } else {
       if (!gamePlaying) {
         // Red button (Button 1) cycles games menu down
-        gameMenuOption = (gameMenuOption + 1) % 4;
+        gameMenuOption = (gameMenuOption + 1) % 8;
         audio.playSound(SOUND_CHIRP);
         Serial.printf("[BTN1] Games Menu DOWN -> option %d\n", gameMenuOption);
       }
@@ -1482,24 +1482,18 @@ void handleBtn2Single() {
   if (currentScreen == SCREEN_GAMES && gamesActive) {
     if (!gamePlaying) {
       // Yellow button (Button 2) selects/confirms the option in games menu
-      if (gameMenuOption == 0) {
-        games.resetAdventure();
-        gameSelected = 1;
+      if (gameMenuOption >= 0 && gameMenuOption < 7) {
+        gameSelected = gameMenuOption + 1;
+        if (gameSelected == 1) games.resetRacer();
+        else if (gameSelected == 2) games.resetSpace();
+        else if (gameSelected == 3) games.resetFlappy();
+        else if (gameSelected == 4) games.resetCatcher();
+        else if (gameSelected == 5) games.resetJump();
+        else if (gameSelected == 6) games.resetStacker();
+        else if (gameSelected == 7) games.resetMemory();
         gamePlaying = true;
         audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 1: Luna Adventure");
-      } else if (gameMenuOption == 1) {
-        games.resetRacer();
-        gameSelected = 2;
-        gamePlaying = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 2: Luna Racer");
-      } else if (gameMenuOption == 2) {
-        games.resetSpace();
-        gameSelected = 3;
-        gamePlaying = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN2] Started Game 3: Luna Space");
+        Serial.printf("[BTN2] Started Game %d\n", gameSelected);
       } else {
         gamesActive = false;
         audio.playSound(SOUND_POWERDOWN);
@@ -1599,8 +1593,8 @@ void updateStateLabel() {
   } else if (currentScreen == SCREEN_GAMES) {
     if (gamePlaying) {
       const char* gameNames[] = {
-        "COIN CATCHER", "FLAPPY MOCHY", "RETRO SNAKE", "SPACE INVADERS",
-        "PONG CHALLENGE", "BRICK BREAKER", "MEMORY MATCH"
+        "LUNA RACER", "LUNA SPACE", "FLAPPY MOCHY", "COIN CATCHER",
+        "MOCHY JUMP", "STACKER", "MEMORY MATRIX"
       };
       if (gameSelected >= 1 && gameSelected <= 7) {
         face.setStateLabel(gameNames[gameSelected - 1]);

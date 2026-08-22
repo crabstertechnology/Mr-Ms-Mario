@@ -7,6 +7,10 @@
 #include "config.h"
 #include "mochi_bitmaps.h"
 #include "image_logo.h"
+#include "qr_card.h"
+#include "wallpaper_image.h"
+
+extern LunaQR qrCard;
 
 // Color compatibility macros for Adafruit GFX
 #define TFT_BLACK       ST77XX_BLACK
@@ -45,6 +49,7 @@ extern int gameSelected;
 extern LunaGames games;
 extern LunaAudio audio;
 extern float batteryVolts;
+extern bool silentMode;
 
 class LunaFace {
 private:
@@ -554,24 +559,31 @@ public:
   // ------------------ Smartwatch UI Drawing Methods ------------------
   
   void drawStatusBar(int hour, int minute) {
-    // ── Background pill ───────────────────────────────────────────────────
-    display.fillRoundRect(8, 4, SCREEN_WIDTH - 16, 22, 11, 0x10A2);
-    display.drawRoundRect(8, 4, SCREEN_WIDTH - 16, 22, 11, 0x18E3);
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104; // Charcoal/black
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
+    uint16_t themeBorder = 0xD69A; // Light Grey
+    uint16_t themeSubText = 0x7BCF; // Muted grey
 
-    // ── Left zone: HH:MM (size 1 = 6px/char, 5 chars = 30px) ─────────────
-    display.setTextSize(1);
-    display.setTextColor(TFT_WHITE, 0x10A2);
+    // ── Background square bar running end-to-end ──────────────────────────
+    display.fillRect(0, 0, SCREEN_WIDTH, 24, themeCardBg);
+    display.drawFastHLine(0, 24, SCREEN_WIDTH, themeBorder);
+
+    // ── Left zone: HH:MM (size 2 = 12px/char, 5 chars = 60px) ─────────────
+    display.setTextSize(2);
+    display.setTextColor(themeText, themeCardBg);
     char tBuf[6];
     snprintf(tBuf, sizeof(tBuf), "%02d:%02d", hour, minute);
-    display.setCursor(14, 10);
-    display.print(tBuf);                          // 5 chars × 6px = 30px, ends at x=44
+    display.setCursor(8, 4);
+    display.print(tBuf);                          // 5 chars × 12px = 60px, ends at x=68
 
     // ── Right zone: battery and connectivity ─────────
-    int bx = SCREEN_WIDTH - 36;
+    int bx = SCREEN_WIDTH - 28;
     
     // Draw battery outline
-    display.drawRect(bx, 9, 16, 10, TFT_LIGHTGREY);
-    display.fillRect(bx + 16, 11, 2, 6, TFT_LIGHTGREY);
+    display.drawRect(bx, 6, 20, 12, themeText);
+    display.fillRect(bx + 20, 9, 2, 6, themeText);
     
     // Calculate battery percentage from voltage using calibrated LiPo discharge curve
     int batteryPct = 0;
@@ -590,8 +602,8 @@ public:
     if (batteryPct > 100) batteryPct = 100;
     if (batteryPct < 0) batteryPct = 0;
     
-    // Proportional fill width (max 12 pixels)
-    int fillWidth = (batteryPct * 12) / 100;
+    // Proportional fill width (max 16 pixels)
+    int fillWidth = (batteryPct * 16) / 100;
     uint16_t batteryColor = TFT_GREEN;
     if (batteryPct < 20) {
       batteryColor = TFT_RED;
@@ -599,25 +611,28 @@ public:
       batteryColor = TFT_YELLOW;
     }
     if (fillWidth > 0) {
-      display.fillRect(bx + 2, 11, fillWidth, 6, batteryColor);
+      display.fillRect(bx + 2, 8, fillWidth, 8, batteryColor);
     }
 
-    // Battery percentage text next to icon
-    display.setTextColor(TFT_WHITE, 0x10A2);
-    display.setTextSize(1);
-    display.setCursor(bx - 26, 10);
-    display.print(String(batteryPct) + "%");
+    // Battery percentage text next to icon (size 2 = 12px/char, 4 chars = 48px)
+    display.setTextColor(themeText, themeCardBg);
+    display.setTextSize(2);
+    String pctStr = String(batteryPct) + "%";
+    int pctStrW = pctStr.length() * 12;
+    display.setCursor(bx - 6 - pctStrW, 4);
+    display.print(pctStr);
 
     // BLE dot (shifted left to make room for text)
-    uint16_t bleColor = bleConnectedStatus  ? (uint16_t)0x5DFF : (uint16_t)TFT_DARKGREY;
-    display.fillCircle(bx - 34, 13, 3, bleColor);
+    uint16_t bleColor = bleConnectedStatus  ? (uint16_t)0x5DFF : themeSubText;
+    display.fillCircle(bx - 12 - pctStrW, 12, 3, bleColor);
 
     // WiFi dot (shifted left to make room for text)
-    uint16_t wifiColor = wifiConnectedStatus ? (uint16_t)TFT_GREEN : (uint16_t)TFT_DARKGREY;
-    display.fillCircle(bx - 44, 13, 3, wifiColor);
+    uint16_t wifiColor = wifiConnectedStatus ? (uint16_t)TFT_GREEN : themeSubText;
+    display.fillCircle(bx - 22 - pctStrW, 12, 3, wifiColor);
 
-    // ── Centre zone: screen name – clamped so it never overlaps sides ─────
-    display.setTextColor(TFT_YELLOW, 0x10A2);
+    // ── Centre zone: screen name (size 1 = 6px/char) ─────
+    display.setTextColor(themeAccent, themeCardBg);
+    display.setTextSize(1);
     const char* nm = "LUNA";
     switch (currentScreen) {
       case SCREEN_CLOCK:         nm = "CLOCK";     break;
@@ -626,24 +641,31 @@ public:
       case SCREEN_GAMES:         nm = "ARCADE";    break;
       case SCREEN_FACE:          nm = "FACE";      break;
       case SCREEN_MAPS:          nm = "MAPS";      break;
+      case SCREEN_CARD:          nm = "MY CARD";   break;
       case SCREEN_SETTINGS:      nm = "SETTINGS";  break;
       default:                   nm = "LUNA";      break;
     }
     int nmLen  = strlen(nm) * 6;               // size-1 chars
-    int leftEdge  = 50;                        // clear of HH:MM
-    int rightEdge = bx - 22;                  // clear of icons
-    int nmX = (leftEdge + rightEdge - nmLen) / 2 + leftEdge / 2;
+    int leftEdge  = 70;                        // clear of HH:MM
+    int rightEdge = bx - 26 - pctStrW;         // clear of icons/dots
+    int nmX = leftEdge + (rightEdge - leftEdge - nmLen) / 2;
     if (nmX < leftEdge) nmX = leftEdge;
     if (nmX + nmLen > rightEdge) nmX = rightEdge - nmLen;
-    display.setCursor(nmX, 10);
+    display.setCursor(nmX, 8);
     display.print(nm);
   }
 
   void drawPopup() {
-    uint16_t LUNA_CYAN   = 0x07FF;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104; // Charcoal/black
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
+    uint16_t themeBorder = 0xD69A; // Light Grey
+
+    uint16_t LUNA_CYAN   = themeAccent;
     uint16_t LUNA_PINK   = 0xF8B8;
-    uint16_t LUNA_DARK   = 0x0842;
-    uint16_t LUNA_GLASS  = 0x18E3;
+    uint16_t LUNA_DARK   = themeCardBg;
+    uint16_t LUNA_GLASS  = themeBorder;
 
     // 1. Premium Card Container
     display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 12, LUNA_CYAN);
@@ -658,7 +680,7 @@ public:
 
     // Title Capsule
     display.fillRoundRect(36, 13, 100, 18, 9, LUNA_GLASS);
-    display.setTextColor(LUNA_CYAN);
+    display.setTextColor(themeText);
     display.setTextSize(1);
     display.setCursor(44, 18);
     display.print("NEW ALERT  *");
@@ -666,14 +688,14 @@ public:
     display.drawFastHLine(12, 38, SCREEN_WIDTH - 24, LUNA_GLASS);
     
     // 3. Title & Content
-    display.setTextColor(TFT_WHITE);
+    display.setTextColor(themeText);
     display.setTextSize(2);
     display.setCursor(16, 48);
     String title = popupTitle;
     if (title.length() > 16) title = title.substring(0, 14) + "...";
     display.print(title);
     
-    display.setTextColor(0xDEDB);
+    display.setTextColor(themeText);
     display.setTextSize(2);
     int yStart = 72;
     int charsPerLine = (SCREEN_WIDTH - 32) / 12;
@@ -690,18 +712,28 @@ public:
     }
     
     // 4. Dismiss indicator
-    display.setTextColor(LUNA_PINK);
+    display.setTextColor(themeAccent);
     display.setTextSize(1);
     display.setCursor((SCREEN_WIDTH - 96) / 2, SCREEN_HEIGHT - 22);
     display.print("[Tap to Dismiss]");
   }
 
   void drawNotificationPanel() {
-    uint16_t LUNA_CYAN   = 0x07FF;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104; // Charcoal/black
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
+    uint16_t themeBorder = 0xD69A; // Light Grey
+    uint16_t themeSubText = 0x7BCF; // Muted grey
+
+    uint16_t LUNA_CYAN   = themeAccent;
     uint16_t LUNA_PINK   = 0xF8B8;
-    uint16_t LUNA_DARK   = 0x0842;
-    uint16_t LUNA_GLASS  = 0x18E3;
+    uint16_t LUNA_DARK   = themeCardBg;
+    uint16_t LUNA_GLASS  = themeBorder;
     uint16_t LUNA_CORAL  = 0xFC10;
+
+    // Clear display below the status bar
+    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
 
     if (notificationCount == 0) {
       // Sleeping face graphic
@@ -709,15 +741,15 @@ public:
       display.fillCircle(centerX, 70, 36, LUNA_GLASS);
       display.drawCircle(centerX, 70, 36, LUNA_PINK);
       
-      display.drawCircle(centerX - 12, 68, 6, TFT_WHITE);
+      display.drawCircle(centerX - 12, 68, 6, themeText);
       display.fillRect(centerX - 19, 60, 14, 8, LUNA_GLASS);
-      display.drawCircle(centerX + 12, 68, 6, TFT_WHITE);
+      display.drawCircle(centerX + 12, 68, 6, themeText);
       display.fillRect(centerX + 5, 60, 14, 8, LUNA_GLASS);
       
       display.fillCircle(centerX - 18, 76, 4, LUNA_CORAL);
       display.fillCircle(centerX + 18, 76, 4, LUNA_CORAL);
       
-      display.drawCircle(centerX, 76, 3, TFT_WHITE);
+      display.drawCircle(centerX, 76, 3, themeText);
       display.fillRect(centerX - 4, 73, 8, 3, LUNA_GLASS);
       
       display.setTextColor(LUNA_CYAN);
@@ -727,13 +759,13 @@ public:
       display.setCursor(centerX + 32, 32);
       display.print("z");
       
-      display.setTextColor(TFT_WHITE);
+      display.setTextColor(themeText);
       display.setTextSize(2);
       int lblW1 = 16 * 12;
       display.setCursor((SCREEN_WIDTH - lblW1) / 2, 126);
       display.print("No Notifications");
       
-      display.setTextColor(0xAD55);
+      display.setTextColor(themeSubText);
       display.setTextSize(1);
       int lblW2 = 18 * 6;
       display.setCursor((SCREEN_WIDTH - lblW2) / 2, 150);
@@ -751,7 +783,7 @@ public:
       display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, LUNA_DARK);
       
       // Header
-      display.setTextColor(LUNA_PINK);
+      display.setTextColor(themeText);
       display.setTextSize(2);
       display.setCursor(14, 34);
       String title = notif.title;
@@ -766,7 +798,7 @@ public:
       display.drawFastHLine(12, 54, SCREEN_WIDTH - 24, LUNA_GLASS);
       
       // Body Text
-      display.setTextColor(TFT_WHITE);
+      display.setTextColor(themeText);
       display.setTextSize(2);
       int yStart = 64;
       int charsPerLine = (SCREEN_WIDTH - 28) / 12;
@@ -783,7 +815,7 @@ public:
       }
       
       // Indicator
-      display.setTextColor(LUNA_PINK);
+      display.setTextColor(themeAccent);
       display.setTextSize(1);
       char footerBuf[16];
       snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentNotifViewIdx + 1, notificationCount);
@@ -793,7 +825,7 @@ public:
     } else {
       // List View: Draw list of up to 5 stored notifications
       // Header
-      display.setTextColor(LUNA_PINK);
+      display.setTextColor(themeText);
       display.setTextSize(2);
       display.setCursor(14, 32);
       display.print("Notifications");
@@ -810,13 +842,13 @@ public:
           display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_CYAN);
         } else {
           // Subtle border for inactive items
-          display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, 0x10A2);
+          display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_GLASS);
         }
         
         // Title/Sender text
         display.setCursor(16, y + 2);
         display.setTextSize(2);
-        display.setTextColor(TFT_WHITE);
+        display.setTextColor(themeText);
         String shortTitle = notif.title;
         if (shortTitle.length() > 11) shortTitle = shortTitle.substring(0, 9) + "..";
         display.print(shortTitle);
@@ -830,7 +862,7 @@ public:
         // Body snippet text
         display.setCursor(16, y + 18);
         display.setTextSize(1);
-        display.setTextColor(0xAD55);
+        display.setTextColor(themeSubText);
         String snippet = notif.body;
         if (snippet.length() > 28) snippet = snippet.substring(0, 26) + "...";
         display.print(snippet);
@@ -839,14 +871,14 @@ public:
       // Bottom Tip / Footer
       display.setTextSize(1);
       if (notificationsActive) {
-        display.setTextColor(LUNA_PINK);
+        display.setTextColor(themeAccent);
         const char* tip = "B1: Read | B2: Next | B1 L: Exit";
         int tipW = strlen(tip) * 6;
         display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 16);
         display.print(tip);
       } else {
-        display.setTextColor(0xAD55);
-        const char* tip = "Press B1 to read messages";
+        display.setTextColor(themeSubText);
+        const char* tip = "B1: Open | B2: Cycle";
         int tipW = strlen(tip) * 6;
         display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 16);
         display.print(tip);
@@ -855,23 +887,33 @@ public:
   }
 
   void drawCalendarEvents() {
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104; // Charcoal/black
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
+    uint16_t themeBorder = 0xD69A; // Light Grey
+    uint16_t themeSubText = 0x7BCF; // Muted grey
+
+    // Clear display below the status bar
+    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+
     // Curved border container
-    display.drawRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 12, 0xF8B8);
-    display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 10, 0x0821);
+    display.drawRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 12, themeAccent);
+    display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 10, themeCardBg);
 
     if (calendarEventCount == 0) {
       int centerX = SCREEN_WIDTH / 2;
-      display.drawRect(centerX - 10, 62, 20, 20, TFT_DARKGREY);
-      display.drawFastHLine(centerX - 10, 68, 20, TFT_DARKGREY);
-      display.fillRect(centerX - 6, 58, 2, 6, TFT_DARKGREY);
-      display.fillRect(centerX + 4, 58, 2, 6, TFT_DARKGREY);
+      display.drawRect(centerX - 10, 62, 20, 20, themeSubText);
+      display.drawFastHLine(centerX - 10, 68, 20, themeSubText);
+      display.fillRect(centerX - 6, 58, 2, 6, themeSubText);
+      display.fillRect(centerX + 4, 58, 2, 6, themeSubText);
       
-      display.setTextColor(TFT_LIGHTGREY, 0x0821);
+      display.setTextColor(themeSubText, themeCardBg);
       display.setTextSize(2);
       int lblW1 = 9 * 12;
       display.setCursor((SCREEN_WIDTH - lblW1) / 2, 98);
       display.print("No Events");
-      display.setTextColor(TFT_DARKGREY, 0x0821);
+      display.setTextColor(themeSubText, themeCardBg);
       display.setTextSize(2);
       int lblW2 = 19 * 12;
       display.setCursor((SCREEN_WIDTH - lblW2) / 2, 130);
@@ -894,15 +936,15 @@ public:
       display.print("MEETING");
     }
     
-    display.setTextColor(0x07FF, 0x0821);
+    display.setTextColor(themeAccent, themeCardBg);
     display.setTextSize(2);
     int timeW = ev.timeStr.length() * 12;
     display.setCursor(SCREEN_WIDTH - 16 - timeW, 40);
     display.print(ev.timeStr);
     
-    display.drawFastHLine(12, 66, SCREEN_WIDTH - 24, 0x18E3);
+    display.drawFastHLine(12, 66, SCREEN_WIDTH - 24, themeBorder);
     
-    display.setTextColor(TFT_WHITE, 0x0821);
+    display.setTextColor(themeText, themeCardBg);
     display.setTextSize(2);
     int yStart = 76;
     int charsPerLine = (SCREEN_WIDTH - 32) / 12;
@@ -917,7 +959,7 @@ public:
       line++;
     }
     
-    display.setTextColor(TFT_DARKGREY, 0x0821);
+    display.setTextColor(themeSubText, themeCardBg);
     display.setTextSize(2);
     char footerBuf[16];
     snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentCalViewIdx + 1, calendarEventCount);
@@ -993,16 +1035,26 @@ public:
   }
 
   void drawCalendarGrid(String dateStr, String dayStr) {
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104; // Charcoal/black
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
+    uint16_t themeBorder = 0xD69A; // Light Grey
+    uint16_t themeSubText = 0x7BCF; // Muted grey
+
     int curDay, curMonth, curYear, startWeekday, daysInMonth;
     parseDateInfo(dateStr, dayStr, curDay, curMonth, curYear, startWeekday, daysInMonth);
     
+    // Clear display below status bar
+    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+
     // Draw Curved Border
-    display.drawRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 12, 0x07FF);
-    display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 10, 0x0821);
+    display.drawRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 12, themeAccent);
+    display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 10, themeCardBg);
     
     // Month / Year header — size 2
     display.setTextSize(2);
-    display.setTextColor(TFT_YELLOW, 0x0821);
+    display.setTextColor(themeText, themeCardBg);
     char headerBuf[32];
     const char* monthNames[] = { "", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER" };
     snprintf(headerBuf, sizeof(headerBuf), "%s %d", (curMonth >= 1 && curMonth <= 12) ? monthNames[curMonth] : "JULY", curYear);
@@ -1014,14 +1066,14 @@ public:
     int colWidth = 31;
     int startX = 12;
     int startY = 60;
-    display.setTextColor(0x5DFF, 0x0821);
+    display.setTextColor(themeAccent, themeCardBg);
     display.setTextSize(2);
     const char* dayLabels[] = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" };
     for (int i = 0; i < 7; i++) {
       display.setCursor(startX + i * colWidth + 4, startY);
       display.print(dayLabels[i]);
     }
-    display.drawFastHLine(8, startY + 16, SCREEN_WIDTH - 16, 0x18E3);
+    display.drawFastHLine(8, startY + 16, SCREEN_WIDTH - 16, themeBorder);
     
     int col = startWeekday;
     int row = 0;
@@ -1035,7 +1087,7 @@ public:
         display.fillCircle(x + 15, y + 7, 11, TFT_RED);
         display.setTextColor(TFT_WHITE, TFT_RED);
       } else {
-        display.setTextColor(TFT_WHITE, 0x0821);
+        display.setTextColor(themeText, themeCardBg);
       }
 
       display.setCursor(d < 10 ? x + 10 : x + 4, y);
@@ -1050,78 +1102,126 @@ public:
   }
 
   void drawSettingsMenuLandscape(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104; // Charcoal/black
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
+    uint16_t themeBorder = 0xD69A; // Light Grey
+    uint16_t themeSubText = 0x7BCF; // Muted grey
+
+    // Clear display below the status bar
+    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+
     // Clean border
-    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, 0x07FF);
-    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 8, 0x0821);
+    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, themeAccent);
+    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 8, themeCardBg);
 
     // Header label
-    display.setTextSize(1);
-    display.setTextColor(0xFDA0, 0x0821);
-    display.setCursor(12, 34);
-    display.print("--- SETTINGS ---");
-    display.drawFastHLine(12, 44, SCREEN_WIDTH - 24, 0x18E3);
+    display.setTextSize(2);
+    display.setTextColor(themeAccent, themeCardBg);
+    display.setCursor(72, 36);
+    display.print("SETTINGS");
+    display.drawFastHLine(12, 56, SCREEN_WIDTH - 24, themeBorder);
 
     display.setTextSize(2);
-    int itemsPerPage = 5;
+    int itemsPerPage = 4;
     int scrollOffset = 0;
     if (option >= itemsPerPage) {
       scrollOffset = option - itemsPerPage + 1;
     }
 
-    int itemHeight = 36;
+    int itemHeight = 32;
 
     for (int pageIdx = 0; pageIdx < itemsPerPage; pageIdx++) {
       int optIdx = pageIdx + scrollOffset;
       if (optIdx >= 8) break;
 
-      int yPos = 46 + pageIdx * itemHeight;
+      int yPos = 62 + pageIdx * itemHeight;
 
       bool isCurrent = (option == optIdx) && settingsActive;
+      
+      // Select box colors
+      uint16_t boxBg = selected ? themeAccent : themeBorder;
+      uint16_t boxText = selected ? TFT_WHITE : themeText;
+
       if (isCurrent) {
-        display.fillRoundRect(8, yPos, SCREEN_WIDTH - 16, itemHeight - 2, 6, selected ? 0x0248 : 0x18E3);
-        display.drawRoundRect(8, yPos, SCREEN_WIDTH - 16, itemHeight - 2, 6, 0x07FF);
-        display.setTextColor(TFT_WHITE, selected ? 0x0248 : 0x18E3);
+        display.fillRoundRect(10, yPos, SCREEN_WIDTH - 20, 30, 6, boxBg);
+        display.drawRoundRect(10, yPos, SCREEN_WIDTH - 20, 30, 6, themeAccent);
+        display.setTextColor(boxText, boxBg);
       } else {
-        display.setTextColor(TFT_LIGHTGREY, 0x0821);
+        display.setTextColor(themeText, themeCardBg);
       }
 
-      uint16_t bg = isCurrent ? (selected ? 0x0248 : 0x18E3) : 0x0821;
-      display.setCursor(14, yPos + 10);
+      uint16_t bg = isCurrent ? boxBg : themeCardBg;
+      display.setCursor(18, yPos + 7);
       switch (optIdx) {
         case 0:
-          display.setTextColor(isCurrent ? TFT_WHITE : 0x07FF, bg);
-          display.print("BLE: ALWAYS ON");
+          display.print("BLE");
+          {
+            String val = "ALWAYS ON";
+            display.setCursor(222 - (val.length() * 12), yPos + 7);
+            display.print(val);
+          }
           break;
         case 1:
-          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
-          display.print("Speed: ");
-          display.print(speed);
-          display.print("ms");
+          display.print("Speed");
+          {
+            String val = String(speed) + "ms";
+            display.setCursor(222 - (val.length() * 12), yPos + 7);
+            display.print(val);
+          }
           break;
         case 2:
-          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
-          display.print("Clock: Style ");
-          display.print(clockStyle);
+          display.print("Clock Style");
+          {
+            String val = String(clockStyle);
+            display.setCursor(222 - (val.length() * 12), yPos + 7);
+            display.print(val);
+          }
           break;
         case 3:
-          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
-          display.print("Invert: ");
-          display.print(invertOn ? "ON" : "OFF");
+          display.print("Invert Screen");
+          {
+            String val = invertOn ? "ON" : "OFF";
+            display.setCursor(222 - (val.length() * 12), yPos + 7);
+            display.print(val);
+          }
           break;
         case 4:
-          display.setTextColor(isCurrent ? TFT_WHITE : TFT_LIGHTGREY, bg);
-          display.print("Bright: ");
-          if (brightness == 1) display.print("LOW");
-          else if (brightness == 2) display.print("MED");
-          else display.print("HIGH");
+          display.print("Brightness");
+          {
+            String val = "MED";
+            if (brightness == 1) val = "LOW";
+            else if (brightness == 3) val = "HIGH";
+            display.setCursor(222 - (val.length() * 12), yPos + 7);
+            display.print(val);
+          }
           break;
         case 5:
-          display.setTextColor(isCurrent ? TFT_WHITE : TFT_GREEN, bg);
-          display.print("SAVE SETTINGS");
+          display.print("Buzzer Sound");
+          {
+            String val = silentMode ? "MUTED" : "ON";
+            display.setCursor(222 - (val.length() * 12), yPos + 7);
+            display.print(val);
+          }
           break;
         case 6:
-          display.setTextColor(isCurrent ? TFT_WHITE : 0xF8B8, bg);
-          display.print("EXIT MENU");
+          {
+            String val = "SAVE SETTINGS";
+            int startX = 10 + (220 - val.length() * 12) / 2;
+            display.setCursor(startX, yPos + 7);
+            if (!isCurrent) display.setTextColor(0x03E0, themeCardBg);
+            display.print(val);
+          }
+          break;
+        case 7:
+          {
+            String val = "EXIT MENU";
+            int startX = 10 + (220 - val.length() * 12) / 2;
+            display.setCursor(startX, yPos + 7);
+            if (!isCurrent) display.setTextColor(TFT_RED, themeCardBg);
+            display.print(val);
+          }
           break;
       }
     }
@@ -1129,22 +1229,22 @@ public:
     if (settingsActive) {
       // Scroll indicator dots at bottom
       int totalItems = 8;
-      int dotAreaY = SCREEN_HEIGHT - 14;
+      int dotAreaY = 208;
       int dotSpacing = 14;
       int dotsStartX = (SCREEN_WIDTH - totalItems * dotSpacing) / 2;
       for (int i = 0; i < totalItems; i++) {
         if (i == option) {
-          display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY, 8, 4, 2, 0x07FF);
+          display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY, 8, 4, 2, themeAccent);
         } else {
-          display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY + 1, 4, 2, 1, 0x18E3);
+          display.fillRoundRect(dotsStartX + i * dotSpacing + 1, dotAreaY + 1, 4, 2, 1, themeBorder);
         }
       }
     } else {
       // Hint text
       display.setTextSize(2);
-      display.setTextColor(0x7BCF, 0x0821);
+      display.setTextColor(themeSubText, themeCardBg);
       String hint = "B1:Enter  B2:Next";
-      display.setCursor((SCREEN_WIDTH - hint.length() * 12) / 2, SCREEN_HEIGHT - 22);
+      display.setCursor((SCREEN_WIDTH - hint.length() * 12) / 2, 206);
       display.print(hint);
     }
   }
@@ -1175,16 +1275,10 @@ public:
       exprToDraw = defaultExpr;
     }
     
-    uint16_t bgColor = TFT_WHITE;
-    uint16_t color   = 0x001F; // Default Blue
-    
-    if (robotVariant == "mr_luna") {
-      bgColor = negativeDisplay ? 0xFFE0 : TFT_WHITE; // 0xFFE0 is complement of Blue (Yellow)
-      color   = negativeDisplay ? 0x0000 : 0x001F;    // 0x0000 is complement of White (Black)
-    } else { // ms_luna
-      bgColor = negativeDisplay ? 0x0747 : TFT_WHITE; // 0x0747 is complement of Pink
-      color   = negativeDisplay ? 0x0000 : 0xF8B8;    // 0x0000 is complement of White (Black)
-    }
+    // For 1.3" display: normal mode has blue background and white drawing.
+    // Inverted/Negative mode has white background and blue drawing.
+    uint16_t bgColor = negativeDisplay ? TFT_WHITE : TFT_BLUE; // Blue when normal, White when inverted
+    uint16_t color   = negativeDisplay ? TFT_BLUE : TFT_WHITE; // White when normal, Blue when inverted
     
     display.fillScreen(bgColor);
 
@@ -1249,19 +1343,29 @@ public:
   }
 
   void drawMapScreenLandscape(int hour, int minute, bool is12Hour) {
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104; // Charcoal/black
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
+    uint16_t themeBorder = 0xD69A; // Light Grey
+    uint16_t themeSubText = 0x7BCF; // Muted grey
+
+    // Clear display below the status bar
+    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+
     display.setTextWrap(false);
 
     // ── Background card ───────────────────────────────────────────────
-    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, TFT_GREEN);
-    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 10, 0x0821);
+    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
+    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 10, themeCardBg);
 
     // ── Top label: "NAVIGATION" ───────────────────────────────────────
     display.setTextSize(1);
-    display.setTextColor(TFT_GREEN, 0x0821);
+    display.setTextColor(themeText, themeCardBg);
     int navW = 10 * 6;
     display.setCursor((SCREEN_WIDTH - navW) / 2, 35);
     display.print("NAVIGATION");
-    display.drawFastHLine(12, 45, SCREEN_WIDTH - 24, 0x18E3);
+    display.drawFastHLine(12, 45, SCREEN_WIDTH - 24, themeBorder);
 
     // ── Arrow area (centered, 60x60px arrow in the middle) ───────────
     int cx = SCREEN_WIDTH / 2;
@@ -1270,64 +1374,64 @@ public:
     if (mapDirection.indexOf("LEFT") >= 0) {
       // LEFT arrow: large clear left-pointing arrow
       // Stem: horizontal bar going left from centre
-      display.fillRect(cx - 30, cy - 8, 40, 16, TFT_WHITE);
+      display.fillRect(cx - 30, cy - 8, 40, 16, themeText);
       // Arrowhead pointing LEFT
       display.fillTriangle(cx - 30, cy,
                            cx - 10, cy - 26,
-                           cx - 10, cy + 26, TFT_WHITE);
+                           cx - 10, cy + 26, themeText);
       // Small vertical stem going down at the right end (road continues straight then turns)
-      display.fillRect(cx + 10, cy - 8, 14, 30, TFT_WHITE);
+      display.fillRect(cx + 10, cy - 8, 14, 30, themeText);
 
     } else if (mapDirection.indexOf("RIGHT") >= 0) {
       // RIGHT arrow: large clear right-pointing arrow
-      display.fillRect(cx - 10, cy - 8, 40, 16, TFT_WHITE);
+      display.fillRect(cx - 10, cy - 8, 40, 16, themeText);
       // Arrowhead pointing RIGHT
       display.fillTriangle(cx + 30, cy,
                            cx + 10, cy - 26,
-                           cx + 10, cy + 26, TFT_WHITE);
+                           cx + 10, cy + 26, themeText);
       // Small vertical stem going down at the left end
-      display.fillRect(cx - 24, cy - 8, 14, 30, TFT_WHITE);
+      display.fillRect(cx - 24, cy - 8, 14, 30, themeText);
 
     } else if (mapDirection.indexOf("UTURN") >= 0 || mapDirection.indexOf("U-TURN") >= 0) {
       // U-TURN: thick U shape with downward arrow
-      display.drawCircle(cx, cy - 14, 22, TFT_WHITE);
-      display.drawCircle(cx, cy - 14, 20, TFT_WHITE);
-      display.drawCircle(cx, cy - 14, 18, TFT_WHITE);
+      display.drawCircle(cx, cy - 14, 22, themeText);
+      display.drawCircle(cx, cy - 14, 20, themeText);
+      display.drawCircle(cx, cy - 14, 18, themeText);
       // Erase the bottom half of the circles to make a U
-      display.fillRect(cx - 30, cy - 14, 60, 40, 0x0821);
+      display.fillRect(cx - 30, cy - 14, 60, 40, themeCardBg);
       // Left leg
-      display.fillRect(cx - 24, cy - 14, 6, 32, TFT_WHITE);
+      display.fillRect(cx - 24, cy - 14, 6, 32, themeText);
       // Right leg with downward arrow at bottom
-      display.fillRect(cx + 18, cy - 14, 6, 24, TFT_WHITE);
+      display.fillRect(cx + 18, cy - 14, 6, 24, themeText);
       display.fillTriangle(cx + 21, cy + 18,
                            cx + 10, cy + 8,
-                           cx + 32, cy + 8, TFT_WHITE);
+                           cx + 32, cy + 8, themeText);
 
     } else if (mapDirection.indexOf("ROUNDABOUT") >= 0 || mapDirection.indexOf("ROUND") >= 0) {
       // ROUNDABOUT: circle with an exit arrow
-      display.drawCircle(cx, cy, 22, TFT_WHITE);
-      display.drawCircle(cx, cy, 20, TFT_WHITE);
-      // Fill inside dark
-      display.fillCircle(cx, cy, 17, 0x0821);
+      display.drawCircle(cx, cy, 22, themeText);
+      display.drawCircle(cx, cy, 20, themeText);
+      // Fill inside card bg
+      display.fillCircle(cx, cy, 17, themeCardBg);
       // Exit arrow pointing up-right
-      display.fillRect(cx + 14, cy - 28, 6, 24, TFT_WHITE);
+      display.fillRect(cx + 14, cy - 28, 6, 24, themeText);
       display.fillTriangle(cx + 17, cy - 34,
                            cx + 10, cy - 24,
-                           cx + 24, cy - 24, TFT_WHITE);
+                           cx + 24, cy - 24, themeText);
       // Entry from bottom
-      display.fillRect(cx - 6, cy + 14, 12, 16, TFT_WHITE);
+      display.fillRect(cx - 6, cy + 14, 12, 16, themeText);
 
     } else {
       // STRAIGHT: tall upward arrow
-      display.fillRect(cx - 8, cy - 20, 16, 44, TFT_WHITE);
+      display.fillRect(cx - 8, cy - 20, 16, 44, themeText);
       display.fillTriangle(cx, cy - 40,
                            cx - 22, cy - 20,
-                           cx + 22, cy - 20, TFT_WHITE);
+                           cx + 22, cy - 20, themeText);
     }
 
     // ── Direction label text below arrow ────────────────────────────
     display.setTextSize(2);
-    display.setTextColor(TFT_WHITE, 0x0821);
+    display.setTextColor(themeText, themeCardBg);
     String dirLabel = "Go Straight";
     if      (mapDirection.indexOf("LEFT")       >= 0) dirLabel = "Turn Left";
     else if (mapDirection.indexOf("RIGHT")      >= 0) dirLabel = "Turn Right";
@@ -1340,20 +1444,21 @@ public:
     display.print(dirLabel);
 
     // ── Bottom info bar ─────────────────────────────────────────────
-    display.drawFastHLine(8, 170, SCREEN_WIDTH - 16, 0x18E3);
-    display.fillRoundRect(6, 172, SCREEN_WIDTH - 12, 50, 8, 0x18E3);
+    display.drawFastHLine(8, 170, SCREEN_WIDTH - 16, themeBorder);
+    display.fillRoundRect(6, 172, SCREEN_WIDTH - 12, 50, 8, themeCardBg);
+    display.drawRoundRect(6, 172, SCREEN_WIDTH - 12, 50, 8, themeBorder);
 
-    // Distance — left side, large yellow
+    // Distance — left side, large accent
     display.setTextSize(3);
-    display.setTextColor(TFT_YELLOW, 0x18E3);
+    display.setTextColor(themeAccent, themeCardBg);
     String distStr = (mapDistance == "" || mapDistance == "--") ? "---" : mapDistance;
     display.setCursor(12, 179);
     display.print(distStr);
 
-    // ETA / description — right side, white size 2
+    // ETA / description — right side, size 2 text
     if (mapDescription != "") {
       display.setTextSize(2);
-      display.setTextColor(TFT_WHITE, 0x18E3);
+      display.setTextColor(themeText, themeCardBg);
       int etaW = mapDescription.length() * 12;
       int etaX = SCREEN_WIDTH - 12 - etaW;
       if (etaX < 12) etaX = 12;
@@ -1363,19 +1468,27 @@ public:
   }
 
   void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour, int steps) {
-    display.setTextColor(TFT_WHITE, TFT_BLACK);
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+    uint16_t themeBg     = TFT_WHITE;
+    uint16_t themeText   = 0x2104; // Charcoal/black
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
+    uint16_t themeBorder = 0xD69A; // Light Grey
+    uint16_t themeSubText = 0x7BCF; // Muted grey
+
+    // Clear display below the status bar
+    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
 
     if (style == 0) {
-      // Style 0: Cyberpunk Dashboard
-      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, 0x07FF);
-      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, 0x0821);
+      // Style 0: Cyberpunk Dashboard (Light/Clean version)
+      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
+      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, themeCardBg);
 
       // Horizontal divider line
-      display.drawFastHLine(12, SCREEN_HEIGHT / 2 + 10, SCREEN_WIDTH - 24, 0x18E3);
+      display.drawFastHLine(12, SCREEN_HEIGHT / 2 + 10, SCREEN_WIDTH - 24, themeBorder);
 
       // Large Digital Time
       display.setTextSize(4);
-      display.setTextColor(TFT_WHITE, 0x0821);
+      display.setTextColor(themeText, themeCardBg);
       char timeStr[6];
       int dispHour = hour;
       if (is12Hour) {
@@ -1389,7 +1502,7 @@ public:
 
       // AM/PM or Seconds
       display.setTextSize(1);
-      display.setTextColor(0xF8B8, 0x0821);
+      display.setTextColor(themeAccent, themeCardBg);
       if (is12Hour) {
         const char* ampm = (hour >= 12) ? "PM" : "AM";
         display.setCursor((SCREEN_WIDTH - timeW) / 2 + timeW + 4, SCREEN_HEIGHT / 2 - 22);
@@ -1406,12 +1519,12 @@ public:
       if ((int)dayDate.length() * 12 > SCREEN_WIDTH - 36) {
         dayDate = day;  // fallback to just weekday abbreviation
       }
-      display.setTextColor(0x07FF, 0x0821);
+      display.setTextColor(themeText, themeCardBg);
       display.setCursor(18, SCREEN_HEIGHT / 2 + 18);
       display.print(dayDate);
 
       // Steps widget — right-aligned, won't overlap day text
-      display.setTextColor(0xFDA0, 0x0821);
+      display.setTextColor(themeText, themeCardBg);
       String stepStr = String(steps);
       int stepW = (int)stepStr.length() * 12 + 14; // extra for foot icon
       int stepX = SCREEN_WIDTH - 16 - stepW;
@@ -1420,26 +1533,26 @@ public:
       // foot icon dots
       int fx = stepX + 6;
       int fy = SCREEN_HEIGHT / 2 + 24;
-      display.fillCircle(fx,     fy - 4, 2, 0xFDA0);
-      display.fillCircle(fx + 4, fy - 2, 2, 0xFDA0);
-      display.fillCircle(fx - 3, fy + 2, 1, 0xFDA0);
+      display.fillCircle(fx,     fy - 4, 2, themeAccent);
+      display.fillCircle(fx + 4, fy - 2, 2, themeAccent);
+      display.fillCircle(fx - 3, fy + 2, 1, themeAccent);
 
     } else if (style == 1) {
       // Style 1: Minimalist Radial Gauge
-      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 16, 0xF8B8);
-      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 12, 0x0821);
+      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 16, themeAccent);
+      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 12, themeBg);
 
       // Center card
       int cardW = 130;
       int cardH = 46;
       int cardX = (SCREEN_WIDTH - cardW) / 2;
       int cardY = (SCREEN_HEIGHT - cardH) / 2 + 8;
-      display.fillRoundRect(cardX, cardY, cardW, cardH, 8, 0x18E3);
-      display.drawRoundRect(cardX, cardY, cardW, cardH, 8, 0x07FF);
+      display.fillRoundRect(cardX, cardY, cardW, cardH, 8, themeCardBg);
+      display.drawRoundRect(cardX, cardY, cardW, cardH, 8, themeBorder);
 
       // Time
       display.setTextSize(3);
-      display.setTextColor(TFT_WHITE, 0x18E3);
+      display.setTextColor(themeText, themeCardBg);
       char timeStr[6];
       int dispHour = hour;
       if (is12Hour) {
@@ -1451,7 +1564,7 @@ public:
       display.print(timeStr);
 
       display.setTextSize(1);
-      display.setTextColor(0xF8B8, 0x18E3);
+      display.setTextColor(themeAccent, themeCardBg);
       if (is12Hour) {
         const char* ampm = (hour >= 12) ? "PM" : "AM";
         display.setCursor(cardX + 104, cardY + 14);
@@ -1464,43 +1577,45 @@ public:
 
       // Sweeping Ring arc
       int progressWidth = (second * (SCREEN_WIDTH - 48)) / 60;
-      display.drawRoundRect(24, 38, SCREEN_WIDTH - 48, 6, 3, 0x18E3);
-      display.fillRoundRect(24, 38, progressWidth, 6, 3, 0xF8B8);
+      display.drawRoundRect(24, 38, SCREEN_WIDTH - 48, 6, 3, themeBorder);
+      display.fillRoundRect(24, 38, progressWidth, 6, 3, themeAccent);
 
       // Date
+      display.fillRoundRect(24, SCREEN_HEIGHT - 32, SCREEN_WIDTH - 48, 24, 6, themeCardBg);
+      display.drawRoundRect(24, SCREEN_HEIGHT - 32, SCREEN_WIDTH - 48, 24, 6, themeBorder);
       display.setTextSize(2);
-      display.setTextColor(0x07FF, 0x0821);
+      display.setTextColor(themeText, themeCardBg);
       String dStr = day + " " + date;
       int dW = dStr.length() * 12;
-      display.setCursor((SCREEN_WIDTH - dW) / 2, SCREEN_HEIGHT - 22);
+      display.setCursor((SCREEN_WIDTH - dW) / 2, SCREEN_HEIGHT - 28);
       display.print(dStr);
 
     } else {
-      // Style 2: Watch OS Grid (original style 3, but polished with curved edges)
-      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, 0xFDA0);
-      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, 0x0821);
+      // Style 2: Watch OS Grid
+      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
+      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, themeBg);
 
       // Grid spacing — yield() prevents WDT resets during pixel loops
       int gridSpacing = SCREEN_WIDTH / 10;
       for (int x = gridSpacing; x < SCREEN_WIDTH; x += gridSpacing) {
-        display.drawFastVLine(x, 32, SCREEN_HEIGHT - 32, 0x0100);
+        display.drawFastVLine(x, 28, SCREEN_HEIGHT - 28, themeBorder);
         yield();
       }
-      for (int y = 32; y < SCREEN_HEIGHT; y += gridSpacing) {
-        display.drawFastHLine(0, y, SCREEN_WIDTH, 0x0100);
+      for (int y = 28; y < SCREEN_HEIGHT; y += gridSpacing) {
+        display.drawFastHLine(0, y, SCREEN_WIDTH, themeBorder);
         yield();
       }
 
       // Title Card
-      display.fillRoundRect(12, 34, 110, 16, 4, 0x18E3);
-      display.setTextColor(0x07E0, 0x18E3);
+      display.fillRoundRect(12, 34, 130, 20, 4, themeCardBg);
+      display.setTextColor(themeText, themeCardBg);
       display.setTextSize(1);
-      display.setCursor(18, 38);
+      display.setCursor(18, 40);
       display.print("WATCH OS v3.0");
 
-      // Time
+      // Time (Large & bold size 4)
       display.setTextSize(4);
-      display.setTextColor(TFT_WHITE, 0x0821);
+      display.setTextColor(themeText, themeBg);
       char timeStr[6];
       int dispHour = hour;
       if (is12Hour) {
@@ -1508,34 +1623,38 @@ public:
         if (dispHour == 0) dispHour = 12;
       }
       snprintf(timeStr, sizeof(timeStr), "%d:%02d", dispHour, minute);
-      display.setCursor(14, 52);
+      display.setCursor(14, 62);
       display.print(timeStr);
 
-      display.setTextSize(1);
+      display.setTextSize(2);
       if (is12Hour) {
-        display.setTextColor(0xF8B8, 0x0821);
-        display.setCursor(115, 66);
+        display.setTextColor(themeAccent, themeBg);
+        display.setCursor(120 + (dispHour >= 10 ? 24 : 0), 62);
         display.print((hour >= 12) ? "PM" : "AM");
       }
 
-      // Steps widget
-      display.fillRoundRect(14, 86, 100, 14, 4, 0x18E3);
-      display.setTextColor(0xFDA0, 0x18E3);
-      display.setCursor(18, 89);
-      display.print("STP: ");
+      // Steps widget (size 2, centered inside high contrast card)
+      display.fillRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, themeCardBg);
+      display.drawRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, themeBorder);
+      display.setTextColor(themeText, themeCardBg);
+      display.setTextSize(2);
+      display.setCursor(20, 116);
+      display.print("STEPS: ");
       display.print(steps);
 
-      // Date widget
-      display.fillRoundRect(14, 102, SCREEN_WIDTH - 28, 14, 4, 0x18E3);
-      display.setTextColor(TFT_LIGHTGREY, 0x18E3);
-      display.setCursor(18, 105);
-      display.print("DT: ");
+      // Date widget (size 2, centered inside high contrast card)
+      display.fillRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, themeCardBg);
+      display.drawRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, themeBorder);
+      display.setTextColor(themeText, themeCardBg);
+      display.setTextSize(2);
+      display.setCursor(20, 152);
+      display.print("DATE: ");
       display.print(day);
       display.print(", ");
       display.print(date);
 
       // Flashing block
-      display.fillRoundRect(SCREEN_WIDTH - 24, SCREEN_HEIGHT - 24, 8, 8, 2, (second % 2 == 0) ? 0x07E0 : 0x18E3);
+      display.fillRoundRect(SCREEN_WIDTH - 30, SCREEN_HEIGHT - 30, 12, 12, 3, (second % 2 == 0) ? themeAccent : themeBorder);
     }
   }
 
@@ -1638,13 +1757,16 @@ public:
     if (popupActive) {
       drawPopup();
     } else {
-      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_GAMES) {
+      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_GAMES && currentScreen != SCREEN_CARD) {
         drawStatusBar(hour, minute);
       }
       
       switch (currentScreen) {
         case SCREEN_CLOCK:
           drawClockScreen(hour, minute, second, day, date, style, is12Hour, touchCount);
+          break;
+        case SCREEN_SETTINGS:
+          drawSettingsMenuLandscape(menuOption, optionSelected, bleActive, gifSpeed, clockStyle, negativeDisplay, oledBrightness);
           break;
         case SCREEN_NOTIFICATIONS:
           drawNotificationPanel();
@@ -1658,26 +1780,36 @@ public:
           break;
         case SCREEN_GAMES:
           if (!gamesActive) {
+            uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
+            uint16_t themeBg     = TFT_WHITE;
+            uint16_t themeText   = 0x2104; // Charcoal/black
+            uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
+            uint16_t themeBorder = 0xD69A; // Light Grey
+            uint16_t themeSubText = 0x7BCF; // Muted grey
+
+            // Clear display below the status bar
+            display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+
             // Draw initial Games screen with prompt
-            display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 10, 0x0821);
-            display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, 0x07FF);
+            display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 10, themeCardBg);
+            display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, themeAccent);
 
             // Large Title
             display.setTextSize(2);
-            display.setTextColor(0xFDA0, 0x0821); // Neon Orange
+            display.setTextColor(themeAccent, themeCardBg);
             display.setCursor(54, 60);
             display.print("LUNA ARCADE");
             
             // Draw divider
-            display.drawFastHLine(20, 85, SCREEN_WIDTH - 40, 0x18E3);
+            display.drawFastHLine(20, 85, SCREEN_WIDTH - 40, themeBorder);
 
             // Subtitle instructions
             display.setTextSize(2);
-            display.setTextColor(TFT_WHITE, 0x0821);
+            display.setTextColor(themeText, themeCardBg);
             display.setCursor(24, 115);
             display.print("BTN1: START");
             
-            display.setTextColor(TFT_LIGHTGREY, 0x0821);
+            display.setTextColor(themeSubText, themeCardBg);
             display.setCursor(24, 155);
             display.print("BTN2: CYCLE");
           } else {
@@ -1685,11 +1817,19 @@ public:
               games.drawMenu(display);
             } else {
               if (gameSelected == 1) {
-                games.updateAndDrawAdventure(display, audio);
-              } else if (gameSelected == 2) {
                 games.updateAndDrawRacer(display, audio);
-              } else if (gameSelected == 3) {
+              } else if (gameSelected == 2) {
                 games.updateAndDrawSpace(display, audio);
+              } else if (gameSelected == 3) {
+                games.updateAndDrawFlappy(display, audio);
+              } else if (gameSelected == 4) {
+                games.updateAndDrawCatcher(display, audio);
+              } else if (gameSelected == 5) {
+                games.updateAndDrawJump(display, audio);
+              } else if (gameSelected == 6) {
+                games.updateAndDrawStacker(display, audio);
+              } else if (gameSelected == 7) {
+                games.updateAndDrawMemory(display, audio);
               }
             }
           }
@@ -1700,19 +1840,15 @@ public:
         case SCREEN_MAPS:
           drawMapScreenLandscape(hour, minute, is12Hour);
           break;
+        case SCREEN_CARD:
+          qrCard.drawQRScreen(display);
+          break;
       }
     }
 
     if (!popupActive && currentScreen == SCREEN_FACE && headerText.length() > 0) {
-      uint16_t headerBg = TFT_WHITE;
-      uint16_t headerFg = 0x001F;
-      if (robotVariant == "mr_luna") {
-        headerBg = negativeDisplay ? 0xFFE0 : TFT_WHITE;
-        headerFg = negativeDisplay ? 0x0000 : 0x001F;
-      } else {
-        headerBg = negativeDisplay ? 0x0747 : TFT_WHITE;
-        headerFg = negativeDisplay ? 0x0000 : 0xF8B8;
-      }
+      uint16_t headerBg = negativeDisplay ? TFT_WHITE : TFT_BLUE; // matches screen bgColor
+      uint16_t headerFg = negativeDisplay ? TFT_BLUE : TFT_WHITE; // matches screen drawing color
       display.fillRect(0, 0, SCREEN_WIDTH, 24, headerBg);
       display.setTextColor(headerFg);
       display.setTextSize(2);
@@ -1732,7 +1868,7 @@ public:
 
   // Legacy compatibility
   void drawSettingsMenu(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
-    display.fillScreen(TFT_BLACK);
+    display.fillScreen(TFT_WHITE);
     drawStatusBar(12, 0);
     drawSettingsMenuLandscape(option, selected, bleOn, speed, clockStyle, invertOn, brightness);
     tft.drawRGBBitmap(0, 0, display.getBuffer(), SCREEN_WIDTH, SCREEN_HEIGHT);

@@ -18,6 +18,12 @@
 #define BUZZER_PIN 5        // Buzzer pin
 #define BATTERY_PIN 0       // GPIO 0 (ADC1_CH0) for battery monitoring
 
+// Battery monitoring voltage divider calibration
+// For standard 10k/10k Ohm divider, use 2.0f.
+// For high-impedance 1M/1M Ohm divider, the ADC sampling capacitor pulls down the voltage,
+// so a higher multiplier (typically between 2.2f and 2.4f) is needed to calibrate.
+#define BATTERY_CALIBRATION_MULTIPLIER 2.3f
+
 // ST7789 Display Settings (Resolution: 240x240)
 #define SCREEN_WIDTH 240
 #define SCREEN_HEIGHT 240
@@ -68,6 +74,7 @@ enum SmartwatchScreen {
   SCREEN_GAMES,
   SCREEN_FACE,
   SCREEN_MAPS,
+  SCREEN_CARD,   // Digital Business Card / QR Code screen
   SCREEN_SETTINGS,
   SCREEN_MAX
 };

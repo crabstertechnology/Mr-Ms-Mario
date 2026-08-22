@@ -1673,11 +1673,19 @@ public:
               games.drawMenu(display);
             } else {
               if (gameSelected == 1) {
-                games.updateAndDrawAdventure(display, audio);
-              } else if (gameSelected == 2) {
                 games.updateAndDrawRacer(display, audio);
-              } else if (gameSelected == 3) {
+              } else if (gameSelected == 2) {
                 games.updateAndDrawSpace(display, audio);
+              } else if (gameSelected == 3) {
+                games.updateAndDrawFlappy(display, audio);
+              } else if (gameSelected == 4) {
+                games.updateAndDrawCatcher(display, audio);
+              } else if (gameSelected == 5) {
+                games.updateAndDrawJump(display, audio);
+              } else if (gameSelected == 6) {
+                games.updateAndDrawStacker(display, audio);
+              } else if (gameSelected == 7) {
+                games.updateAndDrawMemory(display, audio);
               }
             }
           }
