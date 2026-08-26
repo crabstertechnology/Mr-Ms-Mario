@@ -66,3 +66,44 @@ GIF[61] WINK (10 frames)
 GIF[62] YAWN (10 frames)
 =============================
 [QR] Loaded stored URL: shop.crabstertech.in
+Inactivity timeout: Returning to GIF expressions screen.
+[TOUCH_RAW] G:00 F:1 X:231 Y:194 MS:245404
+[Touch] Physical Right Side Tap -> next screen
+[BTN2] Cycled screen to 6
+[QR] Generated V2 QR (25x25) for: shop.crabstertech.in
+[TOUCH_RAW] G:00 F:1 X:227 Y:176 MS:246419
+[Touch] Physical Right Side Tap -> next screen
+[BTN2] Cycled screen to 0
+Inactivity timeout: Returning to GIF expressions screen.
+[TOUCH_RAW] G:00 F:1 X:226 Y:180 MS:246984
+[Touch] Physical Right Side Tap -> next screen
+[BTN2] Cycled screen to 6
+[TOUCH_RAW] G:00 F:1 X:229 Y:234 MS:247398
+[TOUCH_RAW] G:00 F:1 X:229 Y:234 MS:247483
+[Touch] Physical Right Side Tap -> next screen
+[BTN2] Cycled screen to 0
+Inactivity timeout: Returning to GIF expressions screen.
+[TOUCH_RAW] G:00 F:1 X:228 Y:233 MS:247969
+[Touch] Physical Right Side Tap -> next screen
+[BTN2] Cycled screen to 6
+[TOUCH_RAW] G:00 F:1 X:214 Y:146 MS:248468
+[Touch] Physical Right Side Tap -> next screen
+[BTN2] Cycled screen to 0
+Inactivity timeout: Returning to GIF expressions screen.
+[TOUCH_RAW] G:00 F:1 X:220 Y:130 MS:248874
+[Touch] Physical Right Side Tap -> next screen
+[BTN2] Cycled screen to 6
+[TOUCH_RAW] G:00 F:1 X:232 Y:162 MS:249206
+[Touch] Physical Right Side Tap -> next screen
+[BTN2] Ignored rapid single tap screen transition to prevent bounce
+[TOUCH_RAW] G:00 F:1 X:45 Y:165 MS:249958
+[Touch] Physical Left Side Tap -> previous screen
+[BTN2 DBL] Cycled screen backward to 4
+[TOUCH_RAW] G:00 F:1 X:37 Y:140 MS:250444
+[Touch] Physical Left Side Tap -> previous screen
+[BTN2 DBL] Cycled screen backward to 7
+Inactivity timeout: Returning to GIF expressions screen.
+[TOUCH_RAW] G:00 F:1 X:26 Y:160 MS:250846
+[Touch] Physical Left Side Tap -> previous screen
+[BTN2 DBL] Cycled screen backward to 7
+Inactivity timeout: Returning to GIF expressions screen.
