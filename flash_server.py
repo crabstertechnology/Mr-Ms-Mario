@@ -423,6 +423,18 @@ class FlashDashboardServer(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 self.wfile.write(f"Error loading dashboard: {e}".encode('utf-8'))
             return
+        elif self.path in ['/designer', '/ui', '/ui_designer.html']:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            designer_path = os.path.join(DIRECTORY, "ui_designer.html")
+            try:
+                with open(designer_path, 'r', encoding='utf-8') as f:
+                    self.wfile.write(f.read().encode('utf-8'))
+            except Exception as e:
+                self.wfile.write(f"Error loading designer: {e}".encode('utf-8'))
+            return
         elif self.path == '/api/robots':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -459,6 +471,79 @@ class FlashDashboardServer(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
             return
 
+        elif self.path == '/api/update_touch_limits':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                left_limit = int(payload.get("left_limit", 80))
+                right_limit = int(payload.get("right_limit", 160))
+                
+                target_dir = os.path.join(DIRECTORY, "1.69 Luna Firmware")
+                config_path = os.path.join(target_dir, "config.h")
+                
+                with open(config_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                
+                import re
+                if "#define TOUCH_LEFT_LIMIT" in content:
+                    content = re.sub(r'#define\s+TOUCH_LEFT_LIMIT\s+\d+', f'#define TOUCH_LEFT_LIMIT {left_limit}', content)
+                else:
+                    content = content.replace("#endif // CONFIG_H", f"#define TOUCH_LEFT_LIMIT {left_limit}\n#endif // CONFIG_H")
+                    
+                if "#define TOUCH_RIGHT_LIMIT" in content:
+                    content = re.sub(r'#define\s+TOUCH_RIGHT_LIMIT\s+\d+', f'#define TOUCH_RIGHT_LIMIT {right_limit}', content)
+                else:
+                    content = content.replace("#endif // CONFIG_H", f"#define TOUCH_RIGHT_LIMIT {right_limit}\n#endif // CONFIG_H")
+                
+                with open(config_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                    
+                print(f"[Server] Updated touch limits in config.h: Left={left_limit}, Right={right_limit}")
+                
+                should_flash = payload.get("flash", False)
+                port = None
+                
+                if should_flash:
+                    ports = scan_serial_ports()
+                    esp_ports = [p['port'] for p in ports if p['is_esp']]
+                    if esp_ports:
+                        port = esp_ports[0]
+                    elif ports:
+                        port = ports[0]['port']
+                        
+                    if not port:
+                        self.send_response(400)
+                        self.send_header('Content-Type', 'application/json')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"success": False, "error": "No serial port detected"}).encode('utf-8'))
+                        return
+                        
+                    sketch_path = os.path.join(target_dir, "1.69 Luna Firmware.ino")
+                    fqbn = "esp32:esp32:esp32s3:PartitionScheme=huge_app,CDCOnBoot=cdc"
+                    
+                    def build_and_flash():
+                        success = run_compile_worker(sketch_path, fqbn)
+                        if not success:
+                            return
+                        run_flash_worker(sketch_path, port, fqbn)
+                        
+                    threading.Thread(target=build_and_flash, daemon=True).start()
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "port": port}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
+            return
+
         elif self.path == '/api/upload_wallpaper':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
@@ -468,7 +553,10 @@ class FlashDashboardServer(http.server.SimpleHTTPRequestHandler):
                 code = payload.get("code", "")
                 
                 # Determine paths
-                if variant == "2" or variant == "1.3":
+                if variant == "1.69" or variant == "2":
+                    target_dir = os.path.join(DIRECTORY, "1.69 Luna Firmware")
+                    fqbn = "esp32:esp32:esp32s3:PartitionScheme=huge_app,CDCOnBoot=cdc"
+                elif variant == "1.3":
                     target_dir = os.path.join(DIRECTORY, "1.3 Luna Firmware")
                     fqbn = "esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc"
                 else:
@@ -482,36 +570,39 @@ class FlashDashboardServer(http.server.SimpleHTTPRequestHandler):
                 
                 print(f"[Server] Saved wallpaper to {header_path}")
                 
-                # Triggers auto-compile and flash
-                sketch_path = os.path.join(target_dir, os.path.basename(target_dir) + ".ino")
-                
-                # Detect port
+                should_flash = payload.get("flash", False)
                 port = None
-                ports = scan_serial_ports()
-                esp_ports = [p['port'] for p in ports if p['is_esp']]
-                if esp_ports:
-                    port = esp_ports[0]
-                elif ports:
-                    port = ports[0]['port']
                 
-                if not port:
-                    self.send_response(400)
-                    self.send_header('Content-Type', 'application/json')
-                    self.send_header('Access-Control-Allow-Origin', '*')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"success": False, "error": "No serial port detected"}).encode('utf-8'))
-                    return
-                
-                # Trigger compile and upload in background threads
-                def build_and_flash():
-                    # 1. Compile
-                    success = run_compile_worker(sketch_path, fqbn)
-                    if not success:
+                if should_flash:
+                    # Detect port
+                    ports = scan_serial_ports()
+                    esp_ports = [p['port'] for p in ports if p['is_esp']]
+                    if esp_ports:
+                        port = esp_ports[0]
+                    elif ports:
+                        port = ports[0]['port']
+                    
+                    if not port:
+                        self.send_response(400)
+                        self.send_header('Content-Type', 'application/json')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"success": False, "error": "No serial port detected"}).encode('utf-8'))
                         return
-                    # 2. Flash
-                    run_flash_worker(sketch_path, port, fqbn)
-                
-                threading.Thread(target=build_and_flash, daemon=True).start()
+                    
+                    # Triggers auto-compile and flash
+                    sketch_path = os.path.join(target_dir, os.path.basename(target_dir) + ".ino")
+                    
+                    # Trigger compile and upload in background threads
+                    def build_and_flash():
+                        # 1. Compile
+                        success = run_compile_worker(sketch_path, fqbn)
+                        if not success:
+                            return
+                        # 2. Flash
+                        run_flash_worker(sketch_path, port, fqbn)
+                    
+                    threading.Thread(target=build_and_flash, daemon=True).start()
                 
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
