@@ -559,15 +559,48 @@ public:
     return changed;
   }
 
+  // ------------------ Theme System ------------------
+  struct ThemeColors {
+    uint16_t bg;
+    uint16_t text;
+    uint16_t accent;
+    uint16_t cardBg;
+    uint16_t border;
+    uint16_t subText;
+  };
+
+  ThemeColors getTheme() {
+    ThemeColors t;
+    if (!negativeDisplay) {
+      // Light Theme (Default)
+      t.bg      = TFT_WHITE;
+      t.text    = 0x2104; // Premium Charcoal Black
+      t.accent  = (robotVariant == "mr_luna") ? 0x197A : 0xF8B8; // Royal Blue or Luna Pink
+      t.cardBg  = 0xF7BE; // Soft Pastel Gray/White
+      t.border  = 0xD69A; // Sleek Light Grey
+      t.subText = 0x7BEF; // Muted Dark Grey
+    } else {
+      // Dark Theme (Inverted)
+      t.bg      = TFT_BLACK;
+      t.text    = TFT_WHITE;
+      t.accent  = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Cyan or Pink
+      t.cardBg  = 0x0842;
+      t.border  = 0x2104;
+      t.subText = 0x7BCF;
+    }
+    return t;
+  }
+
   // ------------------ Smartwatch UI Drawing Methods ------------------
   
   void drawStatusBar(int hour, int minute) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Neon Cyan or Luna Pink
-    uint16_t themeBg     = TFT_BLACK; // Sleek dark mode
-    uint16_t themeText   = TFT_WHITE;
-    uint16_t themeCardBg = 0x0842; // Deep Slate Charcoal
-    uint16_t themeBorder = 0x2104; // Dark Grey border
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent = theme.accent;
+    uint16_t themeBg     = theme.bg;
+    uint16_t themeText   = theme.text;
+    uint16_t themeCardBg = theme.cardBg;
+    uint16_t themeBorder = theme.border;
+    uint16_t themeSubText = theme.subText;
 
     // ── Background square bar running end-to-end ──────────────────────────
     display.fillRect(0, 0, SCREEN_WIDTH, 24, themeBg);
@@ -626,7 +659,7 @@ public:
     // BLE Icon (Vector line drawing instead of simple circle)
     int bleX = bx - 14 - pctStrW;
     int bleY = 12;
-    uint16_t bleColor = bleConnectedStatus ? 0x07FF : 0x4208; // Bright Cyan or dark gray
+    uint16_t bleColor = bleConnectedStatus ? (negativeDisplay ? 0x07FF : 0x197A) : themeBorder; // Bright Cyan/Royal Blue or border
     if (bleConnectedStatus) {
       display.drawLine(bleX, bleY - 5, bleX, bleY + 5, bleColor);
       display.drawLine(bleX, bleY - 5, bleX + 3, bleY - 2, bleColor);
@@ -640,7 +673,7 @@ public:
     // WiFi Icon (cellular/signal bars style instead of dot)
     int wifiX = bx - 26 - pctStrW;
     int wifiY = 9;
-    uint16_t wifiColor = wifiConnectedStatus ? 0x07E0 : 0x4208; // Bright Green or dark gray
+    uint16_t wifiColor = wifiConnectedStatus ? 0x07E0 : themeBorder; // Bright Green or border
     display.fillRect(wifiX,     wifiY + 4, 2, 2, wifiColor);
     display.fillRect(wifiX + 3, wifiY + 2, 2, 4, wifiColor);
     display.fillRect(wifiX + 6, wifiY,     2, 6, wifiColor);
@@ -669,8 +702,8 @@ public:
     if (nmX + nmLen > rightEdge) nmX = rightEdge - nmLen;
     
     // Draw capsule bg for title
-    display.fillRoundRect(nmX - 6, 4, nmLen + 12, 16, 4, 0x10A2);
-    display.drawRoundRect(nmX - 6, 4, nmLen + 12, 16, 4, 0x2104);
+    display.fillRoundRect(nmX - 6, 4, nmLen + 12, 16, 4, themeCardBg);
+    display.drawRoundRect(nmX - 6, 4, nmLen + 12, 16, 4, themeBorder);
     
     display.setCursor(nmX, 8);
     display.print(nm);
@@ -740,12 +773,13 @@ public:
   }
 
   void drawNotificationPanel() {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
-    uint16_t themeBg     = TFT_BLACK;
-    uint16_t themeText   = TFT_WHITE;
-    uint16_t themeCardBg = 0x0842;
-    uint16_t themeBorder = 0x2104;
-    uint16_t themeSubText = 0x9D13;
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent = theme.accent;
+    uint16_t themeBg     = theme.bg;
+    uint16_t themeText   = theme.text;
+    uint16_t themeCardBg = theme.cardBg;
+    uint16_t themeBorder = theme.border;
+    uint16_t themeSubText = theme.subText;
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
@@ -755,7 +789,8 @@ public:
       int centerX = SCREEN_WIDTH / 2;
       
       // Crescent Moon
-      display.fillCircle(centerX - 10, 70, 20, 0xFFE0); // Yellow
+      uint16_t moonColor = !negativeDisplay ? themeAccent : 0xFFE0; // Accent in light, Yellow in dark
+      display.fillCircle(centerX - 10, 70, 20, moonColor);
       display.fillCircle(centerX - 16, 70, 20, themeBg); // Shadow
       
       // Floating Zzz
@@ -895,12 +930,13 @@ public:
   }
 
   void drawCalendarEvents() {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
-    uint16_t themeBg     = TFT_BLACK;
-    uint16_t themeText   = TFT_WHITE;
-    uint16_t themeCardBg = 0x0842;
-    uint16_t themeBorder = 0x2104;
-    uint16_t themeSubText = 0x9D13;
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent = theme.accent;
+    uint16_t themeBg     = theme.bg;
+    uint16_t themeText   = theme.text;
+    uint16_t themeCardBg = theme.cardBg;
+    uint16_t themeBorder = theme.border;
+    uint16_t themeSubText = theme.subText;
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
@@ -1043,12 +1079,13 @@ public:
   }
 
   void drawCalendarGrid(String dateStr, String dayStr) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
-    uint16_t themeBg     = TFT_BLACK;
-    uint16_t themeText   = TFT_WHITE;
-    uint16_t themeCardBg = 0x0842;
-    uint16_t themeBorder = 0x2104;
-    uint16_t themeSubText = 0x9D13;
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent = theme.accent;
+    uint16_t themeBg     = theme.bg;
+    uint16_t themeText   = theme.text;
+    uint16_t themeCardBg = theme.cardBg;
+    uint16_t themeBorder = theme.border;
+    uint16_t themeSubText = theme.subText;
 
     int curDay, curMonth, curYear, startWeekday, daysInMonth;
     parseDateInfo(dateStr, dayStr, curDay, curMonth, curYear, startWeekday, daysInMonth);
@@ -1110,12 +1147,13 @@ public:
   }
 
   void drawSettingsMenuLandscape(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Neon Cyan or Pink
-    uint16_t themeBg     = TFT_BLACK;
-    uint16_t themeText   = TFT_WHITE;
-    uint16_t themeCardBg = 0x0842;
-    uint16_t themeBorder = 0x2104;
-    uint16_t themeSubText = 0x9D13;
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent = theme.accent;
+    uint16_t themeBg     = theme.bg;
+    uint16_t themeText   = theme.text;
+    uint16_t themeCardBg = theme.cardBg;
+    uint16_t themeBorder = theme.border;
+    uint16_t themeSubText = theme.subText;
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
@@ -1150,7 +1188,7 @@ public:
       
       // Select box colors
       uint16_t boxBg = selected ? themeAccent : themeCardBg;
-      uint16_t boxText = selected ? TFT_BLACK : themeText;
+      uint16_t boxText = selected ? TFT_WHITE : themeText;
       uint16_t itemAccent = isCurrent ? boxText : themeAccent;
 
       if (isCurrent) {
@@ -1245,6 +1283,9 @@ public:
 
       display.setCursor(textX, yPos + 7);
       
+      uint16_t activeSwitchColor = !negativeDisplay ? 0x03E0 : 0x07E0;
+      uint16_t activeBrightnessColor = !negativeDisplay ? 0xD560 : 0xFFE0;
+
       switch (optIdx) {
         case 0:
           display.print("BLE Connected");
@@ -1253,7 +1294,7 @@ public:
             int sy = yPos + 7;
             display.drawRoundRect(sx, sy, 32, 16, 8, isCurrent ? boxText : themeBorder);
             if (bleOn) {
-              display.fillRoundRect(sx, sy, 32, 16, 8, 0x07E0); // Green ON
+              display.fillRoundRect(sx, sy, 32, 16, 8, activeSwitchColor); // Green ON
               display.fillCircle(sx + 24, sy + 8, 6, TFT_WHITE);
             } else {
               display.fillCircle(sx + 8, sy + 8, 6, themeSubText);
@@ -1283,7 +1324,7 @@ public:
             int sy = yPos + 7;
             display.drawRoundRect(sx, sy, 32, 16, 8, isCurrent ? boxText : themeBorder);
             if (invertOn) {
-              display.fillRoundRect(sx, sy, 32, 16, 8, 0x07E0);
+              display.fillRoundRect(sx, sy, 32, 16, 8, activeSwitchColor);
               display.fillCircle(sx + 24, sy + 8, 6, TFT_WHITE);
             } else {
               display.fillCircle(sx + 8, sy + 8, 6, themeSubText);
@@ -1296,7 +1337,7 @@ public:
             int bx = SCREEN_WIDTH - 38;
             int by = yPos + 19;
             for (int b = 0; b < 3; b++) {
-              uint16_t col = (brightness > b) ? (isCurrent ? boxText : 0xFFE0) : 0x3186; // Yellow or Gray
+              uint16_t col = (brightness > b) ? (isCurrent ? boxText : activeBrightnessColor) : 0x3186; // Yellow/Amber or Gray
               display.fillRect(bx + b * 6, by - (b + 1) * 4, 4, (b + 1) * 4, col);
             }
           }
@@ -1308,7 +1349,7 @@ public:
             int sy = yPos + 7;
             display.drawRoundRect(sx, sy, 32, 16, 8, isCurrent ? boxText : themeBorder);
             if (!silentMode) {
-              display.fillRoundRect(sx, sy, 32, 16, 8, 0x07E0);
+              display.fillRoundRect(sx, sy, 32, 16, 8, activeSwitchColor);
               display.fillCircle(sx + 24, sy + 8, 6, TFT_WHITE);
             } else {
               display.fillCircle(sx + 8, sy + 8, 6, themeSubText);
@@ -1320,7 +1361,7 @@ public:
             String val = "SAVE SETTINGS";
             int startX = textX + (SCREEN_WIDTH - 20 - textX - val.length() * 12) / 2;
             display.setCursor(startX, yPos + 7);
-            if (!isCurrent) display.setTextColor(0x07E0); // Neon Green text
+            if (!isCurrent) display.setTextColor(activeSwitchColor); // Theme-aware Green text
             display.print(val);
           }
           break;
@@ -1578,12 +1619,13 @@ public:
   }
 
   void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour, int steps) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Neon Cyan or Pink
-    uint16_t themeBg     = TFT_BLACK;
-    uint16_t themeText   = TFT_WHITE;
-    uint16_t themeCardBg = 0x0842; // Charcoal Dark
-    uint16_t themeBorder = 0x2104; // Dark Grey border
-    uint16_t themeSubText = 0x9D13; // Muted Silver
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent = theme.accent;
+    uint16_t themeBg     = theme.bg;
+    uint16_t themeText   = theme.text;
+    uint16_t themeCardBg = theme.cardBg;
+    uint16_t themeBorder = theme.border;
+    uint16_t themeSubText = theme.subText;
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
@@ -1941,12 +1983,13 @@ public:
   }
 
   void drawLevelScreen() {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
-    uint16_t themeBg     = TFT_BLACK;
-    uint16_t themeText   = TFT_WHITE;
-    uint16_t themeCardBg = 0x0842;
-    uint16_t themeBorder = 0x2104;
-    uint16_t themeSubText = 0x9D13;
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent = theme.accent;
+    uint16_t themeBg     = theme.bg;
+    uint16_t themeText   = theme.text;
+    uint16_t themeCardBg = theme.cardBg;
+    uint16_t themeBorder = theme.border;
+    uint16_t themeSubText = theme.subText;
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
@@ -1972,6 +2015,11 @@ public:
 
     if (imu.isInitialized()) {
       hasData = imu.readMotion(ax, ay, az, gx, gy, gz);
+      static unsigned long lastPrint = 0;
+      if (millis() - lastPrint > 500) {
+        Serial.printf("[IMU] Data: ax=%.3f, ay=%.3f, az=%.3f, gx=%.1f, gy=%.1f, gz=%.1f\n", ax, ay, az, gx, gy, gz);
+        lastPrint = millis();
+      }
     }
 
     if (!hasData) {
@@ -2014,9 +2062,9 @@ public:
     display.drawFastHLine(cx - maxRadius - 4, cy, (maxRadius + 4) * 2, themeBorder);
     display.drawFastVLine(cx, cy - maxRadius - 4, (maxRadius + 4) * 2, themeBorder);
 
-    // Calculate bubble position
-    int bx = cx + (int)(ax * maxRadius);
-    int by = cy - (int)(ay * maxRadius);
+    // Calculate bubble position by swapping physical X and Y axes to match vertical screen rotation
+    int bx = cx - (int)(ay * maxRadius);
+    int by = cy - (int)(ax * maxRadius);
 
     // Constrain bubble within maxRadius boundary
     float dist = sqrt((bx - cx) * (bx - cx) + (by - cy) * (by - cy));
@@ -2027,7 +2075,7 @@ public:
     }
 
     // Color code the bubble: Green if perfectly level, else Theme Accent
-    uint16_t bubbleColor = (abs(pitch) < 3.0f && abs(roll) < 3.0f) ? 0x07E0 : themeAccent;
+    uint16_t bubbleColor = (abs(ax) < 0.05f && abs(ay) < 0.05f) ? 0x07E0 : themeAccent;
     display.fillCircle(bx, by, 6, bubbleColor);
     display.drawCircle(bx, by, 6, themeText);
 
@@ -2067,9 +2115,12 @@ public:
     int barW = 100;
     int barX = 90;
 
+    uint16_t gyroXColor = !negativeDisplay ? 0xD560 : 0xFFE0; // Amber/Gold or Yellow
+    uint16_t gyroZColor = !negativeDisplay ? 0xA014 : 0xF81F; // Rich Violet or Neon Magenta
+
     // Gyro X Bar
     display.setTextSize(1);
-    display.setTextColor(0xFFE0); // Yellow
+    display.setTextColor(gyroXColor);
     display.setCursor(20, barY - 1);
     display.print("GYRO X");
     
@@ -2080,9 +2131,9 @@ public:
     if (valWX > barW/2) valWX = barW/2;
     if (valWX < -barW/2) valWX = -barW/2;
     if (valWX >= 0) {
-      display.fillRect(barX + barW/2, barY + 1, valWX, barH - 2, 0xFFE0);
+      display.fillRect(barX + barW/2, barY + 1, valWX, barH - 2, gyroXColor);
     } else {
-      display.fillRect(barX + barW/2 + valWX, barY + 1, -valWX, barH - 2, 0xFFE0);
+      display.fillRect(barX + barW/2 + valWX, barY + 1, -valWX, barH - 2, gyroXColor);
     }
 
     // Gyro Y Bar
@@ -2103,7 +2154,7 @@ public:
 
     // Gyro Z Bar
     barY += 12;
-    display.setTextColor(0xF81F); // Magenta
+    display.setTextColor(gyroZColor);
     display.setCursor(20, barY - 1);
     display.print("GYRO Z");
     display.drawRect(barX, barY, barW, barH, themeBorder);
@@ -2112,15 +2163,16 @@ public:
     if (valWZ > barW/2) valWZ = barW/2;
     if (valWZ < -barW/2) valWZ = -barW/2;
     if (valWZ >= 0) {
-      display.fillRect(barX + barW/2, barY + 1, valWZ, barH - 2, 0xF81F);
+      display.fillRect(barX + barW/2, barY + 1, valWZ, barH - 2, gyroZColor);
     } else {
-      display.fillRect(barX + barW/2 + valWZ, barY + 1, -valWZ, barH - 2, 0xF81F);
+      display.fillRect(barX + barW/2 + valWZ, barY + 1, -valWZ, barH - 2, gyroZColor);
     }
   }
 
   // ------------------ Primary Smartwatch Draw Adapter ------------------
   void draw(int hour, int minute, int second, String day, String date, int style = 0, bool is12Hour = false) {
-    display.fillScreen(TFT_BLACK);
+    ThemeColors theme = getTheme();
+    display.fillScreen(theme.bg);
     
     if (popupActive && (millis() - popupStartTime > popupDuration)) {
       popupActive = false;
@@ -2152,12 +2204,12 @@ public:
           break;
         case SCREEN_GAMES:
           if (!gamesActive) {
-            uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
-            uint16_t themeBg     = TFT_BLACK;
-            uint16_t themeText   = TFT_WHITE;
-            uint16_t themeCardBg = 0x0842;
-            uint16_t themeBorder = 0x2104;
-            uint16_t themeSubText = 0x9D13;
+            uint16_t themeAccent = theme.accent;
+            uint16_t themeBg     = theme.bg;
+            uint16_t themeText   = theme.text;
+            uint16_t themeCardBg = theme.cardBg;
+            uint16_t themeBorder = theme.border;
+            uint16_t themeSubText = theme.subText;
 
             // Clear display below the status bar
             display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);

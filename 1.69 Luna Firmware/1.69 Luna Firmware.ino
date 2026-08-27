@@ -488,6 +488,16 @@ void handleRobotCommand(String text) {
       face.setStateLabel("IDLE");
       Serial.println("Alarm stopped/dismissed.");
     }
+  } else if (text.startsWith("SCREEN:")) {
+    int sVal = text.substring(7).toInt();
+    if (sVal >= 0 && sVal < SCREEN_MAX) {
+      currentScreen = (SmartwatchScreen)sVal;
+      settingsActive = false;
+      gamesActive = false;
+      gamePlaying = false;
+      notificationsActive = false;
+      Serial.printf("OK:ScreenSwitched:%d\n", sVal);
+    }
   } else if (text.startsWith("MAP:")) {
     // Command format: MAP:direction,distance,description OR MAP:EXIT
     String payload = text.substring(4);
@@ -752,7 +762,7 @@ void applySettings(String payload) {
   if (partCount > 2) defaultGif  = parts[2].toInt();
   if (partCount > 3) gifIntro    = parts[3].toInt();
   // parts[4], parts[5], parts[6] represent touch settings which are now removed/ignored.
-  if (partCount > 7) negativeDisplay = (parts[7].toInt() == 1);
+  if (partCount > 7) negativeDisplay = false; // Force White Theme (ignore app dark theme setting)
   if (partCount > 8) {
     gifIntroSpeed = 169;
   }
@@ -772,7 +782,8 @@ void applySettings(String payload) {
     if (birthdayDurationMs < 1000) birthdayDurationMs = 1000;
   }
   if (partCount > 13) {
-    clockStyle = parts[13].toInt();
+    // Disabled companion app clockStyle override to prevent reverting
+    // clockStyle = parts[13].toInt();
   }
   if (partCount > 14) {
     oledBrightness = parts[14].toInt();
@@ -874,8 +885,10 @@ void setup() {
   gifIntro = preferences.getInt("intGif", 1);
   // Gestures/touch settings no longer loaded
   robotVariant = preferences.getString("robot_var", "ms_luna");
-  negativeDisplay = preferences.getBool("neg", false);
-  clockStyle = preferences.getInt("clkStyle", 3); // Default to Style 3 (Custom UI Designer)
+  negativeDisplay = false; // Always boot in White Theme (Light Mode)
+  preferences.putBool("neg", false);
+  clockStyle = 3; // Force Style 3 (Tactical HUD) on boot
+  preferences.putInt("clkStyle", 3);
   oledBrightness = preferences.getInt("oledBright", 2);
   silentMode = preferences.getBool("silent", false);
   audio.silentMode = silentMode;

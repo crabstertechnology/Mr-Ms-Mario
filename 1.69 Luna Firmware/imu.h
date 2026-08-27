@@ -66,18 +66,22 @@ public:
 
     Serial.printf("[IMU] Found QMI8658 at address 0x%02X\n", i2cAddr);
 
+    // Soft reset
+    writeReg(0x60, 0xB0);
+    delay(20);
+
     // CTRL1: Configuration (Interface Control, address auto-increment)
     // Bit 6 enables address auto-increment for burst reads
     writeReg(0x02, 0x40);
 
     // CTRL2: Accelerometer Configuration (125Hz, ±2g)
-    // aODR is bits [7:4] -> 0110 (125Hz) -> 0x60
-    // aFS is bits [2:0] -> 000 (±2g) -> 0x00
-    writeReg(0x03, 0x60);
+    // aFS is bits [6:4] -> 000 (±2g)
+    // aODR is bits [3:0] -> 0110 (125Hz) -> 0x06
+    writeReg(0x03, 0x06);
 
-    // CTRL3: Gyroscope Configuration (112Hz, ±512 dps)
+    // CTRL3: Gyroscope Configuration (125Hz, ±512 dps)
     // gFS is bits [6:4] -> 101 (±512 dps) -> 0x50
-    // gODR is bits [3:0] -> 0110 (112.1 Hz) -> 0x06
+    // gODR is bits [3:0] -> 0110 (125Hz) -> 0x06
     writeReg(0x04, 0x56);
 
     // CTRL7: Enable both Accelerometer and Gyroscope

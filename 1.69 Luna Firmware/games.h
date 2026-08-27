@@ -337,11 +337,23 @@ public:
 
   void drawMenu(GFXcanvas16& display) {
     extern String robotVariant;
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
-    uint16_t themeBg     = TFT_BLACK;
-    uint16_t themeCardBg = 0x0842;
-    uint16_t themeText   = TFT_WHITE;
-    uint16_t themeBorder = 0x2104;
+    extern bool negativeDisplay;
+    uint16_t themeAccent, themeBg, themeCardBg, themeText, themeBorder;
+    if (!negativeDisplay) {
+      // Light Theme
+      themeBg      = TFT_WHITE;
+      themeText    = 0x2104; // Charcoal Black
+      themeAccent  = (robotVariant == "mr_luna") ? 0x197A : 0xF8B8; // Royal Blue or Luna Pink
+      themeCardBg  = 0xF7BE; // Soft Pastel Gray
+      themeBorder  = 0xD69A; // Light Grey
+    } else {
+      // Dark Theme
+      themeBg      = TFT_BLACK;
+      themeText    = TFT_WHITE;
+      themeAccent  = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
+      themeCardBg  = 0x0842;
+      themeBorder  = 0x2104;
+    }
 
     display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
 
@@ -379,7 +391,7 @@ public:
       bool sel = (gameMenuOption == optIdx);
       
       uint16_t boxBg = sel ? themeAccent : themeCardBg;
-      uint16_t boxText = sel ? TFT_BLACK : themeText;
+      uint16_t boxText = sel ? TFT_WHITE : themeText;
       uint16_t itemAccent = sel ? boxText : themeAccent;
 
       if (sel) {
@@ -414,8 +426,11 @@ public:
           display.fillTriangle(ix + 3, iy + 6, ix + 5, iy + 4, ix + 5, iy + 8, TFT_WHITE);
           break;
         case 3:
-          display.drawCircle(ix + 6, iy + 6, 5, 0xFFE0);
-          display.fillCircle(ix + 6, iy + 6, 3, 0xFFE0);
+          {
+            uint16_t coinColor = !negativeDisplay ? 0xD560 : 0xFFE0; // Amber/Gold or Yellow
+            display.drawCircle(ix + 6, iy + 6, 5, coinColor);
+            display.fillCircle(ix + 6, iy + 6, 3, coinColor);
+          }
           break;
         case 4:
           display.drawLine(ix + 6, iy, ix + 6, iy + 12, itemAccent);
@@ -456,7 +471,7 @@ public:
     }
 
     display.setTextSize(1);
-    display.setTextColor(0x7BCF);
+    display.setTextColor(themeText);
     String hint = "B1:Scroll  B2:Play";
     display.setCursor((SCREEN_WIDTH - hint.length() * 6) / 2, SCREEN_WIDTH == 240 ? 208 : 140);
     display.print(hint);
