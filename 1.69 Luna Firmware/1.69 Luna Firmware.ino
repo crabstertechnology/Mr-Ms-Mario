@@ -1401,10 +1401,10 @@ void handleBtn2Single() {
   }
   lastScreenTransitionTime = transitionNow;
 
-  // Screen cycle: Face <-> Clock <-> Notifications <-> Calendar <-> Games <-> Settings <-> Card <-> Face
+  // Screen cycle: Face <-> Card <-> Clock <-> Notifications <-> Calendar <-> Games <-> Settings <-> Face
   static const SmartwatchScreen CYCLE[] = {
-    SCREEN_FACE, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
-    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD
+    SCREEN_FACE, SCREEN_CARD, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS
   };
   static const int CYCLE_LEN = 7;
 
@@ -1425,7 +1425,7 @@ void handleBtn2Single() {
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
 
-  const char* names[] = {"FACE","CLOCK","NOTIF","CAL","GAMES","SETTINGS","CARD"};
+  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS"};
   Serial.printf("[BTN2] >>> %s (screen %d)\n", names[(idx+1)%CYCLE_LEN], currentScreen);
 }
 
@@ -1441,8 +1441,8 @@ void handleBtn2Double() {
   lastScreenTransitionTime = transitionNow;
 
   static const SmartwatchScreen CYCLE[] = {
-    SCREEN_FACE, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
-    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD
+    SCREEN_FACE, SCREEN_CARD, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS
   };
   static const int CYCLE_LEN = 7;
 
@@ -1463,7 +1463,7 @@ void handleBtn2Double() {
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
 
-  const char* names[] = {"FACE","CLOCK","NOTIF","CAL","GAMES","SETTINGS","CARD"};
+  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS"};
   Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
 }
 
