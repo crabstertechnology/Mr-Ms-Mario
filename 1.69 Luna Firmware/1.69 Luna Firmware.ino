@@ -1401,12 +1401,13 @@ void handleBtn2Single() {
   }
   lastScreenTransitionTime = transitionNow;
 
-  // Screen cycle order: Face → Clock → Notifications → Calendar → Games → Settings → Card → Face
+  // Screen cycle: Face <-> Clock <-> Notifications <-> Calendar <-> Games <-> Settings <-> Face
+  // CARD (QR) is excluded from swipe navigation — use long-press on clock screen to reach it
   static const SmartwatchScreen CYCLE[] = {
     SCREEN_FACE, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
-    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS
   };
-  static const int CYCLE_LEN = 7;
+  static const int CYCLE_LEN = 6;
 
   int idx = 0;
   for (int i = 0; i < CYCLE_LEN; i++) {
@@ -1425,7 +1426,7 @@ void handleBtn2Single() {
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
 
-  const char* names[] = {"FACE","CLOCK","NOTIF","CAL","GAMES","SETTINGS","CARD"};
+  const char* names[] = {"FACE","CLOCK","NOTIF","CAL","GAMES","SETTINGS"};
   Serial.printf("[BTN2] >>> %s (screen %d)\n", names[(idx+1)%CYCLE_LEN], currentScreen);
 }
 
@@ -1442,9 +1443,9 @@ void handleBtn2Double() {
 
   static const SmartwatchScreen CYCLE[] = {
     SCREEN_FACE, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
-    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS
   };
-  static const int CYCLE_LEN = 7;
+  static const int CYCLE_LEN = 6;
 
   int idx = 0;
   for (int i = 0; i < CYCLE_LEN; i++) {
@@ -1463,8 +1464,8 @@ void handleBtn2Double() {
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
 
-  const char* names[] = {"FACE","CLOCK","NOTIF","CAL","GAMES","SETTINGS","CARD"};
-  Serial.printf("[BTN2] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
+  const char* names[] = {"FACE","CLOCK","NOTIF","CAL","GAMES","SETTINGS"};
+  Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
 }
 
 void updateStateLabel() {
@@ -1701,7 +1702,7 @@ void loop() {
   // Note: SCREEN_CARD is excluded – QR must stay visible until user explicitly dismisses it
   // Inactivity timeout: 5 minutes of no interaction returns to Face screen
   if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive && !gamePlaying) {
-    if (now - lastInteractionTime >= 300000) {
+    if (now >= lastInteractionTime && now - lastInteractionTime >= 300000) {
       currentScreen = SCREEN_FACE;
       lastExpressionCycleTime = now;
       Serial.println("[Inactivity] 5min timeout: returning to Face screen.");
