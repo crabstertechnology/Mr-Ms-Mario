@@ -17,6 +17,10 @@ enum ButtonEvent {
   BTN2_SINGLE,      // Right tap   → next screen
   BTN2_DOUBLE,      // Left tap    → previous screen
   BTN2_LONG,        // (reserved)
+  BTN_SWIPE_UP,     // Swipe up    → scroll down
+  BTN_SWIPE_DOWN,   // Swipe down  → scroll up
+  BTN_SWIPE_LEFT,   // Swipe left  → next screen
+  BTN_SWIPE_RIGHT,  // Swipe right → previous screen
 };
 
 // ── Keep backwards-compatible TouchEvent ─────────────────────────────────────
@@ -162,22 +166,59 @@ public:
 
         unsigned long held = now - startMs;
 
-        if (held >= 500) {
-          // ── Long Press ──────────────────────────────────────────────────
-          ev = BTN1_LONG;
-          Serial.println("[Touch] Long press → home screen");
+        // First, check gesture code from CST816T if available
+        if (gesture == 0x01) {
+          ev = BTN_SWIPE_UP;
+          Serial.println("[Touch] Gesture: Swipe Up");
+        } else if (gesture == 0x02) {
+          ev = BTN_SWIPE_DOWN;
+          Serial.println("[Touch] Gesture: Swipe Down");
+        } else if (gesture == 0x03) {
+          ev = BTN_SWIPE_LEFT;
+          Serial.println("[Touch] Gesture: Swipe Left");
+        } else if (gesture == 0x04) {
+          ev = BTN_SWIPE_RIGHT;
+          Serial.println("[Touch] Gesture: Swipe Right");
+        } else {
+          // If no hardware gesture detected, fallback to software delta tracking
+          int deltaX = lastX - startX;
+          int deltaY = lastY - startY;
+          int absX = abs(deltaX);
+          int absY = abs(deltaY);
 
-        } else if (held >= 30) {
-          // ── Short Tap — classify by X zone ─────────────────────────────
-          if (lastX < TOUCH_LEFT_LIMIT) {
-            ev = BTN2_DOUBLE;           // Left tap → previous screen
-            Serial.printf("[Touch] LEFT tap (X=%d) → prev screen\n", lastX);
-          } else if (lastX >= TOUCH_RIGHT_LIMIT) {
-            ev = BTN2_SINGLE;           // Right tap → next screen
-            Serial.printf("[Touch] RIGHT tap (X=%d) → next screen\n", lastX);
+          if (absY > 30 && absY > absX) {
+            if (deltaY < 0) {
+              ev = BTN_SWIPE_UP;
+              Serial.printf("[Touch] Software Swipe Up (dY=%d)\n", deltaY);
+            } else {
+              ev = BTN_SWIPE_DOWN;
+              Serial.printf("[Touch] Software Swipe Down (dY=%d)\n", deltaY);
+            }
+          } else if (absX > 30 && absX > absY) {
+            if (deltaX < 0) {
+              ev = BTN_SWIPE_LEFT;
+              Serial.printf("[Touch] Software Swipe Left (dX=%d)\n", deltaX);
+            } else {
+              ev = BTN_SWIPE_RIGHT;
+              Serial.printf("[Touch] Software Swipe Right (dX=%d)\n", deltaX);
+            }
           } else {
-            ev = BTN1_SINGLE;           // Center tap → select / interact
-            Serial.printf("[Touch] CENTER tap (X=%d) → select\n", lastX);
+            // Standard click/long press handling
+            if (held >= 500) {
+              ev = BTN1_LONG;
+              Serial.println("[Touch] Long press → home screen");
+            } else if (held >= 30) {
+              if (lastX < TOUCH_LEFT_LIMIT) {
+                ev = BTN2_DOUBLE;
+                Serial.printf("[Touch] LEFT tap (X=%d) → prev screen\n", lastX);
+              } else if (lastX >= TOUCH_RIGHT_LIMIT) {
+                ev = BTN2_SINGLE;
+                Serial.printf("[Touch] RIGHT tap (X=%d) → next screen\n", lastX);
+              } else {
+                ev = BTN1_SINGLE;
+                Serial.printf("[Touch] CENTER tap (X=%d) → select\n", lastX);
+              }
+            }
           }
         }
       }

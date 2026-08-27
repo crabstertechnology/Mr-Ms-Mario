@@ -309,9 +309,9 @@ public:
 
   void drawGameOverScreen(GFXcanvas16& display, int score, int highScore) {
     extern String robotVariant;
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg  = TFT_WHITE;
-    uint16_t themeText = 0x2104;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
+    uint16_t themeBg  = TFT_BLACK;
+    uint16_t themeText = TFT_WHITE;
 
     display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
 
@@ -337,29 +337,29 @@ public:
 
   void drawMenu(GFXcanvas16& display) {
     extern String robotVariant;
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2;
-    uint16_t themeText   = 0x2104;
-    uint16_t themeBorder = 0xD69A;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
+    uint16_t themeBg     = TFT_BLACK;
+    uint16_t themeCardBg = 0x0842;
+    uint16_t themeText   = TFT_WHITE;
+    uint16_t themeBorder = 0x2104;
 
     display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
 
     display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
     display.setTextColor(themeAccent);
-    display.setCursor((SCREEN_WIDTH - 11 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 30 : 12);
+    display.setCursor((SCREEN_WIDTH - 11 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 28 : 12);
     display.print("LUNA ARCADE");
-    display.drawFastHLine(6, SCREEN_WIDTH == 240 ? 54 : 24, SCREEN_WIDTH - 12, themeBorder);
+    display.drawFastHLine(6, SCREEN_WIDTH == 240 ? 48 : 24, SCREEN_WIDTH - 12, themeBorder);
 
     const char* gameNames[] = {
-      "1.LUNA RACER",
-      "2.LUNA SPACE",
-      "3.FLAPPY MOCHY",
-      "4.COIN CATCHER",
-      "5.MOCHY JUMP",
-      "6.STACKER",
-      "7.MEMORY MATRIX",
-      "8.EXIT ARCADE"
+      "LUNA RACER",
+      "LUNA SPACE",
+      "FLAPPY MOCHY",
+      "COIN CATCHER",
+      "MOCHY JUMP",
+      "STACKER",
+      "MEMORY MATRIX",
+      "EXIT ARCADE"
     };
 
     int itemsPerPage = 4;
@@ -369,7 +369,7 @@ public:
     }
 
     int spacing = SCREEN_WIDTH == 240 ? 32 : 20;
-    int startY = SCREEN_WIDTH == 240 ? 66 : 30;
+    int startY = SCREEN_WIDTH == 240 ? 58 : 30;
 
     for (int idx = 0; idx < itemsPerPage; idx++) {
       int optIdx = idx + scrollOffset;
@@ -378,20 +378,73 @@ public:
       int yPos = startY + idx * spacing;
       bool sel = (gameMenuOption == optIdx);
       
+      uint16_t boxBg = sel ? themeAccent : themeCardBg;
+      uint16_t boxText = sel ? TFT_BLACK : themeText;
+      uint16_t itemAccent = sel ? boxText : themeAccent;
+
       if (sel) {
-        display.fillRoundRect(6, yPos, SCREEN_WIDTH - 24, SCREEN_WIDTH == 240 ? 28 : 17, 4, themeCardBg);
-        display.drawRoundRect(6, yPos, SCREEN_WIDTH - 24, SCREEN_WIDTH == 240 ? 28 : 17, 4, themeAccent);
-        display.setTextColor(themeAccent);
+        display.fillRoundRect(6, yPos, SCREEN_WIDTH - 12, SCREEN_WIDTH == 240 ? 28 : 17, 6, boxBg);
+        display.drawRoundRect(6, yPos, SCREEN_WIDTH - 12, SCREEN_WIDTH == 240 ? 28 : 17, 6, themeAccent);
+        display.setTextColor(boxText);
       } else {
+        display.fillRoundRect(6, yPos, SCREEN_WIDTH - 12, SCREEN_WIDTH == 240 ? 28 : 17, 6, themeCardBg);
         display.setTextColor(themeText);
       }
       
-      display.setCursor(14, yPos + (SCREEN_WIDTH == 240 ? 6 : 5));
+      // Draw icon
+      int ix = 14;
+      int iy = yPos + (SCREEN_WIDTH == 240 ? 8 : 3);
+      switch (optIdx) {
+        case 0:
+          display.fillRect(ix + 2, iy + 4, 8, 4, itemAccent);
+          display.fillRect(ix + 1, iy + 2, 2, 2, 0x4208);
+          display.fillRect(ix + 9, iy + 2, 2, 2, 0x4208);
+          display.fillRect(ix + 1, iy + 8, 2, 2, 0x4208);
+          display.fillRect(ix + 9, iy + 8, 2, 2, 0x4208);
+          break;
+        case 1:
+          display.fillTriangle(ix + 6, iy, ix + 2, iy + 4, ix + 10, iy + 4, itemAccent);
+          display.fillRect(ix + 3, iy + 4, 7, 6, itemAccent);
+          display.fillTriangle(ix + 1, iy + 8, ix + 3, iy + 8, ix + 3, iy + 10, itemAccent);
+          display.fillTriangle(ix + 11, iy + 8, ix + 9, iy + 8, ix + 9, iy + 10, itemAccent);
+          break;
+        case 2:
+          display.fillCircle(ix + 6, iy + 6, 4, itemAccent);
+          display.fillTriangle(ix + 9, iy + 5, ix + 9, iy + 7, ix + 12, iy + 6, 0xFDA0);
+          display.fillTriangle(ix + 3, iy + 6, ix + 5, iy + 4, ix + 5, iy + 8, TFT_WHITE);
+          break;
+        case 3:
+          display.drawCircle(ix + 6, iy + 6, 5, 0xFFE0);
+          display.fillCircle(ix + 6, iy + 6, 3, 0xFFE0);
+          break;
+        case 4:
+          display.drawLine(ix + 6, iy, ix + 6, iy + 12, itemAccent);
+          display.drawLine(ix + 6, iy, ix + 2, iy + 4, itemAccent);
+          display.drawLine(ix + 6, iy, ix + 10, iy + 4, itemAccent);
+          break;
+        case 5:
+          display.fillRect(ix + 2, iy + 8, 8, 3, itemAccent);
+          display.fillRect(ix + 4, iy + 4, 4, 3, itemAccent);
+          display.fillRect(ix + 5, iy,     2, 3, itemAccent);
+          break;
+        case 6:
+          display.drawRect(ix + 1, iy + 1, 10, 10, itemAccent);
+          display.drawFastHLine(ix + 1, iy + 5, 10, itemAccent);
+          display.drawFastVLine(ix + 5, iy + 1, 10, itemAccent);
+          break;
+        case 7:
+          display.drawLine(ix + 1, iy + 6, ix + 11, iy + 6, itemAccent);
+          display.drawLine(ix + 1, iy + 6, ix + 5, iy + 2, itemAccent);
+          display.drawLine(ix + 1, iy + 6, ix + 5, iy + 10, itemAccent);
+          break;
+      }
+      
+      display.setCursor(32, yPos + (SCREEN_WIDTH == 240 ? 6 : 5));
       display.print(gameNames[optIdx]);
     }
 
     // Scroll dots
-    int dotAreaY = SCREEN_WIDTH == 240 ? 202 : 122;
+    int dotAreaY = SCREEN_WIDTH == 240 ? 194 : 122;
     int dotSpacing = SCREEN_WIDTH == 240 ? 12 : 8;
     int dotsStartX = (SCREEN_WIDTH - 8 * dotSpacing) / 2;
     for (int i = 0; i < 8; i++) {
@@ -405,7 +458,7 @@ public:
     display.setTextSize(1);
     display.setTextColor(0x7BCF);
     String hint = "B1:Scroll  B2:Play";
-    display.setCursor((SCREEN_WIDTH - hint.length() * 6) / 2, SCREEN_WIDTH == 240 ? 214 : 140);
+    display.setCursor((SCREEN_WIDTH - hint.length() * 6) / 2, SCREEN_WIDTH == 240 ? 208 : 140);
     display.print(hint);
   }
 

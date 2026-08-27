@@ -1464,7 +1464,45 @@ void handleBtn2Double() {
   audio.playSound(SOUND_COIN);
 
   const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS"};
-  Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
+    Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
+}
+
+void handleSwipeUp() {
+  lastInteractionTime = millis();
+  if (mapsActive || gamePlaying) return;
+
+  if (currentScreen == SCREEN_SETTINGS && settingsActive) {
+    if (optionSelected) {
+      adjustOption(menuOption, 1);
+    } else {
+      menuOption = (menuOption + 1) % 8;
+      audio.playSound(SOUND_CHIRP);
+      Serial.printf("[Swipe Up] Settings Option highlighted -> %d\n", menuOption);
+    }
+  } else if (currentScreen == SCREEN_GAMES && gamesActive && !gamePlaying) {
+    gameMenuOption = (gameMenuOption + 1) % 8;
+    audio.playSound(SOUND_CHIRP);
+    Serial.printf("[Swipe Up] Game Option highlighted -> %d\n", gameMenuOption);
+  }
+}
+
+void handleSwipeDown() {
+  lastInteractionTime = millis();
+  if (mapsActive || gamePlaying) return;
+
+  if (currentScreen == SCREEN_SETTINGS && settingsActive) {
+    if (optionSelected) {
+      adjustOption(menuOption, -1);
+    } else {
+      menuOption = (menuOption - 1 + 8) % 8;
+      audio.playSound(SOUND_CHIRP);
+      Serial.printf("[Swipe Down] Settings Option highlighted -> %d\n", menuOption);
+    }
+  } else if (currentScreen == SCREEN_GAMES && gamesActive && !gamePlaying) {
+    gameMenuOption = (gameMenuOption - 1 + 8) % 8;
+    audio.playSound(SOUND_CHIRP);
+    Serial.printf("[Swipe Down] Game Option highlighted -> %d\n", gameMenuOption);
+  }
 }
 
 void updateStateLabel() {
@@ -1533,8 +1571,16 @@ void loop() {
     case BTN1_SINGLE: handleBtn1Single(); break;
     case BTN1_DOUBLE: handleBtn1Double(); break;
     case BTN1_LONG:   handleBtn1Long();   break;
-    case BTN2_SINGLE: handleBtn2Single(); break;
-    case BTN2_DOUBLE: handleBtn2Double(); break;
+    case BTN2_SINGLE:
+    case BTN_SWIPE_LEFT:
+      handleBtn2Single();
+      break;
+    case BTN2_DOUBLE:
+    case BTN_SWIPE_RIGHT:
+      handleBtn2Double();
+      break;
+    case BTN_SWIPE_UP:   handleSwipeUp();   break;
+    case BTN_SWIPE_DOWN: handleSwipeDown(); break;
     default: break;
   }
 

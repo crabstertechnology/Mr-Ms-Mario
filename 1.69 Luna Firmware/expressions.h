@@ -559,24 +559,24 @@ public:
   // ------------------ Smartwatch UI Drawing Methods ------------------
   
   void drawStatusBar(int hour, int minute) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Neon Cyan or Luna Pink
+    uint16_t themeBg     = TFT_BLACK; // Sleek dark mode
+    uint16_t themeText   = TFT_WHITE;
+    uint16_t themeCardBg = 0x0842; // Deep Slate Charcoal
+    uint16_t themeBorder = 0x2104; // Dark Grey border
     uint16_t themeSubText = 0x7BCF; // Muted grey
 
     // ── Background square bar running end-to-end ──────────────────────────
-    display.fillRect(0, 0, SCREEN_WIDTH, 24, themeCardBg);
+    display.fillRect(0, 0, SCREEN_WIDTH, 24, themeBg);
     display.drawFastHLine(0, 24, SCREEN_WIDTH, themeBorder);
 
-    // ── Left zone: HH:MM (size 2 = 12px/char, 5 chars = 60px) ─────────────
+    // ── Left zone: HH:MM ─────────────
     display.setTextSize(2);
-    display.setTextColor(themeText, themeCardBg);
+    display.setTextColor(themeText);
     char tBuf[6];
     snprintf(tBuf, sizeof(tBuf), "%02d:%02d", hour, minute);
     display.setCursor(8, 4);
-    display.print(tBuf);                          // 5 chars × 12px = 60px, ends at x=68
+    display.print(tBuf);
 
     // ── Right zone: battery and connectivity ─────────
     int bx = SCREEN_WIDTH - 28;
@@ -585,7 +585,7 @@ public:
     display.drawRect(bx, 6, 20, 12, themeText);
     display.fillRect(bx + 20, 9, 2, 6, themeText);
     
-    // Calculate battery percentage from voltage using calibrated LiPo discharge curve
+    // Calculate battery percentage
     int batteryPct = 0;
     if (batteryVolts >= 4.15f) batteryPct = 100;
     else if (batteryVolts >= 4.05f) batteryPct = 90 + (batteryVolts - 4.05f) * 100;
@@ -602,36 +602,48 @@ public:
     if (batteryPct > 100) batteryPct = 100;
     if (batteryPct < 0) batteryPct = 0;
     
-    // Proportional fill width (max 16 pixels)
     int fillWidth = (batteryPct * 16) / 100;
-    uint16_t batteryColor = TFT_GREEN;
+    uint16_t batteryColor = 0x07E0; // Neon Green
     if (batteryPct < 20) {
-      batteryColor = TFT_RED;
+      batteryColor = 0xF800; // Bright Red
     } else if (batteryPct < 55) {
-      batteryColor = TFT_YELLOW;
+      batteryColor = 0xFFE0; // Bright Yellow
     }
     if (fillWidth > 0) {
       display.fillRect(bx + 2, 8, fillWidth, 8, batteryColor);
     }
 
-    // Battery percentage text next to icon (size 2 = 12px/char, 4 chars = 48px)
-    display.setTextColor(themeText, themeCardBg);
+    display.setTextColor(themeText);
     display.setTextSize(2);
     String pctStr = String(batteryPct) + "%";
     int pctStrW = pctStr.length() * 12;
     display.setCursor(bx - 6 - pctStrW, 4);
     display.print(pctStr);
 
-    // BLE dot (shifted left to make room for text)
-    uint16_t bleColor = bleConnectedStatus  ? (uint16_t)0x5DFF : themeSubText;
-    display.fillCircle(bx - 12 - pctStrW, 12, 3, bleColor);
+    // BLE Icon (Vector line drawing instead of simple circle)
+    int bleX = bx - 14 - pctStrW;
+    int bleY = 12;
+    uint16_t bleColor = bleConnectedStatus ? 0x07FF : 0x4208; // Bright Cyan or dark gray
+    if (bleConnectedStatus) {
+      display.drawLine(bleX, bleY - 5, bleX, bleY + 5, bleColor);
+      display.drawLine(bleX, bleY - 5, bleX + 3, bleY - 2, bleColor);
+      display.drawLine(bleX + 3, bleY - 2, bleX - 2, bleY + 2, bleColor);
+      display.drawLine(bleX - 2, bleY - 2, bleX + 3, bleY + 2, bleColor);
+      display.drawLine(bleX + 3, bleY + 2, bleX, bleY + 5, bleColor);
+    } else {
+      display.drawCircle(bleX, bleY, 2, bleColor);
+    }
 
-    // WiFi dot (shifted left to make room for text)
-    uint16_t wifiColor = wifiConnectedStatus ? (uint16_t)TFT_GREEN : themeSubText;
-    display.fillCircle(bx - 22 - pctStrW, 12, 3, wifiColor);
+    // WiFi Icon (cellular/signal bars style instead of dot)
+    int wifiX = bx - 26 - pctStrW;
+    int wifiY = 9;
+    uint16_t wifiColor = wifiConnectedStatus ? 0x07E0 : 0x4208; // Bright Green or dark gray
+    display.fillRect(wifiX,     wifiY + 4, 2, 2, wifiColor);
+    display.fillRect(wifiX + 3, wifiY + 2, 2, 4, wifiColor);
+    display.fillRect(wifiX + 6, wifiY,     2, 6, wifiColor);
 
-    // ── Centre zone: screen name (size 1 = 6px/char) ─────
-    display.setTextColor(themeAccent, themeCardBg);
+    // ── Centre zone: screen name ─────
+    display.setTextColor(themeAccent);
     display.setTextSize(1);
     const char* nm = "LUNA";
     switch (currentScreen) {
@@ -645,12 +657,17 @@ public:
       case SCREEN_SETTINGS:      nm = "SETTINGS";  break;
       default:                   nm = "LUNA";      break;
     }
-    int nmLen  = strlen(nm) * 6;               // size-1 chars
-    int leftEdge  = 70;                        // clear of HH:MM
-    int rightEdge = bx - 26 - pctStrW;         // clear of icons/dots
+    int nmLen  = strlen(nm) * 6;
+    int leftEdge  = 70;
+    int rightEdge = bx - 30 - pctStrW;
     int nmX = leftEdge + (rightEdge - leftEdge - nmLen) / 2;
     if (nmX < leftEdge) nmX = leftEdge;
     if (nmX + nmLen > rightEdge) nmX = rightEdge - nmLen;
+    
+    // Draw capsule bg for title
+    display.fillRoundRect(nmX - 6, 4, nmLen + 12, 16, 4, 0x10A2);
+    display.drawRoundRect(nmX - 6, 4, nmLen + 12, 16, 4, 0x2104);
+    
     display.setCursor(nmX, 8);
     display.print(nm);
   }
@@ -719,57 +736,46 @@ public:
   }
 
   void drawNotificationPanel() {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
-
-    uint16_t LUNA_CYAN   = themeAccent;
-    uint16_t LUNA_PINK   = 0xF8B8;
-    uint16_t LUNA_DARK   = themeCardBg;
-    uint16_t LUNA_GLASS  = themeBorder;
-    uint16_t LUNA_CORAL  = 0xFC10;
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
+    uint16_t themeBg     = TFT_BLACK;
+    uint16_t themeText   = TFT_WHITE;
+    uint16_t themeCardBg = 0x0842;
+    uint16_t themeBorder = 0x2104;
+    uint16_t themeSubText = 0x9D13;
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
 
     if (notificationCount == 0) {
-      // Sleeping face graphic
+      // Sleek moon and sleep animation
       int centerX = SCREEN_WIDTH / 2;
-      display.fillCircle(centerX, 70, 36, LUNA_GLASS);
-      display.drawCircle(centerX, 70, 36, LUNA_PINK);
       
-      display.drawCircle(centerX - 12, 68, 6, themeText);
-      display.fillRect(centerX - 19, 60, 14, 8, LUNA_GLASS);
-      display.drawCircle(centerX + 12, 68, 6, themeText);
-      display.fillRect(centerX + 5, 60, 14, 8, LUNA_GLASS);
+      // Crescent Moon
+      display.fillCircle(centerX - 10, 70, 20, 0xFFE0); // Yellow
+      display.fillCircle(centerX - 16, 70, 20, themeBg); // Shadow
       
-      display.fillCircle(centerX - 18, 76, 4, LUNA_CORAL);
-      display.fillCircle(centerX + 18, 76, 4, LUNA_CORAL);
-      
-      display.drawCircle(centerX, 76, 3, themeText);
-      display.fillRect(centerX - 4, 73, 8, 3, LUNA_GLASS);
-      
-      display.setTextColor(LUNA_CYAN);
-      display.setTextSize(1);
-      display.setCursor(centerX + 24, 40);
+      // Floating Zzz
+      display.setTextColor(themeAccent);
+      display.setTextSize(2);
+      display.setCursor(centerX + 16, 44);
       display.print("Z");
-      display.setCursor(centerX + 32, 32);
+      display.setTextSize(1);
+      display.setCursor(centerX + 28, 36);
+      display.print("z");
+      display.setCursor(centerX + 36, 48);
       display.print("z");
       
       display.setTextColor(themeText);
       display.setTextSize(2);
-      int lblW1 = 16 * 12;
-      display.setCursor((SCREEN_WIDTH - lblW1) / 2, 126);
-      display.print("No Notifications");
+      int lblW1 = 11 * 12;
+      display.setCursor((SCREEN_WIDTH - lblW1) / 2, 116);
+      display.print("INBOX CLEAR");
       
       display.setTextColor(themeSubText);
       display.setTextSize(1);
-      int lblW2 = 18 * 6;
-      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 150);
-      display.print("History is empty");
+      int lblW2 = 20 * 6;
+      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 142);
+      display.print("No new notifications");
       return;
     }
     
@@ -778,33 +784,31 @@ public:
       NotificationItem& notif = notificationHistory[currentNotifViewIdx];
       
       // Glowing Card Container
-      display.drawRoundRect(6, 26, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 10, LUNA_CYAN);
-      display.drawRoundRect(7, 27, SCREEN_WIDTH - 14, SCREEN_HEIGHT - 34, 9, LUNA_GLASS);
-      display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, LUNA_DARK);
+      display.drawRoundRect(6, 26, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 10, themeAccent);
+      display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, themeCardBg);
       
       // Header
       display.setTextColor(themeText);
       display.setTextSize(2);
-      display.setCursor(14, 34);
+      display.setCursor(14, 36);
       String title = notif.title;
       if (title.length() > 10) title = title.substring(0, 8) + "...";
       display.print(title);
       
-      display.setTextColor(LUNA_CYAN);
+      display.setTextColor(themeAccent);
       display.setTextSize(2);
-      display.setCursor(SCREEN_WIDTH - 76, 34);
+      display.setCursor(SCREEN_WIDTH - 76, 36);
       display.print(notif.timeStr);
       
-      display.drawFastHLine(12, 54, SCREEN_WIDTH - 24, LUNA_GLASS);
+      display.drawFastHLine(12, 56, SCREEN_WIDTH - 24, themeBorder);
       
       // Body Text
       display.setTextColor(themeText);
       display.setTextSize(2);
-      int yStart = 64;
+      int yStart = 68;
       int charsPerLine = (SCREEN_WIDTH - 28) / 12;
       int line = 0;
-      int maxLines = (SCREEN_HEIGHT - 106) / 20;
-      if (maxLines < 4) maxLines = 4;
+      int maxLines = (SCREEN_HEIGHT - 110) / 20;
       for (unsigned int i = 0; i < notif.body.length() && line < maxLines; i += charsPerLine) {
         unsigned int endIdx = i + charsPerLine;
         if (endIdx > notif.body.length()) endIdx = notif.body.length();
@@ -824,29 +828,29 @@ public:
       display.print(footerBuf);
     } else {
       // List View: Draw list of up to 5 stored notifications
-      // Header
       display.setTextColor(themeText);
       display.setTextSize(2);
-      display.setCursor(14, 32);
+      display.setCursor(14, 30);
       display.print("Notifications");
       
-      display.drawFastHLine(12, 52, SCREEN_WIDTH - 24, LUNA_GLASS);
+      display.drawFastHLine(12, 50, SCREEN_WIDTH - 24, themeBorder);
       
       for (int i = 0; i < notificationCount && i < 5; i++) {
-        int y = 58 + i * 33;
+        int y = 56 + i * 33;
         NotificationItem& notif = notificationHistory[i];
         
-        if (notificationsActive && i == currentNotifViewIdx) {
-          // Highlight card background
-          display.fillRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_GLASS);
-          display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_CYAN);
-        } else {
-          // Subtle border for inactive items
-          display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_GLASS);
+        bool isSel = (notificationsActive && i == currentNotifViewIdx);
+        
+        // Card bg and border
+        display.fillRoundRect(10, y, SCREEN_WIDTH - 20, 29, 6, isSel ? 0x10A2 : themeCardBg);
+        display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 6, isSel ? themeAccent : themeBorder);
+        
+        if (isSel) {
+          display.fillCircle(18, y + 14, 3, 0xFC10); // alert dot
         }
         
         // Title/Sender text
-        display.setCursor(16, y + 2);
+        display.setCursor(isSel ? 26 : 18, y + 2);
         display.setTextSize(2);
         display.setTextColor(themeText);
         String shortTitle = notif.title;
@@ -856,11 +860,11 @@ public:
         // Time text
         display.setCursor(SCREEN_WIDTH - 55, y + 2);
         display.setTextSize(1);
-        display.setTextColor(LUNA_CYAN);
+        display.setTextColor(themeAccent);
         display.print(notif.timeStr);
         
         // Body snippet text
-        display.setCursor(16, y + 18);
+        display.setCursor(isSel ? 26 : 18, y + 18);
         display.setTextSize(1);
         display.setTextColor(themeSubText);
         String snippet = notif.body;
@@ -887,12 +891,12 @@ public:
   }
 
   void drawCalendarEvents() {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
+    uint16_t themeBg     = TFT_BLACK;
+    uint16_t themeText   = TFT_WHITE;
+    uint16_t themeCardBg = 0x0842;
+    uint16_t themeBorder = 0x2104;
+    uint16_t themeSubText = 0x9D13;
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
@@ -908,14 +912,13 @@ public:
       display.fillRect(centerX - 6, 58, 2, 6, themeSubText);
       display.fillRect(centerX + 4, 58, 2, 6, themeSubText);
       
-      display.setTextColor(themeSubText, themeCardBg);
+      display.setTextColor(themeSubText);
       display.setTextSize(2);
       int lblW1 = 9 * 12;
       display.setCursor((SCREEN_WIDTH - lblW1) / 2, 98);
       display.print("No Events");
-      display.setTextColor(themeSubText, themeCardBg);
-      display.setTextSize(2);
-      int lblW2 = 19 * 12;
+      display.setTextSize(1);
+      int lblW2 = 19 * 6;
       display.setCursor((SCREEN_WIDTH - lblW2) / 2, 130);
       display.print("Sync events via BLE");
       return;
@@ -923,20 +926,21 @@ public:
     
     CalendarEventItem& ev = calendarEvents[currentCalViewIdx];
     
-    display.setTextColor(TFT_BLACK);
     if (ev.type.indexOf("birthday") >= 0 || ev.type.indexOf("bday") >= 0) {
       display.fillRoundRect(16, 38, 90, 20, 6, 0xF97F); // Pink label
+      display.setTextColor(TFT_WHITE);
       display.setTextSize(1);
       display.setCursor(22, 44);
       display.print("BIRTHDAY");
     } else {
-      display.fillRoundRect(16, 38, 90, 20, 6, TFT_YELLOW); // Yellow label
+      display.fillRoundRect(16, 38, 90, 20, 6, 0xFFE0); // Yellow label
+      display.setTextColor(TFT_BLACK);
       display.setTextSize(1);
       display.setCursor(22, 44);
       display.print("MEETING");
     }
     
-    display.setTextColor(themeAccent, themeCardBg);
+    display.setTextColor(themeAccent);
     display.setTextSize(2);
     int timeW = ev.timeStr.length() * 12;
     display.setCursor(SCREEN_WIDTH - 16 - timeW, 40);
@@ -944,7 +948,7 @@ public:
     
     display.drawFastHLine(12, 66, SCREEN_WIDTH - 24, themeBorder);
     
-    display.setTextColor(themeText, themeCardBg);
+    display.setTextColor(themeText);
     display.setTextSize(2);
     int yStart = 76;
     int charsPerLine = (SCREEN_WIDTH - 32) / 12;
@@ -959,7 +963,7 @@ public:
       line++;
     }
     
-    display.setTextColor(themeSubText, themeCardBg);
+    display.setTextColor(themeSubText);
     display.setTextSize(2);
     char footerBuf[16];
     snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentCalViewIdx + 1, calendarEventCount);
@@ -1035,12 +1039,12 @@ public:
   }
 
   void drawCalendarGrid(String dateStr, String dayStr) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
+    uint16_t themeBg     = TFT_BLACK;
+    uint16_t themeText   = TFT_WHITE;
+    uint16_t themeCardBg = 0x0842;
+    uint16_t themeBorder = 0x2104;
+    uint16_t themeSubText = 0x9D13;
 
     int curDay, curMonth, curYear, startWeekday, daysInMonth;
     parseDateInfo(dateStr, dayStr, curDay, curMonth, curYear, startWeekday, daysInMonth);
@@ -1054,7 +1058,7 @@ public:
     
     // Month / Year header — size 2
     display.setTextSize(2);
-    display.setTextColor(themeText, themeCardBg);
+    display.setTextColor(themeText);
     char headerBuf[32];
     const char* monthNames[] = { "", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER" };
     snprintf(headerBuf, sizeof(headerBuf), "%s %d", (curMonth >= 1 && curMonth <= 12) ? monthNames[curMonth] : "JULY", curYear);
@@ -1066,7 +1070,7 @@ public:
     int colWidth = 31;
     int startX = 12;
     int startY = 60;
-    display.setTextColor(themeAccent, themeCardBg);
+    display.setTextColor(themeAccent);
     display.setTextSize(2);
     const char* dayLabels[] = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" };
     for (int i = 0; i < 7; i++) {
@@ -1084,10 +1088,10 @@ public:
       int y = startY + 22 + row * rowHeight;
 
       if (d == curDay) {
-        display.fillCircle(x + 15, y + 7, 11, TFT_RED);
-        display.setTextColor(TFT_WHITE, TFT_RED);
+        display.fillCircle(x + 15, y + 7, 11, 0xF800); // Red circle for today
+        display.setTextColor(TFT_WHITE);
       } else {
-        display.setTextColor(themeText, themeCardBg);
+        display.setTextColor(themeText);
       }
 
       display.setCursor(d < 10 ? x + 10 : x + 4, y);
@@ -1102,26 +1106,26 @@ public:
   }
 
   void drawSettingsMenuLandscape(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Neon Cyan or Pink
+    uint16_t themeBg     = TFT_BLACK;
+    uint16_t themeText   = TFT_WHITE;
+    uint16_t themeCardBg = 0x0842;
+    uint16_t themeBorder = 0x2104;
+    uint16_t themeSubText = 0x9D13;
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
 
     // Clean border
     display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, themeAccent);
-    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 8, themeCardBg);
+    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 8, themeBg);
 
     // Header label
     display.setTextSize(2);
-    display.setTextColor(themeAccent, themeCardBg);
-    display.setCursor(72, 36);
+    display.setTextColor(themeAccent);
+    display.setCursor(72, 34);
     display.print("SETTINGS");
-    display.drawFastHLine(12, 56, SCREEN_WIDTH - 24, themeBorder);
+    display.drawFastHLine(12, 52, SCREEN_WIDTH - 24, themeBorder);
 
     display.setTextSize(2);
     int itemsPerPage = 4;
@@ -1136,38 +1140,127 @@ public:
       int optIdx = pageIdx + scrollOffset;
       if (optIdx >= 8) break;
 
-      int yPos = 62 + pageIdx * itemHeight;
+      int yPos = 58 + pageIdx * itemHeight;
 
       bool isCurrent = (option == optIdx) && settingsActive;
       
       // Select box colors
-      uint16_t boxBg = selected ? themeAccent : themeBorder;
-      uint16_t boxText = selected ? TFT_WHITE : themeText;
+      uint16_t boxBg = selected ? themeAccent : themeCardBg;
+      uint16_t boxText = selected ? TFT_BLACK : themeText;
+      uint16_t itemAccent = isCurrent ? boxText : themeAccent;
 
       if (isCurrent) {
         display.fillRoundRect(10, yPos, SCREEN_WIDTH - 20, 30, 6, boxBg);
         display.drawRoundRect(10, yPos, SCREEN_WIDTH - 20, 30, 6, themeAccent);
-        display.setTextColor(boxText, boxBg);
+        display.setTextColor(boxText);
       } else {
-        display.setTextColor(themeText, themeCardBg);
+        display.fillRoundRect(10, yPos, SCREEN_WIDTH - 20, 30, 6, themeCardBg);
+        display.setTextColor(themeText);
       }
 
-      uint16_t bg = isCurrent ? boxBg : themeCardBg;
-      display.setCursor(18, yPos + 7);
+      // Draw vector icon on the left
+      int iconX = 18;
+      int textX = 34;
+      
+      switch (optIdx) {
+        case 0: // BLE
+          {
+            int ix = iconX + 4;
+            int iy = yPos + 14;
+            display.drawLine(ix, iy - 6, ix, iy + 6, itemAccent);
+            display.drawLine(ix, iy - 6, ix + 3, iy - 3, itemAccent);
+            display.drawLine(ix + 3, iy - 3, ix - 3, iy + 3, itemAccent);
+            display.drawLine(ix - 3, iy - 3, ix + 3, iy + 3, itemAccent);
+            display.drawLine(ix + 3, iy + 3, ix, iy + 6, itemAccent);
+          }
+          break;
+        case 1: // Speed
+          {
+            int ix = iconX + 4;
+            int iy = yPos + 14;
+            display.drawCircle(ix, iy, 6, itemAccent);
+            display.drawLine(ix, iy, ix + 4, iy - 3, itemAccent);
+          }
+          break;
+        case 2: // Clock Style
+          {
+            int ix = iconX + 4;
+            int iy = yPos + 14;
+            display.drawRoundRect(ix - 4, iy - 6, 9, 13, 2, itemAccent);
+            display.drawCircle(ix, iy, 3, itemAccent);
+          }
+          break;
+        case 3: // Invert Screen
+          {
+            int ix = iconX + 4;
+            int iy = yPos + 14;
+            display.drawCircle(ix, iy, 6, itemAccent);
+            display.fillRect(ix - 5, iy - 5, 5, 11, itemAccent);
+          }
+          break;
+        case 4: // Brightness
+          {
+            int ix = iconX + 4;
+            int iy = yPos + 14;
+            display.drawCircle(ix, iy, 3, itemAccent);
+            display.drawFastVLine(ix, iy - 6, 2, itemAccent);
+            display.drawFastVLine(ix, iy + 5, 2, itemAccent);
+            display.drawFastHLine(ix - 6, iy, 2, itemAccent);
+            display.drawFastHLine(ix + 5, iy, 2, itemAccent);
+          }
+          break;
+        case 5: // Buzzer Sound
+          {
+            int ix = iconX + 1;
+            int iy = yPos + 14;
+            display.fillRect(ix, iy - 3, 3, 7, itemAccent);
+            display.drawLine(ix + 3, iy - 3, ix + 6, iy - 6, itemAccent);
+            display.drawLine(ix + 6, iy - 6, ix + 6, iy + 6, itemAccent);
+            display.drawLine(ix + 6, iy + 6, ix + 3, iy + 3, itemAccent);
+          }
+          break;
+        case 6: // Save Settings
+          {
+            int ix = iconX + 4;
+            int iy = yPos + 14;
+            display.drawRect(ix - 5, iy - 5, 11, 11, itemAccent);
+            display.fillRect(ix - 3, iy - 5, 6, 4, itemAccent);
+            display.fillRect(ix - 2, iy + 2, 4, 3, itemAccent);
+          }
+          break;
+        case 7: // Exit Menu
+          {
+            int ix = iconX + 4;
+            int iy = yPos + 14;
+            display.drawLine(ix - 5, iy, ix + 5, iy, itemAccent);
+            display.drawLine(ix - 5, iy, ix - 2, iy - 3, itemAccent);
+            display.drawLine(ix - 5, iy, ix - 2, iy + 3, itemAccent);
+          }
+          break;
+      }
+
+      display.setCursor(textX, yPos + 7);
+      
       switch (optIdx) {
         case 0:
-          display.print("BLE");
+          display.print("BLE Connected");
           {
-            String val = "ALWAYS ON";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
+            int sx = SCREEN_WIDTH - 50;
+            int sy = yPos + 7;
+            display.drawRoundRect(sx, sy, 32, 16, 8, isCurrent ? boxText : themeBorder);
+            if (bleOn) {
+              display.fillRoundRect(sx, sy, 32, 16, 8, 0x07E0); // Green ON
+              display.fillCircle(sx + 24, sy + 8, 6, TFT_WHITE);
+            } else {
+              display.fillCircle(sx + 8, sy + 8, 6, themeSubText);
+            }
           }
           break;
         case 1:
           display.print("Speed");
           {
             String val = String(speed) + "ms";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
+            display.setCursor(SCREEN_WIDTH - 24 - (val.length() * 12), yPos + 7);
             display.print(val);
           }
           break;
@@ -1175,51 +1268,64 @@ public:
           display.print("Clock Style");
           {
             String val = String(clockStyle);
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
+            display.setCursor(SCREEN_WIDTH - 24 - (val.length() * 12), yPos + 7);
             display.print(val);
           }
           break;
         case 3:
-          display.print("Invert Screen");
+          display.print("Invert Color");
           {
-            String val = invertOn ? "ON" : "OFF";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
+            int sx = SCREEN_WIDTH - 50;
+            int sy = yPos + 7;
+            display.drawRoundRect(sx, sy, 32, 16, 8, isCurrent ? boxText : themeBorder);
+            if (invertOn) {
+              display.fillRoundRect(sx, sy, 32, 16, 8, 0x07E0);
+              display.fillCircle(sx + 24, sy + 8, 6, TFT_WHITE);
+            } else {
+              display.fillCircle(sx + 8, sy + 8, 6, themeSubText);
+            }
           }
           break;
         case 4:
           display.print("Brightness");
           {
-            String val = "MED";
-            if (brightness == 1) val = "LOW";
-            else if (brightness == 3) val = "HIGH";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
+            int bx = SCREEN_WIDTH - 38;
+            int by = yPos + 19;
+            for (int b = 0; b < 3; b++) {
+              uint16_t col = (brightness > b) ? (isCurrent ? boxText : 0xFFE0) : 0x3186; // Yellow or Gray
+              display.fillRect(bx + b * 6, by - (b + 1) * 4, 4, (b + 1) * 4, col);
+            }
           }
           break;
         case 5:
           display.print("Buzzer Sound");
           {
-            String val = silentMode ? "MUTED" : "ON";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
+            int sx = SCREEN_WIDTH - 50;
+            int sy = yPos + 7;
+            display.drawRoundRect(sx, sy, 32, 16, 8, isCurrent ? boxText : themeBorder);
+            if (!silentMode) {
+              display.fillRoundRect(sx, sy, 32, 16, 8, 0x07E0);
+              display.fillCircle(sx + 24, sy + 8, 6, TFT_WHITE);
+            } else {
+              display.fillCircle(sx + 8, sy + 8, 6, themeSubText);
+            }
           }
           break;
         case 6:
           {
             String val = "SAVE SETTINGS";
-            int startX = 10 + (220 - val.length() * 12) / 2;
+            int startX = textX + (SCREEN_WIDTH - 20 - textX - val.length() * 12) / 2;
             display.setCursor(startX, yPos + 7);
-            if (!isCurrent) display.setTextColor(0x03E0, themeCardBg);
+            if (!isCurrent) display.setTextColor(0x07E0); // Neon Green text
             display.print(val);
           }
           break;
         case 7:
           {
             String val = "EXIT MENU";
-            int startX = 10 + (220 - val.length() * 12) / 2;
+            int startX = textX + (SCREEN_WIDTH - 20 - textX - val.length() * 12) / 2;
             display.setCursor(startX, yPos + 7);
-            if (!isCurrent) display.setTextColor(TFT_RED, themeCardBg);
+            if (!isCurrent) display.setTextColor(0xF800); // Red text
             display.print(val);
           }
           break;
@@ -1229,7 +1335,7 @@ public:
     if (settingsActive) {
       // Scroll indicator dots at bottom
       int totalItems = 8;
-      int dotAreaY = 208;
+      int dotAreaY = 202;
       int dotSpacing = 14;
       int dotsStartX = (SCREEN_WIDTH - totalItems * dotSpacing) / 2;
       for (int i = 0; i < totalItems; i++) {
@@ -1241,10 +1347,10 @@ public:
       }
     } else {
       // Hint text
-      display.setTextSize(2);
-      display.setTextColor(themeSubText, themeCardBg);
-      String hint = "B1:Enter  B2:Next";
-      display.setCursor((SCREEN_WIDTH - hint.length() * 12) / 2, 206);
+      display.setTextSize(1);
+      display.setTextColor(themeSubText);
+      String hint = "B1: Enter | B2: Cycle";
+      display.setCursor((SCREEN_WIDTH - hint.length() * 6) / 2, 206);
       display.print(hint);
     }
   }
@@ -1468,18 +1574,19 @@ public:
   }
 
   void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour, int steps) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Neon Cyan or Pink
+    uint16_t themeBg     = TFT_BLACK;
+    uint16_t themeText   = TFT_WHITE;
+    uint16_t themeCardBg = 0x0842; // Charcoal Dark
+    uint16_t themeBorder = 0x2104; // Dark Grey border
+    uint16_t themeSubText = 0x9D13; // Muted Silver
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
 
     if (style == 0) {
-      // Style 0: Cyberpunk Dashboard (Light/Clean version)
+      // Style 0: Neon Cyberpunk Dashboard (Dark Version)
+      // Glowing outer frame
       display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
       display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, themeCardBg);
 
@@ -1488,7 +1595,7 @@ public:
 
       // Large Digital Time
       display.setTextSize(4);
-      display.setTextColor(themeText, themeCardBg);
+      display.setTextColor(themeText);
       char timeStr[6];
       int dispHour = hour;
       if (is12Hour) {
@@ -1502,7 +1609,7 @@ public:
 
       // AM/PM or Seconds
       display.setTextSize(1);
-      display.setTextColor(themeAccent, themeCardBg);
+      display.setTextColor(themeAccent);
       if (is12Hour) {
         const char* ampm = (hour >= 12) ? "PM" : "AM";
         display.setCursor((SCREEN_WIDTH - timeW) / 2 + timeW + 4, SCREEN_HEIGHT / 2 - 22);
@@ -1513,46 +1620,67 @@ public:
       display.setCursor((SCREEN_WIDTH - timeW) / 2 + timeW + 4, SCREEN_HEIGHT / 2 - 10);
       display.print(secStr);
 
-      // Date and Day — truncated to keep inside right margin
+      // Date and Day
       display.setTextSize(2);
       String dayDate = day + " " + date;
       if ((int)dayDate.length() * 12 > SCREEN_WIDTH - 36) {
-        dayDate = day;  // fallback to just weekday abbreviation
+        dayDate = day;
       }
-      display.setTextColor(themeText, themeCardBg);
+      display.setTextColor(themeText);
       display.setCursor(18, SCREEN_HEIGHT / 2 + 18);
       display.print(dayDate);
 
-      // Steps widget — right-aligned, won't overlap day text
-      display.setTextColor(themeText, themeCardBg);
+      // Steps widget
+      display.setTextColor(themeText);
       String stepStr = String(steps);
-      int stepW = (int)stepStr.length() * 12 + 14; // extra for foot icon
-      int stepX = SCREEN_WIDTH - 16 - stepW;
+      int stepW = (int)stepStr.length() * 12 + 14;
+      int stepX = SCREEN_WIDTH - 18 - stepW;
       display.setCursor(stepX + 14, SCREEN_HEIGHT / 2 + 18);
       display.print(stepStr);
-      // foot icon dots
+      
+      // foot icon vector drawing
       int fx = stepX + 6;
       int fy = SCREEN_HEIGHT / 2 + 24;
       display.fillCircle(fx,     fy - 4, 2, themeAccent);
       display.fillCircle(fx + 4, fy - 2, 2, themeAccent);
       display.fillCircle(fx - 3, fy + 2, 1, themeAccent);
 
+      // Steps progress bar at the bottom
+      int stepBarW = (steps * (SCREEN_WIDTH - 36)) / 10000;
+      if (stepBarW > SCREEN_WIDTH - 36) stepBarW = SCREEN_WIDTH - 36;
+      display.fillRect(18, SCREEN_HEIGHT - 16, SCREEN_WIDTH - 36, 4, themeBorder); // track
+      display.fillRect(18, SCREEN_HEIGHT - 16, stepBarW, 4, themeAccent); // fill
+
     } else if (style == 1) {
-      // Style 1: Minimalist Radial Gauge
+      // Style 1: Minimalist Radial Dots (Modern Eclipse)
       display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 16, themeAccent);
       display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 12, themeBg);
 
-      // Center card
-      int cardW = 130;
+      // Sweeping Ring of dots for seconds
+      int centerX = SCREEN_WIDTH / 2;
+      int centerY = SCREEN_HEIGHT / 2 + 10;
+      int radius = 48;
+      for (int i = 0; i < 12; i++) {
+        float angle = (i * 30.0f - 90.0f) * DEG_TO_RAD;
+        int dx = centerX + radius * cos(angle);
+        int dy = centerY + radius * sin(angle);
+        bool active = (second / 5) == i;
+        display.fillCircle(dx, dy, active ? 5 : 2, active ? themeAccent : themeBorder);
+        if (active) {
+          display.drawCircle(dx, dy, 7, themeAccent); // outer glow ring
+        }
+      }
+
+      // Time in center card
+      int cardW = 120;
       int cardH = 46;
       int cardX = (SCREEN_WIDTH - cardW) / 2;
       int cardY = (SCREEN_HEIGHT - cardH) / 2 + 8;
       display.fillRoundRect(cardX, cardY, cardW, cardH, 8, themeCardBg);
       display.drawRoundRect(cardX, cardY, cardW, cardH, 8, themeBorder);
 
-      // Time
       display.setTextSize(3);
-      display.setTextColor(themeText, themeCardBg);
+      display.setTextColor(themeText);
       char timeStr[6];
       int dispHour = hour;
       if (is12Hour) {
@@ -1560,62 +1688,74 @@ public:
         if (dispHour == 0) dispHour = 12;
       }
       snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
-      display.setCursor(cardX + 16, cardY + 12);
+      display.setCursor(cardX + 12, cardY + 12);
       display.print(timeStr);
 
       display.setTextSize(1);
-      display.setTextColor(themeAccent, themeCardBg);
+      display.setTextColor(themeAccent);
       if (is12Hour) {
         const char* ampm = (hour >= 12) ? "PM" : "AM";
-        display.setCursor(cardX + 104, cardY + 14);
+        display.setCursor(cardX + 102, cardY + 14);
         display.print(ampm);
       }
       char secStr[6];
       snprintf(secStr, sizeof(secStr), "%02d", second);
-      display.setCursor(cardX + 104, cardY + 24);
+      display.setCursor(cardX + 102, cardY + 24);
       display.print(secStr);
 
-      // Sweeping Ring arc
-      int progressWidth = (second * (SCREEN_WIDTH - 48)) / 60;
-      display.drawRoundRect(24, 38, SCREEN_WIDTH - 48, 6, 3, themeBorder);
-      display.fillRoundRect(24, 38, progressWidth, 6, 3, themeAccent);
-
-      // Date
+      // Date at bottom
       display.fillRoundRect(24, SCREEN_HEIGHT - 32, SCREEN_WIDTH - 48, 24, 6, themeCardBg);
       display.drawRoundRect(24, SCREEN_HEIGHT - 32, SCREEN_WIDTH - 48, 24, 6, themeBorder);
       display.setTextSize(2);
-      display.setTextColor(themeText, themeCardBg);
+      display.setTextColor(themeText);
       String dStr = day + " " + date;
       int dW = dStr.length() * 12;
       display.setCursor((SCREEN_WIDTH - dW) / 2, SCREEN_HEIGHT - 28);
       display.print(dStr);
 
     } else if (style == 2) {
-      // Style 2: Watch OS Grid
+      // Style 2: Watch OS Dashboard Grid (Dark Mode)
       display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
       display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, themeBg);
 
-      // Grid spacing — yield() prevents WDT resets during pixel loops
-      int gridSpacing = SCREEN_WIDTH / 10;
-      for (int x = gridSpacing; x < SCREEN_WIDTH; x += gridSpacing) {
-        display.drawFastVLine(x, 28, SCREEN_HEIGHT - 28, themeBorder);
-        yield();
-      }
-      for (int y = 28; y < SCREEN_HEIGHT; y += gridSpacing) {
-        display.drawFastHLine(0, y, SCREEN_WIDTH, themeBorder);
-        yield();
-      }
+      // Clean tech background grid lines
+      display.drawFastVLine(SCREEN_WIDTH / 2, 28, SCREEN_HEIGHT - 28, themeBorder);
+      display.drawFastHLine(0, 110, SCREEN_WIDTH, themeBorder);
 
-      // Title Card
-      display.fillRoundRect(12, 34, 130, 20, 4, themeCardBg);
-      display.setTextColor(themeText, themeCardBg);
+      // Top Left: OS Header
+      display.fillRoundRect(12, 36, 96, 18, 4, themeCardBg);
+      display.setTextColor(themeText);
       display.setTextSize(1);
-      display.setCursor(18, 40);
-      display.print("WATCH OS v3.0");
+      display.setCursor(18, 42);
+      display.print("LUNA OS v3");
 
-      // Time (Large & bold size 4)
+      // Bottom Left: Steps widget
+      display.fillRoundRect(12, 118, 100, 46, 6, themeCardBg);
+      display.drawRoundRect(12, 118, 100, 46, 6, themeBorder);
+      display.setTextColor(themeAccent);
+      display.setTextSize(1);
+      display.setCursor(18, 124);
+      display.print("STEPS");
+      display.setTextColor(themeText);
+      display.setTextSize(2);
+      display.setCursor(18, 138);
+      display.print(steps);
+
+      // Bottom Right: Date widget
+      display.fillRoundRect(128, 118, 100, 46, 6, themeCardBg);
+      display.drawRoundRect(128, 118, 100, 46, 6, themeBorder);
+      display.setTextColor(themeAccent);
+      display.setTextSize(1);
+      display.setCursor(134, 124);
+      display.print("DATE");
+      display.setTextColor(themeText);
+      display.setTextSize(2);
+      display.setCursor(134, 138);
+      display.print(day);
+
+      // Top Right: Time
       display.setTextSize(4);
-      display.setTextColor(themeText, themeBg);
+      display.setTextColor(themeText);
       char timeStr[6];
       int dispHour = hour;
       if (is12Hour) {
@@ -1623,41 +1763,88 @@ public:
         if (dispHour == 0) dispHour = 12;
       }
       snprintf(timeStr, sizeof(timeStr), "%d:%02d", dispHour, minute);
-      display.setCursor(14, 62);
+      display.setCursor(128, 42);
+      display.print(timeStr);
+
+      display.setTextSize(1);
+      display.setTextColor(themeAccent);
+      display.setCursor(128, 86);
+      display.print(date);
+
+      // Flashing circular state indicator
+      display.fillCircle(SCREEN_WIDTH - 24, SCREEN_HEIGHT - 24, 6, (second % 2 == 0) ? themeAccent : themeBorder);
+
+    } else {
+      // Style 3: Sci-Fi Tactical HUD Layout
+      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
+      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, themeBg);
+
+      // Corner brackets (HUD Style)
+      int d = 10;
+      display.drawLine(12, 36, 12 + d, 36, themeAccent);
+      display.drawLine(12, 36, 12, 36 + d, themeAccent);
+      display.drawLine(SCREEN_WIDTH - 12, 36, SCREEN_WIDTH - 12 - d, 36, themeAccent);
+      display.drawLine(SCREEN_WIDTH - 12, 36, SCREEN_WIDTH - 12, 36 + d, themeAccent);
+      display.drawLine(12, SCREEN_HEIGHT - 12, 12 + d, SCREEN_HEIGHT - 12, themeAccent);
+      display.drawLine(12, SCREEN_HEIGHT - 12, 12, SCREEN_HEIGHT - 12 - d, themeAccent);
+      display.drawLine(SCREEN_WIDTH - 12, SCREEN_HEIGHT - 12, SCREEN_WIDTH - 12 - d, SCREEN_HEIGHT - 12, themeAccent);
+      display.drawLine(SCREEN_WIDTH - 12, SCREEN_HEIGHT - 12, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 12 - d, themeAccent);
+
+      // Time center
+      display.setTextSize(4);
+      display.setTextColor(themeText);
+      char timeStr[6];
+      int dispHour = hour;
+      if (is12Hour) {
+        dispHour = hour % 12;
+        if (dispHour == 0) dispHour = 12;
+      }
+      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
+      display.setCursor(40, 56);
       display.print(timeStr);
 
       display.setTextSize(2);
-      if (is12Hour) {
-        display.setTextColor(themeAccent, themeBg);
-        display.setCursor(120 + (dispHour >= 10 ? 24 : 0), 62);
-        display.print((hour >= 12) ? "PM" : "AM");
-      }
+      display.setTextColor(themeAccent);
+      char secStr[6];
+      snprintf(secStr, sizeof(secStr), "%02d", second);
+      display.setCursor(168, 70);
+      display.print(secStr);
 
-      // Steps widget (size 2, centered inside high contrast card)
-      display.fillRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, themeCardBg);
-      display.drawRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, themeBorder);
-      display.setTextColor(themeText, themeCardBg);
-      display.setTextSize(2);
-      display.setCursor(20, 116);
-      display.print("STEPS: ");
-      display.print(steps);
+      // Center Divider line
+      display.drawFastHLine(20, 108, SCREEN_WIDTH - 40, themeBorder);
 
-      // Date widget (size 2, centered inside high contrast card)
-      display.fillRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, themeCardBg);
-      display.drawRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, themeBorder);
-      display.setTextColor(themeText, themeCardBg);
-      display.setTextSize(2);
-      display.setCursor(20, 152);
-      display.print("DATE: ");
+      // Left Gauge: battery outline and title
+      int batX = 54, batY = 146;
+      display.drawCircle(batX, batY, 18, themeBorder);
+      display.setTextColor(themeSubText);
+      display.setTextSize(1);
+      display.setCursor(batX - 9, batY - 3);
+      display.print("BAT");
+      display.drawCircle(batX, batY, 18, themeAccent);
+
+      // Right Gauge: steps outline and title
+      int stpX = 186, stpY = 146;
+      display.drawCircle(stpX, stpY, 18, themeBorder);
+      display.setTextColor(themeSubText);
+      display.setTextSize(1);
+      display.setCursor(stpX - 9, stpY - 3);
+      display.print("STP");
+      display.drawCircle(stpX, stpY, 18, themeAccent);
+
+      // Info in center
+      display.setTextColor(themeText);
+      display.setTextSize(1);
+      int dw = day.length() * 6;
+      display.setCursor((SCREEN_WIDTH - dw) / 2, 126);
       display.print(day);
-      display.print(", ");
+      
+      int dtw = date.length() * 6;
+      display.setCursor((SCREEN_WIDTH - dtw) / 2, 142);
       display.print(date);
 
-      // Flashing block
-      display.fillRoundRect(SCREEN_WIDTH - 30, SCREEN_HEIGHT - 30, 12, 12, 3, (second % 2 == 0) ? themeAccent : themeBorder);
-    } else {
-      // Style 3: Custom UI Designer Layout
-      drawCustomLayout(display);
+      int stw = String(steps).length() * 6;
+      display.setCursor((SCREEN_WIDTH - stw) / 2, 158);
+      display.print(steps);
     }
   }
 
@@ -1783,12 +1970,12 @@ public:
           break;
         case SCREEN_GAMES:
           if (!gamesActive) {
-            uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-            uint16_t themeBg     = TFT_WHITE;
-            uint16_t themeText   = 0x2104; // Charcoal/black
-            uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-            uint16_t themeBorder = 0xD69A; // Light Grey
-            uint16_t themeSubText = 0x7BCF; // Muted grey
+            uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
+            uint16_t themeBg     = TFT_BLACK;
+            uint16_t themeText   = TFT_WHITE;
+            uint16_t themeCardBg = 0x0842;
+            uint16_t themeBorder = 0x2104;
+            uint16_t themeSubText = 0x9D13;
 
             // Clear display below the status bar
             display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
@@ -1799,7 +1986,7 @@ public:
 
             // Large Title
             display.setTextSize(2);
-            display.setTextColor(themeAccent, themeCardBg);
+            display.setTextColor(themeAccent);
             display.setCursor(54, 60);
             display.print("LUNA ARCADE");
             
@@ -1808,11 +1995,11 @@ public:
 
             // Subtitle instructions
             display.setTextSize(2);
-            display.setTextColor(themeText, themeCardBg);
+            display.setTextColor(themeText);
             display.setCursor(24, 115);
             display.print("BTN1: START");
             
-            display.setTextColor(themeSubText, themeCardBg);
+            display.setTextColor(themeSubText);
             display.setCursor(24, 155);
             display.print("BTN2: CYCLE");
           } else {
