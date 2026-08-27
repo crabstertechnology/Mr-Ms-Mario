@@ -9,8 +9,11 @@
 #include "image_logo.h"
 #include "qr_card.h"
 #include "wallpaper_image.h"
+#include "imu.h"
 
 extern LunaQR qrCard;
+extern LunaIMU imu;
+extern bool calibrateRequest;
 
 // Color compatibility macros for Adafruit GFX
 #define TFT_BLACK       ST77XX_BLACK
@@ -655,6 +658,7 @@ public:
       case SCREEN_MAPS:          nm = "MAPS";      break;
       case SCREEN_CARD:          nm = "MY CARD";   break;
       case SCREEN_SETTINGS:      nm = "SETTINGS";  break;
+      case SCREEN_LEVEL:         nm = "LEVEL";     break;
       default:                   nm = "LUNA";      break;
     }
     int nmLen  = strlen(nm) * 6;
@@ -1936,6 +1940,184 @@ public:
     display.setTextSize(1);
   }
 
+  void drawLevelScreen() {
+    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
+    uint16_t themeBg     = TFT_BLACK;
+    uint16_t themeText   = TFT_WHITE;
+    uint16_t themeCardBg = 0x0842;
+    uint16_t themeBorder = 0x2104;
+    uint16_t themeSubText = 0x9D13;
+
+    // Clear display below the status bar
+    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+
+    // Draw main frame border
+    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, themeAccent);
+
+    // Header title
+    display.setTextSize(2);
+    display.setTextColor(themeAccent);
+    display.setCursor(36, 34);
+    display.print("LEVEL ANALYSER");
+    display.drawFastHLine(12, 50, SCREEN_WIDTH - 24, themeBorder);
+
+    // Read IMU data (fall back to simulated values if hardware not initialized)
+    float ax = 0.0f, ay = 0.0f, az = 1.0f;
+    float gx = 0.0f, gy = 0.0f, gz = 0.0f;
+    bool hasData = false;
+
+    static float offsetX = 0.0f;
+    static float offsetY = 0.0f;
+    static float offsetZ = 0.0f;
+
+    if (imu.isInitialized()) {
+      hasData = imu.readMotion(ax, ay, az, gx, gy, gz);
+    }
+
+    if (!hasData) {
+      // Simulation mode — generate beautiful waving values
+      float t = millis() / 1000.0f;
+      ax = sin(t * 1.5f) * 0.4f;
+      ay = cos(t * 1.2f) * 0.3f;
+      az = sqrt(max(0.0f, 1.0f - ax*ax - ay*ay));
+      gx = cos(t * 2.0f) * 80.0f;
+      gy = sin(t * 2.5f) * 60.0f;
+      gz = sin(t * 1.0f) * 40.0f;
+    }
+
+    // Apply calibration request if requested
+    if (calibrateRequest) {
+      offsetX = ax;
+      offsetY = ay;
+      offsetZ = az - 1.0f; // treat current position as flat (1g on Z axis)
+      calibrateRequest = false;
+      audio.playSound(SOUND_POWERUP);
+    }
+
+    // Apply offsets
+    ax -= offsetX;
+    ay -= offsetY;
+    az -= offsetZ;
+
+    // Compute Pitch & Roll in degrees
+    float pitch = atan2(-ax, sqrt(ay * ay + az * az)) * 57.29578f;
+    float roll = atan2(ay, az) * 57.29578f;
+
+    // Center coordinates for Bubble Level
+    int cx = 120;
+    int cy = 115;
+    int maxRadius = 38;
+
+    // Draw Bubble Level Target Crosshair
+    display.drawCircle(cx, cy, maxRadius, themeBorder);
+    display.drawCircle(cx, cy, 12, themeBorder);
+    display.drawFastHLine(cx - maxRadius - 4, cy, (maxRadius + 4) * 2, themeBorder);
+    display.drawFastVLine(cx, cy - maxRadius - 4, (maxRadius + 4) * 2, themeBorder);
+
+    // Calculate bubble position
+    int bx = cx + (int)(ax * maxRadius);
+    int by = cy - (int)(ay * maxRadius);
+
+    // Constrain bubble within maxRadius boundary
+    float dist = sqrt((bx - cx) * (bx - cx) + (by - cy) * (by - cy));
+    if (dist > (maxRadius - 6)) {
+      float angle = atan2(by - cy, bx - cx);
+      bx = cx + (int)(cos(angle) * (maxRadius - 6));
+      by = cy + (int)(sin(angle) * (maxRadius - 6));
+    }
+
+    // Color code the bubble: Green if perfectly level, else Theme Accent
+    uint16_t bubbleColor = (abs(pitch) < 3.0f && abs(roll) < 3.0f) ? 0x07E0 : themeAccent;
+    display.fillCircle(bx, by, 6, bubbleColor);
+    display.drawCircle(bx, by, 6, themeText);
+
+    // ─── CARD 1: PITCH & ROLL ANGLES ───
+    display.fillRoundRect(10, 168, SCREEN_WIDTH - 20, 44, 6, themeCardBg);
+    display.drawRoundRect(10, 168, SCREEN_WIDTH - 20, 44, 6, themeBorder);
+
+    display.setTextSize(1);
+    display.setTextColor(themeSubText);
+    display.setCursor(20, 174);
+    display.print("PITCH ANGLE");
+    display.setCursor(130, 174);
+    display.print("ROLL ANGLE");
+
+    display.setTextSize(2);
+    display.setTextColor(themeText);
+    
+    char pitchStr[10];
+    char rollStr[10];
+    snprintf(pitchStr, sizeof(pitchStr), "%+.1f", pitch);
+    snprintf(rollStr, sizeof(rollStr), "%+.1f", roll);
+    display.setCursor(20, 188);
+    display.print(pitchStr);
+    display.print((char)247); // Degree symbol
+    
+    display.setCursor(130, 188);
+    display.print(rollStr);
+    display.print((char)247); // Degree symbol
+
+    // ─── CARD 2: GYROSCOPE TELEMETRY ───
+    display.fillRoundRect(10, 222, SCREEN_WIDTH - 20, 48, 6, themeCardBg);
+    display.drawRoundRect(10, 222, SCREEN_WIDTH - 20, 48, 6, themeBorder);
+
+    // Visualise three axis rates
+    int barY = 228;
+    int barH = 5;
+    int barW = 100;
+    int barX = 90;
+
+    // Gyro X Bar
+    display.setTextSize(1);
+    display.setTextColor(0xFFE0); // Yellow
+    display.setCursor(20, barY - 1);
+    display.print("GYRO X");
+    
+    // Draw horizontal bar (-250 to +250 dps range)
+    display.drawRect(barX, barY, barW, barH, themeBorder);
+    display.drawFastVLine(barX + barW/2, barY - 1, barH + 2, themeSubText);
+    int valWX = (int)(gx / 250.0f * (barW/2));
+    if (valWX > barW/2) valWX = barW/2;
+    if (valWX < -barW/2) valWX = -barW/2;
+    if (valWX >= 0) {
+      display.fillRect(barX + barW/2, barY + 1, valWX, barH - 2, 0xFFE0);
+    } else {
+      display.fillRect(barX + barW/2 + valWX, barY + 1, -valWX, barH - 2, 0xFFE0);
+    }
+
+    // Gyro Y Bar
+    barY += 12;
+    display.setTextColor(themeAccent);
+    display.setCursor(20, barY - 1);
+    display.print("GYRO Y");
+    display.drawRect(barX, barY, barW, barH, themeBorder);
+    display.drawFastVLine(barX + barW/2, barY - 1, barH + 2, themeSubText);
+    int valWY = (int)(gy / 250.0f * (barW/2));
+    if (valWY > barW/2) valWY = barW/2;
+    if (valWY < -barW/2) valWY = -barW/2;
+    if (valWY >= 0) {
+      display.fillRect(barX + barW/2, barY + 1, valWY, barH - 2, themeAccent);
+    } else {
+      display.fillRect(barX + barW/2 + valWY, barY + 1, -valWY, barH - 2, themeAccent);
+    }
+
+    // Gyro Z Bar
+    barY += 12;
+    display.setTextColor(0xF81F); // Magenta
+    display.setCursor(20, barY - 1);
+    display.print("GYRO Z");
+    display.drawRect(barX, barY, barW, barH, themeBorder);
+    display.drawFastVLine(barX + barW/2, barY - 1, barH + 2, themeSubText);
+    int valWZ = (int)(gz / 250.0f * (barW/2));
+    if (valWZ > barW/2) valWZ = barW/2;
+    if (valWZ < -barW/2) valWZ = -barW/2;
+    if (valWZ >= 0) {
+      display.fillRect(barX + barW/2, barY + 1, valWZ, barH - 2, 0xF81F);
+    } else {
+      display.fillRect(barX + barW/2 + valWZ, barY + 1, -valWZ, barH - 2, 0xF81F);
+    }
+  }
+
   // ------------------ Primary Smartwatch Draw Adapter ------------------
   void draw(int hour, int minute, int second, String day, String date, int style = 0, bool is12Hour = false) {
     display.fillScreen(TFT_BLACK);
@@ -2032,6 +2214,9 @@ public:
           break;
         case SCREEN_CARD:
           qrCard.drawQRScreen(display);
+          break;
+        case SCREEN_LEVEL:
+          drawLevelScreen();
           break;
       }
     }

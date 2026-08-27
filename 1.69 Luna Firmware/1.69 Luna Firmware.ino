@@ -11,6 +11,7 @@
 #include "interaction.h"
 #include "games.h"
 #include "qr_card.h"
+#include "imu.h"
 
 // Forward declaration for BLE command handler
 void handleRobotCommand(String cmd);
@@ -22,9 +23,11 @@ LunaFace face(tft, display);
 LunaAudio audio;
 LunaBLE ble;
 LunaInteraction interaction;   // touch screen interface
+LunaIMU imu;                   // QMI8658 Accelerometer & Gyroscope
 
 bool virtualBtn1 = false;
 bool virtualBtn2 = false;
+bool calibrateRequest = false;
 
 // NVS Settings Persistence
 Preferences preferences;
@@ -906,6 +909,7 @@ void setup() {
   // 3. Initialize audio and other hardware pins
   audio.begin();
   interaction.begin();   // Initialize touch interface
+  imu.begin();           // Initialize accelerometer & gyroscope
   pinMode(BATTERY_PIN, INPUT); // Initialize battery monitoring pin
   // Initial battery read (uses BATTERY_CALIBRATION_MULTIPLIER to account for divider ratio and impedance loading)
   batteryVolts = (analogReadMilliVolts(BATTERY_PIN) * BATTERY_CALIBRATION_MULTIPLIER) / 1000.0f;
@@ -1303,6 +1307,10 @@ void handleBtn1Single() {
     face.cycleCalendarView();
     audio.playSound(SOUND_CHIRP);
     Serial.println("[BTN1] Cycled calendar");
+  } else if (currentScreen == SCREEN_LEVEL) {
+    // Calibrate level sensor on single tap
+    calibrateRequest = true;
+    Serial.println("[BTN1] Triggered Level calibration");
   }
 }
 
@@ -1404,9 +1412,9 @@ void handleBtn2Single() {
   // Screen cycle: Face <-> Card <-> Clock <-> Notifications <-> Calendar <-> Games <-> Settings <-> Face
   static const SmartwatchScreen CYCLE[] = {
     SCREEN_FACE, SCREEN_CARD, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
-    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_LEVEL
   };
-  static const int CYCLE_LEN = 7;
+  static const int CYCLE_LEN = 8;
 
   int idx = 0;
   for (int i = 0; i < CYCLE_LEN; i++) {
@@ -1425,7 +1433,7 @@ void handleBtn2Single() {
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
 
-  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS"};
+  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS","LEVEL"};
   Serial.printf("[BTN2] >>> %s (screen %d)\n", names[(idx+1)%CYCLE_LEN], currentScreen);
 }
 
@@ -1442,9 +1450,9 @@ void handleBtn2Double() {
 
   static const SmartwatchScreen CYCLE[] = {
     SCREEN_FACE, SCREEN_CARD, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
-    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_LEVEL
   };
-  static const int CYCLE_LEN = 7;
+  static const int CYCLE_LEN = 8;
 
   int idx = 0;
   for (int i = 0; i < CYCLE_LEN; i++) {
@@ -1463,7 +1471,7 @@ void handleBtn2Double() {
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
 
-  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS"};
+  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS","LEVEL"};
     Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
 }
 
