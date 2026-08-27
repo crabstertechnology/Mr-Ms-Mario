@@ -1,5 +1,5 @@
 // =============================================================================
-// interaction.h  —  Luna Firmware CST816T Touch & QMI8658 IMU Input Handler
+// interaction.h  —  Luna Firmware CST816T Touch Input (Left / Center / Right)
 // =============================================================================
 #ifndef INTERACTION_H
 #define INTERACTION_H
@@ -8,15 +8,15 @@
 #include <Wire.h>
 #include "config.h"
 
-// ── Exposed button events (mapped to gestures) ───────────────────────────────
+// ── Button events emitted by update() ────────────────────────────────────────
 enum ButtonEvent {
-  BTN_NONE         = 0,
-  BTN1_SINGLE,          // Button 1 single click (Tap / Select / Next)
-  BTN1_DOUBLE,          // Button 1 double click (Double tap / Go to Clock)
-  BTN1_LONG,            // Button 1 long press (Long tap / Go to Face)
-  BTN2_SINGLE,          // Button 2 single click (Swipe left / Change screen)
-  BTN2_DOUBLE,          // Button 2 double click (Swipe right / Change screen back)
-  BTN2_LONG,            // Button 2 long press
+  BTN_NONE    = 0,
+  BTN1_SINGLE,      // Center tap  → select / interact
+  BTN1_DOUBLE,      // (reserved)
+  BTN1_LONG,        // Long press  → return to home (Face) screen
+  BTN2_SINGLE,      // Right tap   → next screen
+  BTN2_DOUBLE,      // Left tap    → previous screen
+  BTN2_LONG,        // (reserved)
 };
 
 // ── Keep backwards-compatible TouchEvent ─────────────────────────────────────
@@ -28,94 +28,76 @@ enum TouchEvent {
   TOUCH_LONG_PRESS
 };
 
-// Global virtual button states for games (read by digitalRead macro interceptor)
+// ── Globals shared with games.h ───────────────────────────────────────────────
 extern bool virtualBtn1;
 extern bool virtualBtn2;
-
-// Extern references to main sketch state variables
 extern bool gamePlaying;
-extern bool settingsActive;
-extern bool gamesActive;
-extern int menuOption;
-extern int gameMenuOption;
 extern SmartwatchScreen currentScreen;
 
-// Static volatile flag for touch interrupts
+// ── Hardware interrupt flag ───────────────────────────────────────────────────
 static volatile bool touchInterruptOccurred = false;
 static void IRAM_ATTR touchISR() {
   touchInterruptOccurred = true;
 }
 
+// =============================================================================
 class LunaInteraction {
 private:
-  unsigned long lastTouchMs;
-  uint8_t lastGesture;
-  bool isDown;
-  int lastX, lastY;
+  // Raw last-known coordinates
+  int   lastX, lastY;
 
-  // Software Gesture State
-  int startX, startY;
+  // Touch-down tracking
+  bool          isDown;
+  int           startX, startY;
   unsigned long startMs;
-  bool swipeTriggered;
-
-  unsigned long lastTapMs;
-  int lastTapX, lastTapY;
+  unsigned long lastTouchMs;
 
 public:
   int getLastX() const { return lastX; }
   int getLastY() const { return lastY; }
 
+  // ---------------------------------------------------------------------------
   void begin() {
-    lastTouchMs = 0;
-    lastGesture = 0;
+    lastX = 0; lastY = 0;
     isDown = false;
-    lastX = 0;
-    lastY = 0;
-    
-    startX = 0;
-    startY = 0;
+    startX = 0; startY = 0;
     startMs = 0;
-    swipeTriggered = false;
-    lastTapMs = 0;
-    lastTapX = 0;
-    lastTapY = 0;
+    lastTouchMs = 0;
 
-    // Reset touch controller (CST816T reset pin is active low)
+    // Hard-reset the CST816T (active-low reset pin)
     pinMode(TOUCH_RST, OUTPUT);
     digitalWrite(TOUCH_RST, LOW);
     delay(10);
     digitalWrite(TOUCH_RST, HIGH);
     delay(100);
 
-    // Initialize I2C (Wire) on the touch SDA/SCL pins
+    // I2C bus initialisation
     Wire.begin(TOUCH_SDA, TOUCH_SCL, 400000);
 
-    // Initialize Interrupt pin (active low when touched) with internal pull-up and falling edge interrupt
+    // Interrupt pin — falling edge fires when screen is touched
     pinMode(TOUCH_INT, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(TOUCH_INT), touchISR, FALLING);
     touchInterruptOccurred = false;
-    Serial.println("CST816T touch interface initialized with hardware interrupt.");
+
+    Serial.println("[Touch] CST816T ready — Left / Center / Right zones active.");
   }
 
+  // ---------------------------------------------------------------------------
+  // Read one packet from the CST816T over I2C.
+  // Returns true when fresh data is available.
+  // ---------------------------------------------------------------------------
   bool readTouch(uint8_t &gesture, uint8_t &fingerNum, int &x, int &y) {
-    if (!touchInterruptOccurred) {
-      return false;
-    }
-    touchInterruptOccurred = false; // Reset trigger flag
+    if (!touchInterruptOccurred) return false;
+    touchInterruptOccurred = false;
 
-    Wire.beginTransmission(0x15); // CST816T I2C Address
-    Wire.write(0x01); // Register 0x01: GestureID
-    if (Wire.endTransmission(false) != 0) {
-      return false;
-    }
+    Wire.beginTransmission(0x15);   // CST816T I2C address
+    Wire.write(0x01);               // GestureID register
+    if (Wire.endTransmission(false) != 0) return false;
+    if (Wire.requestFrom(0x15, 6) < 6) return false;
 
-    if (Wire.requestFrom(0x15, 6) < 6) {
-      return false;
-    }
-
-    gesture = Wire.read();
+    gesture   = Wire.read();
     fingerNum = Wire.read();
-    
+
     uint8_t xH = Wire.read();
     uint8_t xL = Wire.read();
     uint8_t yH = Wire.read();
@@ -126,81 +108,82 @@ public:
     return true;
   }
 
+  // ---------------------------------------------------------------------------
+  // Call every loop() iteration.
+  // Returns a ButtonEvent describing what the user just did.
+  //
+  // Zone map (landscape 240-wide panel, portrait-reported coords):
+  //   X <  TOUCH_LEFT_LIMIT   (80 px)  → Left  tap → BTN2_DOUBLE (prev screen)
+  //   X >= TOUCH_RIGHT_LIMIT  (160 px) → Right tap → BTN2_SINGLE (next screen)
+  //   Otherwise               (80–160) → Center tap→ BTN1_SINGLE (select)
+  //   Hold ≥ 500 ms anywhere           → BTN1_LONG  (home screen)
+  //
+  // While a game is playing the same left/right split drives virtualBtn1/2.
+  // ---------------------------------------------------------------------------
   ButtonEvent update() {
-    uint8_t gesture = 0;
+    uint8_t gesture   = 0;
     uint8_t fingerNum = 0;
-    int x = 0;
-    int y = 0;
+    int  x = 0, y = 0;
 
-    bool success = readTouch(gesture, fingerNum, x, y);
+    bool fresh = readTouch(gesture, fingerNum, x, y);
     unsigned long now = millis();
+    ButtonEvent ev = BTN_NONE;
 
-    ButtonEvent resolvedEvent = BTN_NONE;
-
-    if (success && fingerNum > 0) {
-      Serial.printf("[TOUCH_RAW] G:%02X F:%d X:%d Y:%d MS:%lu\n", gesture, fingerNum, x, y, now);
+    // ── Finger DOWN / HELD ───────────────────────────────────────────────────
+    if (fresh && fingerNum > 0) {
+      Serial.printf("[TOUCH] G:%02X F:%d X:%d Y:%d\n", gesture, fingerNum, x, y);
       lastTouchMs = now;
       lastX = x;
       lastY = y;
 
       if (!isDown) {
-        // Touch down event detected
-        isDown = true;
-        startX = x;
-        startY = y;
+        isDown  = true;
+        startX  = x;
+        startY  = y;
         startMs = now;
       }
 
-      // Live gameplay controls virtualization
+      // Live game controls — split screen left / right
       if (gamePlaying && currentScreen == SCREEN_GAMES) {
-        // Tap left half of screen = BTN1, Tap right half = BTN2
-        if (x < 120) {
-          virtualBtn1 = true;
-          virtualBtn2 = false;
-        } else {
-          virtualBtn1 = false;
-          virtualBtn2 = true;
-        }
+        virtualBtn1 = (x < 120);
+        virtualBtn2 = (x >= 120);
         return BTN_NONE;
       }
 
+    // ── Finger UP / Timed-out ────────────────────────────────────────────────
     } else {
-      // Release touch state
-      bool isExplicitRelease = (success && fingerNum == 0);
-      if (isDown && (isExplicitRelease || (now - lastTouchMs > 50))) {
-        isDown = false;
+      bool explicitRelease = (fresh && fingerNum == 0);
+      bool timedOut        = (isDown && (now - lastTouchMs > 60));
+
+      if (isDown && (explicitRelease || timedOut)) {
+        isDown      = false;
         virtualBtn1 = false;
         virtualBtn2 = false;
 
-        unsigned long dt = now - startMs;
-        if (dt < 300) {
-          // Single Tap
-          lastTapMs = now;
-          lastTapX = lastX;
-          lastTapY = lastY;
-          
+        unsigned long held = now - startMs;
+
+        if (held >= 500) {
+          // ── Long Press ──────────────────────────────────────────────────
+          ev = BTN1_LONG;
+          Serial.println("[Touch] Long press → home screen");
+
+        } else if (held >= 30) {
+          // ── Short Tap — classify by X zone ─────────────────────────────
           if (lastX < TOUCH_LEFT_LIMIT) {
-            // Physical Left Side Tap -> Previous Screen (Cycle Backward)
-            resolvedEvent = BTN2_DOUBLE;
-            Serial.println("[Touch] Physical Left Side Tap -> previous screen");
+            ev = BTN2_DOUBLE;           // Left tap → previous screen
+            Serial.printf("[Touch] LEFT tap (X=%d) → prev screen\n", lastX);
           } else if (lastX >= TOUCH_RIGHT_LIMIT) {
-            // Physical Right Side Tap -> Next Screen (Cycle Forward)
-            resolvedEvent = BTN2_SINGLE;
-            Serial.println("[Touch] Physical Right Side Tap -> next screen");
+            ev = BTN2_SINGLE;           // Right tap → next screen
+            Serial.printf("[Touch] RIGHT tap (X=%d) → next screen\n", lastX);
           } else {
-            // Center Column Tap -> Normal Single Tap / Select Option / Scroll
-            resolvedEvent = BTN1_SINGLE;
-            Serial.println("[Touch] Center Column Tap -> select/scroll");
+            ev = BTN1_SINGLE;           // Center tap → select / interact
+            Serial.printf("[Touch] CENTER tap (X=%d) → select\n", lastX);
           }
-        } else if (dt >= 500) {
-          // Long Press -> Return to Home (Face) Screen
-          resolvedEvent = BTN1_LONG;
-          Serial.println("[Touch] Long Press detected");
         }
       }
     }
 
-    return resolvedEvent;
+    return ev;
   }
 };
 

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Luna Touch Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+  :root {
+    --bg:#0b0e1a; --card:#121626; --border:#1e2540;
+    --left:#f87171; --center:#34d399; --right:#60a5fa; --long:#c084fc;
+    --muted:#4b5680; --text:#e2e8f0; --dim:#64748b;
+    --serial-bg:#080c18; --serial-text:#a3e635;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    padding:24px 16px 48px;gap:20px;}
+
+  header{text-align:center;}
+  header h1{font-size:1.5rem;font-weight:900;
+    background:linear-gradient(135deg,#60a5fa,#34d399);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  header p{color:var(--dim);font-size:0.8rem;margin-top:3px;}
+
+  /* status */
+  .status{display:flex;align-items:center;gap:8px;font-size:0.75rem;color:var(--dim);}
+  .dot{width:8px;height:8px;border-radius:50%;background:#ef4444;transition:background .3s;}
+  .dot.on{background:#22c55e;animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  /* main grid: left = watch+guide, right = serial */
+  .main-grid{width:100%;max-width:960px;display:grid;
+    grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
+
+  /* ── Watch ── */
+  .left-col{display:flex;flex-direction:column;gap:16px;align-items:center;}
+  .watch{width:170px;height:210px;background:#1a1f35;border-radius:30px;
+    border:2px solid var(--border);box-shadow:0 0 0 4px #0d1020,0 20px 50px rgba(0,0,0,.6);
+    overflow:hidden;display:grid;grid-template-columns:1fr 1fr 1fr;
+    position:relative;cursor:crosshair;}
+  .zone{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:5px;border:1px solid transparent;transition:background .15s,border-color .15s;}
+  .zone:nth-child(2){border-left:1px solid var(--border);border-right:1px solid var(--border);}
+  .zone .icon{font-size:1.4rem;}
+  .zone .lbl{font-size:0.55rem;font-weight:700;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);transition:color .15s;}
+  .zone.al{background:rgba(248,113,113,.18);border-color:var(--left);}
+  .zone.al .lbl{color:var(--left);}
+  .zone.ac{background:rgba(52,211,153,.18);border-color:var(--center);}
+  .zone.ac .lbl{color:var(--center);}
+  .zone.ar{background:rgba(96,165,250,.18);border-color:var(--right);}
+  .zone.ar .lbl{color:var(--right);}
+  .zone.along{background:rgba(192,132,252,.18);border-color:var(--long);}
+  .zone.along .lbl{color:var(--long);}
+  .zone-range{position:absolute;top:6px;width:100%;display:flex;justify-content:space-around;
+    font-size:0.5rem;color:var(--dim);pointer-events:none;}
+
+  /* event card */
+  .event-card{width:100%;background:var(--card);border:1px solid var(--border);
+    border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:16px;
+    transition:border-color .3s;}
+  .event-card.el{border-color:var(--left);}
+  .event-card.ec{border-color:var(--center);}
+  .event-card.er{border-color:var(--right);}
+  .event-card.elong{border-color:var(--long);}
+  .ev-icon{font-size:2rem;}
+  .ev-zone{font-size:1.2rem;font-weight:900;}
+  .ev-action{font-size:0.78rem;color:var(--dim);margin-top:2px;}
+  .ev-x{font-size:0.68rem;color:var(--muted);margin-top:3px;font-family:monospace;}
+
+  /* guide chips */
+  .guide{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;width:100%;}
+  .chip{background:var(--card);border:1px solid var(--border);border-radius:8px;
+    padding:8px 4px;text-align:center;font-size:0.66rem;}
+  .chip .ci{font-size:1rem;}
+  .chip .cn{font-weight:700;margin-top:3px;}
+  .chip .cr{color:var(--dim);font-size:0.58rem;margin-top:1px;}
+  .chip.gl{border-color:var(--left);} .chip.gl .cn{color:var(--left);}
+  .chip.gc{border-color:var(--center);} .chip.gc .cn{color:var(--center);}
+  .chip.gr{border-color:var(--right);} .chip.gr .cn{color:var(--right);}
+  .chip.glong{border-color:var(--long);} .chip.glong .cn{color:var(--long);}
+
+  /* ── Serial Monitor ── */
+  .serial-panel{display:flex;flex-direction:column;gap:0;
+    background:var(--serial-bg);border:1px solid var(--border);border-radius:14px;
+    overflow:hidden;height:520px;}
+  .serial-header{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 16px;background:#0d1120;border-bottom:1px solid var(--border);}
+  .serial-title{font-size:0.72rem;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:8px;}
+  .serial-title span{width:8px;height:8px;border-radius:50%;background:#22c55e;
+    display:inline-block;animation:pulse 2s infinite;}
+  .serial-clear{background:none;border:1px solid var(--border);color:var(--dim);
+    font-size:0.68rem;padding:4px 10px;border-radius:6px;cursor:pointer;
+    font-family:inherit;transition:border-color .2s,color .2s;}
+  .serial-clear:hover{border-color:var(--left);color:var(--left);}
+  .serial-body{flex:1;overflow-y:auto;padding:10px 14px;
+    font-family:'JetBrains Mono',monospace;font-size:0.72rem;
+    display:flex;flex-direction:column;gap:3px;}
+  .serial-body::-webkit-scrollbar{width:4px;}
+  .serial-body::-webkit-scrollbar-track{background:transparent;}
+  .serial-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+  /* serial line types */
+  .sl{display:flex;gap:8px;align-items:baseline;animation:fadeIn .15s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+  .sl .ts{color:#334155;min-width:72px;font-size:0.65rem;flex-shrink:0;}
+  .sl .txt{flex:1;word-break:break-all;line-height:1.5;}
+  .sl.sraw  .txt{color:#64748b;}
+  .sl.sleft  .txt{color:var(--left);font-weight:700;}
+  .sl.scenter .txt{color:var(--center);font-weight:700;}
+  .sl.sright .txt{color:var(--right);font-weight:700;}
+  .sl.slong  .txt{color:var(--long);font-weight:700;}
+  .sl.sinfo  .txt{color:#60a5fa;}
+  .sl.serr   .txt{color:#f87171;}
+
+  /* tap history */
+  .hist-title{font-size:0.7rem;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--dim);margin-bottom:8px;}
+  .hist-list{display:flex;flex-direction:column;gap:5px;max-height:140px;overflow-y:auto;}
+  .hist-list::-webkit-scrollbar{width:4px;}
+  .hist-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+  .hi{display:flex;align-items:center;gap:8px;background:var(--card);
+    border:1px solid var(--border);border-radius:8px;padding:6px 12px;
+    font-size:0.74rem;animation:fadeIn .2s ease;}
+  .hi .hd{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .hi .hz{font-weight:700;min-width:60px;}
+  .hi .ha{color:var(--dim);flex:1;}
+  .hi .hx{font-family:monospace;color:var(--muted);font-size:0.66rem;}
+  .hi .ht{color:var(--muted);font-size:0.62rem;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌙 Luna Touch Simulator</h1>
+  <p>Live zone verification + Serial Monitor</p>
+</header>
+
+<div class="status">
+  <div class="dot" id="dot"></div>
+  <span id="stxt">Connecting to WebSocket…</span>
+</div>
+
+<div class="main-grid">
+
+  <!-- LEFT COL: Watch + event card + guide + history -->
+  <div class="left-col">
+
+    <!-- Watch bezel -->
+    <div class="watch" id="watch" onclick="clickZone(event)" onmousedown="startHold()" onmouseup="endHold()" onmouseleave="endHold()">
+      <div class="zone-range"><span>0-79</span><span>80-159</span><span>160-239</span></div>
+      <div class="zone" id="zl"><span class="icon">◀</span><span class="lbl">Left</span></div>
+      <div class="zone" id="zc"><span class="icon">●</span><span class="lbl">Center</span></div>
+      <div class="zone" id="zr"><span class="icon">▶</span><span class="lbl">Right</span></div>
+    </div>
+
+    <!-- Zone guide -->
+    <div class="guide">
+      <div class="chip gl"><div class="ci">◀</div><div class="cn">LEFT</div><div class="cr">X&lt;80</div><div class="cr">Prev</div></div>
+      <div class="chip gc"><div class="ci">●</div><div class="cn">CENTER</div><div class="cr">80-159</div><div class="cr">Select</div></div>
+      <div class="chip gr"><div class="ci">▶</div><div class="cn">RIGHT</div><div class="cr">X≥160</div><div class="cr">Next</div></div>
+      <div class="chip glong"><div class="ci">⏺</div><div class="cn">LONG</div><div class="cr">≥500ms</div><div class="cr">Home</div></div>
+    </div>
+
+    <!-- Event card -->
+    <div class="event-card" id="ecard" style="width:100%">
+      <div class="ev-icon" id="eicon">👆</div>
+      <div>
+        <div class="ev-zone" id="ezone" style="color:var(--muted)">Waiting for touch…</div>
+        <div class="ev-action" id="eaction">Tap any zone on the watch</div>
+        <div class="ev-x" id="ex"></div>
+      </div>
+    </div>
+
+    <!-- Tap history -->
+    <div style="width:100%">
+      <div class="hist-title">Tap History</div>
+      <div class="hist-list" id="hist">
+        <div class="hi" style="border-color:transparent;color:var(--muted)">
+          <div class="hd" style="background:var(--muted)"></div>
+          <span class="ha">No taps yet — waiting for device…</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /left-col -->
+
+  <!-- RIGHT COL: Serial monitor -->
+  <div class="serial-panel">
+    <div class="serial-header">
+      <div class="serial-title"><span></span>Serial Monitor — COM3</div>
+      <button class="serial-clear" onclick="clearSerial()">Clear</button>
+    </div>
+    <div class="serial-body" id="serial-body">
+      <div class="sl sinfo"><span class="ts"></span><span class="txt">Waiting for connection…</span></div>
+    </div>
+  </div>
+
+</div><!-- /main-grid -->
+
+<script>
+const WS = "ws://localhost:8765";
+let ws, retryT, holdT;
+
+const CFG = {
+  LEFT:   {col:"var(--left)",   cls:"el",   wcls:"al",   dot:"#f87171", icon:"◀", act:"Prev Screen"},
+  CENTER: {col:"var(--center)", cls:"ec",   wcls:"ac",   dot:"#34d399", icon:"●", act:"Select / Interact"},
+  RIGHT:  {col:"var(--right)",  cls:"er",   wcls:"ar",   dot:"#60a5fa", icon:"▶", act:"Next Screen"},
+  LONG:   {col:"var(--long)",   cls:"elong",wcls:"along", dot:"#c084fc", icon:"⏺",act:"Home Screen"},
+};
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function connect(){
+  ws = new WebSocket(WS);
+  ws.onopen = ()=>{
+    document.getElementById("dot").classList.add("on");
+    document.getElementById("stxt").textContent = "Connected — COM3 live feed active";
+    clearTimeout(retryT);
+  };
+  ws.onmessage = e=>{
+    const msg = JSON.parse(e.data);
+    if(msg.type === "touch")  handleTouch(msg);
+    if(msg.type === "serial") appendSerial(msg.line);
+  };
+  ws.onclose = ()=>{
+    document.getElementById("dot").classList.remove("on");
+    document.getElementById("stxt").textContent = "Disconnected — retrying in 3s…";
+    retryT = setTimeout(connect, 3000);
+  };
+  ws.onerror = ()=>ws.close();
+}
+
+// ── Serial line classifier ─────────────────────────────────────────────────
+function classifyLine(line){
+  const u = line.toUpperCase();
+  if(/LEFT\s+TAP/.test(u))   return "sleft";
+  if(/CENTER\s+TAP/.test(u)) return "scenter";
+  if(/RIGHT\s+TAP/.test(u))  return "sright";
+  if(/LONG\s+PRESS/.test(u)) return "slong";
+  if(/\[TOUCH\]/.test(u) || /\[SERIAL\]/.test(u)) return "sraw";
+  if(/error|fail/i.test(line)) return "serr";
+  if(/--/.test(line)) return "sinfo";
+  return "sraw";
+}
+
+function appendSerial(line){
+  const body = document.getElementById("serial-body");
+  const cls  = classifyLine(line);
+  const now  = new Date().toLocaleTimeString("en-GB",{hour12:false});
+
+  const row = document.createElement("div");
+  row.className = "sl " + cls;
+  row.innerHTML = `<span class="ts">${now}</span><span class="txt">${escHtml(line)}</span>`;
+  body.appendChild(row);
+
+  // keep max 200 lines
+  while(body.children.length > 200) body.firstChild.remove();
+  body.scrollTop = body.scrollHeight;
+}
+
+function escHtml(s){
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function clearSerial(){
+  document.getElementById("serial-body").innerHTML = "";
+}
+
+// ── Touch zone event ───────────────────────────────────────────────────────
+function handleTouch(ev){
+  const cfg = CFG[ev.zone]; if(!cfg) return;
+
+  // Event card
+  const card = document.getElementById("ecard");
+  card.className = "event-card " + cfg.cls;
+  document.getElementById("eicon").textContent   = cfg.icon;
+  document.getElementById("ezone").textContent   = ev.zone + " TAP";
+  document.getElementById("ezone").style.color   = cfg.col;
+  document.getElementById("eaction").textContent = ev.action || cfg.act;
+  document.getElementById("ex").textContent      = ev.x !== null && ev.x !== undefined ? `Raw X = ${ev.x} px` : "";
+
+  // Flash watch zones
+  ["zl","zc","zr"].forEach(id=>{
+    const z=document.getElementById(id);
+    Object.values(CFG).forEach(c=>z.classList.remove(c.wcls));
+  });
+  if(ev.zone==="LEFT")  document.getElementById("zl").classList.add(cfg.wcls);
+  if(ev.zone==="CENTER")document.getElementById("zc").classList.add(cfg.wcls);
+  if(ev.zone==="RIGHT") document.getElementById("zr").classList.add(cfg.wcls);
+  if(ev.zone==="LONG")  ["zl","zc","zr"].forEach(id=>document.getElementById(id).classList.add(cfg.wcls));
+  setTimeout(()=>{
+    ["zl","zc","zr"].forEach(id=>{
+      const z=document.getElementById(id);
+      Object.values(CFG).forEach(c=>z.classList.remove(c.wcls));
+    });
+  }, 600);
+
+  // History
+  const hist = document.getElementById("hist");
+  const ph = hist.querySelector('[style*="transparent"]');
+  if(ph) ph.remove();
+  const e2 = document.createElement("div");
+  e2.className = "hi";
+  const t = new Date().toLocaleTimeString();
+  e2.innerHTML = `<div class="hd" style="background:${cfg.dot}"></div>
+    <span class="hz" style="color:${cfg.col}">${ev.zone}</span>
+    <span class="ha">${ev.action||cfg.act}</span>
+    <span class="hx">${ev.x!=null?"X="+ev.x:""}</span>
+    <span class="ht">${t}</span>`;
+  hist.prepend(e2);
+  if(hist.children.length > 20) hist.lastChild.remove();
+}
+
+// ── Click-on-watch (local simulation) ─────────────────────────────────────
+function clickZone(e){
+  const r = document.getElementById("watch").getBoundingClientRect();
+  const simX = Math.round(((e.clientX-r.left)/r.width)*240);
+  let zone, action;
+  if(simX < 80)      { zone="LEFT";   action="Prev Screen"; }
+  else if(simX < 160){ zone="CENTER"; action="Select / Interact"; }
+  else               { zone="RIGHT";  action="Next Screen"; }
+  handleTouch({zone, x:simX, action});
+  appendSerial(`[SIM] ${zone} tap  X=${simX}px`);
+}
+
+function startHold(){
+  holdT = setTimeout(()=>{
+    handleTouch({zone:"LONG", x:null, action:"Home Screen"});
+    appendSerial("[SIM] LONG press");
+  }, 700);
+}
+function endHold(){ clearTimeout(holdT); }
+
+connect();
+</script>
+</body>
+</html>

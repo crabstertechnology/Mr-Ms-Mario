@@ -35,9 +35,7 @@ int introSoundSpeed = 80;
 int defaultGif = 99;      // default GIF expression (0-6, or 99 for Cycle Mode)
 bool isCycleMode = true;
 int gifIntro = 1;        // intro GIF expression (0-6)
-int touchSingle = 2;     // action for single tap: 0=default, 1=clock, 2=skip_anim, 3=ble_toggle, 10-16=specific expr
-int touchDouble = 0;     // action for double tap
-int touchLong = 0;       // action for long press
+// Gestures and touch inputs completely removed
 bool negativeDisplay = false; // SSD1306 display color inversion
 bool silentMode = false;
 int clockStyle = 3; // clock style selector (0 to 3) - Default to 3 for Custom UI Designer
@@ -750,9 +748,7 @@ void applySettings(String payload) {
 
   if (partCount > 2) defaultGif  = parts[2].toInt();
   if (partCount > 3) gifIntro    = parts[3].toInt();
-  if (partCount > 4) touchSingle = parts[4].toInt();
-  if (partCount > 5) touchDouble = parts[5].toInt();
-  if (partCount > 6) touchLong   = parts[6].toInt();
+  // parts[4], parts[5], parts[6] represent touch settings which are now removed/ignored.
   if (partCount > 7) negativeDisplay = (parts[7].toInt() == 1);
   if (partCount > 8) {
     gifIntroSpeed = 169;
@@ -843,9 +839,7 @@ void applySettings(String payload) {
   preferences.putInt("speed", gifSpeed);
   preferences.putInt("defGif", defaultGif);
   preferences.putInt("intGif", gifIntro);
-  preferences.putInt("tchSing", touchSingle);
-  preferences.putInt("tchDoub", touchDouble);
-  preferences.putInt("tchLong", touchLong);
+  // Gestures/touch settings no longer stored in Preferences
   preferences.putBool("neg", negativeDisplay);
   preferences.putInt("clkStyle", clockStyle);
   preferences.putInt("oledBright", oledBrightness);
@@ -875,9 +869,7 @@ void setup() {
   gifSpeed = 169;
   defaultGif = preferences.getInt("defGif", 99);
   gifIntro = preferences.getInt("intGif", 1);
-  touchSingle = preferences.getInt("tchSing", 2);  // default: skip animation
-  touchDouble = preferences.getInt("tchDoub", 0);
-  touchLong = preferences.getInt("tchLong", 0);
+  // Gestures/touch settings no longer loaded
   robotVariant = preferences.getString("robot_var", "ms_luna");
   negativeDisplay = preferences.getBool("neg", false);
   clockStyle = preferences.getInt("clkStyle", 3); // Default to Style 3 (Custom UI Designer)
@@ -1078,75 +1070,7 @@ String getExpressionName(int expr) {
   }
 }
 
-void executeTouchAction(int actionType, TouchEvent eventType) {
-  if (actionType == 0) {
-    // Default reaction
-    if (eventType == TOUCH_TAP) {
-      if (random(0, 2) == 0) {
-        face.setExpression(EXPR_WINK);
-        audio.playSound(SOUND_CHIRP);
-      } else {
-        face.setExpression(EXPR_SURPRISED);
-        audio.playSound(SOUND_JUMP);
-      }
-    } else if (eventType == TOUCH_DOUBLE_TAP) {
-      face.setExpression(EXPR_HAPPY);
-      audio.playSound(SOUND_COIN);
-    } else if (eventType == TOUCH_LONG_PRESS) {
-      // isAsleep = true; // Sleep mode disabled
-      face.setExpression(EXPR_SLEEPING);
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println(negativeDisplay ? "Ms. Luna entered Sleep Mode (animation only, stays awake)!" : "Mr. Luna entered Sleep Mode (animation only, stays awake)!");
-    }
-  } else {
-    // Custom actions
-    if (actionType == 1) {
-      currentScreen = SCREEN_CLOCK;
-      face.setExpression(EXPR_CLOCK);
-      audio.playSound(SOUND_CHIRP);
-      Serial.println("Triggered Full Screen Clock");
-    } else if (actionType == 2) {
-      cycleExpression();
-      audio.playSound(SOUND_COIN);
-      Serial.println("Skipped to next animation");
-    } else if (actionType == 3) {
-      // BLE is always ON, do not toggle
-      bleActive = true;
-      audio.playSound(SOUND_CHIRP);
-      Serial.println("BLE Toggle touch action ignored (BLE is always ON)");
-    } else if (actionType >= 20) {
-      // Specific GIF index: actionType = 20 + gifIndex
-      int gifIdx = actionType - 20;
-      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-        face.setGifIndex(gifIdx);
-        face.setExpression(EXPR_ALL_GIF);
-        allGifCycleIdx = gifIdx; // keep cycle state in sync
-        audio.playSound(SOUND_COIN);
-        char gifName[32];
-        strcpy_P(gifName, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIdx].name));
-        Serial.print("Touch triggered specific GIF #");
-        Serial.print(gifIdx);
-        Serial.print(": ");
-        Serial.println(gifName);
-      }
-    } else if (actionType >= 10 && actionType <= 16) {
-      // Legacy base expression (0-6): actionType = 10 + exprId
-      Expression target = (Expression)(actionType - 10);
-      face.setExpression(target);
-      switch (target) {
-        case EXPR_HAPPY: audio.playSound(SOUND_POWERUP); break;
-        case EXPR_SAD: audio.playSound(SOUND_POWERDOWN); break;
-        case EXPR_ANGRY: audio.playSound(SOUND_GAMEOVER); break;
-        case EXPR_SURPRISED: audio.playSound(SOUND_JUMP); break;
-        case EXPR_SLEEPING: audio.playSound(SOUND_POWERDOWN); break;
-        case EXPR_WINK: audio.playSound(SOUND_CHIRP); break;
-        default: audio.playSound(SOUND_CHIRP); break;
-      }
-      Serial.print("Triggered base expression: ");
-      Serial.println(actionType - 10);
-    }
-  }
-}
+// executeTouchAction removed
 // =============================================================================
 // Helper function to adjust Settings options (Direction: +1 for Up/Increment, -1 for Down/Decrement)
 // =============================================================================
@@ -1477,37 +1401,32 @@ void handleBtn2Single() {
   }
   lastScreenTransitionTime = transitionNow;
 
-  // Cycles screens: Face -> QR Card -> Clock -> Notifications -> Calendar -> Games -> Settings -> Face
-  SmartwatchScreen nextScreen;
-  if (currentScreen == SCREEN_FACE) {
-    nextScreen = SCREEN_CARD;
-  } else if (currentScreen == SCREEN_CARD) {
-    nextScreen = SCREEN_CLOCK;
-  } else if (currentScreen == SCREEN_CLOCK) {
-    nextScreen = SCREEN_NOTIFICATIONS;
-  } else if (currentScreen == SCREEN_NOTIFICATIONS) {
-    nextScreen = SCREEN_CALENDAR;
-  } else if (currentScreen == SCREEN_CALENDAR) {
-    nextScreen = SCREEN_GAMES;
-  } else if (currentScreen == SCREEN_GAMES) {
-    nextScreen = SCREEN_SETTINGS;
-  } else {
-    nextScreen = SCREEN_FACE;
-  }
+  // Screen cycle order: Face → Clock → Notifications → Calendar → Games → Settings → Card → Face
+  static const SmartwatchScreen CYCLE[] = {
+    SCREEN_FACE, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD
+  };
+  static const int CYCLE_LEN = 7;
 
-  currentScreen = nextScreen;
-  settingsActive = false; 
+  int idx = 0;
+  for (int i = 0; i < CYCLE_LEN; i++) {
+    if (CYCLE[i] == currentScreen) { idx = i; break; }
+  }
+  currentScreen = CYCLE[(idx + 1) % CYCLE_LEN];
+
+  settingsActive = false;
   optionSelected = false;
   notificationsActive = false;
   notificationSelected = false;
-
   hardwareLoopbackActive = false;
   audio.micStreaming = false;
   audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
   audio.prebuffering = true;
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
-  Serial.printf("[BTN2] Cycled screen to %d\n", currentScreen);
+
+  const char* names[] = {"FACE","CLOCK","NOTIF","CAL","GAMES","SETTINGS","CARD"};
+  Serial.printf("[BTN2] >>> %s (screen %d)\n", names[(idx+1)%CYCLE_LEN], currentScreen);
 }
 
 void handleBtn2Double() {
@@ -1521,36 +1440,31 @@ void handleBtn2Double() {
   }
   lastScreenTransitionTime = transitionNow;
 
-  SmartwatchScreen prevScreen;
-  if (currentScreen == SCREEN_FACE) {
-    prevScreen = SCREEN_SETTINGS;
-  } else if (currentScreen == SCREEN_SETTINGS) {
-    prevScreen = SCREEN_GAMES;
-  } else if (currentScreen == SCREEN_GAMES) {
-    prevScreen = SCREEN_CALENDAR;
-  } else if (currentScreen == SCREEN_CALENDAR) {
-    prevScreen = SCREEN_NOTIFICATIONS;
-  } else if (currentScreen == SCREEN_NOTIFICATIONS) {
-    prevScreen = SCREEN_CLOCK;
-  } else if (currentScreen == SCREEN_CLOCK) {
-    prevScreen = SCREEN_CARD;
-  } else {
-    prevScreen = SCREEN_FACE;
-  }
+  static const SmartwatchScreen CYCLE[] = {
+    SCREEN_FACE, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD
+  };
+  static const int CYCLE_LEN = 7;
 
-  currentScreen = prevScreen;
-  settingsActive = false; 
+  int idx = 0;
+  for (int i = 0; i < CYCLE_LEN; i++) {
+    if (CYCLE[i] == currentScreen) { idx = i; break; }
+  }
+  currentScreen = CYCLE[(idx - 1 + CYCLE_LEN) % CYCLE_LEN];
+
+  settingsActive = false;
   optionSelected = false;
   notificationsActive = false;
   notificationSelected = false;
-
   hardwareLoopbackActive = false;
   audio.micStreaming = false;
   audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
   audio.prebuffering = true;
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
-  Serial.printf("[BTN2 DBL] Cycled screen backward to %d\n", currentScreen);
+
+  const char* names[] = {"FACE","CLOCK","NOTIF","CAL","GAMES","SETTINGS","CARD"};
+  Serial.printf("[BTN2] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
 }
 
 void updateStateLabel() {
@@ -1665,7 +1579,7 @@ void loop() {
       Serial.println("OK:TimeSynced");
 
     } else if (cmd == "GET") {
-      Serial.println("SETTINGS:" + String(bleActive ? "1" : "0") + "," + String(gifSpeed) + "," + String(defaultGif) + "," + String(gifIntro) + "," + String(touchSingle) + "," + String(touchDouble) + "," + String(touchLong) + "," + String(negativeDisplay ? "1" : "0"));
+      Serial.println("SETTINGS:" + String(bleActive ? "1" : "0") + "," + String(gifSpeed) + "," + String(defaultGif) + "," + String(gifIntro) + ",0,0,0," + String(negativeDisplay ? "1" : "0"));
     } else if (cmd == "LIST") {
       // Re-print all GIF entries for debugging
       Serial.println("====== GIF TABLE DUMP ======");
@@ -1717,6 +1631,8 @@ void loop() {
     if (face.isGifFinished()) {
       face.clearGifFinished();
       inIntroPhase = false;
+      lastInteractionTime = millis();   // reset so inactivity timer doesn't fire immediately
+      lastExpressionCycleTime = millis();
       face.setFrameDelay(gifSpeed);
       currentScreen = SCREEN_CLOCK; // Switch to clock after boot!
       if (isCycleMode) {
@@ -1783,11 +1699,12 @@ void loop() {
 
   // 4. Inactivity Timer: Auto-return to Face screen after 60 seconds of no interaction in UI modes
   // Note: SCREEN_CARD is excluded – QR must stay visible until user explicitly dismisses it
+  // Inactivity timeout: 5 minutes of no interaction returns to Face screen
   if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive && !gamePlaying) {
-    if (now - lastInteractionTime >= 60000) {
+    if (now - lastInteractionTime >= 300000) {
       currentScreen = SCREEN_FACE;
       lastExpressionCycleTime = now;
-      Serial.println("Inactivity timeout: Returning to GIF expressions screen.");
+      Serial.println("[Inactivity] 5min timeout: returning to Face screen.");
     }
   }
 
