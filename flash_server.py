@@ -476,8 +476,8 @@ class FlashDashboardServer(http.server.SimpleHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             try:
                 payload = json.loads(post_data.decode('utf-8'))
-                left_limit = int(payload.get("left_limit", 80))
-                right_limit = int(payload.get("right_limit", 160))
+                left_limit = int(payload.get("left_limit", 40))
+                right_limit = int(payload.get("right_limit", 200))
                 
                 target_dir = os.path.join(DIRECTORY, "1.69 Luna Firmware")
                 config_path = os.path.join(target_dir, "config.h")

@@ -30,8 +30,8 @@
 #define SCREEN_HEIGHT 280
 
 // Touch Column Boundaries (0 to 240 pixels width)
-#define TOUCH_LEFT_LIMIT 80
-#define TOUCH_RIGHT_LIMIT 160
+#define TOUCH_LEFT_LIMIT 40
+#define TOUCH_RIGHT_LIMIT 200
 
 // BLE Service & Characteristic UUIDs
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"

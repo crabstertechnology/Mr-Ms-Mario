@@ -301,7 +301,7 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
       audio.playSound(SOUND_CHIRP);
       break;
     case EXPR_SLEEPING:
-      // isAsleep = true; // Sleep mode disabled
+      isAsleep = true;
       audio.playSound(SOUND_POWERDOWN);
       break;
     default:
@@ -351,7 +351,7 @@ void handleRobotCommand(String text) {
     audio.playSound(SOUND_CHIRP);
     Serial.println("Robot woke up from remote command!");
   } else if (text == "SLEEP") {
-    // isAsleep = true; // Sleep mode disabled
+    isAsleep = true;
     face.setExpression(EXPR_SLEEPING);
     audio.playSound(SOUND_POWERDOWN);
     Serial.println("Robot went to sleep from remote command!");
@@ -924,6 +924,10 @@ void setup() {
   interaction.begin();   // Initialize touch interface
   imu.begin();           // Initialize accelerometer & gyroscope
   pinMode(BATTERY_PIN, INPUT); // Initialize battery monitoring pin
+  pinMode(40, INPUT_PULLUP);   // Initialize Power button (Key2)
+  pinMode(0, INPUT_PULLUP);    // Initialize Boot button (Key1)
+  pinMode(41, OUTPUT);         // Hold power pin HIGH to keep power on when on battery
+  digitalWrite(41, HIGH);
   // Initial battery read (uses BATTERY_CALIBRATION_MULTIPLIER to account for divider ratio and impedance loading)
   batteryVolts = (analogReadMilliVolts(BATTERY_PIN) * BATTERY_CALIBRATION_MULTIPLIER) / 1000.0f;
 
@@ -1104,9 +1108,9 @@ void adjustOption(int option, int direction) {
       break;
     case 2: // Clock Style
       if (direction > 0) {
-        clockStyle = (clockStyle + 1) % 4;
+        clockStyle = (clockStyle + 1) % 5;
       } else {
-        clockStyle = (clockStyle - 1 + 4) % 4;
+        clockStyle = (clockStyle - 1 + 5) % 5;
       }
       audio.playSound(SOUND_CHIRP);
       break;
@@ -1277,7 +1281,7 @@ void handleBtn1Single() {
     Serial.println("[BTN1] Next expression");
   } else if (currentScreen == SCREEN_CLOCK) {
     // Cycles clock styles
-    clockStyle = (clockStyle + 1) % 4;
+    clockStyle = (clockStyle + 1) % 5;
     audio.playSound(SOUND_CHIRP);
     Serial.println("[BTN1] Cycled clock style");
   } else if (currentScreen == SCREEN_NOTIFICATIONS) {
@@ -1586,7 +1590,130 @@ void updateStateLabel() {
 void loop() {
   unsigned long now = millis();
 
-  // ── 0. Poll unified button handler ──────────────────────────────────────
+  // ── 0. Poll Physical Buttons for Sleep/Wake ──────────────────────────────
+  static unsigned long powerBtnPressStart = 0;
+  static bool powerBtnWasPressed = false;
+  static unsigned long bootBtnPressStart = 0;
+  static bool bootBtnWasPressed = false;
+
+  bool powerPressed = (digitalRead(40) == LOW);
+  bool bootPressed = (digitalRead(0) == LOW);
+
+  // Handle Power button (GPIO 40)
+  if (powerPressed) {
+    if (!powerBtnWasPressed) {
+      powerBtnWasPressed = true;
+      powerBtnPressStart = now;
+    } else {
+      if (now - powerBtnPressStart >= 1500) {
+        // Long press -> Enter Sleep
+        if (!isAsleep) {
+          isAsleep = true;
+          audio.playSound(SOUND_POWERDOWN);
+          Serial.println("[Power Button] Long press -> Entering Sleep Mode");
+          while (digitalRead(40) == LOW) {
+            delay(10);
+            audio.update(); // Keep audio synthesizer playing
+          }
+          powerBtnWasPressed = false;
+          powerBtnPressStart = 0;
+        }
+      }
+    }
+  } else {
+    if (powerBtnWasPressed) {
+      unsigned long pressDuration = now - powerBtnPressStart;
+      powerBtnWasPressed = false;
+      powerBtnPressStart = 0;
+      
+      if (pressDuration >= 50 && pressDuration < 1500) {
+        if (isAsleep) {
+          isAsleep = false;
+          audio.playSound(SOUND_CHIRP);
+          Serial.println("[Power Button] Short press -> Waking up from Sleep Mode");
+        } else if (gamePlaying) {
+          // Exit game to arcade menu
+          gamePlaying = false;
+          gamesActive = true;
+          audio.playSound(SOUND_POWERDOWN);
+          Serial.println("[Power Button] Short press in game -> Exited to arcade");
+        }
+      }
+    }
+  }
+
+  // Handle Boot button (GPIO 0) - only short press to exit game if not asleep
+  if (bootPressed) {
+    if (!bootBtnWasPressed) {
+      bootBtnWasPressed = true;
+      bootBtnPressStart = now;
+    }
+  } else {
+    if (bootBtnWasPressed) {
+      unsigned long pressDuration = now - bootBtnPressStart;
+      bootBtnWasPressed = false;
+      bootBtnPressStart = 0;
+      
+      if (pressDuration >= 50 && pressDuration < 1500) {
+        if (gamePlaying && !isAsleep) {
+          gamePlaying = false;
+          gamesActive = true;
+          audio.playSound(SOUND_POWERDOWN);
+          Serial.println("[Boot Button] Short press in game -> Exited to arcade");
+        }
+      }
+    }
+  }
+
+  // ── 0.5. High-Efficiency Sleep Path ─────────────────────────────────────
+  if (isAsleep) {
+    // Run minimal tasks for sleep mode
+    ble.handleConnectionState();
+    checkHardwareScheduledAlarms();
+    audio.update();
+    
+    // Update Software Real-Time Clock (drift-free)
+    if (now - lastRtcMillis >= 1000) {
+      lastRtcMillis = now;
+      rtcSecond++;
+      if (rtcSecond >= 60) {
+        rtcSecond = 0;
+        rtcMinute++;
+        if (rtcMinute >= 60) {
+          rtcMinute = 0;
+          rtcHour++;
+          if (rtcHour >= 24) {
+            rtcHour = 0;
+          }
+        }
+      }
+    }
+    
+    // Periodic battery read (every 10 seconds)
+    static unsigned long lastBatteryReadTime = 0;
+    if (now - lastBatteryReadTime > 10000) {
+      lastBatteryReadTime = now;
+      float rawVolts = (analogReadMilliVolts(BATTERY_PIN) * BATTERY_CALIBRATION_MULTIPLIER) / 1000.0f;
+      if (batteryVolts == 3.82f) {
+        batteryVolts = rawVolts;
+      } else {
+        batteryVolts = 0.9f * batteryVolts + 0.1f * rawVolts;
+      }
+    }
+    
+    // Draw the display at ~30fps rate
+    static unsigned long lastDisplayDrawTime = 0;
+    if (now - lastDisplayDrawTime >= 33) {
+      lastDisplayDrawTime = now;
+      face.setConnectivityStatus(ble.isConnected(), false);
+      face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+    }
+    
+    vTaskDelay(1);
+    return;
+  }
+
+  // ── 0.6. Poll unified touch handler (only when awake) ───────────────────
   ButtonEvent btnEvt = interaction.update();
   switch (btnEvt) {
     case BTN1_SINGLE: handleBtn1Single(); break;

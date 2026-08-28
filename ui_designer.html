@@ -746,17 +746,17 @@
             <div class="form-group" style="margin-top: 5px;">
               <label for="sliderLeftLimit" style="font-size: 0.75rem; display: flex; justify-content: space-between; margin-bottom: 4px;">
                 <span>Left Limit (X threshold):</span>
-                <span id="lblLeftLimit" style="font-weight: 600; color: var(--accent-light);">80px</span>
+                <span id="lblLeftLimit" style="font-weight: 600; color: var(--accent-light);">40px</span>
               </label>
-              <input type="range" id="sliderLeftLimit" min="30" max="110" value="80" oninput="adjustLeftLimit(this.value)" style="width: 100%;">
+              <input type="range" id="sliderLeftLimit" min="30" max="110" value="40" oninput="adjustLeftLimit(this.value)" style="width: 100%;">
             </div>
             
             <div class="form-group">
               <label for="sliderRightLimit" style="font-size: 0.75rem; display: flex; justify-content: space-between; margin-bottom: 4px;">
                 <span>Right Limit (X threshold):</span>
-                <span id="lblRightLimit" style="font-weight: 600; color: var(--accent-light);">160px</span>
+                <span id="lblRightLimit" style="font-weight: 600; color: var(--accent-light);">200px</span>
               </label>
-              <input type="range" id="sliderRightLimit" min="130" max="210" value="160" oninput="adjustRightLimit(this.value)" style="width: 100%;">
+              <input type="range" id="sliderRightLimit" min="130" max="210" value="200" oninput="adjustRightLimit(this.value)" style="width: 100%;">
             </div>
             
             <div id="calibTouchStatus" style="font-size: 0.75rem; padding: 6px; background: rgba(255,255,255,0.03); border-radius: 4px; text-align: center; color: var(--accent-light); min-height: 18px; font-family: monospace;">
@@ -786,9 +786,9 @@
             
             <!-- Touch Zone Calibration Overlays -->
             <div id="touchCalOverlays" style="display: none;">
-              <div class="touch-zone-overlay" id="overlayLeftZone" style="position: absolute; top:0; left:0; bottom:0; width: 80px; background: rgba(239, 68, 68, 0.05); border-right: 2px dashed rgba(239, 68, 68, 0.5); pointer-events: none; transition: background 0.15s ease, opacity 0.15s ease; z-index: 90;"></div>
-              <div class="touch-zone-overlay" id="overlayCenterZone" style="position: absolute; top:0; left:80px; bottom:0; width: 80px; background: rgba(59, 130, 246, 0.02); border-right: 2px dashed rgba(59, 130, 246, 0.4); pointer-events: none; transition: background 0.15s ease, opacity 0.15s ease; z-index: 90;"></div>
-              <div class="touch-zone-overlay" id="overlayRightZone" style="position: absolute; top:0; left:160px; bottom:0; right:0; background: rgba(16, 185, 129, 0.05); pointer-events: none; transition: background 0.15s ease, opacity 0.15s ease; z-index: 90;"></div>
+              <div class="touch-zone-overlay" id="overlayLeftZone" style="position: absolute; top:0; left:0; bottom:0; width: 40px; background: rgba(239, 68, 68, 0.05); border-right: 2px dashed rgba(239, 68, 68, 0.5); pointer-events: none; transition: background 0.15s ease, opacity 0.15s ease; z-index: 90;"></div>
+              <div class="touch-zone-overlay" id="overlayCenterZone" style="position: absolute; top:0; left:40px; bottom:0; width: 160px; background: rgba(59, 130, 246, 0.02); border-right: 2px dashed rgba(59, 130, 246, 0.4); pointer-events: none; transition: background 0.15s ease, opacity 0.15s ease; z-index: 90;"></div>
+              <div class="touch-zone-overlay" id="overlayRightZone" style="position: absolute; top:0; left:200px; bottom:0; right:0; background: rgba(16, 185, 129, 0.05); pointer-events: none; transition: background 0.15s ease, opacity 0.15s ease; z-index: 90;"></div>
             </div>
             
             <!-- Selection Box Indicator -->
@@ -1039,8 +1039,8 @@
     let isResizing = false;
     
     // Touch Zone Calibration States
-    let leftLimit = 80;
-    let rightLimit = 160;
+    let leftLimit = 40;
+    let rightLimit = 200;
     let isTouchZonesOverlayActive = false;
 
     // Web Audio Synthesizer Context

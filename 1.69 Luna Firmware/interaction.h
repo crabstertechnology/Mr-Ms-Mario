@@ -116,10 +116,10 @@ public:
   // Call every loop() iteration.
   // Returns a ButtonEvent describing what the user just did.
   //
-  // Zone map (landscape 240-wide panel, portrait-reported coords):
-  //   X <  TOUCH_LEFT_LIMIT   (80 px)  → Left  tap → BTN2_DOUBLE (prev screen)
-  //   X >= TOUCH_RIGHT_LIMIT  (160 px) → Right tap → BTN2_SINGLE (next screen)
-  //   Otherwise               (80–160) → Center tap→ BTN1_SINGLE (select)
+  //   Zone map (landscape 240-wide panel, portrait-reported coords):
+  //   X <  TOUCH_LEFT_LIMIT   (40 px)  → Left  tap → BTN2_DOUBLE (prev screen)
+  //   X >= TOUCH_RIGHT_LIMIT  (200 px) → Right tap → BTN2_SINGLE (next screen)
+  //   Otherwise               (40–200) → Center tap→ BTN1_SINGLE (select)
   //   Hold ≥ 500 ms anywhere           → BTN1_LONG  (home screen)
   //
   // While a game is playing the same left/right split drives virtualBtn1/2.
@@ -163,6 +163,10 @@ public:
         isDown      = false;
         virtualBtn1 = false;
         virtualBtn2 = false;
+
+        if (gamePlaying && currentScreen == SCREEN_GAMES) {
+          return BTN_NONE;
+        }
 
         unsigned long held = now - startMs;
 
