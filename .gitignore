@@ -2,7 +2,7 @@
 jdk17/
 
 # Ignore compiled Android package
-app-release.apk
+releases/app-release.apk
 
 # Ignore local VS Code settings
 .vscode/

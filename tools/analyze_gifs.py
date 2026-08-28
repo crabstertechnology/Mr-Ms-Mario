@@ -8,7 +8,7 @@ Analyze all GIF files in mobile_app/animations/ to extract:
 import os
 import struct
 
-ANIM_DIR = os.path.join(os.path.dirname(__file__), "mobile_app", "animations")
+ANIM_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "mobile_app", "animations")
 
 def read_gif_timing(path):
     """Extract frame count and average delay from a GIF file."""

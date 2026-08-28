@@ -10,7 +10,9 @@ except Exception as e:
     print(f"Error opening COM3: {e}")
     sys.exit(1)
 
-log_file = open("w:\\Mr.mario\\serial_log.txt", "w", encoding="utf-8")
+import os
+log_file_path = os.path.join(os.path.dirname(__file__), "serial_log.txt")
+log_file = open(log_file_path, "w", encoding="utf-8")
 log_file.write("--- Start Log ---\n")
 log_file.flush()
 
