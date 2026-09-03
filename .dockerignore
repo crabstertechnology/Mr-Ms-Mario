@@ -1,0 +1,17 @@
+# Exclude heavy tooling and build artifacts from container context
+.git
+.vscode
+.claude
+jdk17/
+scrcpy/
+releases/
+mobile_app/
+mobile_flutter/
+build_test/
+scratch/
+build/
+bin/
+*.exe
+*.zip
+*.tar.gz
+*.bin

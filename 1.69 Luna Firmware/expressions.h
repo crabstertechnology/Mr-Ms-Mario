@@ -116,6 +116,11 @@ private:
   String popupTitle;
   String popupBody;
 
+  // Silent Mode Transient Overlay state
+  unsigned long silentOverlayStartTime;
+  bool showSilentOverlay;
+  bool silentOverlayState;
+
 public:
   String headerText;
   LunaFace(Adafruit_ST7789& tftDisp, GFXcanvas16& disp) 
@@ -150,6 +155,10 @@ public:
     popupTitle = "";
     popupBody = "";
     headerText = "";
+
+    silentOverlayStartTime = 0;
+    showSilentOverlay = false;
+    silentOverlayState = false;
 
     for (int i = 0; i < 5; i++) {
       notificationHistory[i].active = false;
@@ -436,6 +445,12 @@ public:
     return popupActive;
   }
 
+  void triggerSilentOverlay(bool isSilent) {
+    silentOverlayStartTime = millis();
+    showSilentOverlay = true;
+    silentOverlayState = isSilent;
+  }
+
   // ------------------ Map Navigation State ------------------
   void setMapNavigation(String direction, String distance, String description) {
     mapDirection = direction;
@@ -678,6 +693,19 @@ public:
     display.fillRect(wifiX,     wifiY + 4, 2, 2, wifiColor);
     display.fillRect(wifiX + 3, wifiY + 2, 2, 4, wifiColor);
     display.fillRect(wifiX + 6, wifiY,     2, 6, wifiColor);
+
+    // Silent mode status indicator in status bar
+    if (silentMode) {
+      int silentX = wifiX - 14;
+      int silentY = wifiY + 3;
+      uint16_t silentColor = 0xF800; // Red indicator
+      // Speaker body
+      display.fillRect(silentX, silentY - 2, 2, 4, silentColor);
+      display.fillTriangle(silentX + 2, silentY - 4, silentX + 2, silentY + 4, silentX + 4, silentY, silentColor);
+      // Small line/cross representing mute
+      display.drawLine(silentX + 6, silentY - 2, silentX + 8, silentY, silentColor);
+      display.drawLine(silentX + 8, silentY - 2, silentX + 6, silentY, silentColor);
+    }
 
     // ── Centre zone: screen name ─────
     display.setTextColor(themeAccent);
@@ -1566,6 +1594,17 @@ public:
       if (frameData != nullptr) {
         drawBitmapScaled(xOffset, yOffset, frameData, 128, 64, targetW, targetH, color);
       }
+    }
+
+    // Small silent mode indicator on Face screen
+    if (silentMode) {
+      uint16_t silentColor = negativeDisplay ? TFT_BLUE : TFT_WHITE;
+      int silentX = SCREEN_WIDTH - 20;
+      int silentY = 10;
+      display.fillRect(silentX, silentY - 2, 2, 4, silentColor);
+      display.fillTriangle(silentX + 2, silentY - 4, silentX + 2, silentY + 4, silentX + 4, silentY, silentColor);
+      display.drawLine(silentX + 6, silentY - 2, silentX + 8, silentY, silentColor);
+      display.drawLine(silentX + 8, silentY - 2, silentX + 6, silentY, silentColor);
     }
   }
 
@@ -2503,6 +2542,51 @@ public:
       display.setCursor(startX, 4);
       display.print(headerText);
       display.drawFastHLine(0, 24, SCREEN_WIDTH, headerFg);
+    }
+
+    // ── Silent Mode Transient Overlay ──────────────────────────────────────
+    if (showSilentOverlay) {
+      if (millis() - silentOverlayStartTime > 2000) {
+        showSilentOverlay = false;
+      } else {
+        // Draw elegant pill/capsule on top-center of the screen
+        int bx = 50;
+        int by = 6;
+        int bw = 140;
+        int bh = 28;
+        
+        // Draw shadow/background and colored outline
+        display.fillRoundRect(bx, by, bw, bh, 8, 0x0000); // Black bg
+        display.drawRoundRect(bx, by, bw, bh, 8, silentOverlayState ? 0xF800 : 0x07E0); // Red/Green outline
+        
+        display.setTextSize(2);
+        if (silentOverlayState) {
+          display.setTextColor(0xF800); // Red
+          display.setCursor(bx + 12, by + 6);
+          display.print("SILENT ON");
+          
+          // Draw small speaker cone + X
+          int sx = bx + 115, sy = by + 14;
+          display.fillRect(sx - 5, sy - 3, 4, 6, 0xF800);
+          display.fillTriangle(sx - 1, sy - 6, sx - 1, sy + 6, sx + 3, sy, 0xF800);
+          display.drawLine(sx + 6, sy - 3, sx + 10, sy + 1, 0xF800);
+          display.drawLine(sx + 10, sy - 3, sx + 6, sy + 1, 0xF800);
+        } else {
+          display.setTextColor(0x07E0); // Green
+          display.setCursor(bx + 12, by + 6);
+          display.print("SOUND ON");
+          
+          // Draw speaker cone + sound waves
+          int sx = bx + 112, sy = by + 14;
+          display.fillRect(sx - 5, sy - 3, 4, 6, 0x07E0);
+          display.fillTriangle(sx - 1, sy - 6, sx - 1, sy + 6, sx + 3, sy, 0x07E0);
+          display.drawPixel(sx + 6, sy - 2, 0x07E0);
+          display.drawPixel(sx + 7, sy - 1, 0x07E0);
+          display.drawPixel(sx + 7, sy, 0x07E0);
+          display.drawPixel(sx + 7, sy + 1, 0x07E0);
+          display.drawPixel(sx + 6, sy + 2, 0x07E0);
+        }
+      }
     }
     
     tft.drawRGBBitmap(0, 20, display.getBuffer(), SCREEN_WIDTH, SCREEN_HEIGHT);

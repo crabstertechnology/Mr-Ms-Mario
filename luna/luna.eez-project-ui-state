@@ -212,7 +212,8 @@
                   },
                   "icon": "svg:page"
                 }
-              ]
+              ],
+              "active": true
             },
             {
               "type": "row",
@@ -222,7 +223,7 @@
                 {
                   "type": "tabset",
                   "id": "#49a51124-e353-4dc3-bd44-a6ccd2459440",
-                  "weight": 2,
+                  "weight": 2.689655172413793,
                   "children": [
                     {
                       "type": "tab",
@@ -232,13 +233,12 @@
                       "enableClose": false,
                       "icon": "svg:properties"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
                   "id": "#2330edb8-cdfc-411b-af1a-4d0347cd3212",
-                  "weight": 1,
+                  "weight": 0.3103448275862069,
                   "children": [
                     {
                       "type": "tab",
@@ -1077,16 +1077,12 @@
     "[luna.eez-project]:/userPages/0[flow-state]": {
       "selectionFront": {},
       "selectionBack": {
-        "0": {
-          "1": {
-            "$selected": true
-          }
-        }
+        "0": {}
       },
       "transform": {
         "translate": {
-          "x": -120,
-          "y": -140
+          "x": -400,
+          "y": -240
         },
         "scale": 1
       },
@@ -1104,7 +1100,7 @@
   "searchMatchWholeWord": false,
   "replaceEnabled": false,
   "replaceText": "",
-  "pageRuntimeFrontFace": true,
+  "pageRuntimeFrontFace": false,
   "breakpoints": {},
   "watchExpressions": [],
   "showComponentDescriptions": true,

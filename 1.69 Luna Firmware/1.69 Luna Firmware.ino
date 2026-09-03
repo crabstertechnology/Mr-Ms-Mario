@@ -1642,11 +1642,44 @@ void loop() {
     }
   }
 
-  // Handle Boot button (GPIO 0) - only short press to exit game if not asleep
+  // Handle Boot button (GPIO 0)
   if (bootPressed) {
     if (!bootBtnWasPressed) {
       bootBtnWasPressed = true;
       bootBtnPressStart = now;
+    } else {
+      if (now - bootBtnPressStart >= 1500) {
+        // Long press -> Toggle silent mode
+        silentMode = !silentMode;
+        audio.silentMode = silentMode;
+        
+        // Save to NVS
+        preferences.begin("luna", false);
+        preferences.putBool("silent", silentMode);
+        preferences.end();
+        
+        // Trigger non-intrusive transient silent overlay notification
+        face.triggerSilentOverlay(silentMode);
+        if (silentMode) {
+          Serial.println("[Boot Button] Long press -> Silent Mode Enabled");
+        } else {
+          audio.playSound(SOUND_CHIRP);
+          Serial.println("[Boot Button] Long press -> Silent Mode Disabled");
+        }
+        
+        // Notify BLE app
+        String silentValStr = silentMode ? "1" : "0";
+        String negValStr = negativeDisplay ? "1" : "0";
+        ble.sendLog("SET_SYNC:" + String(clockStyle) + "," + String(oledBrightness) + "," + negValStr + "," + silentValStr);
+        
+        // Wait for button release
+        while (digitalRead(0) == LOW) {
+          delay(10);
+          audio.update(); // Keep audio synthesizer playing
+        }
+        bootBtnWasPressed = false;
+        bootBtnPressStart = 0;
+      }
     }
   } else {
     if (bootBtnWasPressed) {

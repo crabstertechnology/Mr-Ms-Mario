@@ -31,7 +31,7 @@ void create_screen_main() {
     lv_obj_t *obj = lv_obj_create(0);
     objects.main = obj;
     lv_obj_set_pos(obj, 0, 0);
-    lv_obj_set_size(obj, 240, 280);
+    lv_obj_set_size(obj, 800, 480);
     {
         lv_obj_t *parent_obj = obj;
         {
@@ -39,14 +39,6 @@ void create_screen_main() {
             lv_obj_set_pos(obj, 356, 232);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             lv_label_set_text_static(obj, "Hello, world!");
-        }
-        {
-            lv_obj_t *obj = lv_calendar_create(parent_obj);
-            lv_obj_set_pos(obj, 0, 20);
-            lv_obj_set_size(obj, 230, 240);
-            lv_calendar_header_arrow_create(obj);
-            lv_calendar_set_today_date(obj, 2022, 11, 1);
-            lv_calendar_set_showed_date(obj, 2022, 11);
         }
     }
     
