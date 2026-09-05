@@ -5,6 +5,7 @@
 #include <Preferences.h>
 
 #include "config.h"
+#include "rtc.h"
 #include "expressions.h"
 #include "audio.h"
 #include "bluetooth.h"
@@ -24,6 +25,18 @@ LunaAudio audio;
 LunaBLE ble;
 LunaInteraction interaction;   // touch screen interface
 LunaIMU imu;                   // QMI8658 Accelerometer & Gyroscope
+LunaRTC rtcDevice;             // PCF85063 Hardware RTC
+
+float readBatteryVolts() {
+  uint32_t totalMv = 0;
+  for (int i = 0; i < 10; i++) {
+    totalMv += analogReadMilliVolts(BATTERY_PIN);
+    delayMicroseconds(200);
+  }
+  float avgMv = totalMv / 10.0f;
+  return (avgMv * BATTERY_CALIBRATION_MULTIPLIER) / 1000.0f;
+}
+
 
 bool virtualBtn1 = false;
 bool virtualBtn2 = false;
@@ -211,8 +224,10 @@ void parseAndSyncTime(String timeStr) {
       rtcSecond = timeStr.substring(secondColon + 1).toInt();
     }
     lastRtcMillis = millis(); // Align RTC base to right now
+    rtcDevice.setTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
   }
 }
+
 
 // Periodic expression cycling — all 7 available face expressions
 const Expression cycleExpressions[] = {
@@ -923,13 +938,21 @@ void setup() {
   audio.begin();
   interaction.begin();   // Initialize touch interface
   imu.begin();           // Initialize accelerometer & gyroscope
+  analogSetPinAttenuation(BATTERY_PIN, ADC_11db);
   pinMode(BATTERY_PIN, INPUT); // Initialize battery monitoring pin
   pinMode(40, INPUT_PULLUP);   // Initialize Power button (Key2)
   pinMode(0, INPUT_PULLUP);    // Initialize Boot button (Key1)
   pinMode(41, OUTPUT);         // Hold power pin HIGH to keep power on when on battery
   digitalWrite(41, HIGH);
-  // Initial battery read (uses BATTERY_CALIBRATION_MULTIPLIER to account for divider ratio and impedance loading)
-  batteryVolts = (analogReadMilliVolts(BATTERY_PIN) * BATTERY_CALIBRATION_MULTIPLIER) / 1000.0f;
+
+  // Initialize PCF85063 Hardware RTC
+  if (rtcDevice.begin()) {
+    rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
+  }
+
+  // Initial battery read using 10-sample ADC averaging
+  batteryVolts = readBatteryVolts();
+
 
   Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
   Serial.println(FIRMWARE_VERSION);
@@ -1705,18 +1728,18 @@ void loop() {
     checkHardwareScheduledAlarms();
     audio.update();
     
-    // Update Software Real-Time Clock (drift-free)
+    // Update Real-Time Clock from PCF85063 hardware
     if (now - lastRtcMillis >= 1000) {
       lastRtcMillis = now;
-      rtcSecond++;
-      if (rtcSecond >= 60) {
-        rtcSecond = 0;
-        rtcMinute++;
-        if (rtcMinute >= 60) {
-          rtcMinute = 0;
-          rtcHour++;
-          if (rtcHour >= 24) {
-            rtcHour = 0;
+      if (!rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate)) {
+        rtcSecond++;
+        if (rtcSecond >= 60) {
+          rtcSecond = 0;
+          rtcMinute++;
+          if (rtcMinute >= 60) {
+            rtcMinute = 0;
+            rtcHour++;
+            if (rtcHour >= 24) rtcHour = 0;
           }
         }
       }
@@ -1726,13 +1749,14 @@ void loop() {
     static unsigned long lastBatteryReadTime = 0;
     if (now - lastBatteryReadTime > 10000) {
       lastBatteryReadTime = now;
-      float rawVolts = (analogReadMilliVolts(BATTERY_PIN) * BATTERY_CALIBRATION_MULTIPLIER) / 1000.0f;
+      float rawVolts = readBatteryVolts();
       if (batteryVolts == 3.82f) {
         batteryVolts = rawVolts;
       } else {
-        batteryVolts = 0.9f * batteryVolts + 0.1f * rawVolts;
+        batteryVolts = 0.8f * batteryVolts + 0.2f * rawVolts;
       }
     }
+
     
     // Draw the display at ~30fps rate
     static unsigned long lastDisplayDrawTime = 0;
@@ -1835,22 +1859,23 @@ void loop() {
   // at the top of loop() via interaction.update() + handleBtn1/2 functions.
 
 
-  // 3.5. Update Software Real-Time Clock (drift-free)
+  // 3.5. Update Real-Time Clock from PCF85063 hardware
   if (now - lastRtcMillis >= 1000) {
-    lastRtcMillis = now; // Use actual now to prevent drift accumulation
-    rtcSecond++;
-    if (rtcSecond >= 60) {
-      rtcSecond = 0;
-      rtcMinute++;
-      if (rtcMinute >= 60) {
-        rtcMinute = 0;
-        rtcHour++;
-        if (rtcHour >= 24) {
-          rtcHour = 0;
+    lastRtcMillis = now;
+    if (!rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate)) {
+      rtcSecond++;
+      if (rtcSecond >= 60) {
+        rtcSecond = 0;
+        rtcMinute++;
+        if (rtcMinute >= 60) {
+          rtcMinute = 0;
+          rtcHour++;
+          if (rtcHour >= 24) rtcHour = 0;
         }
       }
     }
   }
+
 
   // 3.6. Expression cycling and transitions
   if (inIntroPhase) {
@@ -1935,19 +1960,18 @@ void loop() {
     }
   }
 
-  // Periodic battery read (every 10 seconds — ADC sampling consumes ~2mA; 1s polling is unnecessary for a voltage display)
+  // Periodic battery read (every 10 seconds)
   static unsigned long lastBatteryReadTime = 0;
   if (now - lastBatteryReadTime > 10000) {
     lastBatteryReadTime = now;
-    // Multiply by BATTERY_CALIBRATION_MULTIPLIER to get calibrated battery voltage.
-    float rawVolts = (analogReadMilliVolts(BATTERY_PIN) * BATTERY_CALIBRATION_MULTIPLIER) / 1000.0f;
-    // Apply low-pass Exponential Moving Average filter to smooth fluctuations
+    float rawVolts = readBatteryVolts();
     if (batteryVolts == 3.82f) {
-      batteryVolts = rawVolts; // first read override
+      batteryVolts = rawVolts;
     } else {
-      batteryVolts = 0.9f * batteryVolts + 0.1f * rawVolts;
+      batteryVolts = 0.8f * batteryVolts + 0.2f * rawVolts;
     }
   }
+
 
   // 5. Periodic status updates to BLE client
   if (bleActive && ble.isConnected() && (now - lastStatusUpdateTime > STATUS_UPDATE_INTERVAL)) {

@@ -55,6 +55,26 @@ extern LunaAudio audio;
 extern float batteryVolts;
 extern bool silentMode;
 
+inline int getBatteryPercentage(float volts) {
+  int pct = 0;
+  if (volts >= 4.15f) pct = 100;
+  else if (volts >= 4.05f) pct = (int)(90 + (volts - 4.05f) * 100.0f);
+  else if (volts >= 3.95f) pct = (int)(80 + (volts - 3.95f) * 100.0f);
+  else if (volts >= 3.87f) pct = (int)(70 + (volts - 3.87f) * 125.0f);
+  else if (volts >= 3.82f) pct = (int)(60 + (volts - 3.82f) * 200.0f);
+  else if (volts >= 3.79f) pct = (int)(50 + (volts - 3.79f) * 333.0f);
+  else if (volts >= 3.75f) pct = (int)(40 + (volts - 3.75f) * 250.0f);
+  else if (volts >= 3.72f) pct = (int)(30 + (volts - 3.72f) * 333.0f);
+  else if (volts >= 3.68f) pct = (int)(20 + (volts - 3.68f) * 250.0f);
+  else if (volts >= 3.60f) pct = (int)(10 + (volts - 3.60f) * 125.0f);
+  else if (volts >= 3.30f) pct = (int)((volts - 3.30f) * 33.3f);
+  else pct = 0;
+  if (pct > 100) pct = 100;
+  if (pct < 0) pct = 0;
+  return pct;
+}
+
+
 class LunaFace {
 private:
   Adafruit_ST7789& tft;
@@ -638,21 +658,8 @@ public:
     display.fillRect(bx + 20, 9, 2, 6, themeText);
     
     // Calculate battery percentage
-    int batteryPct = 0;
-    if (batteryVolts >= 4.15f) batteryPct = 100;
-    else if (batteryVolts >= 4.05f) batteryPct = 90 + (batteryVolts - 4.05f) * 100;
-    else if (batteryVolts >= 3.95f) batteryPct = 80 + (batteryVolts - 3.95f) * 100;
-    else if (batteryVolts >= 3.87f) batteryPct = 70 + (batteryVolts - 3.87f) * 125;
-    else if (batteryVolts >= 3.82f) batteryPct = 60 + (batteryVolts - 3.82f) * 200;
-    else if (batteryVolts >= 3.79f) batteryPct = 50 + (batteryVolts - 3.79f) * 333;
-    else if (batteryVolts >= 3.75f) batteryPct = 40 + (batteryVolts - 3.75f) * 250;
-    else if (batteryVolts >= 3.72f) batteryPct = 30 + (batteryVolts - 3.72f) * 333;
-    else if (batteryVolts >= 3.68f) batteryPct = 20 + (batteryVolts - 3.68f) * 250;
-    else if (batteryVolts >= 3.60f) batteryPct = 10 + (batteryVolts - 3.60f) * 125;
-    else if (batteryVolts >= 3.30f) batteryPct = (batteryVolts - 3.30f) * 33.3f;
-    else batteryPct = 0;
-    if (batteryPct > 100) batteryPct = 100;
-    if (batteryPct < 0) batteryPct = 0;
+    int batteryPct = getBatteryPercentage(batteryVolts);
+
     
     int fillWidth = (batteryPct * 16) / 100;
     uint16_t batteryColor = 0x07E0; // Neon Green
@@ -2305,9 +2312,8 @@ public:
       display.drawRect(bx, by, 16, 8, LCD_FG_COLOR);
       display.fillRect(bx + 16, by + 2, 2, 4, LCD_FG_COLOR);
       
-      int pct = 0;
-      if (batteryVolts >= 4.15f) pct = 100;
-      else if (batteryVolts >= 3.30f) pct = (batteryVolts - 3.30f) * 117.6f;
+      int pct = getBatteryPercentage(batteryVolts);
+
       
       // Draw Casio segmented battery levels
       if (pct >= 20) display.fillRect(bx + 2, by + 2, 3, 4, LCD_FG_COLOR);
