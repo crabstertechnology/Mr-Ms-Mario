@@ -71,6 +71,52 @@ int gameSelected = 0;
 LunaGames games;
 LunaQR qrCard;   // Digital Business Card QR manager
 
+// Real-Time Clock variables
+extern int rtcHour;
+extern int rtcMinute;
+
+// Pomodoro Timer State Variables
+int pomoMode = 0;             // 0: 25m Focus Work, 1: 5m Short Break, 2: 15m Long Break
+int pomoState = 0;            // 0: Stopped, 1: Running, 2: Paused, 3: Completed
+int pomoRemainingSec = 1500;  // Default 25 minutes = 1500s
+int pomoTotalSec = 1500;
+int pomoCompletedSessions = 0;
+unsigned long pomoLastTickMillis = 0;
+
+
+void resetPomodoroTimer() {
+  pomoState = 0;
+  if (pomoMode == 0) pomoTotalSec = 1500;      // 25 mins
+  else if (pomoMode == 1) pomoTotalSec = 300;  // 5 mins
+  else if (pomoMode == 2) pomoTotalSec = 900;  // 15 mins
+  pomoRemainingSec = pomoTotalSec;
+}
+
+void updatePomodoroTimer() {
+  if (pomoState == 1) { // Running
+    unsigned long now = millis();
+    if (now - pomoLastTickMillis >= 1000) {
+      pomoLastTickMillis = now;
+      if (pomoRemainingSec > 0) {
+        pomoRemainingSec--;
+      }
+      if (pomoRemainingSec == 0) {
+        pomoState = 3; // Completed
+        if (pomoMode == 0) {
+          pomoCompletedSessions++;
+        }
+        audio.playSound(SOUND_POWERUP);
+        if (pomoMode == 0) {
+          face.setDetailedNotification("POMODORO", "Focus session complete! Take a break.", rtcHour, rtcMinute);
+        } else {
+          face.setDetailedNotification("POMODORO", "Break is over! Ready to focus?", rtcHour, rtcMinute);
+        }
+      }
+    }
+  }
+}
+
+
 // System State Variables
 unsigned int touchCount = 0;
 float batteryVolts = 3.82f;
@@ -151,13 +197,14 @@ void loadCalendarEventsFromNVS() {
 }
 
 // Software Real-Time Clock variables
-int rtcHour = 12;
+int rtcHour = 0;
 int rtcMinute = 0;
 int rtcSecond = 0;
 String rtcDay = "Mon";
-String rtcDate = "06 Jul";
+String rtcDate = "01 Jan";
 unsigned long lastRtcMillis = 0;
 bool is12HourFormat = false;
+bool rtcEverSynced = false; // true once a valid TIME: sync has been received
 
 void checkHardwareScheduledAlarms() {
   if (rtcSecond == 0 && rtcMinute != lastTriggeredAlarmMinute) {
@@ -205,26 +252,65 @@ int relLongExpr = 5; // Default Sleeping
 int relLongSound = 4; // Default Powerdown
 
 
+void saveTimeToNVS(int h, int m, int s, const String& day, const String& date) {
+  preferences.begin("luna", false);
+  preferences.putBool("rtcSynced", true); // Mark that a real sync has happened
+  preferences.putInt("rtcH",  h);
+  preferences.putInt("rtcM",  m);
+  preferences.putInt("rtcS",  s);
+  preferences.putString("rtcDay",  day);
+  preferences.putString("rtcDate", date);
+  preferences.end();
+}
+
 void parseAndSyncTime(String timeStr) {
   int firstColon = timeStr.indexOf(':');
   int secondColon = timeStr.lastIndexOf(':');
   if (firstColon > 0 && secondColon > firstColon) {
-    rtcHour = timeStr.substring(0, firstColon).toInt();
-    rtcMinute = timeStr.substring(firstColon + 1, secondColon).toInt();
-    
+    int h = timeStr.substring(0, firstColon).toInt();
+    int m = timeStr.substring(firstColon + 1, secondColon).toInt();
+    int s = 0;
+    String day  = rtcDay;
+    String date = rtcDate;
+
     int commaIdx = timeStr.indexOf(',', secondColon);
     if (commaIdx > 0) {
-      rtcSecond = timeStr.substring(secondColon + 1, commaIdx).toInt();
+      s = timeStr.substring(secondColon + 1, commaIdx).toInt();
       int secondCommaIdx = timeStr.indexOf(',', commaIdx + 1);
       if (secondCommaIdx > 0) {
-        rtcDay = timeStr.substring(commaIdx + 1, secondCommaIdx);
-        rtcDate = timeStr.substring(secondCommaIdx + 1);
+        day  = timeStr.substring(commaIdx + 1, secondCommaIdx);
+        date = timeStr.substring(secondCommaIdx + 1);
+        day.trim();
+        date.trim();
       }
     } else {
-      rtcSecond = timeStr.substring(secondColon + 1).toInt();
+      s = timeStr.substring(secondColon + 1).toInt();
     }
-    lastRtcMillis = millis(); // Align RTC base to right now
+
+    // Basic sanity check before accepting
+    if (h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59) {
+      Serial.println(F("[TIME] Invalid time values — sync rejected"));
+      return;
+    }
+
+    rtcHour   = h;
+    rtcMinute = m;
+    rtcSecond = s;
+    rtcDay    = day;
+    rtcDate   = date;
+    rtcEverSynced = true;
+    face.timeSynced = true; // Unlock clock display
+
+    lastRtcMillis = millis(); // Align software fallback base to right now
+
+    // Write to hardware RTC (uses STOP bit protocol internally)
     rtcDevice.setTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
+
+    // Persist to NVS so we survive reboots without BLE
+    saveTimeToNVS(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
+
+    Serial.printf("[TIME] Synced: %02d:%02d:%02d %s %s\n",
+                  rtcHour, rtcMinute, rtcSecond, rtcDay.c_str(), rtcDate.c_str());
   }
 }
 
@@ -946,8 +1032,69 @@ void setup() {
   digitalWrite(41, HIGH);
 
   // Initialize PCF85063 Hardware RTC
+  // Wire is already started by interaction.begin() above (SDA=11, SCL=10)
   if (rtcDevice.begin()) {
-    rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
+    bool hwTimeValid = rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
+    if (!hwTimeValid) {
+      // HW RTC had invalid time — try restoring from NVS (last known good time)
+      Serial.println(F("[RTC] HW time invalid — restoring from NVS last-known time"));
+      preferences.begin("luna", true);
+      int nvs_h    = preferences.getInt("rtcH",  0);
+      int nvs_m    = preferences.getInt("rtcM",  0);
+      int nvs_s    = preferences.getInt("rtcS",  0);
+      String nvs_day  = preferences.getString("rtcDay",  "Mon");
+      String nvs_date = preferences.getString("rtcDate", "01 Jan");
+      preferences.end();
+      // Accept NVS time only if it looks plausible
+      if (nvs_h >= 0 && nvs_h <= 23 && nvs_m >= 0 && nvs_m <= 59) {
+        rtcHour   = nvs_h;
+        rtcMinute = nvs_m;
+        rtcSecond = nvs_s;
+        rtcDay    = nvs_day;
+        rtcDate   = nvs_date;
+        // Write NVS time back to HW RTC so it ticks from correct base
+        rtcDevice.setTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
+        Serial.printf("[RTC] NVS time restored: %02d:%02d:%02d %s %s\n",
+                      rtcHour, rtcMinute, rtcSecond, rtcDay.c_str(), rtcDate.c_str());
+      } else {
+        Serial.println(F("[RTC] No valid NVS time — waiting for TIME: sync from app"));
+      }
+    } else {
+      Serial.printf("[RTC] HW time loaded: %02d:%02d:%02d %s %s\n",
+                    rtcHour, rtcMinute, rtcSecond, rtcDay.c_str(), rtcDate.c_str());
+    }
+  } else {
+    // RTC hardware not found — still try NVS
+    Serial.println(F("[RTC] PCF85063 not detected — checking NVS"));
+    preferences.begin("luna", true);
+    int nvs_h    = preferences.getInt("rtcH",  -1);
+    int nvs_m    = preferences.getInt("rtcM",  0);
+    int nvs_s    = preferences.getInt("rtcS",  0);
+    String nvs_day  = preferences.getString("rtcDay",  "Mon");
+    String nvs_date = preferences.getString("rtcDate", "01 Jan");
+    preferences.end();
+    if (nvs_h >= 0 && nvs_h <= 23) {
+      rtcHour   = nvs_h;
+      rtcMinute = nvs_m;
+      rtcSecond = nvs_s;
+      rtcDay    = nvs_day;
+      rtcDate   = nvs_date;
+    }
+  }
+
+  // Restore timeSynced flag from NVS — if a TIME: sync was ever received,
+  // the clock should keep showing real time across reboots.
+  {
+    preferences.begin("luna", true);
+    bool nvsHadSync = preferences.getBool("rtcSynced", false);
+    preferences.end();
+    if (nvsHadSync) {
+      rtcEverSynced   = true;
+      face.timeSynced = true;
+      Serial.println(F("[RTC] Previous TIME: sync found in NVS — clock enabled."));
+    } else {
+      Serial.println(F("[RTC] No previous sync in NVS — clock shows --:-- until app syncs."));
+    }
   }
 
   // Initial battery read using 10-sample ADC averaging
@@ -1351,8 +1498,24 @@ void handleBtn1Single() {
     // Calibrate level sensor on single tap
     calibrateRequest = true;
     Serial.println("[BTN1] Triggered Level calibration");
+  } else if (currentScreen == SCREEN_POMODORO) {
+    if (pomoState == 0 || pomoState == 2) {
+      pomoState = 1; // Start / Resume
+      pomoLastTickMillis = millis();
+      audio.playSound(SOUND_COIN);
+      Serial.println("[BTN1] Pomodoro timer started/resumed");
+    } else if (pomoState == 1) {
+      pomoState = 2; // Pause
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("[BTN1] Pomodoro timer paused");
+    } else if (pomoState == 3) {
+      resetPomodoroTimer();
+      audio.playSound(SOUND_POWERUP);
+      Serial.println("[BTN1] Pomodoro timer reset after completion");
+    }
   }
 }
+
 
 void handleBtn1Double() {
   lastInteractionTime = millis();
@@ -1370,6 +1533,15 @@ void handleBtn1Double() {
     Serial.println("[BTN1 DBL] Switched from Games to FACE screen");
     return;
   }
+
+  if (currentScreen == SCREEN_POMODORO) {
+    pomoMode = (pomoMode + 1) % 3;
+    resetPomodoroTimer();
+    audio.playSound(SOUND_CHIRP);
+    Serial.println("[BTN1 DBL] Cycled Pomodoro mode");
+    return;
+  }
+
 
   // Clear any settings menu activation states
   settingsActive = false;
@@ -1390,6 +1562,14 @@ void handleBtn1Long() {
     // Long press to go back is removed as requested by the user
     return;
   }
+
+  if (currentScreen == SCREEN_POMODORO) {
+    resetPomodoroTimer();
+    audio.playSound(SOUND_POWERDOWN);
+    Serial.println("[BTN1 LONG] Reset Pomodoro timer");
+    return;
+  }
+
 
   if (currentScreen == SCREEN_NOTIFICATIONS) {
     if (notificationSelected) {
@@ -1449,12 +1629,12 @@ void handleBtn2Single() {
   }
   lastScreenTransitionTime = transitionNow;
 
-  // Screen cycle: Face <-> Card <-> Clock <-> Notifications <-> Calendar <-> Games <-> Settings <-> Face
+  // Screen cycle: Face <-> Card <-> Clock <-> Notifications <-> Calendar <-> Games <-> Settings <-> Level <-> Pomodoro <-> Face
   static const SmartwatchScreen CYCLE[] = {
     SCREEN_FACE, SCREEN_CARD, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
-    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_LEVEL
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_LEVEL, SCREEN_POMODORO
   };
-  static const int CYCLE_LEN = 8;
+  static const int CYCLE_LEN = 9;
 
   int idx = 0;
   for (int i = 0; i < CYCLE_LEN; i++) {
@@ -1473,9 +1653,10 @@ void handleBtn2Single() {
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
 
-  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS","LEVEL"};
+  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS","LEVEL","POMO"};
   Serial.printf("[BTN2] >>> %s (screen %d)\n", names[(idx+1)%CYCLE_LEN], currentScreen);
 }
+
 
 void handleBtn2Double() {
   lastInteractionTime = millis();
@@ -1490,9 +1671,9 @@ void handleBtn2Double() {
 
   static const SmartwatchScreen CYCLE[] = {
     SCREEN_FACE, SCREEN_CARD, SCREEN_CLOCK, SCREEN_NOTIFICATIONS,
-    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_LEVEL
+    SCREEN_CALENDAR, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_LEVEL, SCREEN_POMODORO
   };
-  static const int CYCLE_LEN = 8;
+  static const int CYCLE_LEN = 9;
 
   int idx = 0;
   for (int i = 0; i < CYCLE_LEN; i++) {
@@ -1511,7 +1692,7 @@ void handleBtn2Double() {
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
 
-  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS","LEVEL"};
+  const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS","LEVEL","POMO"};
     Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
 }
 
@@ -1725,8 +1906,9 @@ void loop() {
   if (isAsleep) {
     // Run minimal tasks for sleep mode
     ble.handleConnectionState();
-    checkHardwareScheduledAlarms();
-    audio.update();
+    // Update Pomodoro timer background countdown
+    updatePomodoroTimer();
+
     
     // Update Real-Time Clock from PCF85063 hardware
     if (now - lastRtcMillis >= 1000) {
@@ -1794,6 +1976,8 @@ void loop() {
 
   // 1.5. Check offline hardware scheduled alarms & calendar events
   checkHardwareScheduledAlarms();
+  updatePomodoroTimer();
+
 
   // 2. Refresh non-blocking audio synthesizer
   audio.update();

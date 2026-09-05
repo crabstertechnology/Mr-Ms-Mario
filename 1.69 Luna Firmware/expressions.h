@@ -143,6 +143,7 @@ private:
 
 public:
   String headerText;
+  bool timeSynced = false; // true after first TIME: sync from companion app
   LunaFace(Adafruit_ST7789& tftDisp, GFXcanvas16& disp) 
     : tft(tftDisp), display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
     currentFrame = 0;
@@ -647,11 +648,12 @@ public:
     display.setTextColor(themeText);
     char tBuf[6];
     snprintf(tBuf, sizeof(tBuf), "%02d:%02d", hour, minute);
-    display.setCursor(8, 4);
+    display.setCursor(16, 4);
     display.print(tBuf);
 
     // ── Right zone: battery and connectivity ─────────
-    int bx = SCREEN_WIDTH - 28;
+    int bx = SCREEN_WIDTH - 36;
+
     
     // Draw battery outline
     display.drawRect(bx, 6, 20, 12, themeText);
@@ -728,7 +730,9 @@ public:
       case SCREEN_CARD:          nm = "MY CARD";   break;
       case SCREEN_SETTINGS:      nm = "SETTINGS";  break;
       case SCREEN_LEVEL:         nm = "LEVEL";     break;
+      case SCREEN_POMODORO:      nm = "POMO";      break;
       default:                   nm = "LUNA";      break;
+
     }
     int nmLen  = strlen(nm) * 6;
     int leftEdge  = 70;
@@ -953,15 +957,16 @@ public:
         display.setTextColor(themeAccent);
         const char* tip = "B1: Read | B2: Next | B1 L: Exit";
         int tipW = strlen(tip) * 6;
-        display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 16);
+        display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 22);
         display.print(tip);
       } else {
         display.setTextColor(themeSubText);
         const char* tip = "B1: Open | B2: Cycle";
         int tipW = strlen(tip) * 6;
-        display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 16);
+        display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 22);
         display.print(tip);
       }
+
     }
   }
 
@@ -1436,6 +1441,99 @@ public:
     }
   }
 
+  void drawPomodoroScreen(int remainingSec, int totalSec, int pomoState, int pomoMode, int completedSessions) {
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent = theme.accent;
+    uint16_t themeBg     = theme.bg;
+    uint16_t themeText   = theme.text;
+    uint16_t themeCardBg = theme.cardBg;
+    uint16_t themeBorder = theme.border;
+    uint16_t themeSubText = theme.subText;
+
+    // Clear display area below status bar
+    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+
+    // Card border container
+    display.drawRoundRect(6, 28, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 12, themeAccent);
+    display.fillRoundRect(8, 30, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 10, themeCardBg);
+
+    // Top Mode Capsule Pill
+    const char* modeTitle = "FOCUS WORK";
+    uint16_t modeColor = themeAccent;
+    if (pomoMode == 1) {
+      modeTitle = "SHORT BREAK";
+      modeColor = 0x07E0; // Neon Green
+    } else if (pomoMode == 2) {
+      modeTitle = "LONG BREAK";
+      modeColor = 0x7BF0; // Cyan / Purple
+    }
+
+    int modeLen = strlen(modeTitle) * 6;
+    int modeX = (SCREEN_WIDTH - modeLen - 16) / 2;
+    display.fillRoundRect(modeX, 36, modeLen + 16, 20, 6, modeColor);
+    display.setTextColor(TFT_WHITE);
+    display.setTextSize(1);
+    display.setCursor(modeX + 8, 42);
+    display.print(modeTitle);
+
+    // Countdown Display: MM:SS
+    int mins = remainingSec / 60;
+    int secs = remainingSec % 60;
+    char timeBuf[8];
+    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", mins, secs);
+
+    display.setTextSize(4);
+    uint16_t timeColor = (pomoState == 3) ? 0x07E0 : ((pomoState == 1) ? themeText : themeSubText);
+    display.setTextColor(timeColor);
+    int timeW = 5 * 24;
+    int timeX = (SCREEN_WIDTH - timeW) / 2;
+    display.setCursor(timeX, 75);
+    display.print(timeBuf);
+
+    // Progress Bar
+    int barX = 20;
+    int barY = 125;
+    int barW = SCREEN_WIDTH - 40;
+    int barH = 12;
+    display.drawRoundRect(barX, barY, barW, barH, 4, themeBorder);
+    if (totalSec > 0) {
+      int fillW = ((totalSec - remainingSec) * (barW - 4)) / totalSec;
+      fillW = constrain(fillW, 0, barW - 4);
+      if (fillW > 0) {
+        display.fillRoundRect(barX + 2, barY + 2, fillW, barH - 4, 2, modeColor);
+      }
+    }
+
+    // State Badge
+    const char* stateText = "[ TAP: START ]";
+    if (pomoState == 1)      stateText = "[ TAP: PAUSE ]";
+    else if (pomoState == 2) stateText = "[ TAP: RESUME ]";
+    else if (pomoState == 3) stateText = "[ COMPLETE! RESET ]";
+
+    display.setTextSize(1);
+    display.setTextColor(themeAccent);
+    int stW = strlen(stateText) * 6;
+    display.setCursor((SCREEN_WIDTH - stW) / 2, 155);
+    display.print(stateText);
+
+    // Completed Sessions Counter
+    char sessBuf[32];
+    snprintf(sessBuf, sizeof(sessBuf), "Sessions Done: %d", completedSessions);
+    display.setTextColor(themeSubText);
+    int sessW = strlen(sessBuf) * 6;
+    display.setCursor((SCREEN_WIDTH - sessW) / 2, 178);
+    display.print(sessBuf);
+
+    // Navigation Tip
+    const char* navTip = "B1 Dbl: Mode | B1 Hold: Reset";
+    display.setTextColor(themeSubText);
+    int navW = strlen(navTip) * 6;
+    display.setCursor((SCREEN_WIDTH - navW) / 2, SCREEN_HEIGHT - 22);
+    display.print(navTip);
+  }
+
+
+
   void draw7SegmentDigit(int x, int y, char ch, int w, int h, int t, uint16_t color) {
     uint8_t mask = 0;
     if (ch >= '0' && ch <= '9') {
@@ -1763,12 +1861,16 @@ public:
       display.setTextSize(4);
       display.setTextColor(themeText, themeCardBg);
       char timeStr[6];
-      int dispHour = hour;
-      if (is12Hour) {
-        dispHour = hour % 12;
-        if (dispHour == 0) dispHour = 12;
+      if (!timeSynced) {
+        snprintf(timeStr, sizeof(timeStr), "--:--");
+      } else {
+        int dispHour = hour;
+        if (is12Hour) {
+          dispHour = hour % 12;
+          if (dispHour == 0) dispHour = 12;
+        }
+        snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
       }
-      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
       int timeW = 5 * 24;
       display.setCursor((SCREEN_WIDTH - timeW) / 2 - 10, SCREEN_HEIGHT / 2 - 28);
       display.print(timeStr);
@@ -2393,16 +2495,22 @@ public:
       }
 
       // ── BOTTOM SECTION ──────────────────────────────────────────────────────
-      int dispHour = hour;
-      if (is12Hour) {
-        dispHour = hour % 12;
-        if (dispHour == 0) dispHour = 12;
-      }
       char timeBuf[6];
-      snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", dispHour, minute);
-      
       char secBuf[3];
-      snprintf(secBuf, sizeof(secBuf), "%02d", second);
+
+      if (!timeSynced) {
+        // Not yet synced from app — show dashes
+        snprintf(timeBuf, sizeof(timeBuf), "--:--");
+        snprintf(secBuf, sizeof(secBuf), "--");
+      } else {
+        int dispHour = hour;
+        if (is12Hour) {
+          dispHour = hour % 12;
+          if (dispHour == 0) dispHour = 12;
+        }
+        snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", dispHour, minute);
+        snprintf(secBuf, sizeof(secBuf), "%02d", second);
+      }
 
       int startTimeX = 39;
       int startSecX = 170;
@@ -2413,7 +2521,11 @@ public:
       for (int i = 0; i < 5; i++) {
         char ch = timeBuf[i];
         if (ch == ':') {
-          if (second % 2 == 0) {
+          if (timeSynced && second % 2 == 0) {
+            display.fillRect(curX + 5, 210 + 12, t, t, LCD_FG_COLOR);
+            display.fillRect(curX + 5, 210 + 32, t, t, LCD_FG_COLOR);
+          } else if (!timeSynced) {
+            // Static colon when unsynced
             display.fillRect(curX + 5, 210 + 12, t, t, LCD_FG_COLOR);
             display.fillRect(curX + 5, 210 + 32, t, t, LCD_FG_COLOR);
           }
@@ -2530,7 +2642,12 @@ public:
         case SCREEN_LEVEL:
           drawLevelScreen();
           break;
+        case SCREEN_POMODORO:
+          extern int pomoRemainingSec, pomoTotalSec, pomoState, pomoMode, pomoCompletedSessions;
+          drawPomodoroScreen(pomoRemainingSec, pomoTotalSec, pomoState, pomoMode, pomoCompletedSessions);
+          break;
       }
+
     }
 
     if (!popupActive && currentScreen == SCREEN_FACE && headerText.length() > 0) {

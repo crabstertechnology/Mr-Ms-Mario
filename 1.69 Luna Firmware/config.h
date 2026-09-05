@@ -82,6 +82,8 @@ enum SmartwatchScreen {
   SCREEN_CARD,   // Digital Business Card / QR Code screen
   SCREEN_SETTINGS,
   SCREEN_LEVEL,  // Accelerometer & Gyroscope Level Analyzer
+  SCREEN_POMODORO,// Pomodoro Focus Timer
   SCREEN_MAX
 };
 #endif // CONFIG_H
+
