@@ -1,0 +1,32 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid == $uid || !data.exists())"
+      }
+    },
+    "triggers": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null"
+      }
+    },
+    "friend_requests": {
+      "$targetUid": {
+        ".read": "auth != null && auth.uid == $targetUid",
+        "$fromUid": {
+          ".write": "auth != null && (auth.uid == $fromUid || auth.uid == $targetUid)"
+        }
+      }
+    },
+    "friends": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$friendUid": {
+          ".write": "auth != null && (auth.uid == $uid || auth.uid == $friendUid)"
+        }
+      }
+    }
+  }
+}

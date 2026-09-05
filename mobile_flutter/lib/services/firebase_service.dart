@@ -48,6 +48,22 @@ class FirebaseService with ChangeNotifier {
     _initService();
   }
 
+  Future<Uri> _buildUri(String path) async {
+    String? token;
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        token = await user.getIdToken();
+      }
+    } catch (_) {}
+
+    final separator = path.contains('?') ? '&' : '?';
+    if (token != null && token.isNotEmpty) {
+      return Uri.parse("$_firebaseUrl$path${separator}auth=$token");
+    }
+    return Uri.parse("$_firebaseUrl$path");
+  }
+
   Future<void> _initService() async {
     _useLiveConfig = true; // Always use Live Firebase Database!
     
@@ -79,7 +95,7 @@ class FirebaseService with ChangeNotifier {
       }
       
       try {
-        final url = Uri.parse("$_firebaseUrl/users/$uid.json");
+        final url = await _buildUri("/users/$uid.json");
         await http.put(url, body: jsonEncode(_currentUser));
       } catch (_) {}
     }
@@ -155,19 +171,20 @@ class FirebaseService with ChangeNotifier {
 
     try {
       // 1. Poll incoming triggers
-      final triggerUrl = Uri.parse("$_firebaseUrl/triggers/$uid.json");
+      final triggerUrl = await _buildUri("/triggers/$uid.json");
       final triggerRes = await http.get(triggerUrl);
       if (triggerRes.statusCode == 200 && triggerRes.body != "null") {
         final data = jsonDecode(triggerRes.body);
         if (data is Map<String, dynamic>) {
           _remoteTriggerController.add(data);
           addCloudLog("Cloud Receive (Live): ${data['senderName']} sent remote ${data['eventType']}");
-          await http.delete(triggerUrl);
+          final deleteTriggerUrl = await _buildUri("/triggers/$uid.json");
+          await http.delete(deleteTriggerUrl);
         }
       }
 
       // 2. Poll incoming friend requests
-      final reqUrl = Uri.parse("$_firebaseUrl/friend_requests/$uid.json");
+      final reqUrl = await _buildUri("/friend_requests/$uid.json");
       final reqRes = await http.get(reqUrl);
       if (reqRes.statusCode == 200) {
         if (reqRes.body == "null") {
@@ -189,7 +206,7 @@ class FirebaseService with ChangeNotifier {
       }
 
       // 3. Poll friends list
-      final friendsUrl = Uri.parse("$_firebaseUrl/friends/$uid.json");
+      final friendsUrl = await _buildUri("/friends/$uid.json");
       final friendsRes = await http.get(friendsUrl);
       if (friendsRes.statusCode == 200) {
         if (friendsRes.body == "null") {
@@ -211,7 +228,7 @@ class FirebaseService with ChangeNotifier {
       }
 
       // 4. Sync online users profiles
-      final usersUrl = Uri.parse("$_firebaseUrl/users.json");
+      final usersUrl = await _buildUri("/users.json");
       final usersRes = await http.get(usersUrl);
       if (usersRes.statusCode == 200 && usersRes.body != "null") {
         final data = jsonDecode(usersRes.body) as Map<String, dynamic>;
@@ -277,7 +294,7 @@ class FirebaseService with ChangeNotifier {
 
       if (_useLiveConfig) {
         try {
-          final url = Uri.parse("$_firebaseUrl/users/$uid.json");
+          final url = await _buildUri("/users/$uid.json");
           await http.put(url, body: jsonEncode(_currentUser));
           addCloudLog("Registered user profile to Live Database.");
         } catch (e) {
@@ -310,7 +327,7 @@ class FirebaseService with ChangeNotifier {
       
       if (_useLiveConfig) {
         try {
-          final url = Uri.parse("$_firebaseUrl/users/$uid.json");
+          final url = await _buildUri("/users/$uid.json");
           await http.put(url, body: jsonEncode(_currentUser));
           addCloudLog("Registered fallback profile to Live Database.");
         } catch (err) {
@@ -332,7 +349,7 @@ class FirebaseService with ChangeNotifier {
     if (_useLiveConfig && _currentUser != null) {
       try {
         final uid = _currentUser!['uid'];
-        final url = Uri.parse("$_firebaseUrl/users/$uid.json");
+        final url = await _buildUri("/users/$uid.json");
         final offlineUser = Map<String, dynamic>.from(_currentUser!)..['isOnline'] = false;
         await http.put(url, body: jsonEncode(offlineUser));
       } catch (_) {}
@@ -381,7 +398,7 @@ class FirebaseService with ChangeNotifier {
 
     if (_useLiveConfig) {
       try {
-        final url = Uri.parse("$_firebaseUrl/friend_requests/${targetUser['uid']}/${_currentUser!['uid']}.json");
+        final url = await _buildUri("/friend_requests/${targetUser['uid']}/${_currentUser!['uid']}.json");
         await http.put(url, body: jsonEncode({
           'id': 'req_${_currentUser!['uid']}',
           'fromUid': _currentUser!['uid'],
@@ -434,13 +451,13 @@ class FirebaseService with ChangeNotifier {
 
       if (_useLiveConfig) {
         try {
-          final deleteUrl = Uri.parse("$_firebaseUrl/friend_requests/${_currentUser!['uid']}/${req['fromUid']}.json");
+          final deleteUrl = await _buildUri("/friend_requests/${_currentUser!['uid']}/${req['fromUid']}.json");
           await http.delete(deleteUrl);
 
-          final myFriendsUrl = Uri.parse("$_firebaseUrl/friends/${_currentUser!['uid']}/${req['fromUid']}.json");
+          final myFriendsUrl = await _buildUri("/friends/${_currentUser!['uid']}/${req['fromUid']}.json");
           await http.put(myFriendsUrl, body: jsonEncode(friendData));
 
-          final targetFriendsUrl = Uri.parse("$_firebaseUrl/friends/${req['fromUid']}/${_currentUser!['uid']}.json");
+          final targetFriendsUrl = await _buildUri("/friends/${req['fromUid']}/${_currentUser!['uid']}.json");
           await http.put(targetFriendsUrl, body: jsonEncode({
             'uid': _currentUser!['uid'],
             'email': _currentUser!['email'],
@@ -475,7 +492,7 @@ class FirebaseService with ChangeNotifier {
 
       if (_useLiveConfig) {
         try {
-          final deleteUrl = Uri.parse("$_firebaseUrl/friend_requests/${_currentUser!['uid']}/${req['fromUid']}.json");
+          final deleteUrl = await _buildUri("/friend_requests/${_currentUser!['uid']}/${req['fromUid']}.json");
           await http.delete(deleteUrl);
         } catch (e) {
           addCloudLog("Live reject error: $e");
@@ -498,9 +515,9 @@ class FirebaseService with ChangeNotifier {
 
     if (_useLiveConfig) {
       try {
-        final deleteUrl1 = Uri.parse("$_firebaseUrl/friends/${_currentUser!['uid']}/$uid.json");
+        final deleteUrl1 = await _buildUri("/friends/${_currentUser!['uid']}/$uid.json");
         await http.delete(deleteUrl1);
-        final deleteUrl2 = Uri.parse("$_firebaseUrl/friends/$uid/${_currentUser!['uid']}.json");
+        final deleteUrl2 = await _buildUri("/friends/$uid/${_currentUser!['uid']}.json");
         await http.delete(deleteUrl2);
       } catch (e) {
         addCloudLog("Live unfriend error: $e");
@@ -567,7 +584,7 @@ class FirebaseService with ChangeNotifier {
 
     if (_useLiveConfig) {
       try {
-        final url = Uri.parse("$_firebaseUrl/triggers/${_pairedFriendUid}.json");
+        final url = await _buildUri("/triggers/${_pairedFriendUid}.json");
         await http.put(url, body: jsonEncode({
           'senderName': senderName,
           'eventType': eventType,
@@ -607,7 +624,7 @@ class FirebaseService with ChangeNotifier {
     final myUid = _currentUser!['uid'];
     
     try {
-      final myFriendUrl = Uri.parse("$_firebaseUrl/friends/$myUid/$friendUid.json");
+      final myFriendUrl = await _buildUri("/friends/$myUid/$friendUid.json");
       final res = await http.get(myFriendUrl);
       if (res.statusCode == 200 && res.body != "null") {
         final friendData = jsonDecode(res.body) as Map<String, dynamic>;
@@ -651,7 +668,7 @@ class FirebaseService with ChangeNotifier {
         await http.put(myFriendUrl, body: jsonEncode(friendData));
         
         // Update target friend's record of the user
-        final targetFriendUrl = Uri.parse("$_firebaseUrl/friends/$friendUid/$myUid.json");
+        final targetFriendUrl = await _buildUri("/friends/$friendUid/$myUid.json");
         final targetRes = await http.get(targetFriendUrl);
         if (targetRes.statusCode == 200 && targetRes.body != "null") {
           final targetFriendData = jsonDecode(targetRes.body) as Map<String, dynamic>;
@@ -680,7 +697,7 @@ class FirebaseService with ChangeNotifier {
     final uid = _currentUser!['uid'];
     if (_useLiveConfig) {
       try {
-        final url = Uri.parse("$_firebaseUrl/users/$uid.json");
+        final url = await _buildUri("/users/$uid.json");
         await http.put(url, body: jsonEncode(_currentUser));
         addCloudLog("Updated user profile on Live Database.");
       } catch (e) {
