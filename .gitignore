@@ -10,4 +10,5 @@ releases/app-release.apk
 # Ignore large media & zip archives
 *.zip
 *.mp4
+scratch/
 
