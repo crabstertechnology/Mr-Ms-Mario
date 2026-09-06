@@ -13,6 +13,7 @@
 #include "games.h"
 #include "qr_card.h"
 #include "imu.h"
+#include "image_transfer.h"
 
 // Forward declaration for BLE command handler
 void handleRobotCommand(String cmd);
@@ -25,6 +26,7 @@ LunaAudio audio;
 LunaBLE ble;
 LunaInteraction interaction;   // touch screen interface
 LunaIMU imu;                   // QMI8658 Accelerometer & Gyroscope
+LunaImageTransfer imgTransfer; // BLE wallpaper image transfer state machine
 LunaRTC rtcDevice;             // PCF85063 Hardware RTC
 
 float readBatteryVolts() {
@@ -124,6 +126,7 @@ unsigned long lastInteractionTime = 0;
 unsigned long lastScreenTransitionTime = 0;
 const unsigned long SLEEP_TIMEOUT = 45000; // 45 seconds of inactivity -> sleep
 bool isAsleep = false;
+bool wallpaperDrawnInSleep = false;
 bool inIntroPhase = false;
 bool isAlarmRinging = false;
 unsigned long lastAlarmSoundTime = 0;
@@ -331,7 +334,42 @@ unsigned long lastExpressionCycleTime = 0;
 
 // Timing helper for BLE status notifications
 unsigned long lastStatusUpdateTime = 0;
-const unsigned long STATUS_UPDATE_INTERVAL = 3000; // 3 seconds (was 1s — 3x reduction in BLE TX duty cycle)
+const unsigned long STATUS_UPDATE_INTERVAL = 3000; // 3 seconds
+
+// Global function to transmit instant screen and expression status to paired mobile APK
+void notifyScreenAndExprSync() {
+  if (!ble.isConnected()) return;
+  
+  String screenName = "FACE";
+  switch (currentScreen) {
+    case SCREEN_FACE: screenName = "FACE"; break;
+    case SCREEN_CARD: screenName = "CARD"; break;
+    case SCREEN_CLOCK: screenName = "CLOCK"; break;
+    case SCREEN_NOTIFICATIONS: screenName = "NOTIF"; break;
+    case SCREEN_CALENDAR: screenName = "CALENDAR"; break;
+    case SCREEN_GAMES: screenName = "GAMES"; break;
+    case SCREEN_SETTINGS: screenName = "SETTINGS"; break;
+    case SCREEN_LEVEL: screenName = "LEVEL"; break;
+    case SCREEN_POMODORO: screenName = "POMODORO"; break;
+    case SCREEN_MAPS: screenName = "MAPS"; break;
+    case SCREEN_WALLPAPER: screenName = "WALLPAPER"; break;
+    default: screenName = "FACE"; break;
+  }
+  
+  int animIndex = 0;
+  if (currentScreen == SCREEN_FACE) {
+    animIndex = face.getRobotEyeAnim().getAnimationIndex();
+  } else {
+    animIndex = (int)face.getExpression();
+  }
+  
+  String label = face.getStateLabel();
+  ble.sendLog("EXPR_SYNC:" + String(animIndex) + "|" + label);
+  ble.sendLog("SCREEN_SYNC:" + screenName);
+  
+  unsigned long uptimeSec = millis() / 1000;
+  ble.updateStatus(uptimeSec, touchCount, batteryVolts, (Expression)animIndex, label);
+}
 
 // Global BLE Write Event Handlers (declared extern in bluetooth.h)
 void handleBLEExpressionWithLabel(Expression expr, String label) {
@@ -349,6 +387,7 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
     face.setStateLabel("CLOCK");
     audio.playSound(SOUND_CHIRP);
     Serial.println("Triggered Full Screen Clock via BLE command");
+    notifyScreenAndExprSync();
     return;
   }
   
@@ -391,6 +430,7 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
     default:
       break;
   }
+  notifyScreenAndExprSync();
 }
 
 void handleBLEExpression(Expression expr) {
@@ -405,6 +445,19 @@ void handleBLEAudio(SoundEffect sound) {
 
 void handleBLEText(String text) {
   handleRobotCommand(text);
+}
+
+// Called by BLE ImageCallbacks with each raw binary chunk
+void handleBLEImageChunk(uint8_t* data, size_t len) {
+  imgTransfer.onChunk(data, len);
+  // Broadcast progress every ~5% so app can update the UI
+  static float lastReportedProgress = -1.0f;
+  float p = imgTransfer.progress();
+  if (p - lastReportedProgress >= 0.05f || p >= 1.0f) {
+    lastReportedProgress = p;
+    int pct = (int)(p * 100.0f);
+    ble.sendLog("IMG_PROGRESS:" + String(pct));
+  }
 }
 
 void handleRobotCommand(String text) {
@@ -439,6 +492,15 @@ void handleRobotCommand(String text) {
     face.setExpression(EXPR_SLEEPING);
     audio.playSound(SOUND_POWERDOWN);
     Serial.println("Robot went to sleep from remote command!");
+  } else if (text == "TOUCH_SIM:TAP") {
+    handleBtn1Single();
+    notifyScreenAndExprSync();
+  } else if (text == "TOUCH_SIM:DOUBLE") {
+    handleBtn1Double();
+    notifyScreenAndExprSync();
+  } else if (text == "TOUCH_SIM:LONG") {
+    handleBtn1Long();
+    notifyScreenAndExprSync();
   } else if (text == "ANGRY" || text == "ANIM:ANGRY" || text == "EXPR_ANGRY") {
     currentScreen = SCREEN_FACE;
     face.setExpression(EXPR_ANGRY);
@@ -823,6 +885,66 @@ void handleRobotCommand(String text) {
     }
     audio.playSound(SOUND_CHIRP);
     activeNotificationDurationMs = notificationDurationMs;
+  } else if (text.startsWith("IMG_START:")) {
+    // Format: IMG_START:<byteSize>:<crc32hex>
+    String payload = text.substring(10);
+    int sep = payload.indexOf(':');
+    if (sep > 0) {
+      uint32_t imgSize = payload.substring(0, sep).toInt();
+      uint32_t imgCrc  = (uint32_t)strtoul(payload.substring(sep + 1).c_str(), nullptr, 16);
+      if (imgTransfer.startTransfer(imgSize, imgCrc)) {
+        currentScreen = SCREEN_WALLPAPER;
+        lastInteractionTime = millis();
+        tft.fillScreen(ST77XX_BLACK);
+        tft.setTextColor(ST77XX_WHITE);
+        tft.setTextSize(2);
+        tft.setCursor(20, 120);
+        tft.println("Receiving...");
+        ble.sendLog("IMG_READY");
+        Serial.printf("[IMG] Transfer started: %u bytes, CRC=0x%08X\n", imgSize, imgCrc);
+      } else {
+        ble.sendLog("IMG_FAIL:start_failed");
+      }
+    } else {
+      ble.sendLog("IMG_FAIL:bad_start_format");
+    }
+  } else if (text == "IMG_END") {
+    String errMsg;
+    bool ok = imgTransfer.finishTransfer(errMsg);
+    if (ok) {
+      audio.playSound(SOUND_POWERUP);
+      ble.sendLog("IMG_OK");
+      Serial.println("[IMG] Transfer complete and wallpaper displayed.");
+      // Stay on wallpaper screen
+      currentScreen = SCREEN_WALLPAPER;
+      lastInteractionTime = millis();
+    } else {
+      audio.playSound(SOUND_POWERDOWN);
+      ble.sendLog("IMG_FAIL:" + errMsg);
+      Serial.println("[IMG] Transfer failed: " + errMsg);
+      currentScreen = SCREEN_FACE;
+      imgTransfer.resetState();
+    }
+  } else if (text == "IMG_CANCEL") {
+    imgTransfer.cancelTransfer();
+    ble.sendLog("IMG_CANCELLED");
+    currentScreen = SCREEN_FACE;
+    Serial.println("[IMG] Transfer cancelled by app.");
+  } else if (text == "IMG_DELETE") {
+    imgTransfer.deleteWallpaper();
+    ble.sendLog("IMG_DELETED");
+    currentScreen = SCREEN_FACE;
+    face.setExpression(EXPR_ROBOT_EYE);
+    audio.playSound(SOUND_COIN);
+    Serial.println("[IMG] Wallpaper deleted.");
+  } else if (text == "IMG_SHOW") {
+    if (imgTransfer.hasWallpaper()) {
+      currentScreen = SCREEN_WALLPAPER;
+      imgTransfer.drawWallpaper();
+      lastInteractionTime = millis();
+    } else {
+      ble.sendLog("IMG_FAIL:no_wallpaper");
+    }
   } else if (text == "QRCARD:CLEAR") {
     qrCard.clearCard();
     if (currentScreen == SCREEN_CARD) {
@@ -1158,6 +1280,12 @@ void setup() {
 
   games.begin();
   qrCard.begin();  // Load persisted business card URL from NVS
+
+  // Init LittleFS and check for saved wallpaper
+  imgTransfer.begin();
+  if (imgTransfer.hasWallpaper()) {
+    Serial.println("[IMG] Saved wallpaper found — will display on SCREEN_WALLPAPER.");
+  }
 }
 
 // Global index for all-gifs cycling — advances through all 63 entries
@@ -1373,10 +1501,11 @@ void handleBtn1Single() {
   }
 
   if (currentScreen == SCREEN_FACE) {
-    // Center tap on FACE screen -> cycle through all 3 Sprite AI animations
+    // Center tap on FACE screen -> cycle through all 6 Sprite AI animations
     face.getRobotEyeAnim().nextAnimation();
     audio.playSound(SOUND_CHIRP);
     Serial.printf("[BTN1] Cycled Sprite AI animation -> Anim #%d\n", face.getRobotEyeAnim().getAnimationIndex());
+    notifyScreenAndExprSync();
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
     // Cycles clock styles
@@ -1417,6 +1546,7 @@ void handleBtn1Single() {
         }
       }
     }
+    notifyScreenAndExprSync();
     return;
   } else if (currentScreen == SCREEN_CALENDAR) {
     // Cycles calendar events/view
@@ -1443,6 +1573,7 @@ void handleBtn1Single() {
       Serial.println("[BTN1] Pomodoro timer reset after completion");
     }
   }
+  notifyScreenAndExprSync();
 }
 
 
@@ -1584,6 +1715,7 @@ void handleBtn2Single() {
 
   const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS","LEVEL","POMO"};
   Serial.printf("[BTN2] >>> %s (screen %d)\n", names[(idx+1)%CYCLE_LEN], currentScreen);
+  notifyScreenAndExprSync();
 }
 
 
@@ -1622,7 +1754,8 @@ void handleBtn2Double() {
   audio.playSound(SOUND_COIN);
 
   const char* names[] = {"FACE","CARD","CLOCK","NOTIF","CAL","GAMES","SETTINGS","LEVEL","POMO"};
-    Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
+  Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
+  notifyScreenAndExprSync();
 }
 
 void handleSwipeUp() {
@@ -1729,11 +1862,12 @@ void loop() {
       powerBtnPressStart = now;
     } else {
       if (now - powerBtnPressStart >= 1500) {
-        // Long press -> Enter Sleep
+        // Long press -> Enter Sleep / Digital Badge Mode
         if (!isAsleep) {
           isAsleep = true;
+          wallpaperDrawnInSleep = false;
           audio.playSound(SOUND_POWERDOWN);
-          Serial.println("[Power Button] Long press -> Entering Sleep Mode");
+          Serial.println("[Power Button] Long press -> Entering Sleep / Digital Badge Mode");
           while (digitalRead(40) == LOW) {
             delay(10);
             audio.update(); // Keep audio synthesizer playing
@@ -1752,6 +1886,7 @@ void loop() {
       if (pressDuration >= 50 && pressDuration < 1500) {
         if (isAsleep) {
           isAsleep = false;
+          wallpaperDrawnInSleep = false;
           audio.playSound(SOUND_CHIRP);
           Serial.println("[Power Button] Short press -> Waking up from Sleep Mode");
         } else if (gamePlaying) {
@@ -1822,13 +1957,23 @@ void loop() {
   }
 
   // ── 0.5. High-Efficiency Sleep Path ─────────────────────────────────────
+  // ── 0.5. High-Efficiency Sleep / Digital Badge Mode Path ───────────────────
   if (isAsleep) {
     // Run minimal tasks for sleep mode
     ble.handleConnectionState();
     // Update Pomodoro timer background countdown
     updatePomodoroTimer();
 
-    
+    // Check for touch input to wake up
+    ButtonEvent sleepTouch = interaction.update();
+    if (sleepTouch != BTN_NONE) {
+      isAsleep = false;
+      wallpaperDrawnInSleep = false;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("[Touch] Waking up from Sleep Mode");
+      return;
+    }
+
     // Update Real-Time Clock from PCF85063 hardware with software tick fallback
     if (now - lastRtcMillis >= 1000) {
       lastRtcMillis = now;
@@ -1864,17 +2009,27 @@ void loop() {
       }
     }
 
-    
-    // Draw the display at ~30fps rate
-    static unsigned long lastDisplayDrawTime = 0;
-    if (now - lastDisplayDrawTime >= 33) {
-      lastDisplayDrawTime = now;
-      face.setConnectivityStatus(ble.isConnected(), false);
-      face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+    // Render Digital Badge Wallpaper once when entering sleep mode (no 30fps redrawing -> max power saving!)
+    if (!wallpaperDrawnInSleep) {
+      wallpaperDrawnInSleep = true;
+      if (imgTransfer.hasWallpaper()) {
+        imgTransfer.drawWallpaper();
+      } else {
+        tft.fillScreen(ST77XX_BLACK);
+        tft.setTextColor(0x07FF, ST77XX_BLACK);
+        tft.setTextSize(2);
+        tft.setCursor(40, 130 + 20);
+        tft.print("LUNA BADGE");
+        tft.setTextSize(1);
+        tft.setCursor(35, 160 + 20);
+        tft.print("Long-press power to wake");
+      }
     }
-    
-    vTaskDelay(1);
+
+    vTaskDelay(20);
     return;
+  } else {
+    wallpaperDrawnInSleep = false;
   }
 
   // ── 0.6. Poll unified touch handler (only when awake) ───────────────────
@@ -2003,10 +2158,11 @@ void loop() {
     }
   }
 
-  // 4. Inactivity Timer: Auto-return to Face screen after 60 seconds of no interaction in UI modes
+  // 4. Inactivity Timer: Auto-return to Face screen after 5 minutes of no interaction
   // Note: SCREEN_CARD is excluded – QR must stay visible until user explicitly dismisses it
-  // Inactivity timeout: 5 minutes of no interaction returns to Face screen
-  if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive && !gamePlaying) {
+  // Note: SCREEN_WALLPAPER is excluded — wallpaper stays until swiped away
+  if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && currentScreen != SCREEN_WALLPAPER
+      && !inIntroPhase && !isAlarmRinging && !isReminderRinging && !mapsActive && !gamePlaying) {
     if (now >= lastInteractionTime && now - lastInteractionTime >= 300000) {
       currentScreen = SCREEN_FACE;
       lastExpressionCycleTime = now;
@@ -2036,17 +2192,34 @@ void loop() {
     ble.updateStatus(uptimeSec, touchCount, batteryVolts, face.getExpression(), face.getStateLabel());
   }
 
-  // Update GIF frame states on every loop iteration
-  face.update();
+  // Update GIF frame states on every loop iteration (skip when wallpaper is shown)
+  if (currentScreen != SCREEN_WALLPAPER) {
+    face.update();
+  }
 
   // Draw the display at ~30fps rate
   static int lastDrawnSecond = -1;
   static unsigned long lastDisplayDrawTime = 0;
   if (now - lastDisplayDrawTime >= 33) {
     lastDisplayDrawTime = now;
-    lastDrawnSecond = rtcSecond;
-    face.setConnectivityStatus(ble.isConnected(), false);
-    face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+    if (currentScreen == SCREEN_WALLPAPER) {
+      // Wallpaper screen: static JPEG already rendered — only redraw if in the middle of receiving
+      if (imgTransfer.state() == LunaImageTransfer::RECEIVING) {
+        // Show live progress bar
+        int pct = (int)(imgTransfer.progress() * 100.0f);
+        int barW = (int)(imgTransfer.progress() * (SCREEN_WIDTH - 20));
+        tft.fillRect(10, SCREEN_HEIGHT - 30 + 20, SCREEN_WIDTH - 20, 12, 0x39E7); // Dark grey background
+        tft.fillRect(10, SCREEN_HEIGHT - 30 + 20, barW, 12, 0x07FF); // Cyan progress bar
+        tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+        tft.setTextSize(1);
+        tft.setCursor(10, SCREEN_HEIGHT - 15 + 20);
+        tft.printf("%d%%", pct);
+      }
+    } else {
+      lastDrawnSecond = rtcSecond;
+      face.setConnectivityStatus(ble.isConnected(), false);
+      face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+    }
   }
 
   // Yield one FreeRTOS tick to WiFi/BLE background tasks.

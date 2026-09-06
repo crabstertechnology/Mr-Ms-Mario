@@ -16,6 +16,7 @@ class BLEService with ChangeNotifier {
   static const String textCharUuid = 'c8a00d04-62ff-4b32-843d-0f1c6db8a101';
   static const String statusCharUuid = 'fb2f0e05-73ee-4f32-833d-1f2c6db8a102';
   static const String audioStreamCharUuid = 'a823e50b-71ee-48c5-9276-2e8c6db8a103';
+  static const String imageCharUuid = 'e1234501-1fb5-459e-8fcc-c5c9c331914b';
 
   BluetoothDevice? _connectedDevice;
   bool _isConnected = false;
@@ -46,6 +47,7 @@ class BLEService with ChangeNotifier {
   BluetoothCharacteristic? _textChar;
   BluetoothCharacteristic? _statusChar;
   BluetoothCharacteristic? _audioStreamChar;
+  BluetoothCharacteristic? _imageChar;
 
   // Diagnostics variables
   int _uptimeSeconds = 0;
@@ -53,6 +55,7 @@ class BLEService with ChangeNotifier {
   double _batteryVoltage = 0.0;
   int _activeExpressionId = 0;
   String _activeExpressionLabel = "IDLE";
+  String _activeScreenMode = "FACE";
 
   // Companion Device Properties
   BluetoothDevice? _companionDevice;
@@ -150,6 +153,7 @@ class BLEService with ChangeNotifier {
 
   int get activeExpressionId => _activeExpressionId;
   String get activeExpressionLabel => _activeExpressionLabel;
+  String get activeScreenMode => _activeScreenMode;
   List<String> get consoleLogs => _consoleLogs;
   String get serverIp => _serverIp;
   bool get hasSpeaker => false;
@@ -634,6 +638,7 @@ class BLEService with ChangeNotifier {
         if (c.uuid == Guid(textCharUuid)) _textChar = c;
         if (c.uuid == Guid(statusCharUuid)) _statusChar = c;
         if (c.uuid == Guid(audioStreamCharUuid)) _audioStreamChar = c;
+        if (c.uuid == Guid(imageCharUuid)) _imageChar = c;
       }
 
       if (_statusChar != null) {
@@ -780,6 +785,20 @@ class BLEService with ChangeNotifier {
         } else if (logMsg.startsWith("TOUCH:")) {
           final event = logMsg.substring(6); // TAP, DOUBLE, TRIPLE, LONG
           _triggerRelationshipAction(fromPrimary: true, eventType: event);
+        } else if (logMsg.startsWith("EXPR_SYNC:")) {
+          final payload = logMsg.substring(10);
+          final parts = payload.split('|');
+          if (parts.isNotEmpty) {
+            _activeExpressionId = int.tryParse(parts[0]) ?? _activeExpressionId;
+            if (parts.length > 1) {
+              _activeExpressionLabel = parts[1].trim();
+            }
+            notifyListeners();
+          }
+        } else if (logMsg.startsWith("SCREEN_SYNC:")) {
+          final screenName = logMsg.substring(12).trim();
+          _activeScreenMode = screenName;
+          notifyListeners();
         } else if (logMsg.startsWith("SET_SYNC:")) {
           final payload = logMsg.substring(9);
           final parts = payload.split(',');
@@ -832,6 +851,7 @@ class BLEService with ChangeNotifier {
     _audioChar = null;
     _textChar = null;
     _statusChar = null;
+    _imageChar = null;
     
     _uptimeSeconds = 0;
     _touchCount = 0;
@@ -922,6 +942,64 @@ class BLEService with ChangeNotifier {
 
   Future<void> transmitMarqueeText(String text) async {
     await _writeTextWithAck(text, "Marquee Text");
+  }
+
+  Future<void> transmitText(String text) async {
+    await _writeTextWithAck(text, "Text Command");
+  }
+
+  // ── Image Transfer Helpers ─────────────────────────────────────────────
+
+  /// Returns true if the image BLE characteristic is available.
+  bool get imageCharAvailable => _imageChar != null;
+
+  /// Sends a raw binary chunk to the image transfer characteristic.
+  /// Slices into 200-byte MTU-safe subpackets for reliable transmission.
+  Future<bool> sendImageChunk(Uint8List chunk) async {
+    if (_imageChar == null) {
+      addLog('Image char not available — not connected or char missing', 'ERROR');
+      return false;
+    }
+    try {
+      const int maxPacketSize = 200;
+      int offset = 0;
+      while (offset < chunk.length) {
+        final end = (offset + maxPacketSize < chunk.length) ? offset + maxPacketSize : chunk.length;
+        final sub = chunk.sublist(offset, end);
+        try {
+          await _imageChar!.write(sub, withoutResponse: true);
+        } catch (e) {
+          // If writeWithoutResponse fails (e.g. MTU or stack buffer issue), try write with response
+          await _imageChar!.write(sub, withoutResponse: false);
+        }
+        offset = end;
+        await Future.delayed(const Duration(milliseconds: 2));
+      }
+      return true;
+    } catch (e) {
+      addLog('sendImageChunk failed: $e', 'ERROR');
+      return false;
+    }
+  }
+
+  Future<void> transmitImgStart(int size, String crc32Hex) async {
+    await _writeTextWithAck('IMG_START:$size:$crc32Hex', 'Image Start');
+  }
+
+  Future<void> transmitImgEnd() async {
+    await _writeTextWithAck('IMG_END', 'Image End');
+  }
+
+  Future<void> transmitImgCancel() async {
+    await _writePrimaryTextDirect('IMG_CANCEL');
+  }
+
+  Future<void> transmitImgDelete() async {
+    await _writeTextWithAck('IMG_DELETE', 'Delete Wallpaper');
+  }
+
+  Future<void> transmitImgShow() async {
+    await _writeTextWithAck('IMG_SHOW', 'Show Wallpaper');
   }
 
   Future<void> syncClockToHardware() async {

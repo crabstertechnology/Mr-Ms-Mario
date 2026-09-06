@@ -147,7 +147,82 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
     int quarterTurns = (rotationVal / 90.0).round() % 4;
 
     Widget screenContent;
-    if (widget.activeGifId == 'clock') {
+    if (widget.activeGifId == 'map' || widget.activeLabel.toLowerCase().contains('map')) {
+      screenContent = Container(
+        width: 240,
+        height: 280,
+        color: const Color(0xFF1E293B),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF38BDF8), width: 3),
+              ),
+              child: const Icon(Icons.navigation, color: Color(0xFF38BDF8), size: 48),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "250 m",
+              style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Turn Right on Main St",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                color: const Color(0xFF94A3B8),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0EA5E9).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF0EA5E9)),
+              ),
+              child: Text(
+                "GPS NAV ACTIVE",
+                style: GoogleFonts.outfit(color: const Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (widget.activeGifId == 'card' || widget.activeLabel.toLowerCase().contains('card')) {
+      screenContent = Container(
+        width: 240,
+        height: 280,
+        color: Colors.white,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.qr_code_2, size: 140, color: Colors.black),
+            const SizedBox(height: 8),
+            Text(
+              isMiss ? "MS. LUNA" : "MR. LUNA",
+              style: GoogleFonts.outfit(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              "Digital Business Card",
+              style: GoogleFonts.outfit(color: Colors.black54, fontSize: 11),
+            ),
+          ],
+        ),
+      );
+    } else if (widget.activeGifId == 'clock') {
       final now = DateTime.now();
       final List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       final List<String> months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -170,46 +245,42 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
             : now.second.toString().padLeft(2, '0');
 
         screenContent = Center(
-          child: SizedBox(
-            width: 128,
-            height: 64,
-            child: Stack(
+          child: Container(
+            width: 220,
+            height: 250,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Positioned(
-                  left: 10,
-                  top: 12,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        timeNoSec,
-                        style: GoogleFonts.pressStart2p(
-                          color: oledColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      timeNoSec,
+                      style: GoogleFonts.pressStart2p(
+                        color: oledColor,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        suffix,
-                        style: GoogleFonts.pressStart2p(
-                          color: oledColor,
-                          fontSize: 6,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  left: 10,
-                  bottom: 12,
-                  child: Text(
-                    dayDateStr,
-                    style: GoogleFonts.pressStart2p(
-                      color: oledColor,
-                      fontSize: 6,
                     ),
+                    const SizedBox(width: 6),
+                    Text(
+                      suffix,
+                      style: GoogleFonts.pressStart2p(
+                        color: oledColor,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  dayDateStr,
+                  style: GoogleFonts.pressStart2p(
+                    color: oledColor,
+                    fontSize: 9,
                   ),
                 ),
               ],
@@ -217,7 +288,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
           ),
         );
       } else if (db.clockStyle == 2) {
-        // STYLE 2: Analog Split
+        // STYLE 2: Analog Split (240x280)
         String digitalTime;
         int hour = now.hour;
         if (db.is12HourFormat) {
@@ -229,47 +300,32 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
         }
 
         screenContent = Center(
-          child: SizedBox(
-            width: 128,
-            height: 64,
-            child: Row(
+          child: Container(
+            width: 220,
+            height: 250,
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(width: 8),
                 CustomPaint(
-                  size: const Size(44, 44),
+                  size: const Size(100, 100),
                   painter: AnalogClockPainter(now, oledColor),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        digitalTime,
-                        style: GoogleFonts.pressStart2p(
-                          color: oledColor,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        weekday,
-                        style: GoogleFonts.pressStart2p(
-                          color: oledColor,
-                          fontSize: 6,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        dateStr,
-                        style: GoogleFonts.pressStart2p(
-                          color: oledColor,
-                          fontSize: 5,
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 16),
+                Text(
+                  digitalTime,
+                  style: GoogleFonts.pressStart2p(
+                    color: oledColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  dayDateStr,
+                  style: GoogleFonts.pressStart2p(
+                    color: oledColor,
+                    fontSize: 8,
                   ),
                 ),
               ],
@@ -277,7 +333,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
           ),
         );
       } else if (db.clockStyle == 3) {
-        // STYLE 3: Custom Photo Wallpaper Clock
+        // STYLE 3: Custom Photo Wallpaper Clock (240x280)
         String timeStr;
         if (db.is12HourFormat) {
           int hour = now.hour % 12;
@@ -294,70 +350,75 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
 
         final hasWallpaper = widget.wallpaperBytes != null;
 
-        screenContent = Center(
-          child: Container(
-            width: 128,
-            height: 64,
-            decoration: BoxDecoration(
-              color: hasWallpaper ? Colors.black : const Color(0xFF1E293B),
-              image: hasWallpaper
-                  ? DecorationImage(
-                      image: MemoryImage(widget.wallpaperBytes!),
-                      fit: BoxFit.cover,
-                    )
-                  : const DecorationImage(
-                      image: AssetImage('assets/logo.png'),
-                      fit: BoxFit.contain,
-                      opacity: 0.15,
+        screenContent = Container(
+          width: 240,
+          height: 280,
+          decoration: BoxDecoration(
+            color: hasWallpaper ? Colors.black : const Color(0xFF1E293B),
+            image: hasWallpaper
+                ? DecorationImage(
+                    image: MemoryImage(widget.wallpaperBytes!),
+                    fit: BoxFit.cover,
+                  )
+                : const DecorationImage(
+                    image: AssetImage('assets/logo.png'),
+                    fit: BoxFit.contain,
+                    opacity: 0.15,
+                  ),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                top: 24,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  top: 10,
-                  left: 0,
-                  right: 0,
-                  child: Center(
                     child: Text(
                       timeStr,
                       style: GoogleFonts.pressStart2p(
                         color: Colors.white,
-                        fontSize: 8,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                         shadows: const [
-                          Shadow(color: Colors.black, offset: Offset(1, 1), blurRadius: 1),
+                          Shadow(color: Colors.black, offset: Offset(1, 1), blurRadius: 2),
                         ],
                       ),
                     ),
                   ),
                 ),
-                Positioned(
-                  bottom: 10,
-                  left: 14,
-                  right: 14,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    decoration: BoxDecoration(
-                      color: (db.primaryRobot?.variant == 'mr_luna' ? const Color(0xFF0074D9) : const Color(0xFFEC4899)).withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Center(
-                      child: Text(
-                        dayDateStr,
-                        style: GoogleFonts.pressStart2p(
-                          color: Colors.white,
-                          fontSize: 5,
-                        ),
+              ),
+              Positioned(
+                bottom: 20,
+                left: 20,
+                right: 20,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: (db.primaryRobot?.variant == 'mr_luna' ? const Color(0xFF0074D9) : const Color(0xFFEC4899)).withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Center(
+                    child: Text(
+                      dayDateStr,
+                      style: GoogleFonts.pressStart2p(
+                        color: Colors.white,
+                        fontSize: 8,
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       } else {
-        // STYLE 0: Classic Border
+        // STYLE 0: Classic Border (240x280)
         String timeStr;
         if (db.is12HourFormat) {
           int hour = now.hour % 12;
@@ -374,12 +435,12 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
 
         screenContent = Center(
           child: Container(
-            width: 128,
-            height: 64,
+            width: 210,
+            height: 240,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              border: Border.all(color: oledColor, width: 1.2),
-              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: oledColor, width: 2.0),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -388,16 +449,16 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
                   timeStr,
                   style: GoogleFonts.pressStart2p(
                     color: oledColor,
-                    fontSize: 10,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 14),
                 Text(
                   dayDateStr,
                   style: GoogleFonts.pressStart2p(
                     color: oledColor,
-                    fontSize: 6,
+                    fontSize: 9,
                   ),
                 ),
               ],
@@ -469,112 +530,50 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
           faceWidget = const Icon(Icons.broken_image, color: Colors.red);
         }
       } else {
-        // Built-in Sprite AI animation rendering (240x240 RGB565 face on 240x280 TFT)
-        faceWidget = CustomPaint(
-          size: const Size(240, 240),
-          painter: SpriteAIEyePainter(
-            animId: currentGif.id,
-            eyeColor: oledThemeColor,
-            cycleIndex: _cycleIndex,
-          ),
+        // Built-in Sprite AI animation rendering (Exact pixels from sprite_ai_data.h)
+        faceWidget = Gif(
+          image: AssetImage('assets/animations/${currentGif.id}.gif'),
+          controller: _gifController,
+          autostart: Autostart.loop,
+          fit: BoxFit.contain,
         );
       }
 
-      screenContent = Stack(
-        alignment: Alignment.center,
-        children: [
-          // Background dark container
-          Container(color: Colors.black),
-          // Glowing Cyan text label overlay
-          Positioned(
-            top: 10,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                widget.activeLabel.toUpperCase(),
-                style: GoogleFonts.pressStart2p(
-                  color: oledThemeColor,
-                  fontSize: 7,
-                  shadows: [
-                    Shadow(
-                      color: oledThemeColor.withOpacity(0.8),
-                      blurRadius: 4,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // 240x240 Robot Eye Face Display
-          Center(
-            child: SizedBox(
-              width: 200,
-              height: 200,
-              child: faceWidget,
-            ),
-          ),
-        ],
+      screenContent = Container(
+        color: Colors.black,
+        child: SizedBox.expand(
+          child: faceWidget,
+        ),
       );
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 1.69" 240x280 TFT Display Bezel container
-        RotatedBox(
-          quarterTurns: quarterTurns,
-          child: Container(
-            width: 200,
-            height: 233, // 240x280 aspect ratio (1:1.166)
-            decoration: BoxDecoration(
-              color: Colors.black,
-              border: Border.all(color: const Color(0xFF27273A), width: 7),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.6),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-                BoxShadow(
-                  color: oledThemeColor.withOpacity(0.12),
-                  blurRadius: 28,
-                  spreadRadius: 2,
-                ),
-              ],
+    return RotatedBox(
+      quarterTurns: quarterTurns,
+      child: Container(
+        width: 240,
+        height: 280, // Exact 240x280 ST7789 screen size
+        decoration: BoxDecoration(
+          color: Colors.black,
+          border: Border.all(color: const Color(0xFF27273A), width: 7),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.6),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: screenContent,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Simulator Caption label
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "SCREEN PREVIEW",
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              "[${widget.activeLabel.toUpperCase()}]",
-              style: GoogleFonts.pressStart2p(
-                color: Colors.yellow,
-                fontSize: 8,
-              ),
+            BoxShadow(
+              color: oledThemeColor.withOpacity(0.12),
+              blurRadius: 28,
+              spreadRadius: 2,
             ),
           ],
         ),
-      ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: screenContent,
+        ),
+      ),
     );
   }
 }

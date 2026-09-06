@@ -77,19 +77,26 @@ class PhoneNotificationService {
           return;
         }
 
-        // Google Maps Navigation Notification
-        if (pkgLower == 'com.google.android.apps.maps') {
-          _bleService.addLog("Parsing Google Maps navigation payload...", "NOTIF");
+        // Navigation Apps Notification Parser (Google Maps, Ola Maps, MapMyIndia/Mappls, Waze, etc.)
+        final isNavApp = pkgLower == 'com.google.android.apps.maps' ||
+            pkgLower.contains('ola') ||
+            pkgLower.contains('mappls') ||
+            pkgLower.contains('mapmyindia') ||
+            pkgLower.contains('waze') ||
+            pkgLower.contains('maps');
+
+        if (isNavApp) {
+          _bleService.addLog("Parsing navigation payload for '$pkgLower'...", "NOTIF");
           final mapInfo = _parseGoogleMapsNotification(title, text, subText, bigText, smallIcon, directionFromIcon);
           if (mapInfo != null) {
             final String direction = mapInfo['direction']!;
             final String distance = mapInfo['distance']!;
             final String description = mapInfo['description']!;
-            _bleService.addLog("Maps Parsed: dir=$direction, dist=$distance, desc=$description", "NOTIF");
+            _bleService.addLog("Nav Parsed: dir=$direction, dist=$distance, desc=$description", "NOTIF");
             await _forwardToRobot("MAP:$direction,$distance,$description");
             break;
           } else {
-            _bleService.addLog("Maps parsing returned null", "NOTIF");
+            _bleService.addLog("Nav parsing returned null for '$pkgLower'", "NOTIF");
           }
         }
         

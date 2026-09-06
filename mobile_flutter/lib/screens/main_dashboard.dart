@@ -29,6 +29,7 @@ import '../widgets/luna_background.dart';
 import 'package:gif/gif.dart';
 import 'login_screen.dart';
 import 'business_card_screen.dart';
+import 'wallpaper_screen.dart';
 
 
 class MainDashboard extends StatefulWidget {
@@ -1318,56 +1319,50 @@ class _MainDashboardState extends State<MainDashboard> {
     // Secondary accent (red for Mr. Luna, rose for Ms. Luna)
     final Color _secondaryColor = isMsLuna ? const Color(0xFFEC4899) : const Color(0xFFE53935);
 
-    // â”€â”€ Resolve the active GIF to show in the simulator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Priority: BLE label (exact match) â†’ BLE exprId fallback â†’ local state
+    // Resolve the active screen & expression GIF to show in the simulator
+    // Direct bi-directional mirroring from BLE hardware status & screen sync packets
     String activeGifId = _localActiveGifId;
     String activeLabel = _localActiveLabel;
 
     if (ble.isConnected) {
-      final rawLabel = ble.activeExpressionLabel.trim();
-      final upperLabel = rawLabel.toUpperCase();
-
-      if (upperLabel.isNotEmpty && upperLabel != 'IDLE') {
-        // 1. Try to find the GIF by matching the label from the hardware status packet
-        //    (using robust normalized matching: e.g. "look left" matches "Look Left" or "left")
-        GifModel? match;
-        try {
-          String normalize(String s) => s.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
-          final normLabel = normalize(rawLabel);
-          
-          match = db.gifs.firstWhere(
-            (g) => normalize(g.id) == normLabel || normalize(g.name) == normLabel,
-          );
-        } catch (_) {
-          match = null;
-        }
-
-        if (match != null) {
-          // Perfect match by id or name
-          activeGifId = match.id;
-          activeLabel = match.name;
-        } else {
-          // 2. Fallback: use exprId to resolve the 7 standard expressions
-          final exprId = ble.activeExpressionId;
-          switch (exprId) {
-            case 0: activeGifId = 'relaxed';  activeLabel = 'Idle';      break;
-            case 1: activeGifId = 'happy';    activeLabel = 'Happy';     break;
-            case 2: activeGifId = 'crying';   activeLabel = 'Sad';       break;
-            case 3: activeGifId = 'angry';    activeLabel = 'Angry';     break;
-            case 4: activeGifId = 'surprised';activeLabel = 'Surprised'; break;
-            case 5: activeGifId = 'sleepy';   activeLabel = 'Sleeping';  break;
-            case 6: activeGifId = 'wink';     activeLabel = 'Wink';      break;
-            case 7: activeGifId = 'clock';    activeLabel = 'Clock';     break;
-            default:
-              // Keep local state for unknown expressions, but show raw label (e.g. ARCADE, SNAKE, etc.)
-              activeLabel = rawLabel;
-              break;
+      final screenMode = ble.activeScreenMode.toUpperCase();
+      if (screenMode == 'MAPS' || screenMode == 'MAP') {
+        activeGifId = 'map';
+        activeLabel = 'Navigation Map';
+      } else if (screenMode == 'CLOCK') {
+        activeGifId = 'clock';
+        activeLabel = 'Clock';
+      } else if (screenMode == 'CARD' || screenMode == 'QR CARD') {
+        activeGifId = 'card';
+        activeLabel = 'QR Business Card';
+      } else {
+        final exprId = ble.activeExpressionId;
+        final rawLabel = ble.activeExpressionLabel.trim();
+        
+        if (exprId >= 0 && exprId <= 5) {
+          activeGifId = 'sprite_ai_$exprId';
+          final mapping = DatabaseService.animMapping['sprite_ai_$exprId'];
+          activeLabel = rawLabel.isNotEmpty ? rawLabel : (mapping?['label'] ?? 'Sprite AI ${exprId + 1}');
+        } else if (exprId >= 100) {
+          final customIdx = exprId - 100;
+          if (customIdx >= 0 && customIdx < db.gifs.length) {
+            activeGifId = db.gifs[customIdx].id;
+            activeLabel = db.gifs[customIdx].name;
+          }
+        } else if (rawLabel.isNotEmpty) {
+          // Try label lookup
+          try {
+            String normalize(String s) => s.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+            final normLabel = normalize(rawLabel);
+            final match = db.gifs.firstWhere(
+              (g) => normalize(g.id) == normLabel || normalize(g.name) == normLabel,
+            );
+            activeGifId = match.id;
+            activeLabel = match.name;
+          } catch (_) {
+            activeLabel = rawLabel;
           }
         }
-      } else if (upperLabel == 'IDLE' || upperLabel.isEmpty) {
-        // Hardware is idle â€” show the default idle GIF
-        activeGifId = 'relaxed';
-        activeLabel = 'Idle';
       }
     }
 
@@ -2057,11 +2052,28 @@ class _MainDashboardState extends State<MainDashboard> {
             ),
             const SizedBox(height: 20),
             Center(
-              child: OLEDSimulator(
-                activeGifId: activeGifId,
-                activeLabel: activeLabel,
-                marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
-                wallpaperBytes: _selectedWallpaperBytes,
+              child: GestureDetector(
+                onTap: () {
+                  if (ble.isConnected) {
+                    ble.transmitText("TOUCH_SIM:TAP");
+                  }
+                },
+                onDoubleTap: () {
+                  if (ble.isConnected) {
+                    ble.transmitText("TOUCH_SIM:DOUBLE");
+                  }
+                },
+                onLongPress: () {
+                  if (ble.isConnected) {
+                    ble.transmitText("TOUCH_SIM:LONG");
+                  }
+                },
+                child: OLEDSimulator(
+                  activeGifId: activeGifId,
+                  activeLabel: activeLabel,
+                  marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
+                  wallpaperBytes: _selectedWallpaperBytes,
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -2136,9 +2148,10 @@ class _MainDashboardState extends State<MainDashboard> {
     // Filter lists
     final search = _searchController.text.toLowerCase();
     List<GifModel> filteredGifs = db.gifs.where((gif) {
+      final isSpriteAI = DatabaseService.animMapping.containsKey(gif.id) || (gif.customData != null && gif.customData!.isNotEmpty);
       final matchesSearch = gif.name.toLowerCase().contains(search) || gif.id.contains(search);
       final matchesCategory = _selectedCategory == 'ALL' || gif.category == _selectedCategory;
-      return matchesSearch && matchesCategory;
+      return isSpriteAI && matchesSearch && matchesCategory;
     }).toList();
 
     // Sort list
@@ -3151,129 +3164,52 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
         ),
         const SizedBox(height: 20),
-        // Smartwatch Custom Wallpaper Manager
+        // Smartwatch Custom Wallpaper Manager — Luna Display
         GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Row(
+                children: [
+                  const Icon(Icons.wallpaper, color: Color(0xFF00E5CC), size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    "LUNA DISPLAY — WALLPAPER",
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFFFFCDD2),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               Text(
-                "SMARTWATCH WALLPAPER",
-                style: GoogleFonts.outfit(color: const Color(0xFFFFCDD2), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                "Send any photo from your gallery as a permanent watch wallpaper via BLE.",
+                style: GoogleFonts.outfit(color: textColor60, fontSize: 12),
               ),
               const SizedBox(height: 16),
-              if (_selectedWallpaperBytes != null) ...[
-                Text(
-                  "Selected: $_selectedWallpaperName",
-                  style: GoogleFonts.outfit(color: textColor, fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Size: ${(_selectedWallpaperBytes!.length / 1024).toStringAsFixed(1)} KB",
-                  style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (_isUploadingWallpaper) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: _wallpaperUploadProgress,
-                    backgroundColor: Colors.black12,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
-                    minHeight: 8,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Uploading: ${(_wallpaperUploadProgress * 100).toInt()}%",
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.firaCode(color: Colors.yellow, fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-              ] else ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _pickAndProcessWallpaper(db),
-                        icon: const Icon(Icons.photo_library),
-                        label: const Text("SELECT IMAGE"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          textStyle: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const WallpaperScreen(),
                     ),
-                    if (_selectedWallpaperBytes != null) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: !ble.isConnected ? null : () => _uploadWallpaper(ble),
-                          icon: const Icon(Icons.bluetooth),
-                          label: const Text("BLE UPLOAD"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            textStyle: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => _compileAndFlashViaServer(ble),
-                          icon: const Icon(Icons.computer),
-                          label: const Text("PC FLASH"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.indigoAccent,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            textStyle: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                  );
+                },
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text("OPEN LUNA DISPLAY"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B4EFF),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  textStyle: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 4,
+                  shadowColor: const Color(0xFF6B4EFF).withOpacity(0.4),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: !ble.isConnected ? null : () async {
-                          final cleared = await ble.transmitWallpaperClear();
-                          if (cleared) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Wallpaper cleared from watch!"),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Failed to clear wallpaper."),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.delete_forever),
-                        label: const Text("CLEAR WATCH WALLPAPER"),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.redAccent,
-                          side: const BorderSide(color: Colors.redAccent),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          textStyle: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ],
           ),
         ),
@@ -3676,11 +3612,28 @@ class _MainDashboardState extends State<MainDashboard> {
 
         // OLED Simulator Container
         Center(
-          child: OLEDSimulator(
-            activeGifId: activeGifId,
-            activeLabel: activeLabel,
-            marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
-            invertColor: db.oledInvert, 
+          child: GestureDetector(
+            onTap: () {
+              if (ble.isConnected) {
+                ble.transmitText("TOUCH_SIM:TAP");
+              }
+            },
+            onDoubleTap: () {
+              if (ble.isConnected) {
+                ble.transmitText("TOUCH_SIM:DOUBLE");
+              }
+            },
+            onLongPress: () {
+              if (ble.isConnected) {
+                ble.transmitText("TOUCH_SIM:LONG");
+              }
+            },
+            child: OLEDSimulator(
+              activeGifId: activeGifId,
+              activeLabel: activeLabel,
+              marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
+              invertColor: db.oledInvert, 
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -8021,19 +7974,6 @@ class _GifCardWidgetState extends State<_GifCardWidget>
       } catch (_) {
         imageWidget = const Icon(Icons.broken_image, color: Colors.red);
       }
-    } else if (DatabaseService.animMapping.containsKey(gif.id)) {
-      imageWidget = Container(
-        color: Colors.black,
-        alignment: Alignment.center,
-        child: CustomPaint(
-          size: const Size(120, 120),
-          painter: SpriteAIEyePainter(
-            animId: gif.id,
-            eyeColor: previewColor,
-            cycleIndex: 0,
-          ),
-        ),
-      );
     } else {
       imageWidget = Gif(
         image: AssetImage('assets/animations/${gif.id}.gif'),
@@ -8064,14 +8004,10 @@ class _GifCardWidgetState extends State<_GifCardWidget>
                     child: Container(
                       color: Colors.black,
                       child: ClipRect(
-                        child: ColorFiltered(
-                          colorFilter:
-                              ColorFilter.mode(previewColor, BlendMode.modulate),
-                          child: Opacity(
-                            opacity: isHidden ? 0.3 : 1.0,
-                            child: SizedBox.expand(
-                              child: imageWidget,
-                            ),
+                        child: Opacity(
+                          opacity: isHidden ? 0.3 : 1.0,
+                          child: SizedBox.expand(
+                            child: imageWidget,
                           ),
                         ),
                       ),

@@ -40,6 +40,10 @@
 #define TEXT_CHAR_UUID         "c8a00d04-62ff-4b32-843d-0f1c6db8a101"
 #define STATUS_CHAR_UUID       "fb2f0e05-73ee-4f32-833d-1f2c6db8a102"
 #define AUDIO_STREAM_CHAR_UUID "a823e50b-71ee-48c5-9276-2e8c6db8a103"
+#define IMAGE_CHAR_UUID        "e1234501-1fb5-459e-8fcc-c5c9c331914b"
+
+// Maximum wallpaper image size in bytes
+#define IMG_MAX_BYTES (100 * 1024)
 
 // Robot Expression States
 enum Expression {
@@ -83,6 +87,7 @@ enum SmartwatchScreen {
   SCREEN_SETTINGS,
   SCREEN_LEVEL,  // Accelerometer & Gyroscope Level Analyzer
   SCREEN_POMODORO,// Pomodoro Focus Timer
+  SCREEN_WALLPAPER, // Custom JPEG wallpaper (sent from phone)
   SCREEN_MAX
 };
 #endif // CONFIG_H

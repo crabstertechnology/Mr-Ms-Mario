@@ -96,13 +96,14 @@ class DatabaseService with ChangeNotifier {
   String get bleName => _bleName;
 
   // New Sprite AI robot-face animations (240x240 RGB565 high performance)
+  // New Sprite AI robot-face animations (240x240 RGB565 high performance)
   static const Map<String, Map<String, dynamic>> animMapping = {
-    "sprite_ai_0": { "expr": 0, "sound": 2, "label": "Sprite AI 1 (Blink)", "cat": "Sprite AI" },
-    "sprite_ai_1": { "expr": 1, "sound": 2, "label": "Sprite AI 2 (Look)", "cat": "Sprite AI" },
-    "sprite_ai_2": { "expr": 2, "sound": 2, "label": "Sprite AI 3 (Happy)", "cat": "Sprite AI" },
-    "sprite_ai_3": { "expr": 3, "sound": 2, "label": "Sprite AI 4 (Focused)", "cat": "Sprite AI" },
-    "sprite_ai_4": { "expr": 4, "sound": 2, "label": "Sprite AI 5 (Expressive)", "cat": "Sprite AI" },
-    "sprite_ai_5": { "expr": 5, "sound": 2, "label": "Sprite AI 6 (Wink)", "cat": "Sprite AI" },
+    "sprite_ai_0": { "expr": 0, "sound": 2, "label": "Happy Smile", "cat": "Sprite AI" },
+    "sprite_ai_1": { "expr": 1, "sound": 2, "label": "Angry Face", "cat": "Sprite AI" },
+    "sprite_ai_2": { "expr": 2, "sound": 2, "label": "Confused", "cat": "Sprite AI" },
+    "sprite_ai_3": { "expr": 3, "sound": 2, "label": "Playful Wink", "cat": "Sprite AI" },
+    "sprite_ai_4": { "expr": 4, "sound": 2, "label": "Sparkle Eye", "cat": "Sprite AI" },
+    "sprite_ai_5": { "expr": 5, "sound": 2, "label": "Sleepy Zzz", "cat": "Sprite AI" },
   };
 
   DatabaseService() {
@@ -166,10 +167,20 @@ class DatabaseService with ChangeNotifier {
     if (jsonStr != null) {
       try {
         final List<dynamic> decoded = jsonDecode(jsonStr);
-        _gifs = decoded.map((item) => GifModel.fromJson(item)).toList();
+        final loaded = decoded.map((item) => GifModel.fromJson(item)).toList();
         
+        // Purge legacy expressions: Keep ONLY Sprite AI built-in animations and user custom GIFs
+        _gifs = loaded.where((g) => animMapping.containsKey(g.id) || (g.customData != null && g.customData!.isNotEmpty)).toList();
+        
+        // Update labels to match current expression names
+        for (int i = 0; i < _gifs.length; i++) {
+          if (animMapping.containsKey(_gifs[i].id)) {
+            _gifs[i] = _gifs[i].copyWith(name: animMapping[_gifs[i].id]!['label'] as String);
+          }
+        }
+
         // Merge missing GIFs from animMapping
-        bool modified = false;
+        bool modified = true;
         animMapping.forEach((key, val) {
           final exists = _gifs.any((g) => g.id == key);
           if (!exists) {
@@ -179,14 +190,13 @@ class DatabaseService with ChangeNotifier {
               id: key,
               name: val['label'] as String,
               category: val['cat'] as String,
-              favorite: key == 'happy' || key == 'relaxed',
+              favorite: key == 'sprite_ai_0' || key == 'sprite_ai_2',
               selected: true,
               hidden: false,
               size: sizeBytes,
               flashSize: flashKb,
               soundId: val['sound'] as int? ?? 0,
             ));
-            modified = true;
           }
         });
         if (modified) {

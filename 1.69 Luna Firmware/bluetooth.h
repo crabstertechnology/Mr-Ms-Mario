@@ -12,6 +12,7 @@ extern void handleBLEExpression(Expression expr);
 extern void handleBLEExpressionWithLabel(Expression expr, String label);
 extern void handleBLEAudio(SoundEffect sound);
 extern void handleBLEText(String text);
+extern void handleBLEImageChunk(uint8_t* data, size_t len);
 
 extern bool negativeDisplay;
 extern String robotVariant;
@@ -27,6 +28,7 @@ private:
   BLECharacteristic* pTextChar;
   BLECharacteristic* pStatusChar;
   BLECharacteristic* pAudioStreamChar;
+  BLECharacteristic* pImageChar;
   bool deviceConnected;
   bool oldDeviceConnected;
   bool isInitialized;
@@ -102,8 +104,18 @@ private:
     }
   };
 
+  class ImageCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pChar) override {
+      uint8_t* data = pChar->getData();
+      size_t len = pChar->getLength();
+      if (len > 0) {
+        handleBLEImageChunk(data, len);
+      }
+    }
+  };
+
 public:
-  LunaBLE() : pServer(nullptr), deviceConnected(false), oldDeviceConnected(false), isInitialized(false), advertising(false) {}
+  LunaBLE() : pServer(nullptr), pImageChar(nullptr), deviceConnected(false), oldDeviceConnected(false), isInitialized(false), advertising(false) {}
 
   void init() {
     if (isInitialized) return;
@@ -152,6 +164,14 @@ public:
                        );
     pAudioStreamChar->setCallbacks(new AudioStreamCallbacks());
     pAudioStreamChar->addDescriptor(new BLE2902());
+
+    // Image Transfer characteristic — receives raw JPEG binary chunks
+    pImageChar = pService->createCharacteristic(
+                   IMAGE_CHAR_UUID,
+                   BLECharacteristic::PROPERTY_WRITE |
+                   BLECharacteristic::PROPERTY_WRITE_NR
+                 );
+    pImageChar->setCallbacks(new ImageCallbacks());
 
     // Start Service
     pService->start();
