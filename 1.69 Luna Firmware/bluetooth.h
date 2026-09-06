@@ -57,7 +57,7 @@ private:
             label += (char)data[i];
           }
         }
-        if (exprVal <= EXPR_ALL_GIF) {
+        if (exprVal <= EXPR_ROBOT_EYE || exprVal == 20) {
           handleBLEExpressionWithLabel((Expression)exprVal, label);
         }
       }

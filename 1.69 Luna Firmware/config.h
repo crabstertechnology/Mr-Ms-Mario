@@ -30,8 +30,8 @@
 #define SCREEN_HEIGHT 280
 
 // Touch Column Boundaries (0 to 240 pixels width)
-#define TOUCH_LEFT_LIMIT 40
-#define TOUCH_RIGHT_LIMIT 200
+#define TOUCH_LEFT_LIMIT 80
+#define TOUCH_RIGHT_LIMIT 140
 
 // BLE Service & Characteristic UUIDs
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -53,7 +53,7 @@ enum Expression {
   EXPR_TEXT,
   EXPR_CLOCK,
   EXPR_MAP,
-  EXPR_ALL_GIF = 10  // Auto-cycle from master ALL_GIFS_TABLE (all 63 animations)
+  EXPR_ROBOT_EYE = 20 // Sprite AI Robot Eye Animation System
 };
 
 // Buzzer Sound Effects

@@ -5,11 +5,11 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include "config.h"
-#include "mochi_bitmaps.h"
 #include "image_logo.h"
 #include "qr_card.h"
 #include "wallpaper_image.h"
 #include "imu.h"
+#include "robot_eye_animation.h"
 
 extern LunaQR qrCard;
 extern LunaIMU imu;
@@ -85,7 +85,6 @@ private:
 
   // Animation frame control
   int currentFrame;
-  int currentGifIndex;        // index into ALL_GIFS_TABLE for EXPR_ALL_GIF mode
   unsigned long lastFrameTime;
   bool gifFinished;
   bool expressionChanged;
@@ -141,13 +140,16 @@ private:
   bool showSilentOverlay;
   bool silentOverlayState;
 
+  // Sprite AI Robot Eye Animation Controller
+  RobotEyeAnimation robotEyeAnim;
+
 public:
   String headerText;
   bool timeSynced = false; // true after first TIME: sync from companion app
+  RobotEyeAnimation& getRobotEyeAnim() { return robotEyeAnim; }
   LunaFace(Adafruit_ST7789& tftDisp, GFXcanvas16& disp) 
-    : tft(tftDisp), display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
+    : tft(tftDisp), display(disp), currentExpr(EXPR_ROBOT_EYE), targetExpr(EXPR_ROBOT_EYE), defaultExpr(EXPR_ROBOT_EYE), stateLabel("ROBOT_EYE"), frameDelayMs(100), expressionChanged(true) {
     currentFrame = 0;
-    currentGifIndex = 0;
     lastFrameTime = 0;
     gifFinished = false;
 
@@ -188,53 +190,7 @@ public:
   }
 
   uint16_t getExpressionColor(Expression expr) {
-    Expression activeExpr = expr;
-    if (activeExpr == EXPR_IDLE) {
-      activeExpr = defaultExpr;
-    }
-    
-    if (activeExpr == EXPR_ALL_GIF) {
-      if (currentGifIndex >= 0 && currentGifIndex < ALL_GIFS_COUNT) {
-        char nameBuf[32];
-        strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[currentGifIndex].name));
-        String gifName = String(nameBuf);
-        gifName.toUpperCase();
-        
-        if (gifName.indexOf("LOVE") >= 0 || gifName.indexOf("ADORE") >= 0 || gifName.indexOf("SPARKLE") >= 0 || gifName.indexOf("GLOWING") >= 0) {
-          return 0xF97F; // Soft Pink
-        }
-        if (gifName.indexOf("ANGRY") >= 0 || gifName.indexOf("ENRAGE") >= 0 || gifName.indexOf("FURIOUS") >= 0 || gifName.indexOf("FIERCE") >= 0 || gifName.indexOf("DEVIL") >= 0 || gifName.indexOf("MENACING") >= 0 || gifName.indexOf("TOUGH") >= 0) {
-          return TFT_RED;
-        }
-        if (gifName.indexOf("CRY") >= 0 || gifName.indexOf("SICK") >= 0 || gifName.indexOf("DIZZY") >= 0 || gifName.indexOf("RAIN") >= 0 || gifName.indexOf("SOB") >= 0 || gifName.indexOf("WEEP") >= 0) {
-          return 0x5DFF; // Cyan/Blue
-        }
-        if (gifName.indexOf("SLEEP") >= 0 || gifName.indexOf("DROW") >= 0 || gifName.indexOf("YAWN") >= 0) {
-          return 0x91FF; // Lavender/Purple
-        }
-        if (gifName.indexOf("BUZZ") >= 0 || gifName.indexOf("CONTEMPT") >= 0 || gifName.indexOf("IRRITATED") >= 0 || gifName.indexOf("MISTAKE") >= 0 || gifName.indexOf("SCARE") >= 0) {
-          return TFT_ORANGE;
-        }
-        if (gifName.indexOf("DANCE") >= 0 || gifName.indexOf("ENERGETIC") >= 0 || gifName.indexOf("SPEED") >= 0 || gifName.indexOf("RUSH") >= 0 || gifName.indexOf("FAST") >= 0) {
-          return TFT_GREEN;
-        }
-        if (gifName.indexOf("HAPPY") >= 0 || gifName.indexOf("LAUGH") >= 0 || gifName.indexOf("PLAY") >= 0 || gifName.indexOf("SMILE") >= 0 || gifName.indexOf("SMIRK") >= 0 || gifName.indexOf("TEAS") >= 0 || gifName.indexOf("GIGGLE") >= 0 || gifName.indexOf("HELLO") >= 0) {
-          return TFT_YELLOW;
-        }
-      }
-      return TFT_CYAN;
-    }
-    
-    switch (activeExpr) {
-      case EXPR_IDLE:      return TFT_CYAN;
-      case EXPR_HAPPY:     return TFT_YELLOW;
-      case EXPR_SAD:       return 0x5DFF; // Soft Blue
-      case EXPR_ANGRY:     return TFT_RED;
-      case EXPR_SURPRISED: return 0xF97F; // Pink/Magenta
-      case EXPR_SLEEPING:  return 0x91FF; // Purple
-      case EXPR_WINK:      return TFT_YELLOW;
-      default:             return TFT_CYAN;
-    }
+    return TFT_CYAN;
   }
 
   void setConnectivityStatus(bool bleConnected, bool wifiConnected) {
@@ -243,33 +199,7 @@ public:
   }
 
   void updateLabelFromState() {
-    Expression exprToLabel = currentExpr;
-    if (exprToLabel == EXPR_IDLE) {
-      exprToLabel = defaultExpr;
-    }
-    
-    if (exprToLabel == EXPR_ALL_GIF) {
-      if (currentGifIndex >= 0 && currentGifIndex < ALL_GIFS_COUNT) {
-        char nameBuf[32];
-        strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[currentGifIndex].name));
-        stateLabel = String(nameBuf);
-      } else {
-        stateLabel = "IDLE";
-      }
-    } else {
-      switch (exprToLabel) {
-        case EXPR_IDLE:      stateLabel = "IDLE"; break;
-        case EXPR_HAPPY:     stateLabel = "HAPPY"; break;
-        case EXPR_SAD:       stateLabel = "SAD"; break;
-        case EXPR_ANGRY:     stateLabel = "ANGRY"; break;
-        case EXPR_SURPRISED: stateLabel = "SURPRISE"; break;
-        case EXPR_SLEEPING:  stateLabel = "SLEEP"; break;
-        case EXPR_WINK:      stateLabel = "WINK"; break;
-        case EXPR_CLOCK:     stateLabel = "CLOCK"; break;
-        case EXPR_TEXT:      stateLabel = "TEXT"; break;
-        default:             stateLabel = "IDLE"; break;
-      }
-    }
+    stateLabel = "ROBOT_EYE";
   }
 
   void setDefaultExpression(Expression expr) {
@@ -281,86 +211,7 @@ public:
     frameDelayMs = ms;
   }
 
-  int getGifFrameDelay(int gifIndex) {
-    static const uint8_t gifDelays[] PROGMEM = {
-      112, // 0  ADORE
-      112, // 1  ANGRY
-      52,  // 2  BLANK
-      252, // 3  BLINDING
-      112, // 4  BRAVE
-      112, // 5  BUZZING
-      92,  // 6  CONTEMPT
-      112, // 7  CRYING
-      112, // 8  DANCING
-      92,  // 9  DEVIL
-      52,  // 10 DISTRACTED
-      112, // 11 DIZZY
-      52,  // 12 DOWN
-      112, // 13 DROWSY
-      92,  // 14 ENCOURAGEMENT
-      52,  // 15 ENERGETIC
-      112, // 16 ENRAGED
-      92,  // 17 EVIL
-      92,  // 18 FAST
-      112, // 19 FIERCE
-      92,  // 20 FURIOUS
-      112, // 21 GIGGLE
-      112, // 22 GLOWING
-      112, // 23 GROWING
-      112, // 24 HANDSOME
-      112, // 25 HAPPY
-      92,  // 26 HELLO
-      112, // 27 IRRITATED
-      92,  // 28 LAUGHING
-      52,  // 29 LEFT
-      112, // 30 LOVE
-      92,  // 31 MENACING
-      112, // 32 MISTAKE
-      112, // 33 PLAYFUL
-      112, // 34 POLICE
-      112, // 35 RAIN
-      92,  // 36 RELAXED
-      52,  // 37 RIGHT
-      92,  // 38 RUSH
-      112, // 39 SCARED
-      112, // 40 SERENE
-      52,  // 41 SHRINK
-      52,  // 42 SHY
-      112, // 43 SICK
-      92,  // 44 SLEEPY
-      112, // 45 SMILE
-      52,  // 46 SMIRK
-      92,  // 47 SMOKE
-      112, // 48 SNEEZE
-      112, // 49 SOBBING
-      112, // 50 SPARKLE
-      52,  // 51 SPEED
-      112, // 52 SPLASH
-      112, // 53 SPRAYING
-      52,  // 54 SQUINT
-      112, // 55 SURPRISED
-      112, // 56 SUSHI
-      112, // 57 SWINGING
-      112, // 58 TEASING
-      122, // 59 TOUGH
-      92,  // 60 WEEPING
-      112, // 61 WINK
-      112, // 62 YAWN
-    };
-    if (gifIndex >= 0 && gifIndex < ALL_GIFS_COUNT) {
-      return pgm_read_byte(&gifDelays[gifIndex]);
-    }
-    return frameDelayMs;
-  }
-
   void setExpression(Expression expr) {
-    if ((int)expr >= 100) {
-      int gifIdx = (int)expr - 100;
-      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-        setGifIndex(gifIdx);
-        expr = EXPR_ALL_GIF;
-      }
-    }
     if (currentExpr == expr) return;
     targetExpr = expr;
     currentExpr = expr;
@@ -368,6 +219,9 @@ public:
     lastFrameTime = millis();
     gifFinished = false;
     expressionChanged = true;
+    
+    robotEyeAnim.reset();
+    robotEyeAnim.play();
     
     if (expr == EXPR_TEXT) {
       scrollPos = SCREEN_WIDTH;
@@ -493,7 +347,7 @@ public:
   }
 
   void setGifIndex(int idx) {
-    currentGifIndex = idx;
+    (void)idx;
     currentFrame = 0;
     lastFrameTime = millis();
     gifFinished = false;
@@ -502,7 +356,7 @@ public:
   }
 
   int getGifIndex() {
-    return currentGifIndex;
+    return 0;
   }
 
   bool isGifFinished() {
@@ -522,63 +376,8 @@ public:
       changed = true;
     }
 
-    // Frame Animation logic
-    if (currentExpr != EXPR_TEXT) {
-      int maxFrames = 1;
-      Expression exprToUpdate = currentExpr;
-      if (exprToUpdate == EXPR_IDLE) {
-        exprToUpdate = defaultExpr;
-      }
-      switch (exprToUpdate) {
-        case EXPR_IDLE:      maxFrames = ep_relaxed_frame_count; break;
-        case EXPR_HAPPY:     maxFrames = ep_happy_frame_count; break;
-        case EXPR_SAD:       maxFrames = ep_crying_frame_count; break;
-        case EXPR_ANGRY:     maxFrames = ep_angry_frame_count; break;
-        case EXPR_SURPRISED: maxFrames = ep_surprised_frame_count; break;
-        case EXPR_SLEEPING:  maxFrames = ep_sleepy_frame_count; break;
-        case EXPR_WINK:      maxFrames = ep_wink_frame_count; break;
-        case EXPR_CLOCK:     maxFrames = 1; break;
-        case EXPR_ALL_GIF: {
-          if (currentGifIndex < ALL_GIFS_COUNT) {
-            maxFrames = (int)pgm_read_dword(&ALL_GIFS_TABLE[currentGifIndex].count);
-          } else {
-            maxFrames = 1;
-          }
-          break;
-        }
-        default: maxFrames = 1; break;
-      }
-
-      int activeDelay;
-      if (exprToUpdate == EXPR_ALL_GIF) {
-        activeDelay = getGifFrameDelay(currentGifIndex);
-      } else {
-        switch (exprToUpdate) {
-          case EXPR_IDLE:      activeDelay = 92; break;
-          case EXPR_HAPPY:     activeDelay = 112; break;
-          case EXPR_SAD:       activeDelay = 112; break;
-          case EXPR_ANGRY:     activeDelay = 112; break;
-          case EXPR_SURPRISED: activeDelay = 112; break;
-          case EXPR_SLEEPING:  activeDelay = 92; break;
-          case EXPR_WINK:      activeDelay = 112; break;
-          default:             activeDelay = 100; break;
-        }
-      }
-      
-      if (frameDelayMs != 100) {
-        activeDelay = (int)(activeDelay * (frameDelayMs / 100.0f));
-      }
-      activeDelay = max(20, activeDelay);
-
-      if (now - lastFrameTime > (unsigned long)activeDelay) {
-        lastFrameTime = now;
-        currentFrame++;
-        if (currentFrame >= maxFrames) {
-          currentFrame = 0;
-          gifFinished = true;
-        }
-        changed = true;
-      }
+    if (robotEyeAnim.update()) {
+      changed = true;
     }
 
     // Scroll text logic
@@ -1630,80 +1429,13 @@ public:
   }
 
   void drawRobotFaceScreen() {
-    Expression exprToDraw = currentExpr;
-    if (exprToDraw == EXPR_IDLE) {
-      exprToDraw = defaultExpr;
+    display.fillScreen(TFT_BLACK);
+    const uint16_t* frameData = robotEyeAnim.getCurrentFrameData();
+    if (frameData != nullptr) {
+      display.drawRGBBitmap(robotEyeAnim.getXOffset(), robotEyeAnim.getYOffset(), frameData, robotEyeAnim.getWidth(), robotEyeAnim.getHeight());
     }
-    
-    // For 1.3" display: normal mode has blue background and white drawing.
-    // Inverted/Negative mode has white background and blue drawing.
-    uint16_t bgColor = negativeDisplay ? TFT_WHITE : TFT_BLUE; // Blue when normal, White when inverted
-    uint16_t color   = negativeDisplay ? TFT_BLUE : TFT_WHITE; // White when normal, Blue when inverted
-    
-    display.fillScreen(bgColor);
-
-    // Keep aspect ratio (2:1) and fit safely within circular smartwatch screen (210x105)
-    int targetW = 210;
-    int targetH = 105;
-    int xOffset = (SCREEN_WIDTH - targetW) / 2;
-    int yOffset = (SCREEN_HEIGHT - targetH) / 2;
-    
-    if (exprToDraw == EXPR_ALL_GIF) {
-      if (currentGifIndex < ALL_GIFS_COUNT) {
-        const unsigned char* const* frames =
-          (const unsigned char* const*)pgm_read_ptr(&ALL_GIFS_TABLE[currentGifIndex].frames);
-        int frameCount = (int)pgm_read_dword(&ALL_GIFS_TABLE[currentGifIndex].count);
-        int safeFrame = (currentFrame < frameCount) ? currentFrame : 0;
-        const unsigned char* frameData =
-          (const unsigned char*)pgm_read_ptr(&frames[safeFrame]);
-        if (frameData) {
-          drawBitmapScaled(xOffset, yOffset, frameData, 128, 64, targetW, targetH, color);
-        }
-      }
-    } else {
-      const unsigned char* frameData = nullptr;
-      int frameIdx = currentFrame;
-      switch (exprToDraw) {
-        case EXPR_IDLE:
-          if (frameIdx < ep_relaxed_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_relaxed_frames[frameIdx]);
-          break;
-        case EXPR_HAPPY:
-          if (frameIdx < ep_happy_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_happy_frames[frameIdx]);
-          break;
-        case EXPR_SAD:
-          if (frameIdx < ep_crying_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_crying_frames[frameIdx]);
-          break;
-        case EXPR_ANGRY:
-          if (frameIdx < ep_angry_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_angry_frames[frameIdx]);
-          break;
-        case EXPR_SURPRISED:
-          if (frameIdx < ep_surprised_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_surprised_frames[frameIdx]);
-          break;
-        case EXPR_SLEEPING:
-          if (frameIdx < ep_sleepy_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_sleepy_frames[frameIdx]);
-          break;
-        case EXPR_WINK:
-          if (frameIdx < ep_wink_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_wink_frames[frameIdx]);
-          break;
-        default:
-          break;
-      }
-      
-      if (frameData != nullptr) {
-        drawBitmapScaled(xOffset, yOffset, frameData, 128, 64, targetW, targetH, color);
-      }
-    }
-
-    // Small silent mode indicator on Face screen
     if (silentMode) {
-      uint16_t silentColor = negativeDisplay ? TFT_BLUE : TFT_WHITE;
+      uint16_t silentColor = TFT_WHITE;
       int silentX = SCREEN_WIDTH - 20;
       int silentY = 10;
       display.fillRect(silentX, silentY - 2, 2, 4, silentColor);

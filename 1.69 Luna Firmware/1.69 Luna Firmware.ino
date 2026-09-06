@@ -48,9 +48,9 @@ bool bleActive = true;
 int gifSpeed = 169;
 int gifIntroSpeed = 169;
 int introSoundSpeed = 80;
-int defaultGif = 99;      // default GIF expression (0-6, or 99 for Cycle Mode)
-bool isCycleMode = true;
-int gifIntro = 1;        // intro GIF expression (0-6)
+int defaultGif = 20;      // default GIF expression (20 = EXPR_ROBOT_EYE)
+bool isCycleMode = false;
+int gifIntro = 20;        // intro GIF expression (20 = EXPR_ROBOT_EYE)
 // Gestures and touch inputs completely removed
 bool negativeDisplay = false; // SSD1306 display color inversion
 bool silentMode = false;
@@ -124,7 +124,7 @@ unsigned long lastInteractionTime = 0;
 unsigned long lastScreenTransitionTime = 0;
 const unsigned long SLEEP_TIMEOUT = 45000; // 45 seconds of inactivity -> sleep
 bool isAsleep = false;
-bool inIntroPhase = true;
+bool inIntroPhase = false;
 bool isAlarmRinging = false;
 unsigned long lastAlarmSoundTime = 0;
 bool isReminderRinging = false;
@@ -352,24 +352,6 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
     return;
   }
   
-  if (label.length() > 0) {
-    label.toUpperCase();
-    // Search ALL_GIFS_TABLE for a match
-    int foundIdx = -1;
-    for (int i = 0; i < ALL_GIFS_COUNT; i++) {
-      char nameBuf[32];
-      strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[i].name));
-      if (label.equals(nameBuf)) {
-        foundIdx = i;
-        break;
-      }
-    }
-    if (foundIdx != -1) {
-      face.setGifIndex(foundIdx);
-      expr = EXPR_ALL_GIF;
-    }
-  }
-  
   face.setExpression(expr);
   if (label.length() > 0) {
     face.setStateLabel(label);
@@ -383,6 +365,7 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
       case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
       case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
       case EXPR_WINK: face.setStateLabel("WINK"); break;
+      case EXPR_ROBOT_EYE: face.setStateLabel("ROBOT_EYE"); break;
       default: face.setStateLabel("IDLE"); break;
     }
   }
@@ -897,39 +880,9 @@ void applySettings(String payload) {
   // Apply settings immediately
   face.setFrameDelay(gifSpeed);
 
-  // defaultGif: 99 = Cycle Mode
-  //             0-8 = base Expression enum
-  //             values >= 100 = specific GIF index (index = value - 100) in ALL_GIFS_TABLE
-  if (defaultGif == 99) {
-    isCycleMode = true;
-    cycleExpression();
-  } else {
-    isCycleMode = false;
-    if (defaultGif >= 100) {
-      int gifIdx = defaultGif - 100;
-      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-        face.setGifIndex(gifIdx);
-        face.setExpression(EXPR_ALL_GIF);
-        
-        char nameBuf[32];
-        strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIdx].name));
-        face.setStateLabel(String(nameBuf));
-      }
-    } else {
-      face.setDefaultExpression((Expression)defaultGif);
-      face.setExpression((Expression)defaultGif);
-      switch ((Expression)defaultGif) {
-        case EXPR_IDLE: face.setStateLabel("IDLE"); break;
-        case EXPR_HAPPY: face.setStateLabel("HAPPY"); break;
-        case EXPR_SAD: face.setStateLabel("SAD"); break;
-        case EXPR_ANGRY: face.setStateLabel("ANGRY"); break;
-        case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
-        case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
-        case EXPR_WINK: face.setStateLabel("WINK"); break;
-        default: face.setStateLabel("IDLE"); break;
-      }
-    }
-  }
+  face.setDefaultExpression(EXPR_ROBOT_EYE);
+  face.setExpression(EXPR_ROBOT_EYE);
+  face.setStateLabel("ROBOT_EYE");
 
   ble.setBLEActive(bleActive);
   tft.invertDisplay(true);
@@ -982,8 +935,8 @@ void setup() {
   preferences.begin("luna", false);
   bleActive = true; // Always ON
   gifSpeed = 169;
-  defaultGif = preferences.getInt("defGif", 99);
-  gifIntro = preferences.getInt("intGif", 1);
+  defaultGif = preferences.getInt("defGif", 20);
+  gifIntro = preferences.getInt("intGif", 20);
   // Gestures/touch settings no longer loaded
   robotVariant = preferences.getString("robot_var", "ms_luna");
   negativeDisplay = false; // Always boot in White Theme (Light Mode)
@@ -1039,7 +992,7 @@ void setup() {
       // HW RTC had invalid time — try restoring from NVS (last known good time)
       Serial.println(F("[RTC] HW time invalid — restoring from NVS last-known time"));
       preferences.begin("luna", true);
-      int nvs_h    = preferences.getInt("rtcH",  0);
+      int nvs_h    = preferences.getInt("rtcH",  -1);
       int nvs_m    = preferences.getInt("rtcM",  0);
       int nvs_s    = preferences.getInt("rtcS",  0);
       String nvs_day  = preferences.getString("rtcDay",  "Mon");
@@ -1057,14 +1010,18 @@ void setup() {
         Serial.printf("[RTC] NVS time restored: %02d:%02d:%02d %s %s\n",
                       rtcHour, rtcMinute, rtcSecond, rtcDay.c_str(), rtcDate.c_str());
       } else {
-        Serial.println(F("[RTC] No valid NVS time — waiting for TIME: sync from app"));
+        rtcHour   = BUILD_HOUR;
+        rtcMinute = BUILD_MIN;
+        rtcSecond = BUILD_SEC;
+        rtcDevice.setTimeFull(BUILD_YEAR, BUILD_MONTH, BUILD_DAY, BUILD_HOUR, BUILD_MIN, BUILD_SEC);
+        Serial.printf("[RTC] Initialised from compile-time: %02d:%02d:%02d\n", rtcHour, rtcMinute, rtcSecond);
       }
     } else {
       Serial.printf("[RTC] HW time loaded: %02d:%02d:%02d %s %s\n",
                     rtcHour, rtcMinute, rtcSecond, rtcDay.c_str(), rtcDate.c_str());
     }
   } else {
-    // RTC hardware not found — still try NVS
+    // RTC hardware not found — still try NVS, fallback to compile time
     Serial.println(F("[RTC] PCF85063 not detected — checking NVS"));
     preferences.begin("luna", true);
     int nvs_h    = preferences.getInt("rtcH",  -1);
@@ -1073,12 +1030,17 @@ void setup() {
     String nvs_day  = preferences.getString("rtcDay",  "Mon");
     String nvs_date = preferences.getString("rtcDate", "01 Jan");
     preferences.end();
-    if (nvs_h >= 0 && nvs_h <= 23) {
+    if (nvs_h >= 0 && nvs_h <= 23 && nvs_m >= 0 && nvs_m <= 59) {
       rtcHour   = nvs_h;
       rtcMinute = nvs_m;
       rtcSecond = nvs_s;
       rtcDay    = nvs_day;
       rtcDate   = nvs_date;
+    } else {
+      rtcHour   = BUILD_HOUR;
+      rtcMinute = BUILD_MIN;
+      rtcSecond = BUILD_SEC;
+      Serial.printf("[RTC] Fallback to compile-time: %02d:%02d:%02d\n", rtcHour, rtcMinute, rtcSecond);
     }
   }
 
@@ -1104,23 +1066,10 @@ void setup() {
   Serial.print(negativeDisplay ? "Ms. Luna Robot Booting Up... Version: " : "Mr. Luna Robot Booting Up... Version: ");
   Serial.println(FIRMWARE_VERSION);
 
-  // Set the GIF speed delay and default expression
+  // Set default expression
   face.setFrameDelay(gifSpeed);
-  if (defaultGif == 99) {
-    isCycleMode = true;
-  } else {
-    isCycleMode = false;
-    if (defaultGif >= 100) {
-      int gifIdx = defaultGif - 100;
-      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-        face.setGifIndex(gifIdx);
-        face.setExpression(EXPR_ALL_GIF);
-      }
-    } else {
-      face.setDefaultExpression((Expression)defaultGif);
-      face.setExpression((Expression)defaultGif);
-    }
-  }
+  face.setDefaultExpression(EXPR_ROBOT_EYE);
+  face.setExpression(EXPR_ROBOT_EYE);
 
   // Perform Hardware Reset
   pinMode(TFT_DC, OUTPUT);
@@ -1175,39 +1124,12 @@ void setup() {
   
   // Set intro speed
   face.setFrameDelay(gifIntroSpeed);
-  inIntroPhase = true;
-
-  if (gifIntro >= 100) {
-    int gifIdx = gifIntro - 100;
-    if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-      face.setGifIndex(gifIdx);
-      face.setExpression(EXPR_ALL_GIF);
-    }
-  } else {
-    face.setExpression((Expression)gifIntro);
-  }
+  face.setExpression(EXPR_ROBOT_EYE);
 
   lastInteractionTime = millis();
   lastRtcMillis = millis();
   lastExpressionCycleTime = millis();
 
-  // Dump all loaded GIF names to serial for debugging
-  Serial.println("====== GIF TABLE DUMP ======");
-  Serial.print("Total GIFs loaded: ");
-  Serial.println(ALL_GIFS_COUNT);
-  for (int i = 0; i < ALL_GIFS_COUNT; i++) {
-    char gifName[32];
-    strcpy_P(gifName, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[i].name));
-    uint32_t cnt = (uint32_t)pgm_read_dword(&ALL_GIFS_TABLE[i].count);
-    Serial.print("GIF[");
-    Serial.print(i);
-    Serial.print("] ");
-    Serial.print(gifName);
-    Serial.print(" (");
-    Serial.print(cnt);
-    Serial.println(" frames)");
-  }
-  Serial.println("=============================");
   games.begin();
   qrCard.begin();  // Load persisted business card URL from NVS
 }
@@ -1216,35 +1138,15 @@ void setup() {
 int allGifCycleIdx = 0;
 
 void cycleExpression() {
-  allGifCycleIdx = random(0, ALL_GIFS_COUNT);
-  face.setGifIndex(allGifCycleIdx);
-  face.setExpression(EXPR_ALL_GIF);
-  // Read GIF name from PROGMEM — update stateLabel so BLE status mirrors hardware
-  char gifName[32];
-  strcpy_P(gifName, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[allGifCycleIdx].name));
-  face.setStateLabel(String(gifName));   // <-- critical: keeps app simulator in sync
-  uint32_t cnt = (uint32_t)pgm_read_dword(&ALL_GIFS_TABLE[allGifCycleIdx].count);
-  Serial.print("PLAYING RANDOM:GIF[");
-  Serial.print(allGifCycleIdx);
-  Serial.print("/");
-  Serial.print(ALL_GIFS_COUNT - 1);
-  Serial.print("] ");
-  Serial.print(gifName);
-  Serial.print(" (");
-  Serial.print(cnt);
-  Serial.println(" frames)");
+  face.setDefaultExpression(EXPR_ROBOT_EYE);
+  face.setExpression(EXPR_ROBOT_EYE);
+  face.setStateLabel("ROBOT_EYE");
+  Serial.println("PLAYING ROBOT_EYE ANIMATION (Sprite AI)");
 }
 
 String getExpressionName(int expr) {
   if (expr >= 100) {
-    int gifIndex = expr - 100;
-    if (gifIndex >= 0 && gifIndex < ALL_GIFS_COUNT) {
-      char nameBuf[32];
-      strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIndex].name));
-      String name = String(nameBuf);
-      name.toUpperCase();
-      return name;
-    }
+    return "ROBOT_EYE";
   }
   switch (expr) {
     case 0: return "IDLE";
@@ -1257,6 +1159,7 @@ String getExpressionName(int expr) {
     case 7: return "TEXT";
     case 8: return "CLOCK";
     case 9: return "MAP";
+    case 20: return "ROBOT_EYE";
     default: return "HAPPY";
   }
 }
@@ -1445,10 +1348,9 @@ void handleBtn1Single() {
 
   // Button 1 single click on other screens:
   if (currentScreen == SCREEN_FACE) {
-    // Next expression/animation
-    cycleExpression();
-    audio.playSound(SOUND_COIN);
-    Serial.println("[BTN1] Next expression");
+    // Tap on FACE screen -> advance to next screen (SCREEN_CARD / SCREEN_CLOCK)
+    handleBtn2Single();
+    return;
   } else if (currentScreen == SCREEN_CLOCK) {
     // Cycles clock styles
     clockStyle = (clockStyle + 1) % 5;
@@ -1745,18 +1647,8 @@ void updateStateLabel() {
       case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
       case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
       case EXPR_WINK: face.setStateLabel("WINK"); break;
-      case EXPR_ALL_GIF: {
-        int gifIdx = face.getGifIndex();
-        if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-          char nameBuf[32];
-          strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIdx].name));
-          face.setStateLabel(String(nameBuf));
-        } else {
-          face.setStateLabel("IDLE");
-        }
-        break;
-      }
-      default: face.setStateLabel("IDLE"); break;
+      case EXPR_ROBOT_EYE: face.setStateLabel("ROBOT_EYE"); break;
+      default: face.setStateLabel("ROBOT_EYE"); break;
     }
   } else if (currentScreen == SCREEN_GAMES) {
     if (gamePlaying) {
@@ -1910,11 +1802,17 @@ void loop() {
     updatePomodoroTimer();
 
     
-    // Update Real-Time Clock from PCF85063 hardware
+    // Update Real-Time Clock from PCF85063 hardware with software tick fallback
     if (now - lastRtcMillis >= 1000) {
       lastRtcMillis = now;
-      if (!rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate)) {
-        rtcSecond++;
+      int prevS = rtcSecond;
+      int prevM = rtcMinute;
+      int prevH = rtcHour;
+      bool hwOk = rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
+      if (!hwOk || (hwOk && rtcHour == prevH && rtcMinute == prevM && rtcSecond == prevS)) {
+        rtcSecond = prevS + 1;
+        rtcMinute = prevM;
+        rtcHour   = prevH;
         if (rtcSecond >= 60) {
           rtcSecond = 0;
           rtcMinute++;
@@ -2019,19 +1917,7 @@ void loop() {
       // Re-print all GIF entries for debugging
       Serial.println("====== GIF TABLE DUMP ======");
       Serial.print("Total GIFs loaded: ");
-      Serial.println(ALL_GIFS_COUNT);
-      for (int i = 0; i < ALL_GIFS_COUNT; i++) {
-        char gifName[32];
-        strcpy_P(gifName, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[i].name));
-        uint32_t cnt = (uint32_t)pgm_read_dword(&ALL_GIFS_TABLE[i].count);
-        Serial.print("GIF[");
-        Serial.print(i);
-        Serial.print("] ");
-        Serial.print(gifName);
-        Serial.print(" (");
-        Serial.print(cnt);
-        Serial.println(" frames)");
-      }
+      Serial.println("Sprite AI Robot Eye animation active.");
       Serial.println("=============================");
     } else {
       // Fallback: forward generic commands (e.g. MAP:, NOTIF:, EXPR:, AUDIO:) to the robot command handler
@@ -2043,11 +1929,17 @@ void loop() {
   // at the top of loop() via interaction.update() + handleBtn1/2 functions.
 
 
-  // 3.5. Update Real-Time Clock from PCF85063 hardware
+  // 3.5. Update Real-Time Clock from PCF85063 hardware with software tick fallback
   if (now - lastRtcMillis >= 1000) {
     lastRtcMillis = now;
-    if (!rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate)) {
-      rtcSecond++;
+    int prevS = rtcSecond;
+    int prevM = rtcMinute;
+    int prevH = rtcHour;
+    bool hwOk = rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
+    if (!hwOk || (hwOk && rtcHour == prevH && rtcMinute == prevM && rtcSecond == prevS)) {
+      rtcSecond = prevS + 1;
+      rtcMinute = prevM;
+      rtcHour   = prevH;
       if (rtcSecond >= 60) {
         rtcSecond = 0;
         rtcMinute++;
@@ -2061,59 +1953,10 @@ void loop() {
   }
 
 
-  // 3.6. Expression cycling and transitions
-  if (inIntroPhase) {
-    currentScreen = SCREEN_FACE; // Force face screen on boot for intro animation
-    if (face.isGifFinished()) {
-      face.clearGifFinished();
-      inIntroPhase = false;
-      lastInteractionTime = millis();   // reset so inactivity timer doesn't fire immediately
-      lastExpressionCycleTime = millis();
-      face.setFrameDelay(gifSpeed);
-      currentScreen = SCREEN_CLOCK; // Switch to clock after boot!
-      if (isCycleMode) {
-        cycleExpression();
-      } else {
-        if (defaultGif >= 100) {
-          face.setGifIndex(defaultGif - 100);
-          face.setExpression(EXPR_ALL_GIF);
-        } else {
-          face.setExpression((Expression)defaultGif);
-        }
-      }
-      lastExpressionCycleTime = now;
-    }
-  } else {
-    // Regular operation expression cycling (only when on SCREEN_FACE screen)
-    if (currentScreen == SCREEN_FACE && !isAsleep) {
-      if (face.getExpression() == EXPR_ALL_GIF) {
-        if (face.isGifFinished()) {
-          face.clearGifFinished();
-          if (isCycleMode) {
-            // Only switch to a different random GIF if at least 8 seconds has elapsed since last cycle!
-            if (now - lastExpressionCycleTime >= 8000) {
-              cycleExpression();
-              lastExpressionCycleTime = now;
-            }
-          }
-        }
-      } else {
-        // Return to random emoji cycling/default expression after notification duration
-        if (!isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
-          face.headerText = ""; // Clear header overlay
-          if (isCycleMode) {
-            cycleExpression();
-          } else {
-            if (defaultGif >= 100) {
-              face.setGifIndex(defaultGif - 100);
-              face.setExpression(EXPR_ALL_GIF);
-            } else {
-              face.setExpression((Expression)defaultGif);
-            }
-          }
-          lastExpressionCycleTime = now;
-        }
-      }
+  // 3.6. Expression cycling
+  if (currentScreen == SCREEN_FACE && !isAsleep) {
+    if (face.getExpression() != EXPR_ROBOT_EYE) {
+      cycleExpression();
     }
   }
 

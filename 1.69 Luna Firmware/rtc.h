@@ -104,6 +104,9 @@ public:
       return false;
     }
 
+    // Always clear STOP bit and set 24h mode in Control_1 (0x00)
+    writeReg(PCF85063_REG_CTRL1, 0x00);
+
     // Read seconds register to check OS (Oscillator Stop) bit
     uint8_t secReg = 0;
     if (!readReg(PCF85063_REG_SECONDS, secReg)) {
@@ -114,13 +117,10 @@ public:
     bool osBit = (secReg & 0x80) != 0;
     if (osBit) {
       Serial.println(F("[RTC] Oscillator was stopped — clearing OS bit and starting clock."));
-      // Clear STOP bit and OS bit:  Control_1 = 0x00 (24h mode, oscillator running)
+      // Clear STOP bit and OS bit: Control_1 = 0x00 (24h mode, oscillator running)
       writeReg(PCF85063_REG_CTRL1, 0x00);
       // Use compile-time date/time as the initial fallback when RTC oscillator
       // was stopped (e.g. first power-on or battery removed).
-      // __DATE__ = "Sep  5 2026", __TIME__ = "20:58:00"
-      // This gives a reasonable starting point close to the actual flash time.
-      // The companion app / USB TIME: command will correct it precisely.
       setTimeFull(BUILD_YEAR, BUILD_MONTH, BUILD_DAY,
                   BUILD_HOUR, BUILD_MIN, BUILD_SEC);
       Serial.println(F("[RTC] Time initialised from compile-time. Send TIME: command to sync."));
@@ -132,6 +132,14 @@ public:
 
   bool readTime(int &hour, int &minute, int &second,
                 String &dayStr, String &dateStr) {
+    // Ensure STOP bit in Control_1 is NOT set
+    uint8_t ctrl1 = 0;
+    if (readReg(PCF85063_REG_CTRL1, ctrl1)) {
+      if (ctrl1 & 0x20) { // STOP bit (bit 5) active
+        writeReg(PCF85063_REG_CTRL1, 0x00); // Clear STOP bit to start clock oscillator
+      }
+    }
+
     Wire.beginTransmission(PCF85063_I2C_ADDR);
     Wire.write(PCF85063_REG_SECONDS);
     if (Wire.endTransmission(false) != 0) return false;
