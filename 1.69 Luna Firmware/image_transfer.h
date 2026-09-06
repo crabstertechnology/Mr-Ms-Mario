@@ -50,12 +50,23 @@ static uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t len) {
 #define WALLPAPER_PATH      "/wallpaper.jpg"
 
 // ───────────────────────────────────────────────────────────────────────────
-// TJpgDec pixel output callback — blits a decoded MCU block to the TFT or Canvas
+// TJpgDec pixel output callback — blits a decoded MCU block to TFT, Cache, or Canvas
 // ───────────────────────────────────────────────────────────────────────────
 static GFXcanvas16* _targetCanvas = nullptr;
+static uint16_t*    _targetCache  = nullptr;
 
 static bool _tftOutputCallback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
-  if (_targetCanvas != nullptr) {
+  if (_targetCache != nullptr) {
+    for (int j = 0; j < h; j++) {
+      int16_t cy = y + j;
+      if (cy < 0 || cy >= SCREEN_HEIGHT) continue;
+      for (int i = 0; i < w; i++) {
+        int16_t cx = x + i;
+        if (cx < 0 || cx >= SCREEN_WIDTH) continue;
+        _targetCache[cy * SCREEN_WIDTH + cx] = bitmap[j * w + i];
+      }
+    }
+  } else if (_targetCanvas != nullptr) {
     _targetCanvas->drawRGBBitmap(x, y, bitmap, w, h);
   } else {
     // Apply 20-px vertical offset for Waveshare 1.69 ST7789 display window
@@ -88,6 +99,26 @@ private:
   bool     _fsReady       = false;
   bool     _wallpaperExists = false;
 
+  // RAM Wallpaper Cache (134.4 KB) for 60+ FPS zero-flicker clock screen rendering
+  uint16_t* _wallpaperCache = nullptr;
+  bool      _cacheValid     = false;
+
+  void _initCache() {
+    if (_wallpaperCache != nullptr) return;
+    size_t sz = SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(uint16_t);
+#if defined(BOARD_HAS_PSRAM) || defined(CONFIG_SPIRAM_SUPPORT)
+    if (psramFound()) {
+      _wallpaperCache = (uint16_t*)ps_malloc(sz);
+    }
+#endif
+    if (!_wallpaperCache) {
+      _wallpaperCache = (uint16_t*)malloc(sz);
+    }
+    if (_wallpaperCache) {
+      Serial.println("[IMG] Allocated RAM wallpaper cache successfully.");
+    }
+  }
+
   // ── Progress broadcast (polled by main loop) ──────────────────────────
   float    _progress = 0.0f;  // 0.0 – 1.0
 
@@ -116,7 +147,28 @@ public:
   // Call once in setup() to initialise LittleFS and check for existing wallpaper
   void begin() {
     _buildCrc32Table();
-    _initFS();
+    if (_initFS()) {
+      if (_wallpaperExists) {
+        reloadCache();
+      }
+    }
+  }
+
+  void reloadCache() {
+    if (!_initFS()) return;
+    if (!_wallpaperExists || !LittleFS.exists(WALLPAPER_PATH)) {
+      _cacheValid = false;
+      return;
+    }
+    _initCache();
+    if (_wallpaperCache == nullptr) return;
+
+    _targetCache = _wallpaperCache;
+    _targetCanvas = nullptr;
+    _decodeAndDisplay();
+    _targetCache = nullptr;
+    _cacheValid = true;
+    Serial.println("[IMG] Wallpaper cache reloaded into RAM successfully.");
   }
 
   // Called when TEXT char receives "IMG_START:<size>:<crc32hex>"
@@ -142,7 +194,6 @@ public:
     _expectedCrc   = crc;
     _receivedBytes = 0;
     _runningCrc    = crc32Update(0, nullptr, 0);  // init = 0x00000000
-    // Reset properly
     _runningCrc    = 0;
     _state         = RECEIVING;
     _progress      = 0.0f;
@@ -167,7 +218,6 @@ public:
   }
 
   // Called when TEXT char receives "IMG_END"
-  // Returns true on success (firmware should send LOG:IMG_OK), false on failure (LOG:IMG_FAIL)
   bool finishTransfer(String& errorOut) {
     if (_state != RECEIVING) {
       errorOut = "not_receiving";
@@ -207,17 +257,12 @@ public:
     }
 
     _wallpaperExists = true;
+    _cacheValid = false;
     _state = DECODING;
     _progress = 1.0f;
-    Serial.println("[IMG] CRC OK — decoding and displaying wallpaper...");
+    Serial.println("[IMG] CRC OK — decoding and caching wallpaper...");
 
-    // 4. Decode and display
-    bool decodeOk = _decodeAndDisplay();
-    if (!decodeOk) {
-      errorOut = "jpeg_decode_failed";
-      _state = DONE_FAIL;
-      return false;
-    }
+    reloadCache();
 
     _state = DONE_OK;
     errorOut = "";
@@ -236,6 +281,7 @@ public:
   // Delete saved wallpaper and revert to face screen
   bool deleteWallpaper() {
     _wallpaperExists = false;
+    _cacheValid = false;
     if (LittleFS.exists(WALLPAPER_PATH)) {
       LittleFS.remove(WALLPAPER_PATH);
       Serial.println("[IMG] Wallpaper deleted.");
@@ -252,14 +298,26 @@ public:
       return false;
     }
     _targetCanvas = nullptr;
+    _targetCache  = nullptr;
     return _decodeAndDisplay();
   }
 
-  // Draw saved wallpaper directly into GFXcanvas16 buffer
+  // Draw saved wallpaper directly into GFXcanvas16 buffer using fast RAM memcpy
   bool drawWallpaperToCanvas(GFXcanvas16& canvas) {
     if (!_initFS()) return false;
-    if (!LittleFS.exists(WALLPAPER_PATH)) return false;
+    if (!_wallpaperExists) return false;
+
+    if (!_cacheValid || _wallpaperCache == nullptr) {
+      reloadCache();
+    }
+
+    if (_wallpaperCache != nullptr && _cacheValid) {
+      memcpy(canvas.getBuffer(), _wallpaperCache, SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(uint16_t));
+      return true;
+    }
+
     _targetCanvas = &canvas;
+    _targetCache  = nullptr;
     bool ok = _decodeAndDisplay();
     _targetCanvas = nullptr;
     return ok;
@@ -284,11 +342,12 @@ private:
     TJpgDec.setSwapBytes(false);                      // False: Adafruit_GFX drawRGBBitmap expects native RGB565
     TJpgDec.setCallback(_tftOutputCallback);
 
-    // Clear screen first
-    tft.fillScreen(ST77XX_BLACK);
+    // Clear hardware screen ONLY when rendering directly to physical TFT hardware
+    if (_targetCanvas == nullptr && _targetCache == nullptr) {
+      tft.fillScreen(ST77XX_BLACK);
+    }
 
     // Decode directly from LittleFS file
-    // TJpgDec supports File* via drawFsJpg
     uint16_t imgW = 0, imgH = 0;
     JRESULT res = TJpgDec.getFsJpgSize(&imgW, &imgH, WALLPAPER_PATH, LittleFS);
     if (res != JDR_OK) {
@@ -308,7 +367,7 @@ private:
       return false;
     }
 
-    Serial.printf("[IMG] Wallpaper displayed (%dx%d) at (%d,%d)\n", imgW, imgH, ox, oy);
+    Serial.printf("[IMG] Wallpaper decoded (%dx%d) at (%d,%d)\n", imgW, imgH, ox, oy);
     return true;
   }
 };

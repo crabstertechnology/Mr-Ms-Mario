@@ -16,7 +16,6 @@ extern LunaQR qrCard;
 extern LunaIMU imu;
 extern bool calibrateRequest;
 extern LunaImageTransfer imgTransfer;
-extern bool showWallpaperInClock;
 
 // Color compatibility macros for Adafruit GFX
 #define TFT_BLACK       ST77XX_BLACK
@@ -1680,13 +1679,34 @@ public:
     }
   }
 
+  // Optimized bold outlined text — 3 shadow passes + 1 main = 4 total (was 6)
+  void drawBoldOutlinedText(const char* text, int x, int y, uint16_t textColor, uint16_t shadowColor = 0x0000) {
+    // Draw shadow at bottom-right, bottom-left, top-right (3 passes covers all visible edges)
+    display.setTextColor(shadowColor);
+    display.setCursor(x - 1, y + 1); display.print(text); // bottom-left shadow
+    display.setCursor(x + 1, y + 1); display.print(text); // bottom-right shadow
+    display.setCursor(x,     y - 1); display.print(text); // top shadow
+    // Main text on top
+    display.setTextColor(textColor);
+    display.setCursor(x, y); display.print(text);
+  }
+
+  void drawBoldOutlinedText(const String& text, int x, int y, uint16_t textColor, uint16_t shadowColor = 0x0000) {
+    display.setTextColor(shadowColor);
+    display.setCursor(x - 1, y + 1); display.print(text);
+    display.setCursor(x + 1, y + 1); display.print(text);
+    display.setCursor(x,     y - 1); display.print(text);
+    display.setTextColor(textColor);
+    display.setCursor(x, y); display.print(text);
+  }
+
   void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour, int steps) {
     uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
     uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    uint16_t themeText   = 0x2104;
+    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2;
+    uint16_t themeBorder = 0xD69A;
+    uint16_t themeSubText = 0x7BCF;
 
     // Clear display below the status bar
     display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
@@ -1806,74 +1826,113 @@ public:
       int dW = dStr.length() * 12;
       display.setCursor((SCREEN_WIDTH - dW) / 2, SCREEN_HEIGHT - 28);
       display.print(dStr);
+    } else if (style == 1) {
+      // Style 1: Minimalist Radial Gauge
+      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 16, themeAccent);
+      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 12, themeBg);
 
-    } else {
-      // Style 2: Watch OS Grid
-      bool isWpActive = (showWallpaperInClock && imgTransfer.hasWallpaper());
-      if (isWpActive) {
-        imgTransfer.drawWallpaperToCanvas(display);
-      } else {
-        display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
-        display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, themeBg);
+      // Center card
+      int cardW = 130;
+      int cardH = 46;
+      int cardX = (SCREEN_WIDTH - cardW) / 2;
+      int cardY = (SCREEN_HEIGHT - cardH) / 2 + 8;
+      display.fillRoundRect(cardX, cardY, cardW, cardH, 8, themeCardBg);
+      display.drawRoundRect(cardX, cardY, cardW, cardH, 8, themeBorder);
 
-        // Grid spacing — draw grid lines ONLY when not in wallpaper mode
-        int gridSpacing = SCREEN_WIDTH / 10;
-        for (int x = gridSpacing; x < SCREEN_WIDTH; x += gridSpacing) {
-          display.drawFastVLine(x, 28, SCREEN_HEIGHT - 28, themeBorder);
-          yield();
-        }
-        for (int y = 28; y < SCREEN_HEIGHT; y += gridSpacing) {
-          display.drawFastHLine(0, y, SCREEN_WIDTH, themeBorder);
-          yield();
-        }
-      }
-
-      // Title Card
-      display.fillRoundRect(12, 34, 130, 20, 4, isWpActive ? 0x0000 : themeCardBg);
-      if (isWpActive) display.drawRoundRect(12, 34, 130, 20, 4, themeAccent);
-      display.setTextColor(isWpActive ? TFT_WHITE : themeText, isWpActive ? 0x0000 : themeCardBg);
-      display.setTextSize(1);
-      display.setCursor(18, 40);
-      display.print("WATCH OS v3.0");
-
-      // Time (Large & bold size 4 with dark translucent backdrop if wallpaper active)
-      if (isWpActive) {
-        display.fillRoundRect(10, 58, SCREEN_WIDTH - 20, 44, 8, 0x0000);
-        display.drawRoundRect(10, 58, SCREEN_WIDTH - 20, 44, 8, themeAccent);
-      }
-
-      display.setTextSize(4);
-      display.setTextColor(isWpActive ? TFT_WHITE : themeText, isWpActive ? 0x0000 : themeBg);
+      // Time
+      display.setTextSize(3);
+      display.setTextColor(themeText, themeCardBg);
       char timeStr[6];
       int dispHour = hour;
       if (is12Hour) {
         dispHour = hour % 12;
         if (dispHour == 0) dispHour = 12;
       }
-      snprintf(timeStr, sizeof(timeStr), "%d:%02d", dispHour, minute);
-      display.setCursor(14, 64);
+      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
+      display.setCursor(cardX + 16, cardY + 12);
       display.print(timeStr);
+
+      display.setTextSize(1);
+      display.setTextColor(themeAccent, themeCardBg);
+      if (is12Hour) {
+        const char* ampm = (hour >= 12) ? "PM" : "AM";
+        display.setCursor(cardX + 104, cardY + 14);
+        display.print(ampm);
+      }
+      char secStr[6];
+      snprintf(secStr, sizeof(secStr), "%02d", second);
+      display.setCursor(cardX + 104, cardY + 24);
+      display.print(secStr);
+
+      // Sweeping Ring arc
+      int progressWidth = (second * (SCREEN_WIDTH - 48)) / 60;
+      display.drawRoundRect(24, 38, SCREEN_WIDTH - 48, 6, 3, themeBorder);
+      display.fillRoundRect(24, 38, progressWidth, 6, 3, themeAccent);
+
+      // Date
+      display.fillRoundRect(24, SCREEN_HEIGHT - 32, SCREEN_WIDTH - 48, 24, 6, themeCardBg);
+      display.drawRoundRect(24, SCREEN_HEIGHT - 32, SCREEN_WIDTH - 48, 24, 6, themeBorder);
+      display.setTextSize(2);
+      display.setTextColor(themeText, themeCardBg);
+      String dStr = day + " " + date;
+      int dW = dStr.length() * 12;
+      display.setCursor((SCREEN_WIDTH - dW) / 2, SCREEN_HEIGHT - 28);
+      display.print(dStr);
+
+    } else {
+      // Style 2+: Watch OS Grid Clock (clean, no wallpaper overlay)
+      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
+      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, themeBg);
+
+      // Grid lines
+      int gridSpacing = SCREEN_WIDTH / 5;
+      for (int gx = gridSpacing; gx < SCREEN_WIDTH; gx += gridSpacing) {
+        display.drawFastVLine(gx, 28, SCREEN_HEIGHT - 28, themeBorder);
+      }
+      for (int gy = 28; gy < SCREEN_HEIGHT; gy += gridSpacing) {
+        display.drawFastHLine(0, gy, SCREEN_WIDTH, themeBorder);
+      }
+
+      // Title Card
+      display.fillRoundRect(12, 34, 130, 20, 4, themeCardBg);
+      display.setTextColor(themeText, themeCardBg);
+      display.setTextSize(1);
+      display.setCursor(18, 40);
+      display.print("WATCH OS v3.0");
+
+      // Time
+      display.setTextSize(4);
+      display.setTextColor(themeText, themeBg);
+      char timeStr2[6];
+      int dispHour2 = hour;
+      if (is12Hour) {
+        dispHour2 = hour % 12;
+        if (dispHour2 == 0) dispHour2 = 12;
+      }
+      snprintf(timeStr2, sizeof(timeStr2), "%d:%02d", dispHour2, minute);
+      display.setCursor(14, 64);
+      display.print(timeStr2);
 
       display.setTextSize(2);
       if (is12Hour) {
-        display.setTextColor(themeAccent, isWpActive ? 0x0000 : themeBg);
-        display.setCursor(120 + (dispHour >= 10 ? 24 : 0), 64);
+        display.setTextColor(themeAccent, themeBg);
+        display.setCursor(120 + (dispHour2 >= 10 ? 24 : 0), 64);
         display.print((hour >= 12) ? "PM" : "AM");
       }
 
-      // Steps widget (size 2, centered inside high contrast card)
-      display.fillRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, isWpActive ? 0x0000 : themeCardBg);
-      display.drawRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, isWpActive ? themeAccent : themeBorder);
-      display.setTextColor(isWpActive ? TFT_WHITE : themeText, isWpActive ? 0x0000 : themeCardBg);
+      // Steps widget
+      display.fillRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, themeCardBg);
+      display.drawRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, themeBorder);
+      display.setTextColor(themeText, themeCardBg);
       display.setTextSize(2);
       display.setCursor(20, 116);
       display.print("STEPS: ");
       display.print(steps);
 
-      // Date widget (size 2, centered inside high contrast card)
-      display.fillRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, isWpActive ? 0x0000 : themeCardBg);
-      display.drawRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, isWpActive ? themeAccent : themeBorder);
-      display.setTextColor(isWpActive ? TFT_WHITE : themeText, isWpActive ? 0x0000 : themeCardBg);
+      // Date widget
+      display.fillRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, themeCardBg);
+      display.drawRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, themeBorder);
+      display.setTextColor(themeText, themeCardBg);
       display.setTextSize(2);
       display.setCursor(20, 152);
       display.print("DATE: ");
@@ -1882,7 +1941,8 @@ public:
       display.print(date);
 
       // Flashing block
-      display.fillRoundRect(SCREEN_WIDTH - 30, SCREEN_HEIGHT - 30, 12, 12, 3, (second % 2 == 0) ? themeAccent : themeBorder);
+      display.fillRoundRect(SCREEN_WIDTH - 30, SCREEN_HEIGHT - 30, 12, 12, 3,
+                            (second % 2 == 0) ? themeAccent : themeBorder);
     }
   }
 

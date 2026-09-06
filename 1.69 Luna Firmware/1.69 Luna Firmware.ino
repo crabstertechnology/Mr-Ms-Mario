@@ -57,7 +57,6 @@ int gifIntro = 20;        // intro GIF expression (20 = EXPR_ROBOT_EYE)
 bool negativeDisplay = false; // SSD1306 display color inversion
 bool silentMode = false;
 int clockStyle = 3; // clock style selector (0 to 3) - Default to 3 for Custom UI Designer
-bool showWallpaperInClock = false; // Toggle wallpaper background on Clock Screen
 int oledBrightness = 2; // screen brightness (1: Low, 2: Med, 3: High)
 bool settingsActive = false;
 bool notificationsActive = false;
@@ -1509,15 +1508,10 @@ void handleBtn1Single() {
     notifyScreenAndExprSync();
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
-    if (imgTransfer.hasWallpaper()) {
-      showWallpaperInClock = !showWallpaperInClock;
-      audio.playSound(SOUND_CHIRP);
-      Serial.printf("[BTN1] Toggled Clock Wallpaper mode -> %s\n", showWallpaperInClock ? "ON" : "OFF");
-    } else {
-      clockStyle = (clockStyle + 1) % 5;
-      audio.playSound(SOUND_CHIRP);
-      Serial.println("[BTN1] Cycled clock style");
-    }
+    // Tap on clock screen cycles the clock style
+    clockStyle = (clockStyle + 1) % 4;
+    audio.playSound(SOUND_CHIRP);
+    Serial.printf("[BTN1] Cycled clock style -> %d\n", clockStyle);
   } else if (currentScreen == SCREEN_NOTIFICATIONS) {
     if (!notificationsActive) {
       if (face.getNotificationCount() > 0) {
@@ -1881,16 +1875,20 @@ void loop() {
       powerBtnPressStart = now;
     } else {
       if (now - powerBtnPressStart >= 1500) {
-        // Long press -> Enter Sleep / Digital Badge Mode
+        // Long press -> Enter Badge Mode: cut all battery-heavy subsystems
         if (!isAsleep) {
           isAsleep = true;
           wallpaperDrawnInSleep = false;
+          // Stop BLE entirely to save ~15-20mA
+          ble.setBLEActive(false);
+          // Silence audio synthesizer tasks
+          audio.silentMode = true;
           audio.playSound(SOUND_POWERDOWN);
-          Serial.println("[Power Button] Long press -> Entering Sleep / Digital Badge Mode");
+          // Wait for button release before entering badge loop
           while (digitalRead(40) == LOW) {
             delay(10);
-            audio.update(); // Keep audio synthesizer playing
           }
+          Serial.println("[Power Button] Long press -> Badge Mode: BLE off, display frozen");
           powerBtnWasPressed = false;
           powerBtnPressStart = 0;
         }
@@ -1901,15 +1899,17 @@ void loop() {
       unsigned long pressDuration = now - powerBtnPressStart;
       powerBtnWasPressed = false;
       powerBtnPressStart = 0;
-      
+
       if (pressDuration >= 50 && pressDuration < 1500) {
         if (isAsleep) {
+          // Short press while in badge mode -> full wake: restart BLE, restore audio
           isAsleep = false;
           wallpaperDrawnInSleep = false;
+          ble.setBLEActive(true);          // restart BLE advertising
+          audio.silentMode = silentMode;   // restore user silent preference
           audio.playSound(SOUND_CHIRP);
-          Serial.println("[Power Button] Short press -> Waking up from Sleep Mode");
+          Serial.println("[Power Button] Short press -> Waking from Badge Mode, BLE restarted");
         } else if (gamePlaying) {
-          // Exit game to arcade menu
           gamePlaying = false;
           gamesActive = true;
           audio.playSound(SOUND_POWERDOWN);
@@ -1975,70 +1975,43 @@ void loop() {
     }
   }
 
-  // ── 0.5. High-Efficiency Sleep Path ─────────────────────────────────────
-  // ── 0.5. High-Efficiency Sleep / Digital Badge Mode Path ───────────────────
+  // ── 0.5. Ultra-Low-Power Badge Mode Path ────────────────────────────────
+  // BLE is OFF, audio is silenced, RTC continues via software tick only.
+  // The screen is frozen on the wallpaper — zero continuous rendering.
   if (isAsleep) {
-    // Run minimal tasks for sleep mode
-    ble.handleConnectionState();
-    // Update Pomodoro timer background countdown
-    updatePomodoroTimer();
-
-    // Consume touch inputs to drain buffer, but do NOT allow touch to wake up sleep mode
+    // Drain any pending touch events (don't act on them)
     interaction.update();
 
-    // Update Real-Time Clock from PCF85063 hardware with software tick fallback
+    // Software RTC tick (no I2C reads — saves power and avoids I2C bus wake)
     if (now - lastRtcMillis >= 1000) {
       lastRtcMillis = now;
-      int prevS = rtcSecond;
-      int prevM = rtcMinute;
-      int prevH = rtcHour;
-      bool hwOk = rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
-      if (!hwOk || (hwOk && rtcHour == prevH && rtcMinute == prevM && rtcSecond == prevS)) {
-        rtcSecond = prevS + 1;
-        rtcMinute = prevM;
-        rtcHour   = prevH;
-        if (rtcSecond >= 60) {
-          rtcSecond = 0;
-          rtcMinute++;
-          if (rtcMinute >= 60) {
-            rtcMinute = 0;
-            rtcHour++;
-            if (rtcHour >= 24) rtcHour = 0;
-          }
-        }
-      }
-    }
-    
-    // Periodic battery read (every 10 seconds)
-    static unsigned long lastBatteryReadTime = 0;
-    if (now - lastBatteryReadTime > 10000) {
-      lastBatteryReadTime = now;
-      float rawVolts = readBatteryVolts();
-      if (batteryVolts == 3.82f) {
-        batteryVolts = rawVolts;
-      } else {
-        batteryVolts = 0.8f * batteryVolts + 0.2f * rawVolts;
-      }
+      rtcSecond++;
+      if (rtcSecond >= 60) { rtcSecond = 0; rtcMinute++; }
+      if (rtcMinute >= 60) { rtcMinute = 0; rtcHour++; }
+      if (rtcHour   >= 24) { rtcHour = 0; }
     }
 
-    // Render Digital Badge Wallpaper once when entering sleep mode (no 30fps redrawing -> max power saving!)
+    // Draw the wallpaper badge exactly once on entry — then freeze
     if (!wallpaperDrawnInSleep) {
       wallpaperDrawnInSleep = true;
       if (imgTransfer.hasWallpaper()) {
         imgTransfer.drawWallpaper();
       } else {
+        // No wallpaper set — show minimal dark badge screen
         tft.fillScreen(ST77XX_BLACK);
         tft.setTextColor(0x07FF, ST77XX_BLACK);
         tft.setTextSize(2);
-        tft.setCursor(40, 130 + 20);
+        int tx = (SCREEN_WIDTH - 9 * 12) / 2;
+        tft.setCursor(tx, 130 + 20);
         tft.print("LUNA BADGE");
         tft.setTextSize(1);
-        tft.setCursor(35, 160 + 20);
-        tft.print("Press power button to wake");
+        tft.setCursor(20, 165 + 20);
+        tft.print("Press power to wake");
       }
     }
 
-    vTaskDelay(20);
+    // Very low duty cycle — only wake to check the button
+    vTaskDelay(50);
     return;
   } else {
     wallpaperDrawnInSleep = false;
@@ -2067,8 +2040,13 @@ void loop() {
   ble.handleConnectionState();
 
   // 1.5. Check offline hardware scheduled alarms & calendar events
-  checkHardwareScheduledAlarms();
-  updatePomodoroTimer();
+  // Gate behind 1-second interval: avoid string comparisons on every loop iteration (~30x/sec)
+  static unsigned long lastAlarmCheckMs = 0;
+  if (now - lastAlarmCheckMs >= 1000) {
+    lastAlarmCheckMs = now;
+    checkHardwareScheduledAlarms();
+    updatePomodoroTimer();
+  }
 
 
   // 2. Refresh non-blocking audio synthesizer
@@ -2182,9 +2160,10 @@ void loop() {
     }
   }
 
-  // Periodic battery read (every 10 seconds)
+  // Periodic battery read — every 30s to reduce ADC blocking time
+  // (10 samples x 200µs each = ~2ms blocked per read, was triggering every 10s)
   static unsigned long lastBatteryReadTime = 0;
-  if (now - lastBatteryReadTime > 10000) {
+  if (now - lastBatteryReadTime > 30000) {
     lastBatteryReadTime = now;
     float rawVolts = readBatteryVolts();
     if (batteryVolts == 3.82f) {
@@ -2234,8 +2213,11 @@ void loop() {
     }
   }
 
-  // Yield one FreeRTOS tick to WiFi/BLE background tasks.
-  // Prevents the Arduino loop task from monopolising Core 1 at 100% and
-  // causing the IC to heat up. Completely invisible to the user at 30fps.
-  vTaskDelay(1);
+  // Yield FreeRTOS ticks to WiFi/BLE background tasks.
+  // Give 2 ticks on clock screen for BLE headroom; 1 tick elsewhere.
+  if (currentScreen == SCREEN_CLOCK) {
+    vTaskDelay(2);
+  } else {
+    vTaskDelay(1);
+  }
 }
