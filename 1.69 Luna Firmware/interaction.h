@@ -212,15 +212,28 @@ public:
               ev = BTN1_LONG;
               Serial.println("[Touch] Long press → home screen");
             } else if (held >= 30) {
-              if (lastX < TOUCH_LEFT_LIMIT) {
-                ev = BTN2_DOUBLE;
-                Serial.printf("[Touch] LEFT tap (X=%d) → prev screen\n", lastX);
-              } else if (lastX >= TOUCH_RIGHT_LIMIT) {
-                ev = BTN2_SINGLE;
-                Serial.printf("[Touch] RIGHT tap (X=%d) → next screen\n", lastX);
+              if (currentScreen == SCREEN_FACE) {
+                if (lastX < 40) {
+                  ev = BTN2_DOUBLE;
+                  Serial.printf("[Touch] LEFT tap (X=%d) → prev screen\n", lastX);
+                } else if (lastX >= 200) {
+                  ev = BTN2_SINGLE;
+                  Serial.printf("[Touch] RIGHT tap (X=%d) → next screen\n", lastX);
+                } else {
+                  ev = BTN1_SINGLE;
+                  Serial.printf("[Touch] CENTER tap (X=%d) → select\n", lastX);
+                }
               } else {
-                ev = BTN1_SINGLE;
-                Serial.printf("[Touch] CENTER tap (X=%d) → select\n", lastX);
+                if (lastX < 15) {
+                  ev = BTN2_DOUBLE;
+                  Serial.printf("[Touch] Edge LEFT tap (X=%d) → prev screen\n", lastX);
+                } else if (lastX >= 225) {
+                  ev = BTN2_SINGLE;
+                  Serial.printf("[Touch] Edge RIGHT tap (X=%d) → next screen\n", lastX);
+                } else {
+                  ev = BTN1_SINGLE;
+                  Serial.printf("[Touch] Content tap (X=%d, Y=%d) → select\n", lastX, lastY);
+                }
               }
             }
           }

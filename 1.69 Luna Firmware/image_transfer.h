@@ -50,11 +50,17 @@ static uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t len) {
 #define WALLPAPER_PATH      "/wallpaper.jpg"
 
 // ───────────────────────────────────────────────────────────────────────────
-// TJpgDec pixel output callback — blits a decoded MCU block to the TFT
+// TJpgDec pixel output callback — blits a decoded MCU block to the TFT or Canvas
 // ───────────────────────────────────────────────────────────────────────────
+static GFXcanvas16* _targetCanvas = nullptr;
+
 static bool _tftOutputCallback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
-  // Apply 20-px vertical offset for Waveshare 1.69 ST7789 display window
-  tft.drawRGBBitmap(x, y + 20, bitmap, w, h);
+  if (_targetCanvas != nullptr) {
+    _targetCanvas->drawRGBBitmap(x, y, bitmap, w, h);
+  } else {
+    // Apply 20-px vertical offset for Waveshare 1.69 ST7789 display window
+    tft.drawRGBBitmap(x, y + 20, bitmap, w, h);
+  }
   return true;
 }
 
@@ -245,7 +251,18 @@ public:
       Serial.println("[IMG] No wallpaper saved.");
       return false;
     }
+    _targetCanvas = nullptr;
     return _decodeAndDisplay();
+  }
+
+  // Draw saved wallpaper directly into GFXcanvas16 buffer
+  bool drawWallpaperToCanvas(GFXcanvas16& canvas) {
+    if (!_initFS()) return false;
+    if (!LittleFS.exists(WALLPAPER_PATH)) return false;
+    _targetCanvas = &canvas;
+    bool ok = _decodeAndDisplay();
+    _targetCanvas = nullptr;
+    return ok;
   }
 
   bool hasWallpaper() {

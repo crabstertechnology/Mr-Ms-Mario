@@ -57,6 +57,7 @@ int gifIntro = 20;        // intro GIF expression (20 = EXPR_ROBOT_EYE)
 bool negativeDisplay = false; // SSD1306 display color inversion
 bool silentMode = false;
 int clockStyle = 3; // clock style selector (0 to 3) - Default to 3 for Custom UI Designer
+bool showWallpaperInClock = false; // Toggle wallpaper background on Clock Screen
 int oledBrightness = 2; // screen brightness (1: Low, 2: Med, 3: High)
 bool settingsActive = false;
 bool notificationsActive = false;
@@ -1508,10 +1509,15 @@ void handleBtn1Single() {
     notifyScreenAndExprSync();
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
-    // Cycles clock styles
-    clockStyle = (clockStyle + 1) % 5;
-    audio.playSound(SOUND_CHIRP);
-    Serial.println("[BTN1] Cycled clock style");
+    if (imgTransfer.hasWallpaper()) {
+      showWallpaperInClock = !showWallpaperInClock;
+      audio.playSound(SOUND_CHIRP);
+      Serial.printf("[BTN1] Toggled Clock Wallpaper mode -> %s\n", showWallpaperInClock ? "ON" : "OFF");
+    } else {
+      clockStyle = (clockStyle + 1) % 5;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("[BTN1] Cycled clock style");
+    }
   } else if (currentScreen == SCREEN_NOTIFICATIONS) {
     if (!notificationsActive) {
       if (face.getNotificationCount() > 0) {
@@ -1529,7 +1535,8 @@ void handleBtn1Single() {
         Serial.println("[BTN1] Exited Notification Detail View");
       } else {
         int lastY = interaction.getLastY();
-        int optIdx = (lastY - 58) / 33;
+        int canvasY = lastY - 20;
+        int optIdx = (canvasY - 54) / 36;
         int notifCount = face.getNotificationCount();
         if (optIdx >= 0 && optIdx < notifCount && optIdx < 5) {
           if (face.getCurrentNotifViewIdx() == optIdx) {
@@ -1558,19 +1565,29 @@ void handleBtn1Single() {
     calibrateRequest = true;
     Serial.println("[BTN1] Triggered Level calibration");
   } else if (currentScreen == SCREEN_POMODORO) {
-    if (pomoState == 0 || pomoState == 2) {
-      pomoState = 1; // Start / Resume
-      pomoLastTickMillis = millis();
-      audio.playSound(SOUND_COIN);
-      Serial.println("[BTN1] Pomodoro timer started/resumed");
-    } else if (pomoState == 1) {
-      pomoState = 2; // Pause
-      audio.playSound(SOUND_CHIRP);
-      Serial.println("[BTN1] Pomodoro timer paused");
-    } else if (pomoState == 3) {
+    int lastY = interaction.getLastY();
+    int canvasY = lastY - 20;
+    if (canvasY < 60) {
+      // Tap top mode pill -> cycle mode
+      pomoMode = (pomoMode + 1) % 3;
       resetPomodoroTimer();
-      audio.playSound(SOUND_POWERUP);
-      Serial.println("[BTN1] Pomodoro timer reset after completion");
+      audio.playSound(SOUND_CHIRP);
+      Serial.printf("[BTN1] Pomodoro mode changed to -> %d\n", pomoMode);
+    } else {
+      if (pomoState == 0 || pomoState == 2) {
+        pomoState = 1; // Start / Resume
+        pomoLastTickMillis = millis();
+        audio.playSound(SOUND_COIN);
+        Serial.println("[BTN1] Pomodoro timer started/resumed");
+      } else if (pomoState == 1) {
+        pomoState = 2; // Pause
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[BTN1] Pomodoro timer paused");
+      } else if (pomoState == 3) {
+        resetPomodoroTimer();
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[BTN1] Pomodoro timer reset after completion");
+      }
     }
   }
   notifyScreenAndExprSync();
@@ -1770,7 +1787,8 @@ void handleSwipeUp() {
       audio.playSound(SOUND_CHIRP);
       Serial.printf("[Swipe Up] Settings Option highlighted -> %d\n", menuOption);
     }
-  } else if (currentScreen == SCREEN_GAMES && gamesActive && !gamePlaying) {
+  } else if (currentScreen == SCREEN_GAMES && !gamePlaying) {
+    gamesActive = true;
     gameMenuOption = (gameMenuOption + 1) % 8;
     audio.playSound(SOUND_CHIRP);
     Serial.printf("[Swipe Up] Game Option highlighted -> %d\n", gameMenuOption);
@@ -1789,7 +1807,8 @@ void handleSwipeDown() {
       audio.playSound(SOUND_CHIRP);
       Serial.printf("[Swipe Down] Settings Option highlighted -> %d\n", menuOption);
     }
-  } else if (currentScreen == SCREEN_GAMES && gamesActive && !gamePlaying) {
+  } else if (currentScreen == SCREEN_GAMES && !gamePlaying) {
+    gamesActive = true;
     gameMenuOption = (gameMenuOption - 1 + 8) % 8;
     audio.playSound(SOUND_CHIRP);
     Serial.printf("[Swipe Down] Game Option highlighted -> %d\n", gameMenuOption);
@@ -1964,15 +1983,8 @@ void loop() {
     // Update Pomodoro timer background countdown
     updatePomodoroTimer();
 
-    // Check for touch input to wake up
-    ButtonEvent sleepTouch = interaction.update();
-    if (sleepTouch != BTN_NONE) {
-      isAsleep = false;
-      wallpaperDrawnInSleep = false;
-      audio.playSound(SOUND_CHIRP);
-      Serial.println("[Touch] Waking up from Sleep Mode");
-      return;
-    }
+    // Consume touch inputs to drain buffer, but do NOT allow touch to wake up sleep mode
+    interaction.update();
 
     // Update Real-Time Clock from PCF85063 hardware with software tick fallback
     if (now - lastRtcMillis >= 1000) {
@@ -2022,7 +2034,7 @@ void loop() {
         tft.print("LUNA BADGE");
         tft.setTextSize(1);
         tft.setCursor(35, 160 + 20);
-        tft.print("Long-press power to wake");
+        tft.print("Press power button to wake");
       }
     }
 

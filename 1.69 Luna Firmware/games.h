@@ -329,10 +329,15 @@ public:
     display.print(scoreBuf);
 
     display.setTextColor(themeAccent);
-    display.setCursor((SCREEN_WIDTH - 13 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 160 : 108);
-    display.print("B1:PLAY AGAIN");
-    display.setCursor((SCREEN_WIDTH - 14 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 190 : 126);
-    display.print("B2:BACK 2 MENU");
+    const char* pAgain = "TAP TO REPLAY";
+    int pW = strlen(pAgain) * (SCREEN_WIDTH == 240 ? 12 : 6);
+    display.setCursor((SCREEN_WIDTH - pW) / 2, SCREEN_WIDTH == 240 ? 160 : 108);
+    display.print(pAgain);
+
+    const char* bMenu = "SWIPE TO EXIT";
+    int bW = strlen(bMenu) * (SCREEN_WIDTH == 240 ? 12 : 6);
+    display.setCursor((SCREEN_WIDTH - bW) / 2, SCREEN_WIDTH == 240 ? 190 : 126);
+    display.print(bMenu);
   }
 
   void drawMenu(GFXcanvas16& display) {
@@ -472,7 +477,7 @@ public:
 
     display.setTextSize(1);
     display.setTextColor(themeText);
-    String hint = "B1:Scroll  B2:Play";
+    String hint = "Tap: Select | Swipe: Scroll";
     display.setCursor((SCREEN_WIDTH - hint.length() * 6) / 2, SCREEN_WIDTH == 240 ? 208 : 140);
     display.print(hint);
   }

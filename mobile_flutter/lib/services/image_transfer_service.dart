@@ -82,19 +82,22 @@ class ImageTransferService {
     final decoded = img.decodeImage(inputBytes);
     if (decoded == null) throw Exception('Could not decode image');
 
-    // Resize + crop to exact 240×280 (fill mode, crop centre)
-    final resized = _cropAndResize(decoded, targetWidth, targetHeight);
+    // Resize + crop to exact 240×280 using high-sharpness bicubic interpolation
+    var resized = _cropAndResize(decoded, targetWidth, targetHeight);
+
+    // Subtle color & contrast boost for IPS display clarity
+    resized = img.adjustColor(resized, contrast: 1.06, saturation: 1.04);
 
     _emit(TransferProgress(phase: TransferPhase.compressing, percent: 20));
 
-    // Binary-search quality to hit ≤ maxBytes
+    // High quality JPEG encoding (starts at 95 for ultra-crisp detail)
     Uint8List? jpegBytes;
-    int quality = 90;
-    while (quality >= 30) {
+    int quality = 95;
+    while (quality >= 40) {
       final encoded = img.encodeJpg(resized, quality: quality);
       jpegBytes = Uint8List.fromList(encoded);
       if (jpegBytes.length <= maxBytes) break;
-      quality -= 10;
+      quality -= 5;
       jpegBytes = null;
     }
 
@@ -252,7 +255,7 @@ class ImageTransferService {
     final scaledW = (srcW * scale).round();
     final scaledH = (srcH * scale).round();
     final scaled = img.copyResize(src, width: scaledW, height: scaledH,
-        interpolation: img.Interpolation.linear);
+        interpolation: img.Interpolation.cubic);
 
     final cropX = (scaledW - targetW) ~/ 2;
     final cropY = (scaledH - targetH) ~/ 2;
