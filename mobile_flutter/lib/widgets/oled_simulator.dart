@@ -444,100 +444,74 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
         },
       );
     } else {
-      // Normal Eye expression GIF
-      Widget imageWidget;
+      // Sprite AI / Face Expression Renderer for 1.69" 240x280 display
       final isCycling = widget.activeLabel.toUpperCase() == "CYCLING ALL GIFS";
       final GifModel currentGif;
 
       if (isCycling && db.gifs.isNotEmpty) {
-        final cycleGifs = db.gifs.where((g) => g.category.toUpperCase() != "BLANK" && g.id != "blank" && g.id != "clock").toList();
+        final cycleGifs = db.gifs.where((g) => g.id != "clock").toList();
         if (cycleGifs.isNotEmpty) {
           currentGif = cycleGifs[_cycleIndex % cycleGifs.length];
         } else {
-          currentGif = db.gifs[_cycleIndex % db.gifs.length];
+          currentGif = db.gifs.isNotEmpty ? db.gifs[_cycleIndex % db.gifs.length] : GifModel(id: 'sprite_ai_0', name: 'Sprite AI 1', category: 'Sprite AI', size: 0, flashSize: '0KB');
         }
       } else {
-        currentGif = db.gifs.firstWhere((g) => g.id == widget.activeGifId, orElse: () => db.gifs.first);
+        currentGif = db.gifs.firstWhere((g) => g.id == widget.activeGifId, orElse: () => db.gifs.isNotEmpty ? db.gifs.first : GifModel(id: 'sprite_ai_0', name: 'Sprite AI 1', category: 'Sprite AI', size: 0, flashSize: '0KB'));
       }
       
+      Widget faceWidget;
       if (currentGif.customData != null && currentGif.customData!.isNotEmpty) {
-        // Base64 user uploaded image
         try {
           final base64Str = currentGif.customData!.split(',').last;
           final bytes = base64Decode(base64Str);
-          imageWidget = Gif(
-            key: ValueKey('${currentGif.id}_$_gifResetCounter'),
-            image: MemoryImage(bytes),
-            controller: _gifController,
-            autostart: Autostart.loop,
-            fit: BoxFit.contain,
-            placeholder: (context) => const Center(child: CircularProgressIndicator()),
-          );
+          faceWidget = Image.memory(bytes, fit: BoxFit.contain);
         } catch (e) {
-          imageWidget = const Icon(Icons.broken_image, color: Colors.red);
+          faceWidget = const Icon(Icons.broken_image, color: Colors.red);
         }
       } else {
-        // Built-in assets GIF
-        imageWidget = Gif(
-          key: ValueKey('${currentGif.id}_$_gifResetCounter'),
-          image: AssetImage('assets/animations/${currentGif.id}.gif'),
-          controller: _gifController,
-          autostart: Autostart.loop,
-          fit: BoxFit.contain,
-          placeholder: (context) => const Center(child: CircularProgressIndicator()),
+        // Built-in Sprite AI animation rendering (240x240 RGB565 face on 240x280 TFT)
+        faceWidget = CustomPaint(
+          size: const Size(240, 240),
+          painter: SpriteAIEyePainter(
+            animId: currentGif.id,
+            eyeColor: oledThemeColor,
+            cycleIndex: _cycleIndex,
+          ),
         );
       }
 
       screenContent = Stack(
+        alignment: Alignment.center,
         children: [
+          // Background dark container
+          Container(color: Colors.black),
           // Glowing Cyan text label overlay
           Positioned(
-            top: 6,
+            top: 10,
             left: 0,
             right: 0,
             child: Center(
               child: Text(
                 widget.activeLabel.toUpperCase(),
                 style: GoogleFonts.pressStart2p(
-                  color: oledColor,
-                  fontSize: 6,
+                  color: oledThemeColor,
+                  fontSize: 7,
                   shadows: [
                     Shadow(
-                      color: oledThemeColor.withOpacity(0.6),
-                      blurRadius: 3,
+                      color: oledThemeColor.withOpacity(0.8),
+                      blurRadius: 4,
                     ),
                   ],
                 ),
               ),
             ),
           ),
-          // OLED colored image (using color filter to color pixelated white/grey eyes to cyan)
+          // 240x240 Robot Eye Face Display
           Center(
-            child: Container(
-              width: 128,
-              height: 64,
-              padding: const EdgeInsets.only(top: 8),
-              child: ColorFiltered(
-                colorFilter: ColorFilter.matrix(
-                  invertVal
-                      ? [
-                          (oledThemeColor.red / 255.0) - 1.0, 0.0, 0.0, 0.0, 255.0,
-                          0.0, (oledThemeColor.green / 255.0) - 1.0, 0.0, 0.0, 255.0,
-                          0.0, 0.0, (oledThemeColor.blue / 255.0) - 1.0, 0.0, 255.0,
-                          0.0, 0.0, 0.0, 1.0, 0.0,
-                        ]
-                      : [
-                          1.0 - (oledThemeColor.red / 255.0), 0.0, 0.0, 0.0, oledThemeColor.red.toDouble(),
-                          0.0, 1.0 - (oledThemeColor.green / 255.0), 0.0, 0.0, oledThemeColor.green.toDouble(),
-                          0.0, 0.0, 1.0 - (oledThemeColor.blue / 255.0), 0.0, oledThemeColor.blue.toDouble(),
-                          0.0, 0.0, 0.0, 1.0, 0.0,
-                        ],
-                ),
-                child: Opacity(
-                  opacity: brightnessVal.clamp(0.0, 1.0),
-                  child: imageWidget,
-                ),
-              ),
+            child: SizedBox(
+              width: 200,
+              height: 200,
+              child: faceWidget,
             ),
           ),
         ],
@@ -547,31 +521,31 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Bezel container
+        // 1.69" 240x280 TFT Display Bezel container
         RotatedBox(
           quarterTurns: quarterTurns,
           child: Container(
-            width: 160,
-            height: 96,
+            width: 200,
+            height: 233, // 240x280 aspect ratio (1:1.166)
             decoration: BoxDecoration(
-              color: oledBgColor,
-              border: Border.all(color: const Color(0xFF27273A), width: 6),
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.black,
+              border: Border.all(color: const Color(0xFF27273A), width: 7),
+              borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 16,
+                  color: Colors.black.withOpacity(0.6),
+                  blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
                 BoxShadow(
-                  color: oledThemeColor.withOpacity(0.08),
-                  blurRadius: 24,
+                  color: oledThemeColor.withOpacity(0.12),
+                  blurRadius: 28,
                   spreadRadius: 2,
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(6),
               child: screenContent,
             ),
           ),
@@ -660,6 +634,88 @@ class AnalogClockPainter extends CustomPainter {
       Offset(center.dx + secLength * sin(angleSec), center.dy - secLength * cos(angleSec)),
       secPaint,
     );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class SpriteAIEyePainter extends CustomPainter {
+  final String animId;
+  final Color eyeColor;
+  final int cycleIndex;
+
+  SpriteAIEyePainter({
+    required this.animId,
+    required this.eyeColor,
+    required this.cycleIndex,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centerLeft = Offset(size.width * 0.32, size.height * 0.5);
+    final centerRight = Offset(size.width * 0.68, size.height * 0.5);
+    final eyeWidth = size.width * 0.24;
+    final eyeHeight = size.height * 0.36;
+
+    final paint = Paint()
+      ..color = eyeColor
+      ..style = PaintingStyle.fill;
+
+    final glowPaint = Paint()
+      ..color = eyeColor.withOpacity(0.3)
+      ..style = PaintingStyle.fill
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+
+    if (animId == 'sprite_ai_2') {
+      // Happy eyes / Arc
+      final pathLeft = Path()
+        ..addArc(Rect.fromCenter(center: centerLeft, width: eyeWidth * 1.1, height: eyeHeight * 0.9), 3.14, 3.14);
+      final pathRight = Path()
+        ..addArc(Rect.fromCenter(center: centerRight, width: eyeWidth * 1.1, height: eyeHeight * 0.9), 3.14, 3.14);
+      
+      final strokePaint = Paint()
+        ..color = eyeColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 14
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawPath(pathLeft, glowPaint);
+      canvas.drawPath(pathRight, glowPaint);
+      canvas.drawPath(pathLeft, strokePaint);
+      canvas.drawPath(pathRight, strokePaint);
+    } else if (animId == 'sprite_ai_1') {
+      // Looking / Expressive shifted eyes
+      final shiftX = (cycleIndex % 2 == 0) ? -10.0 : 10.0;
+      final rectLeft = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(centerLeft.dx + shiftX, centerLeft.dy), width: eyeWidth, height: eyeHeight),
+        const Radius.circular(16),
+      );
+      final rectRight = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(centerRight.dx + shiftX, centerRight.dy), width: eyeWidth, height: eyeHeight),
+        const Radius.circular(16),
+      );
+
+      canvas.drawRRect(rectLeft, glowPaint);
+      canvas.drawRRect(rectRight, glowPaint);
+      canvas.drawRRect(rectLeft, paint);
+      canvas.drawRRect(rectRight, paint);
+    } else {
+      // Default Sprite AI Blink / Oval robot eyes
+      final rectLeft = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: centerLeft, width: eyeWidth, height: eyeHeight),
+        const Radius.circular(20),
+      );
+      final rectRight = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: centerRight, width: eyeWidth, height: eyeHeight),
+        const Radius.circular(20),
+      );
+
+      canvas.drawRRect(rectLeft, glowPaint);
+      canvas.drawRRect(rectRight, glowPaint);
+      canvas.drawRRect(rectLeft, paint);
+      canvas.drawRRect(rectRight, paint);
+    }
   }
 
   @override

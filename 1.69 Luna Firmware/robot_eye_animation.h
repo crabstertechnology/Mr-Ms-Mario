@@ -18,6 +18,7 @@ enum RobotEyeState {
 class RobotEyeAnimation {
 private:
   RobotEyeState state;
+  int animIndex;
   int currentFrame;
   int frameCount;
   int frameDelayMs;
@@ -27,7 +28,7 @@ private:
 
 public:
   RobotEyeAnimation() 
-    : state(ROBOT_EYE_IDLE), currentFrame(0), frameCount(SPRITE_AI_FRAME_COUNT), 
+    : state(ROBOT_EYE_IDLE), animIndex(0), currentFrame(0), frameCount(SPRITE_AI_FRAME_COUNT), 
       frameDelayMs(125), lastFrameTime(0), playing(true), fps(8.0f) {}
 
   void play() {
@@ -42,6 +43,24 @@ public:
   void reset() {
     currentFrame = 0;
     lastFrameTime = millis();
+  }
+
+  void nextAnimation() {
+    animIndex = (animIndex + 1) % SPRITE_AI_ANIMATION_COUNT;
+    currentFrame = 0;
+    lastFrameTime = millis();
+  }
+
+  void setAnimationIndex(int idx) {
+    if (idx >= 0 && idx < SPRITE_AI_ANIMATION_COUNT) {
+      animIndex = idx;
+      currentFrame = 0;
+      lastFrameTime = millis();
+    }
+  }
+
+  int getAnimationIndex() const {
+    return animIndex;
   }
 
   void setFrame(int frame) {
@@ -94,10 +113,7 @@ public:
   }
 
   const uint16_t* getCurrentFrameData() const {
-    if (currentFrame < 0 || currentFrame >= frameCount) {
-      return (const uint16_t*)pgm_read_ptr(&luna_sprite_ai_frames[0]);
-    }
-    return (const uint16_t*)pgm_read_ptr(&luna_sprite_ai_frames[currentFrame]);
+    return getSpriteAiFrame(animIndex, currentFrame);
   }
 
   int getCurrentFrame() const { return currentFrame; }

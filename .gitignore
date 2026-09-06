@@ -6,3 +6,8 @@ releases/app-release.apk
 
 # Ignore local VS Code settings
 .vscode/
+
+# Ignore large media & zip archives
+*.zip
+*.mp4
+

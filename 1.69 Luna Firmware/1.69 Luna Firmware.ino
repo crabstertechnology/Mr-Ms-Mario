@@ -379,7 +379,7 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
       audio.playSound(SOUND_POWERDOWN);
       break;
     case EXPR_ANGRY:
-      audio.playSound(SOUND_JUMP); // Play angry cartoon jump sound
+      audio.playSound(SOUND_POWERDOWN);
       break;
     case EXPR_SURPRISED:
       audio.playSound(SOUND_CHIRP);
@@ -411,7 +411,7 @@ void handleRobotCommand(String text) {
   lastInteractionTime = millis();
   lastExpressionCycleTime = millis(); // Reset cycle timer on interaction
   
-  if (mapsActive && !text.startsWith("MAP:")) {
+  if (mapsActive && !text.startsWith("MAP")) {
     Serial.println("[BLE] Ignored command because MAPS is active");
     return;
   }
@@ -439,6 +439,10 @@ void handleRobotCommand(String text) {
     face.setExpression(EXPR_SLEEPING);
     audio.playSound(SOUND_POWERDOWN);
     Serial.println("Robot went to sleep from remote command!");
+  } else if (text == "ANGRY" || text == "ANIM:ANGRY" || text == "EXPR_ANGRY") {
+    currentScreen = SCREEN_FACE;
+    face.setExpression(EXPR_ANGRY);
+    Serial.println("OK:AngryAnimationTriggered");
   } else if (text == "RESET") {
     // Factory reset: clear NVS and reboot
     audio.playSound(SOUND_GAMEOVER);
@@ -633,6 +637,49 @@ void handleRobotCommand(String text) {
     }
     
     activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
+  } else if (text.startsWith("MAPLINE:")) {
+    int firstColon = text.indexOf(':');
+    int secondColon = text.indexOf(':', firstColon + 1);
+    if (secondColon > firstColon) {
+      int y = text.substring(firstColon + 1, secondColon).toInt();
+      String hexStr = text.substring(secondColon + 1);
+      int pxCount = hexStr.length() / 4;
+      if (pxCount > 0 && pxCount <= 240) {
+        static uint16_t lineBuf[240];
+        for (int i = 0; i < pxCount; i++) {
+          char hbuf[5] = { hexStr[i*4], hexStr[i*4+1], hexStr[i*4+2], hexStr[i*4+3], 0 };
+          lineBuf[i] = (uint16_t)strtoul(hbuf, NULL, 16);
+        }
+        face.updateLiveMapLine(y, lineBuf, pxCount);
+        mapsActive = true;
+        currentScreen = SCREEN_MAPS;
+        lastInteractionTime = millis();
+      }
+    }
+  } else if (text.startsWith("MAPCHUNK:")) {
+    int firstColon = text.indexOf(':');
+    int secondColon = text.indexOf(':', firstColon + 1);
+    if (secondColon > firstColon) {
+      int offset = text.substring(firstColon + 1, secondColon).toInt();
+      String hexStr = text.substring(secondColon + 1);
+      int pxCount = hexStr.length() / 4;
+      if (pxCount > 0) {
+        uint16_t* chunkBuf = (uint16_t*)malloc(pxCount * sizeof(uint16_t));
+        if (chunkBuf != nullptr) {
+          for (int i = 0; i < pxCount; i++) {
+            char hbuf[5] = { hexStr[i*4], hexStr[i*4+1], hexStr[i*4+2], hexStr[i*4+3], 0 };
+            chunkBuf[i] = (uint16_t)strtoul(hbuf, NULL, 16);
+          }
+          face.updateLiveMapChunk(offset, chunkBuf, pxCount);
+          free(chunkBuf);
+          mapsActive = true;
+          currentScreen = SCREEN_MAPS;
+          lastInteractionTime = millis();
+        }
+      }
+    }
+  } else if (text == "MAPCLEAR") {
+    face.clearLiveMap();
   } else if (text == "CALL:START") {
     audio.micStreaming = true;
     audio.audioMode = LunaAudio::AUDIO_MODE_STREAM;
@@ -988,37 +1035,16 @@ void setup() {
   // Wire is already started by interaction.begin() above (SDA=11, SCL=10)
   if (rtcDevice.begin()) {
     bool hwTimeValid = rtcDevice.readTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
-    if (!hwTimeValid) {
-      // HW RTC had invalid time — try restoring from NVS (last known good time)
-      Serial.println(F("[RTC] HW time invalid — restoring from NVS last-known time"));
-      preferences.begin("luna", true);
-      int nvs_h    = preferences.getInt("rtcH",  -1);
-      int nvs_m    = preferences.getInt("rtcM",  0);
-      int nvs_s    = preferences.getInt("rtcS",  0);
-      String nvs_day  = preferences.getString("rtcDay",  "Mon");
-      String nvs_date = preferences.getString("rtcDate", "01 Jan");
-      preferences.end();
-      // Accept NVS time only if it looks plausible
-      if (nvs_h >= 0 && nvs_h <= 23 && nvs_m >= 0 && nvs_m <= 59) {
-        rtcHour   = nvs_h;
-        rtcMinute = nvs_m;
-        rtcSecond = nvs_s;
-        rtcDay    = nvs_day;
-        rtcDate   = nvs_date;
-        // Write NVS time back to HW RTC so it ticks from correct base
-        rtcDevice.setTime(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate);
-        Serial.printf("[RTC] NVS time restored: %02d:%02d:%02d %s %s\n",
-                      rtcHour, rtcMinute, rtcSecond, rtcDay.c_str(), rtcDate.c_str());
-      } else {
-        rtcHour   = BUILD_HOUR;
-        rtcMinute = BUILD_MIN;
-        rtcSecond = BUILD_SEC;
-        rtcDevice.setTimeFull(BUILD_YEAR, BUILD_MONTH, BUILD_DAY, BUILD_HOUR, BUILD_MIN, BUILD_SEC);
-        Serial.printf("[RTC] Initialised from compile-time: %02d:%02d:%02d\n", rtcHour, rtcMinute, rtcSecond);
-      }
-    } else {
-      Serial.printf("[RTC] HW time loaded: %02d:%02d:%02d %s %s\n",
+    if (hwTimeValid) {
+      Serial.printf("[RTC] Hardware RTC active & advanced time loaded: %02d:%02d:%02d %s %s\n",
                     rtcHour, rtcMinute, rtcSecond, rtcDay.c_str(), rtcDate.c_str());
+    } else {
+      Serial.println(F("[RTC] HW read failed — initialising from build time"));
+      rtcHour   = BUILD_HOUR;
+      rtcMinute = BUILD_MIN;
+      rtcSecond = BUILD_SEC;
+      rtcDevice.setTimeFull(BUILD_YEAR, BUILD_MONTH, BUILD_DAY, BUILD_HOUR, BUILD_MIN, BUILD_SEC);
+      Serial.printf("[RTC] Initialised from compile-time: %02d:%02d:%02d\n", rtcHour, rtcMinute, rtcSecond);
     }
   } else {
     // RTC hardware not found — still try NVS, fallback to compile time
@@ -1346,10 +1372,11 @@ void handleBtn1Single() {
     return;
   }
 
-  // Button 1 single click on other screens:
   if (currentScreen == SCREEN_FACE) {
-    // Tap on FACE screen -> advance to next screen (SCREEN_CARD / SCREEN_CLOCK)
-    handleBtn2Single();
+    // Center tap on FACE screen -> cycle through all 3 Sprite AI animations
+    face.getRobotEyeAnim().nextAnimation();
+    audio.playSound(SOUND_CHIRP);
+    Serial.printf("[BTN1] Cycled Sprite AI animation -> Anim #%d\n", face.getRobotEyeAnim().getAnimationIndex());
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
     // Cycles clock styles

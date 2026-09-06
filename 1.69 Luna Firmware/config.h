@@ -53,7 +53,7 @@ enum Expression {
   EXPR_TEXT,
   EXPR_CLOCK,
   EXPR_MAP,
-  EXPR_ROBOT_EYE = 20 // Sprite AI Robot Eye Animation System
+  EXPR_ROBOT_EYE = 20  // Sprite AI Robot Eye Animation System
 };
 
 // Buzzer Sound Effects

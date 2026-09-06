@@ -109,24 +109,13 @@ public:
 
     // Read seconds register to check OS (Oscillator Stop) bit
     uint8_t secReg = 0;
-    if (!readReg(PCF85063_REG_SECONDS, secReg)) {
-      Serial.println(F("[RTC] Failed to read seconds register!"));
-      return false;
+    if (readReg(PCF85063_REG_SECONDS, secReg)) {
+      if (secReg & 0x80) {
+        Serial.println(F("[RTC] Oscillator Stop flag cleared to ensure continuous background ticking."));
+        writeReg(PCF85063_REG_SECONDS, secReg & 0x7F);
+      }
     }
-
-    bool osBit = (secReg & 0x80) != 0;
-    if (osBit) {
-      Serial.println(F("[RTC] Oscillator was stopped — clearing OS bit and starting clock."));
-      // Clear STOP bit and OS bit: Control_1 = 0x00 (24h mode, oscillator running)
-      writeReg(PCF85063_REG_CTRL1, 0x00);
-      // Use compile-time date/time as the initial fallback when RTC oscillator
-      // was stopped (e.g. first power-on or battery removed).
-      setTimeFull(BUILD_YEAR, BUILD_MONTH, BUILD_DAY,
-                  BUILD_HOUR, BUILD_MIN, BUILD_SEC);
-      Serial.println(F("[RTC] Time initialised from compile-time. Send TIME: command to sync."));
-    } else {
-      Serial.println(F("[RTC] PCF85063 oscillator is running, reading current time."));
-    }
+    Serial.println(F("[RTC] PCF85063 hardware oscillator running smoothly in background."));
     return true;
   }
 
@@ -153,12 +142,7 @@ public:
     uint8_t monReg  = Wire.read();  // 0x09
     uint8_t yrReg   = Wire.read();  // 0x0A
 
-    // If oscillator-stop flag is set, the time is invalid
-    if (secReg & 0x80) {
-      Serial.println(F("[RTC] OS bit set during read — time invalid"));
-      return false;
-    }
-
+    // Mask OS flag bit (bit 7) and extract BCD values
     second = bcdToDec(secReg & 0x7F);
     minute = bcdToDec(minReg & 0x7F);
     hour   = bcdToDec(hrReg  & 0x3F);

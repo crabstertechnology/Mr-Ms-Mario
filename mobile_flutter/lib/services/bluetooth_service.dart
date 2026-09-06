@@ -1003,6 +1003,34 @@ class BLEService with ChangeNotifier {
     await _writeTextWithAck('WAKE', "Wake Robot");
   }
 
+  Future<void> transmitAnimationSelect(int animIndex) async {
+    await _writeTextWithAck('ANIM:$animIndex', "Select Sprite AI Anim $animIndex");
+  }
+
+  Future<void> transmitMapClear() async {
+    await _writeTextWithAck('MAPCLEAR', "Clear Live Map");
+  }
+
+  Future<void> transmitMapLine(int lineIdx, String base64Rgb565) async {
+    if (_textChar == null) return;
+    try {
+      final payload = utf8.encode('MAPLINE:$lineIdx,$base64Rgb565');
+      await _textChar!.write(payload, withoutResponse: true);
+    } catch (e) {
+      print("Error sending map line: $e");
+    }
+  }
+
+  Future<void> transmitMapChunk(int chunkIdx, String base64Chunk) async {
+    if (_textChar == null) return;
+    try {
+      final payload = utf8.encode('MAPCHUNK:$chunkIdx,$base64Chunk');
+      await _textChar!.write(payload, withoutResponse: true);
+    } catch (e) {
+      print("Error sending map chunk: $e");
+    }
+  }
+
   Future<void> transmitSleep( ) async {
     await _writeTextWithAck('SLEEP', "Sleep Robot");
   }

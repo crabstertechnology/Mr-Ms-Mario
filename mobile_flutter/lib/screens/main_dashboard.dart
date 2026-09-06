@@ -79,8 +79,9 @@ class _MainDashboardState extends State<MainDashboard> {
   DateTime _calendarViewDate = DateTime.now();
   bool _isSettingsSaving = false;
   bool _isCompiling = false;
-  String _localActiveGifId = 'relaxed';
-  String _localActiveLabel = 'Idle';
+  String _localActiveGifId = 'sprite_ai_0';
+  String _localActiveLabel = 'Sprite AI 1';
+  bool _isStreamingMap = false;
 
   List<Map<String, String>> _localAudioFiles = [];
   bool _isLoadingAudioFiles = false;
@@ -3720,8 +3721,141 @@ class _MainDashboardState extends State<MainDashboard> {
         _buildSendMessageSection(ble),
         const SizedBox(height: 20),
 
+        _buildMapStreamingSection(ble),
+        const SizedBox(height: 20),
+
         // Quick Actions panel
         _buildQuickActionsPanel(ble),
+      ],
+    );
+  }
+
+  Widget _buildMapStreamingSection(BLEService ble) {
+    const mapBlue = Color(0xFF4285F4); // Google Maps Blue
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionHeader("Google Maps Live Streaming", Icons.map_outlined, mapBlue),
+        const SizedBox(height: 12),
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Screen Map Canvas Preview Box (1.69" 240x280 display ratio)
+              Container(
+                height: 180,
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: mapBlue.withOpacity(0.5), width: 1.5),
+                ),
+                child: Stack(
+                  children: [
+                    // Simulated Map background grid / navigation route lines
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: CustomPaint(
+                        size: const Size(double.infinity, 180),
+                        painter: MapPreviewPainter(isStreaming: _isStreamingMap),
+                      ),
+                    ),
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: mapBlue.withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.navigation, color: mapBlue, size: 12),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isStreamingMap ? "LIVE BLE MAP ACTIVE" : "ST7789 (240x280)",
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        setState(() {
+                          _isStreamingMap = !_isStreamingMap;
+                        });
+                        if (_isStreamingMap) {
+                          await ble.transmitMapClear();
+                          // Stream demo map packets (240x240 RGB565 chunks)
+                          for (int line = 0; line < 240; line += 20) {
+                            final sampleBase64 = base64Encode(List<int>.filled(480, (line % 255)));
+                            await ble.transmitMapLine(line, sampleBase64);
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Started Live Map Stream to Luna Watch!"),
+                              backgroundColor: Color(0xFF4285F4),
+                            ),
+                          );
+                        } else {
+                          await ble.transmitMapClear();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Map stream stopped."),
+                            ),
+                          );
+                        }
+                      },
+                      icon: Icon(_isStreamingMap ? Icons.stop : Icons.play_arrow, size: 18),
+                      label: Text(_isStreamingMap ? "STOP MAP STREAM" : "START MAP STREAM"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isStreamingMap ? Colors.redAccent : mapBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await ble.transmitMapClear();
+                      setState(() {
+                        _isStreamingMap = false;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Cleared Watch Screen")),
+                      );
+                    },
+                    icon: const Icon(Icons.clear_all, size: 18),
+                    label: const Text("CLEAR"),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: textColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -8321,5 +8455,52 @@ class _WallpaperCropDialogState extends State<WallpaperCropDialog> {
       ),
     );
   }
+}
+
+class MapPreviewPainter extends CustomPainter {
+  final bool isStreaming;
+  MapPreviewPainter({required this.isStreaming});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bgPaint = Paint()..color = const Color(0xFF1E293B);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+
+    final gridPaint = Paint()
+      ..color = Colors.white.withOpacity(0.08)
+      ..strokeWidth = 1.0;
+
+    for (double x = 0; x < size.width; x += 24) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y < size.height; y += 24) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    // Draw route path
+    final routePaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..strokeWidth = 6.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path()
+      ..moveTo(size.width * 0.2, size.height * 0.8)
+      ..lineTo(size.width * 0.4, size.height * 0.4)
+      ..lineTo(size.width * 0.7, size.height * 0.3);
+
+    canvas.drawPath(path, routePaint);
+
+    // Location Marker
+    final pinPaint = Paint()..color = const Color(0xFFEA4335);
+    canvas.drawCircle(Offset(size.width * 0.7, size.height * 0.3), 8, pinPaint);
+
+    // Navigation Arrow
+    final arrowPaint = Paint()..color = const Color(0xFF34A853);
+    canvas.drawCircle(Offset(size.width * 0.2, size.height * 0.8), 10, arrowPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 

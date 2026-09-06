@@ -101,6 +101,9 @@ private:
   String mapDirection;
   String mapDistance;
   String mapDescription;
+  uint16_t* liveMapBuffer;
+  bool hasLiveMap;
+  unsigned long lastLiveMapMs;
 
   // Track BLE & WiFi status internally for top bar drawing
   bool bleConnectedStatus;
@@ -161,6 +164,9 @@ public:
     mapDirection = "STRAIGHT";
     mapDistance = "--";
     mapDescription = "";
+    liveMapBuffer = nullptr;
+    hasLiveMap = false;
+    lastLiveMapMs = 0;
 
     bleConnectedStatus = false;
     wifiConnectedStatus = false;
@@ -222,7 +228,7 @@ public:
     
     robotEyeAnim.reset();
     robotEyeAnim.play();
-    
+
     if (expr == EXPR_TEXT) {
       scrollPos = SCREEN_WIDTH;
       lastScrollTime = millis();
@@ -327,6 +333,47 @@ public:
   }
 
   // ------------------ Map Navigation State ------------------
+  void initLiveMapBuffer() {
+    if (liveMapBuffer == nullptr) {
+      if (psramFound()) {
+        liveMapBuffer = (uint16_t*)ps_malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(uint16_t));
+      }
+      if (liveMapBuffer == nullptr) {
+        liveMapBuffer = (uint16_t*)malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(uint16_t));
+      }
+      if (liveMapBuffer != nullptr) {
+        memset(liveMapBuffer, 0, SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(uint16_t));
+      }
+    }
+  }
+
+  void updateLiveMapLine(int y, const uint16_t* linePixels, int count) {
+    initLiveMapBuffer();
+    if (liveMapBuffer != nullptr && y >= 0 && y < SCREEN_HEIGHT) {
+      int maxPx = (count > SCREEN_WIDTH) ? SCREEN_WIDTH : count;
+      memcpy(&liveMapBuffer[y * SCREEN_WIDTH], linePixels, maxPx * sizeof(uint16_t));
+      hasLiveMap = true;
+      lastLiveMapMs = millis();
+    }
+  }
+
+  void updateLiveMapChunk(int offsetPx, const uint16_t* pixels, int count) {
+    initLiveMapBuffer();
+    if (liveMapBuffer != nullptr) {
+      int totalPx = SCREEN_WIDTH * SCREEN_HEIGHT;
+      if (offsetPx >= 0 && offsetPx < totalPx) {
+        int maxPx = (offsetPx + count > totalPx) ? (totalPx - offsetPx) : count;
+        memcpy(&liveMapBuffer[offsetPx], pixels, maxPx * sizeof(uint16_t));
+        hasLiveMap = true;
+        lastLiveMapMs = millis();
+      }
+    }
+  }
+
+  void clearLiveMap() {
+    hasLiveMap = false;
+  }
+
   void setMapNavigation(String direction, String distance, String description) {
     mapDirection = direction;
     mapDistance = distance;
@@ -1430,6 +1477,7 @@ public:
 
   void drawRobotFaceScreen() {
     display.fillScreen(TFT_BLACK);
+    
     const uint16_t* frameData = robotEyeAnim.getCurrentFrameData();
     if (frameData != nullptr) {
       display.drawRGBBitmap(robotEyeAnim.getXOffset(), robotEyeAnim.getYOffset(), frameData, robotEyeAnim.getWidth(), robotEyeAnim.getHeight());
@@ -1446,6 +1494,26 @@ public:
   }
 
   void drawMapScreenLandscape(int hour, int minute, bool is12Hour) {
+    if (hasLiveMap && liveMapBuffer != nullptr && (millis() - lastLiveMapMs < 60000)) {
+      // Draw live Google Maps screen bitmap frame!
+      display.drawRGBBitmap(0, 0, liveMapBuffer, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+      // Google Maps dark green status banner at top (#0F9D58)
+      display.fillRect(0, 0, SCREEN_WIDTH, 26, 0x04C0);
+      display.drawFastHLine(0, 26, SCREEN_WIDTH, TFT_WHITE);
+
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE, 0x04C0);
+      String topText = "GOOGLE MAPS LIVE";
+      if (mapDirection.length() > 0 && mapDirection != "STRAIGHT") {
+        topText = mapDirection + " " + mapDistance;
+      }
+      int txtW = topText.length() * 6;
+      display.setCursor((SCREEN_WIDTH - txtW) / 2, 8);
+      display.print(topText);
+      return;
+    }
+
     uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
     uint16_t themeBg     = TFT_WHITE;
     uint16_t themeText   = 0x2104; // Charcoal/black
