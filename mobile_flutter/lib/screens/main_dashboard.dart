@@ -3731,12 +3731,12 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   Widget _buildMapStreamingSection(BLEService ble) {
-    const mapBlue = Color(0xFF4285F4); // Google Maps Blue
+    const mapGreen = Color(0xFF10B981); // Navigation Emerald Green
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildSectionHeader("Google Maps Live Streaming", Icons.map_outlined, mapBlue),
+        _buildSectionHeader("1.69\" Navigation Map UI (240x280 ST7789)", Icons.map, mapGreen),
         const SizedBox(height: 12),
         GlassCard(
           padding: const EdgeInsets.all(16),
@@ -3745,39 +3745,46 @@ class _MainDashboardState extends State<MainDashboard> {
             children: [
               // Screen Map Canvas Preview Box (1.69" 240x280 display ratio)
               Container(
-                height: 180,
+                height: 270,
                 decoration: BoxDecoration(
                   color: Colors.black,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: mapBlue.withOpacity(0.5), width: 1.5),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: mapGreen.withOpacity(0.4), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Stack(
                   children: [
-                    // Simulated Map background grid / navigation route lines
+                    // Exact Google Maps Turn-by-Turn Navigation Custom Canvas
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       child: CustomPaint(
-                        size: const Size(double.infinity, 180),
-                        painter: MapPreviewPainter(isStreaming: _isStreamingMap),
+                        size: const Size(double.infinity, 270),
+                        painter: MapPreviewPainter(isStreaming: true),
                       ),
                     ),
                     Positioned(
-                      top: 10,
-                      left: 10,
+                      top: 14,
+                      right: 14,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.black87,
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: mapBlue.withOpacity(0.5)),
+                          border: Border.all(color: mapGreen.withOpacity(0.5)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.navigation, color: mapBlue, size: 12),
+                            const Icon(Icons.navigation, color: mapGreen, size: 12),
                             const SizedBox(width: 4),
                             Text(
-                              _isStreamingMap ? "LIVE BLE MAP ACTIVE" : "ST7789 (240x280)",
+                              "1.69\" (240x280 ST7789)",
                               style: GoogleFonts.outfit(
                                 color: Colors.white,
                                 fontSize: 9,
@@ -3791,67 +3798,26 @@ class _MainDashboardState extends State<MainDashboard> {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        setState(() {
-                          _isStreamingMap = !_isStreamingMap;
-                        });
-                        if (_isStreamingMap) {
-                          await ble.transmitMapClear();
-                          // Stream demo map packets (240x240 RGB565 chunks)
-                          for (int line = 0; line < 240; line += 20) {
-                            final sampleBase64 = base64Encode(List<int>.filled(480, (line % 255)));
-                            await ble.transmitMapLine(line, sampleBase64);
-                          }
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Started Live Map Stream to Luna Watch!"),
-                              backgroundColor: Color(0xFF4285F4),
-                            ),
-                          );
-                        } else {
-                          await ble.transmitMapClear();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Map stream stopped."),
-                            ),
-                          );
-                        }
-                      },
-                      icon: Icon(_isStreamingMap ? Icons.stop : Icons.play_arrow, size: 18),
-                      label: Text(_isStreamingMap ? "STOP MAP STREAM" : "START MAP STREAM"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _isStreamingMap ? Colors.redAccent : mapBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_outline, color: mapGreen, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Turn-by-turn navigation guidance is synchronized automatically from phone notifications.",
+                        style: GoogleFonts.outfit(color: textColor70, fontSize: 11),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await ble.transmitMapClear();
-                      setState(() {
-                        _isStreamingMap = false;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Cleared Watch Screen")),
-                      );
-                    },
-                    icon: const Icon(Icons.clear_all, size: 18),
-                    label: const Text("CLEAR"),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: textColor,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -8055,6 +8021,19 @@ class _GifCardWidgetState extends State<_GifCardWidget>
       } catch (_) {
         imageWidget = const Icon(Icons.broken_image, color: Colors.red);
       }
+    } else if (DatabaseService.animMapping.containsKey(gif.id)) {
+      imageWidget = Container(
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: CustomPaint(
+          size: const Size(120, 120),
+          painter: SpriteAIEyePainter(
+            animId: gif.id,
+            eyeColor: previewColor,
+            cycleIndex: 0,
+          ),
+        ),
+      );
     } else {
       imageWidget = Gif(
         image: AssetImage('assets/animations/${gif.id}.gif'),
@@ -8459,45 +8438,288 @@ class _WallpaperCropDialogState extends State<WallpaperCropDialog> {
 
 class MapPreviewPainter extends CustomPainter {
   final bool isStreaming;
-  MapPreviewPainter({required this.isStreaming});
+  MapPreviewPainter({this.isStreaming = false});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bgPaint = Paint()..color = const Color(0xFF1E293B);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+    final w = size.width;
+    final h = size.height;
 
-    final gridPaint = Paint()
-      ..color = Colors.white.withOpacity(0.08)
-      ..strokeWidth = 1.0;
+    // 1. Satellite Base Color & Background
+    final bgPaint = Paint()..color = const Color(0xFF2C362B);
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), bgPaint);
 
-    for (double x = 0; x < size.width; x += 24) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    // 2. Terrain & Vegetation Patches
+    final patch1 = Paint()..color = const Color(0xFF212A20);
+    canvas.drawRect(Rect.fromLTWH(0, 0, w * 0.45, h * 0.45), patch1);
+    canvas.drawRect(Rect.fromLTWH(w * 0.55, h * 0.1, w * 0.45, h * 0.4), patch1);
+    
+    final patch2 = Paint()..color = const Color(0xFF344032);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.08, h * 0.48, w * 0.38, h * 0.38), const Radius.circular(8)), patch2);
+
+    // 3. Residential Blocks Outline / Buildings Grid Pattern
+    final blockPaint = Paint()
+      ..color = const Color(0xFF424D3E)
+      ..style = PaintingStyle.fill;
+    for (int i = 0; i < 5; i++) {
+      for (int j = 0; j < 5; j++) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(12.0 + i * 44, 70.0 + j * 38, 28, 22),
+            const Radius.circular(3),
+          ),
+          blockPaint,
+        );
+      }
     }
-    for (double y = 0; y < size.height; y += 24) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
 
-    // Draw route path
-    final routePaint = Paint()
-      ..color = const Color(0xFF4285F4)
+    // 4. Street Network Roads (Grey Satellite Roads matching Image 2)
+    final roadPaint = Paint()
+      ..color = const Color(0xFF758071)
+      ..strokeWidth = 3.5
+      ..style = PaintingStyle.stroke;
+
+    final roadPaintThick = Paint()
+      ..color = const Color(0xFF8F9B8A)
       ..strokeWidth = 6.0
+      ..style = PaintingStyle.stroke;
+
+    // Horizontal & Vertical Street Grid Lines
+    canvas.drawLine(Offset(0, h * 0.22), Offset(w, h * 0.22), roadPaint);
+    canvas.drawLine(Offset(0, h * 0.52), Offset(w, h * 0.52), roadPaintThick);
+    canvas.drawLine(Offset(0, h * 0.76), Offset(w, h * 0.76), roadPaint);
+    
+    canvas.drawLine(Offset(w * 0.22, 0), Offset(w * 0.22, h), roadPaint);
+    canvas.drawLine(Offset(w * 0.48, 0), Offset(w * 0.48, h), roadPaintThick);
+    canvas.drawLine(Offset(w * 0.78, 0), Offset(w * 0.78, h), roadPaint);
+
+    // Neighborhood Sub-Road Curves
+    for (int k = 0; k < 4; k++) {
+      final yPos = 85.0 + k * 45;
+      canvas.drawLine(Offset(w * 0.22, yPos), Offset(w * 0.48, yPos), roadPaint);
+      canvas.drawLine(Offset(w * 0.48, yPos + 15), Offset(w * 0.78, yPos + 15), roadPaint);
+    }
+    
+    // Diagonal & Curved Main Road
+    final curvedRoad = Path()
+      ..moveTo(0, h * 0.15)
+      ..cubicTo(w * 0.3, h * 0.25, w * 0.6, h * 0.05, w, h * 0.3);
+    canvas.drawPath(curvedRoad, roadPaintThick);
+
+    // 5. Active Blue Navigation Route Line (Matching Image 2 path)
+    final routePaint = Paint()
+      ..color = const Color(0xFF1D4ED8) // Deep Google Maps Blue
+      ..strokeWidth = 7.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final routePath = Path()
+      ..moveTo(w, h * 0.60)
+      ..lineTo(w * 0.48, h * 0.64)
+      ..lineTo(w * 0.48, h * 0.52);
+
+    canvas.drawPath(routePath, routePaint);
+
+    // 6. Current Location Blue Marker & Direction Cone
+    final locCenter = Offset(w * 0.48, h * 0.52);
+    
+    // Translucent direction cone/beam pointing UP
+    final beamPaint = Paint()..color = const Color(0x663B82F6);
+    final beamPath = Path()
+      ..moveTo(locCenter.dx, locCenter.dy)
+      ..lineTo(locCenter.dx - 20, locCenter.dy - 32)
+      ..lineTo(locCenter.dx + 20, locCenter.dy - 32)
+      ..close();
+    canvas.drawPath(beamPath, beamPaint);
+
+    // Blue location dot with white border & core
+    canvas.drawCircle(locCenter, 11, Paint()..color = const Color(0x663B82F6));
+    canvas.drawCircle(locCenter, 7.5, Paint()..color = const Color(0xFF2563EB));
+    canvas.drawCircle(locCenter, 3.5, Paint()..color = Colors.white);
+
+    // 7. Route Badge Callout ("29 min slower")
+    final badgeRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.55, h * 0.64, 75, 26),
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(badgeRect, Paint()..color = Colors.white);
+    canvas.drawRRect(badgeRect, Paint()..color = const Color(0xFFCBD5E1)..style = PaintingStyle.stroke..strokeWidth = 1);
+    
+    TextPainter(
+      text: const TextSpan(
+        text: "29 min\nslower",
+        style: TextStyle(color: Colors.black87, fontSize: 8, height: 1.1, fontWeight: FontWeight.bold),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    )
+      ..layout(maxWidth: 70)
+      ..paint(canvas, Offset(w * 0.55 + 16, h * 0.64 + 4));
+
+    // 8. Top Green Turn Navigation Header Card (Exact replica of Image 2)
+    final turnCardRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(8, 8, w - 16, 52),
+      const Radius.circular(12),
+    );
+    canvas.drawRRect(turnCardRect, Paint()..color = const Color(0xFF064E3B)); // Dark Emerald Teal
+
+    // Turn Right Arrow Icon inside Top Card
+    final arrowPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 3.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
+    
+    final turnArrowPath = Path()
+      ..moveTo(22, 40)
+      ..lineTo(22, 26)
+      ..lineTo(36, 26)
+      ..moveTo(30, 20)
+      ..lineTo(37, 26)
+      ..lineTo(30, 32);
+    canvas.drawPath(turnArrowPath, arrowPaint);
 
-    final path = Path()
-      ..moveTo(size.width * 0.2, size.height * 0.8)
-      ..lineTo(size.width * 0.4, size.height * 0.4)
-      ..lineTo(size.width * 0.7, size.height * 0.3);
+    // Distance "10 m"
+    TextPainter(
+      text: const TextSpan(
+        text: "10 m",
+        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+      ),
+      textDirection: TextDirection.ltr,
+    )
+      ..layout()
+      ..paint(canvas, const Offset(44, 11));
 
-    canvas.drawPath(path, routePaint);
+    // Direction "towards Veerapandi Rd"
+    TextPainter(
+      text: const TextSpan(
+        text: "towards Veerapandi Rd",
+        style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w500),
+      ),
+      textDirection: TextDirection.ltr,
+    )
+      ..layout()
+      ..paint(canvas, const Offset(44, 32));
 
-    // Location Marker
-    final pinPaint = Paint()..color = const Color(0xFFEA4335);
-    canvas.drawCircle(Offset(size.width * 0.7, size.height * 0.3), 8, pinPaint);
+    // Next turn sub-banner badge "Then ➔"
+    final subPillRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(8, 64, 62, 20),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(subPillRect, Paint()..color = const Color(0xFF064E3B));
+    TextPainter(
+      text: const TextSpan(
+        text: "Then ➔",
+        style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+      ),
+      textDirection: TextDirection.ltr,
+    )
+      ..layout()
+      ..paint(canvas, const Offset(16, 68));
 
-    // Navigation Arrow
-    final arrowPaint = Paint()..color = const Color(0xFF34A853);
-    canvas.drawCircle(Offset(size.width * 0.2, size.height * 0.8), 10, arrowPaint);
+    // Sparkle / Star icon badge on top right of Turn Header Card
+    final starBadgeCenter = Offset(w - 30, 34);
+    canvas.drawCircle(starBadgeCenter, 14, Paint()..color = Colors.white);
+    canvas.drawCircle(starBadgeCenter, 14, Paint()..color = const Color(0xFF3B82F6)..style = PaintingStyle.stroke..strokeWidth = 1.5);
+    
+    // Draw 4-point sparkle star in blue inside badge
+    final starPath = Path()
+      ..moveTo(starBadgeCenter.dx, starBadgeCenter.dy - 7)
+      ..quadraticBezierTo(starBadgeCenter.dx, starBadgeCenter.dy, starBadgeCenter.dx + 7, starBadgeCenter.dy)
+      ..quadraticBezierTo(starBadgeCenter.dx, starBadgeCenter.dy, starBadgeCenter.dx, starBadgeCenter.dy + 7)
+      ..quadraticBezierTo(starBadgeCenter.dx, starBadgeCenter.dy, starBadgeCenter.dx - 7, starBadgeCenter.dy)
+      ..quadraticBezierTo(starBadgeCenter.dx, starBadgeCenter.dy, starBadgeCenter.dx, starBadgeCenter.dy - 7);
+    canvas.drawPath(starPath, Paint()..color = const Color(0xFF3B82F6));
+
+    // 9. Floating Action Buttons (Right Side)
+    final double btnX = w - 28;
+    
+    // Compass 'N' button
+    canvas.drawCircle(Offset(btnX, 96), 13, Paint()..color = const Color(0xEE121212));
+    TextPainter(
+      text: const TextSpan(text: "N", style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+      textDirection: TextDirection.ltr,
+    )..layout()..paint(canvas, Offset(btnX - 4, 90));
+
+    // Search Lens button
+    canvas.drawCircle(Offset(btnX, 128), 13, Paint()..color = const Color(0xEE121212));
+    canvas.drawCircle(Offset(btnX - 2, 126), 4, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.5);
+    canvas.drawLine(Offset(btnX + 1, 129), Offset(btnX + 4, 132), Paint()..color = Colors.white..strokeWidth = 1.5);
+
+    // Mute speaker button
+    canvas.drawCircle(Offset(btnX, 160), 13, Paint()..color = const Color(0xEE121212));
+    canvas.drawLine(Offset(btnX - 5, 155), Offset(btnX + 5, 165), Paint()..color = Colors.white..strokeWidth = 1.5);
+
+    // Report hazard button (Black pill)
+    final reportPill = RRect.fromRectAndRadius(Rect.fromLTWH(w - 74, 186, 68, 22), const Radius.circular(11));
+    canvas.drawRRect(reportPill, Paint()..color = const Color(0xEE121212));
+    
+    // Yellow hazard triangle
+    final triPath = Path()
+      ..moveTo(w - 64, 202)
+      ..lineTo(w - 58, 191)
+      ..lineTo(w - 52, 202)
+      ..close();
+    canvas.drawPath(triPath, Paint()..color = const Color(0xFFF59E0B));
+    TextPainter(
+      text: const TextSpan(text: "Report", style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+      textDirection: TextDirection.ltr,
+    )..layout()..paint(canvas, Offset(w - 47, 192));
+
+    // 10. Speedometer (Bottom Left)
+    final speedCenter = Offset(26, h - 35);
+    canvas.drawCircle(speedCenter, 14, Paint()..color = const Color(0xEE121212));
+    TextPainter(
+      text: const TextSpan(
+        text: "--\nkm/h",
+        style: TextStyle(color: Colors.white, fontSize: 6, height: 1.0, fontWeight: FontWeight.bold),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: 24)..paint(canvas, Offset(speedCenter.dx - 8, speedCenter.dy - 6));
+
+    // 11. Bottom ETA Navigation Bar (Exact replica of Image 2)
+    final bottomBarRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(8, h - 48, w - 16, 42),
+      const Radius.circular(14),
+    );
+    canvas.drawRRect(bottomBarRect, Paint()..color = const Color(0xFF0F172A));
+
+    // Close button (X)
+    canvas.drawCircle(Offset(28, h - 27), 13, Paint()..color = const Color(0xFF1E293B));
+    canvas.drawLine(Offset(23, h - 32), Offset(33, h - 22), Paint()..color = Colors.white..strokeWidth = 2);
+    canvas.drawLine(Offset(33, h - 32), Offset(23, h - 22), Paint()..color = Colors.white..strokeWidth = 2);
+
+    // ETA Text "2 hr 31 min" (Bright Green)
+    TextPainter(
+      text: const TextSpan(
+        children: [
+          TextSpan(text: "2 hr 31 ", style: TextStyle(color: Color(0xFF10B981), fontSize: 13, fontWeight: FontWeight.bold)),
+          TextSpan(text: "min", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+        ],
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout()..paint(canvas, Offset(48, h - 42));
+
+    // Subtitle "123 km • 11:36 pm"
+    TextPainter(
+      text: const TextSpan(
+        text: "123 km  •  11:36 pm",
+        style: TextStyle(color: Colors.white54, fontSize: 8, fontWeight: FontWeight.w500),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout()..paint(canvas, Offset(48, h - 24));
+
+    // Alternate route button (Split arrows) on Right
+    canvas.drawCircle(Offset(w - 28, h - 27), 13, Paint()..color = const Color(0xFF1E293B));
+    final splitPath = Path()
+      ..moveTo(w - 32, h - 21)
+      ..lineTo(w - 32, h - 28)
+      ..lineTo(w - 25, h - 33)
+      ..moveTo(w - 32, h - 28)
+      ..lineTo(w - 25, h - 24);
+    canvas.drawPath(splitPath, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.8);
   }
 
   @override

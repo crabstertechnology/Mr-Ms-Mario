@@ -685,7 +685,7 @@ class SpriteAIEyePainter extends CustomPainter {
       canvas.drawPath(pathLeft, strokePaint);
       canvas.drawPath(pathRight, strokePaint);
     } else if (animId == 'sprite_ai_1') {
-      // Looking / Expressive shifted eyes
+      // Looking / Shifted eyes
       final shiftX = (cycleIndex % 2 == 0) ? -10.0 : 10.0;
       final rectLeft = RRect.fromRectAndRadius(
         Rect.fromCenter(center: Offset(centerLeft.dx + shiftX, centerLeft.dy), width: eyeWidth, height: eyeHeight),
@@ -700,8 +700,57 @@ class SpriteAIEyePainter extends CustomPainter {
       canvas.drawRRect(rectRight, glowPaint);
       canvas.drawRRect(rectLeft, paint);
       canvas.drawRRect(rectRight, paint);
+    } else if (animId == 'sprite_ai_3') {
+      // Focused / Narrow slit eyes
+      final rectLeft = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: centerLeft, width: eyeWidth * 1.2, height: eyeHeight * 0.4),
+        const Radius.circular(8),
+      );
+      final rectRight = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: centerRight, width: eyeWidth * 1.2, height: eyeHeight * 0.4),
+        const Radius.circular(8),
+      );
+
+      canvas.drawRRect(rectLeft, glowPaint);
+      canvas.drawRRect(rectRight, glowPaint);
+      canvas.drawRRect(rectLeft, paint);
+      canvas.drawRRect(rectRight, paint);
+    } else if (animId == 'sprite_ai_4') {
+      // Expressive / Wide round eyes with inner highlight
+      final circleLeft = Rect.fromCenter(center: centerLeft, width: eyeWidth * 1.1, height: eyeWidth * 1.1);
+      final circleRight = Rect.fromCenter(center: centerRight, width: eyeWidth * 1.1, height: eyeWidth * 1.1);
+
+      canvas.drawOval(circleLeft, glowPaint);
+      canvas.drawOval(circleRight, glowPaint);
+      canvas.drawOval(circleLeft, paint);
+      canvas.drawOval(circleRight, paint);
+
+      // Inner highlight dot
+      final pupilPaint = Paint()..color = Colors.black;
+      canvas.drawCircle(Offset(centerLeft.dx + 4, centerLeft.dy - 4), eyeWidth * 0.25, pupilPaint);
+      canvas.drawCircle(Offset(centerRight.dx + 4, centerRight.dy - 4), eyeWidth * 0.25, pupilPaint);
+    } else if (animId == 'sprite_ai_5') {
+      // Wink / Left eye open, right eye closed wink line
+      final rectLeft = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: centerLeft, width: eyeWidth, height: eyeHeight),
+        const Radius.circular(20),
+      );
+      canvas.drawRRect(rectLeft, glowPaint);
+      canvas.drawRRect(rectLeft, paint);
+
+      // Wink line on right
+      final winkPaint = Paint()
+        ..color = eyeColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+        Offset(centerRight.dx - eyeWidth * 0.5, centerRight.dy),
+        Offset(centerRight.dx + eyeWidth * 0.5, centerRight.dy),
+        winkPaint,
+      );
     } else {
-      // Default Sprite AI Blink / Oval robot eyes
+      // sprite_ai_0: Default Sprite AI Blink / Oval robot eyes
       final rectLeft = RRect.fromRectAndRadius(
         Rect.fromCenter(center: centerLeft, width: eyeWidth, height: eyeHeight),
         const Radius.circular(20),
