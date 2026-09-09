@@ -371,17 +371,33 @@ void notifyScreenAndExprSync() {
   ble.updateStatus(uptimeSec, touchCount, batteryVolts, (Expression)animIndex, label);
 }
 
+const char* getSpriteAiAnimationName(int idx) {
+  switch (idx) {
+    case 0: return "Happy Smile";
+    case 1: return "Angry Face";
+    case 2: return "Confused";
+    case 3: return "Playful Wink";
+    case 4: return "Sparkle Eye";
+    case 5: return "Sleepy Zzz";
+    case 6: return "Curious";
+    case 7: return "Giggle";
+    case 8: return "Excited";
+    case 9: return "Heart Eye";
+    case 10: return "Surprised";
+    case 11: return "Cheery";
+    default: return "ROBOT_EYE";
+  }
+}
+
 // Global BLE Write Event Handlers (declared extern in bluetooth.h)
 void handleBLEExpressionWithLabel(Expression expr, String label) {
   if (mapsActive) return;
   lastInteractionTime = millis();
   lastExpressionCycleTime = millis(); // Reset cycle timer on BLE action
-  if (isAsleep && expr != EXPR_SLEEPING) {
+
+  // 1. Full Screen Clock command
+  if ((expr == EXPR_CLOCK && label.length() == 0) || label.equalsIgnoreCase("CLOCK")) {
     isAsleep = false;
-    audio.playSound(SOUND_CHIRP);
-  }
-  
-  if (expr == EXPR_CLOCK) {
     currentScreen = SCREEN_CLOCK;
     face.setExpression(EXPR_CLOCK);
     face.setStateLabel("CLOCK");
@@ -389,6 +405,27 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
     Serial.println("Triggered Full Screen Clock via BLE command");
     notifyScreenAndExprSync();
     return;
+  }
+
+  // 2. Sprite AI Animation handling (indices 0 to 11)
+  if ((int)expr >= 0 && (int)expr < SPRITE_AI_ANIMATION_COUNT) {
+    isAsleep = false;
+    currentScreen = SCREEN_FACE;
+    face.getRobotEyeAnim().setAnimationIndex((int)expr);
+    face.setExpression(EXPR_ROBOT_EYE);
+    if (label.length() > 0) {
+      face.setStateLabel(label);
+    } else {
+      face.setStateLabel(getSpriteAiAnimationName((int)expr));
+    }
+    Serial.printf("[BLE] Set Sprite AI Animation #%d -> %s\n", (int)expr, face.getStateLabel().c_str());
+    notifyScreenAndExprSync();
+    return;
+  }
+
+  if (isAsleep && expr != EXPR_SLEEPING) {
+    isAsleep = false;
+    audio.playSound(SOUND_CHIRP);
   }
   
   face.setExpression(expr);
@@ -501,10 +538,27 @@ void handleRobotCommand(String text) {
   } else if (text == "TOUCH_SIM:LONG") {
     handleBtn1Long();
     notifyScreenAndExprSync();
+  } else if (text == "TOUCH_SIM:NEXT") {
+    handleBtn2Single();
+    notifyScreenAndExprSync();
+  } else if (text == "TOUCH_SIM:PREV") {
+    handleBtn2Double();
+    notifyScreenAndExprSync();
   } else if (text == "ANGRY" || text == "ANIM:ANGRY" || text == "EXPR_ANGRY") {
     currentScreen = SCREEN_FACE;
     face.setExpression(EXPR_ANGRY);
     Serial.println("OK:AngryAnimationTriggered");
+  } else if (text.startsWith("ANIM:") || text.startsWith("SPRITE:")) {
+    int colon = text.indexOf(':');
+    int idx = text.substring(colon + 1).toInt();
+    if (idx >= 0 && idx < SPRITE_AI_ANIMATION_COUNT) {
+      currentScreen = SCREEN_FACE;
+      face.getRobotEyeAnim().setAnimationIndex(idx);
+      face.setExpression(EXPR_ROBOT_EYE);
+      face.setStateLabel(getSpriteAiAnimationName(idx));
+      notifyScreenAndExprSync();
+      Serial.printf("OK:AnimIndexSet:%d\n", idx);
+    }
   } else if (text == "RESET") {
     // Factory reset: clear NVS and reboot
     audio.playSound(SOUND_GAMEOVER);
@@ -639,13 +693,28 @@ void handleRobotCommand(String text) {
       Serial.println("Alarm stopped/dismissed.");
     }
   } else if (text.startsWith("SCREEN:")) {
-    int sVal = text.substring(7).toInt();
+    String arg = text.substring(7);
+    arg.toUpperCase();
+    arg.trim();
+    int sVal = -1;
+    if (arg == "CLOCK") sVal = SCREEN_CLOCK;
+    else if (arg == "NOTIF" || arg == "NOTIFICATIONS") sVal = SCREEN_NOTIFICATIONS;
+    else if (arg == "CALENDAR" || arg == "CAL") sVal = SCREEN_CALENDAR;
+    else if (arg == "GAMES" || arg == "ARCADE") sVal = SCREEN_GAMES;
+    else if (arg == "FACE" || arg == "EYES") sVal = SCREEN_FACE;
+    else if (arg == "CARD") sVal = SCREEN_CARD;
+    else if (arg == "SETTINGS") sVal = SCREEN_SETTINGS;
+    else if (arg == "LEVEL") sVal = SCREEN_LEVEL;
+    else if (arg == "POMODORO" || arg == "POMO") sVal = SCREEN_POMODORO;
+    else sVal = arg.toInt();
+
     if (sVal >= 0 && sVal < SCREEN_MAX) {
       currentScreen = (SmartwatchScreen)sVal;
       settingsActive = false;
       gamesActive = false;
       gamePlaying = false;
       notificationsActive = false;
+      notifyScreenAndExprSync();
       Serial.printf("OK:ScreenSwitched:%d\n", sVal);
     }
   } else if (text.startsWith("MAP:")) {
@@ -1501,10 +1570,12 @@ void handleBtn1Single() {
   }
 
   if (currentScreen == SCREEN_FACE) {
-    // Center tap on FACE screen -> cycle through all 6 Sprite AI animations
+    // Center tap on FACE screen -> cycle through all 12 Sprite AI animations
     face.getRobotEyeAnim().nextAnimation();
+    int curIdx = face.getRobotEyeAnim().getAnimationIndex();
+    face.setStateLabel(getSpriteAiAnimationName(curIdx));
     audio.playSound(SOUND_CHIRP);
-    Serial.printf("[BTN1] Cycled Sprite AI animation -> Anim #%d\n", face.getRobotEyeAnim().getAnimationIndex());
+    Serial.printf("[BTN1] Cycled Sprite AI animation -> Anim #%d (%s)\n", curIdx, face.getStateLabel().c_str());
     notifyScreenAndExprSync();
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
@@ -1811,17 +1882,21 @@ void handleSwipeDown() {
 
 void updateStateLabel() {
   if (currentScreen == SCREEN_FACE) {
-    Expression expr = face.getExpression();
-    switch (expr) {
-      case EXPR_IDLE: face.setStateLabel("IDLE"); break;
-      case EXPR_HAPPY: face.setStateLabel("HAPPY"); break;
-      case EXPR_SAD: face.setStateLabel("SAD"); break;
-      case EXPR_ANGRY: face.setStateLabel("ANGRY"); break;
-      case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
-      case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
-      case EXPR_WINK: face.setStateLabel("WINK"); break;
-      case EXPR_ROBOT_EYE: face.setStateLabel("ROBOT_EYE"); break;
-      default: face.setStateLabel("ROBOT_EYE"); break;
+    if (face.getExpression() == EXPR_ROBOT_EYE) {
+      int idx = face.getRobotEyeAnim().getAnimationIndex();
+      face.setStateLabel(getSpriteAiAnimationName(idx));
+    } else {
+      Expression expr = face.getExpression();
+      switch (expr) {
+        case EXPR_IDLE: face.setStateLabel("IDLE"); break;
+        case EXPR_HAPPY: face.setStateLabel("HAPPY"); break;
+        case EXPR_SAD: face.setStateLabel("SAD"); break;
+        case EXPR_ANGRY: face.setStateLabel("ANGRY"); break;
+        case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
+        case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
+        case EXPR_WINK: face.setStateLabel("WINK"); break;
+        default: face.setStateLabel(getSpriteAiAnimationName(face.getRobotEyeAnim().getAnimationIndex())); break;
+      }
     }
   } else if (currentScreen == SCREEN_GAMES) {
     if (gamePlaying) {
@@ -2180,7 +2255,8 @@ void loop() {
     
     unsigned long uptimeSec = now / 1000;
     updateStateLabel();
-    ble.updateStatus(uptimeSec, touchCount, batteryVolts, face.getExpression(), face.getStateLabel());
+    int reportExpr = (currentScreen == SCREEN_FACE) ? face.getRobotEyeAnim().getAnimationIndex() : (int)face.getExpression();
+    ble.updateStatus(uptimeSec, touchCount, batteryVolts, (Expression)reportExpr, face.getStateLabel());
   }
 
   // Update GIF frame states on every loop iteration (skip when wallpaper is shown)

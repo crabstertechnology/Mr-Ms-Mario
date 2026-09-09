@@ -1,0 +1,88 @@
+[
+  {
+    "id": "el_stat1",
+    "type": "card_stat",
+    "name": "Heart Rate Card",
+    "props": {
+      "x": 16,
+      "y": 24,
+      "w": 100,
+      "h": 80,
+      "label": "HEART RATE",
+      "value": "128",
+      "unit": "BPM",
+      "icon": "heart",
+      "bgColor": "#161b26",
+      "borderColor": "#ec4899",
+      "accentColor": "#ec4899",
+      "textColor": "#ffffff",
+      "radius": 10,
+      "borderWidth": 1
+    }
+  },
+  {
+    "id": "el_stat2",
+    "type": "card_stat",
+    "name": "CPU Temp Card",
+    "props": {
+      "x": 124,
+      "y": 24,
+      "w": 100,
+      "h": 80,
+      "label": "ESP32 TEMP",
+      "value": "42",
+      "unit": "°C",
+      "icon": "chip",
+      "bgColor": "#161b26",
+      "borderColor": "#00f2fe",
+      "accentColor": "#00f2fe",
+      "textColor": "#ffffff",
+      "radius": 10,
+      "borderWidth": 1
+    }
+  },
+  {
+    "id": "el_wave",
+    "type": "audio_waveform",
+    "name": "Waveform Visualizer",
+    "props": {
+      "x": 16,
+      "y": 114,
+      "w": 208,
+      "h": 46,
+      "barColor": "#00f2fe",
+      "barsCount": 9,
+      "bgColor": "#0f172a"
+    }
+  },
+  {
+    "id": "el_toggle",
+    "type": "toggle_switch",
+    "name": "Bluetooth Toggle",
+    "props": {
+      "x": 20,
+      "y": 172,
+      "w": 200,
+      "h": 32,
+      "label": "BLUETOOTH LINK",
+      "checked": true,
+      "activeColor": "#00f2fe",
+      "inactiveColor": "#334155",
+      "textColor": "#ffffff"
+    }
+  },
+  {
+    "id": "el_badge",
+    "type": "status_badge",
+    "name": "System Online Badge",
+    "props": {
+      "x": 65,
+      "y": 220,
+      "w": 110,
+      "h": 24,
+      "text": "ONLINE (BLE)",
+      "color": "#10b981",
+      "textColor": "#ffffff"
+    }
+  }
+]

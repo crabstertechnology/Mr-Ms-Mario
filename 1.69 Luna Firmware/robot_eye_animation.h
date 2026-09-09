@@ -56,6 +56,7 @@ public:
       animIndex = idx;
       currentFrame = 0;
       lastFrameTime = millis();
+      playing = true;
     }
   }
 

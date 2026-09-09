@@ -1183,9 +1183,8 @@
         "0": {
           "0": {},
           "4": {
-            "0": {
-              "$selected": true
-            }
+            "0": {},
+            "$selected": true
           }
         }
       },
@@ -1280,8 +1279,10 @@
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
   "lvglPart": "MAIN",
-  "lvglState": "DEFAULT",
-  "lvglExpandedPropertiesGroup": [],
+  "lvglState": "PRESSED",
+  "lvglExpandedPropertiesGroup": [
+    "MARGIN"
+  ],
   "showInactiveFlowsInDebugger": true,
   "globalFlowZoom": true,
   "flowZoom": 1,

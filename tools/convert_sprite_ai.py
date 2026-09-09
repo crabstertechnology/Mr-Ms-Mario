@@ -120,12 +120,21 @@ def convert_multiple_sprite_ai(zip_paths, output_header_path, target_w=240, targ
 
 if __name__ == "__main__":
     zips = [
+        # Existing 6 animations (0-5)
         r"W:\Mr.mario\sprite-animation-256x256-4f-atlas.zip",
         r"W:\Mr.mario\sprite-animation-256x256-4f-atlas (1).zip",
         r"W:\Mr.mario\sprite-animation-256x256-4f-atlas (2).zip",
         r"W:\Mr.mario\sprite-256x256px-4f-atlas.zip",
         r"W:\Mr.mario\sprite-animation-256x256-4f-addtlas (1).zip",
-        r"W:\Mr.mario\sprite-animation-256x256-4f-atlddas.zip"
+        r"W:\Mr.mario\sprite-animation-256x256-4f-atlddas.zip",
+        # 6 New animations from gif/ (6-11)
+        r"W:\Mr.mario\gif\sprite-animation-256x256-4f-atlas.zip",
+        r"W:\Mr.mario\gif\sprite-animation-256x256-4f-atlas (1).zip",
+        r"W:\Mr.mario\gif\sprite-animation-256x256-4f-atlas (2).zip",
+        r"W:\Mr.mario\gif\sprite-animation-256x256-4f-atlas (3).zip",
+        r"W:\Mr.mario\gif\sprite-animation-256x256-4f-atlas (4).zip",
+        r"W:\Mr.mario\gif\sprite-animation-256x256-4f-atlas (5).zip"
     ]
     out_h = r"W:\Mr.mario\1.69 Luna Firmware\sprite_ai_data.h"
     convert_multiple_sprite_ai(zips, out_h, target_w=240, target_h=240, dark_threshold=20)
+

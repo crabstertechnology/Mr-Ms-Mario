@@ -1,7 +1,7 @@
 name: mr_ms_luna_controller
 description: "A premium Flutter controller for Mr.&Ms Luna Smart Toy Robot."
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.6+2006
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

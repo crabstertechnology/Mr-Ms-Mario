@@ -133,19 +133,22 @@ public:
     // Create BLE Characteristics
     pExpressionChar = pService->createCharacteristic(
                         EXPRESSION_CHAR_UUID,
-                        BLECharacteristic::PROPERTY_WRITE
+                        BLECharacteristic::PROPERTY_WRITE |
+                        BLECharacteristic::PROPERTY_WRITE_NR
                       );
     pExpressionChar->setCallbacks(new ExpressionCallbacks());
 
     pAudioChar = pService->createCharacteristic(
                    AUDIO_CHAR_UUID,
-                   BLECharacteristic::PROPERTY_WRITE
+                   BLECharacteristic::PROPERTY_WRITE |
+                   BLECharacteristic::PROPERTY_WRITE_NR
                  );
     pAudioChar->setCallbacks(new AudioCallbacks());
 
     pTextChar = pService->createCharacteristic(
                   TEXT_CHAR_UUID,
-                  BLECharacteristic::PROPERTY_WRITE
+                  BLECharacteristic::PROPERTY_WRITE |
+                  BLECharacteristic::PROPERTY_WRITE_NR
                 );
     pTextChar->setCallbacks(new TextCallbacks());
 

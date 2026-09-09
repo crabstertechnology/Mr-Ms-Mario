@@ -897,13 +897,14 @@ class BLEService with ChangeNotifier {
 
   // Characteristics Write Helpers
   Future<void> transmitExpression(int expr, String label) async {
+    // Instant optimistic state update for 0ms latency in UI
+    _activeExpressionId = expr;
+    _activeExpressionLabel = label;
+    notifyListeners();
+
     if (!_isConnected || _exprChar == null) {
       final success = await _transmitWifiCommand("EXPR:$expr,$label");
-      if (success) {
-        _activeExpressionId = expr;
-        _activeExpressionLabel = label;
-        notifyListeners();
-      } else {
+      if (!success) {
         addLog("Cannot transmit expression: Not connected via BLE or Wi-Fi.", "ERROR");
       }
       return;
@@ -914,11 +915,9 @@ class BLEService with ChangeNotifier {
       payload[0] = expr;
       payload.setRange(1, payload.length, labelBytes);
       
-      await _exprChar!.write(payload, withoutResponse: false);
-      _activeExpressionId = expr;
-      _activeExpressionLabel = label;
+      final bool writeWithoutResp = _exprChar!.properties.writeWithoutResponse;
+      await _exprChar!.write(payload, withoutResponse: writeWithoutResp);
       addLog("Sent expression: $expr ($label)", "BLE");
-      notifyListeners();
     } catch (e) {
       addLog("Failed to write expression characteristic: $e", "ERROR");
     }
@@ -933,7 +932,8 @@ class BLEService with ChangeNotifier {
       return;
     }
     try {
-      await _audioChar!.write([soundId], withoutResponse: false);
+      final bool writeWithoutResp = _audioChar!.properties.writeWithoutResponse;
+      await _audioChar!.write([soundId], withoutResponse: writeWithoutResp);
       addLog("Sent audio trigger: SFX $soundId", "BLE");
     } catch (e) {
       addLog("Failed to write audio characteristic: $e", "ERROR");

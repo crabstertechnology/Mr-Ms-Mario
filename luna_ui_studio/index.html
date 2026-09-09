@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Luna Display Studio — ESP32-S3 1.69" UI Maker</title>
+  <meta name="description" content="Visual drag-and-drop UI maker for ESP32-S3 1.69 inch 240x280 ST7789 displays. Export ready-to-paste C++ and TFT_eSPI code.">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@400;500;600;700;800;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+
+  <!-- Studio CSS -->
+  <link rel="stylesheet" href="css/studio.css?v=5.0">
+</head>
+<body>
+
+  <!-- ==========================================
+       TOP APPLICATION BAR
+       ========================================== -->
+  <header id="top-bar">
+    <div class="brand-section">
+      <div class="brand-logo">🌙</div>
+      <div>
+        <div class="brand-title">LUNA DISPLAY STUDIO</div>
+        <div style="font-size: 10px; color: var(--text-muted); font-family: var(--font-mono);">ESP32-S3 • 1.69" (240×280 ST7789)</div>
+      </div>
+      <span class="brand-badge">UI MAKER v2.0</span>
+    </div>
+
+    <!-- Central Toolbar Controls -->
+    <div class="toolbar-controls">
+      <!-- Templates -->
+      <select id="preset-select" class="tool-select" title="Load Preset Template">
+        <option value="" disabled selected>📁 Load Template...</option>
+        <option value="dashboard">Smart Watch Dashboard</option>
+        <option value="cyberpunk_hud">Cyberpunk HUD</option>
+        <option value="pomodoro">Pomodoro Focus Timer</option>
+      </select>
+
+      <!-- Zoom -->
+      <div class="tool-group">
+        <span style="font-size: 11px; color: var(--text-muted); margin: 0 4px;">🔍</span>
+        <select id="zoom-select" class="tool-select" style="padding: 4px 8px; border: none; background: transparent;">
+          <option value="1.0">100%</option>
+          <option value="1.25">125%</option>
+          <option value="1.5" selected>150%</option>
+          <option value="2.0">200%</option>
+        </select>
+      </div>
+
+      <!-- Snap Grid -->
+      <div class="tool-group">
+        <span style="font-size: 11px; color: var(--text-muted); margin: 0 4px;">⊞</span>
+        <select id="snap-select" class="tool-select" style="padding: 4px 8px; border: none; background: transparent;">
+          <option value="1">Snap: Off</option>
+          <option value="2">Snap: 2px</option>
+          <option value="4" selected>Snap: 4px</option>
+          <option value="8">Snap: 8px</option>
+        </select>
+      </div>
+
+      <!-- History & Quick Actions -->
+      <div class="tool-group">
+        <button id="btn-undo" class="tool-btn" title="Undo (Ctrl+Z)">↶</button>
+        <button id="btn-redo" class="tool-btn" title="Redo (Ctrl+Shift+Z)">↷</button>
+        <div style="width: 1px; height: 16px; background: var(--border-subtle); margin: 0 2px;"></div>
+        <button id="btn-dup" class="tool-btn" title="Duplicate Selected (Ctrl+D)">⧉ Dup</button>
+        <button id="btn-del" class="tool-btn" title="Delete Selected (Del)">✕ Del</button>
+        <button id="btn-clear" class="tool-btn" title="Clear Screen" style="color: var(--accent-crimson);">🗑</button>
+      </div>
+    </div>
+
+    <!-- Right Actions: Web Serial & Export -->
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button id="btn-serial" class="btn-webserial" title="Connect to ESP32 on COM3 via Web Serial (Chrome/Edge)">
+        <span>⚡ Connect COM3</span>
+      </button>
+
+      <button id="btn-export" class="btn-export" title="Export ready-to-paste C++ code">
+        <span>&lt;/&gt; Export C++ Code</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==========================================
+       STUDIO MAIN WORKSPACE
+       ========================================== -->
+  <main id="studio-workspace">
+
+    <!-- LEFT: UIVERSE COMPONENT PALETTE -->
+    <aside id="palette-sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">UI Elements</span>
+        <span style="font-size: 10px; color: var(--accent-cyan); font-family: var(--font-mono);">Drag & Drop</span>
+      </div>
+
+      <input type="text" id="palette-search" class="palette-search" placeholder="Search cards, buttons, gauges...">
+
+
+      <!-- Category Filter Tabs -->
+      <div class="category-tabs">
+        <button class="cat-tab active" data-cat="all">All</button>
+        <button class="cat-tab" data-cat="cards">Cards</button>
+        <button class="cat-tab" data-cat="buttons">Buttons</button>
+        <button class="cat-tab" data-cat="toggles">Toggles</button>
+        <button class="cat-tab" data-cat="loaders">Loaders</button>
+        <button class="cat-tab" data-cat="checkboxes">Checkboxes</button>
+        <button class="cat-tab" data-cat="notifications">Alerts</button>
+        <button class="cat-tab" data-cat="gauges">Gauges</button>
+        <button class="cat-tab" data-cat="inputs">Inputs</button>
+        <button class="cat-tab" data-cat="text">Text</button>
+      </div>
+
+      <!-- Component Items List -->
+      <div id="palette-list" class="palette-items-list">
+        <!-- Injected via components.js -->
+      </div>
+    </aside>
+
+    <!-- CENTER: 240x280 CANVAS STAGE -->
+    <section id="canvas-stage" class="canvas-grid-bg">
+      <!-- Smart Watch Chassis Frame Mockup -->
+      <div class="watch-frame">
+        <div class="watch-screen-bezel">
+          <!-- 240x280 ST7789 Display Surface -->
+          <div id="screen-canvas">
+            <!-- Simulated Top Status Bar -->
+            <div class="screen-statusbar">
+              <span>10:45</span>
+              <span style="font-size: 9px; opacity: 0.8;">ESP32-S3</span>
+              <span>[===] 98%</span>
+            </div>
+            <!-- Interactive Elements Layer -->
+            <div id="elements-container"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating Canvas HUD -->
+      <div class="canvas-hud">
+        <span class="hud-item">Display: <strong>240 × 280</strong></span>
+        <span class="hud-item" id="hud-pos">X: --, Y: --</span>
+        <span class="hud-item" id="hud-size">W: --, H: --</span>
+      </div>
+    </section>
+
+    <!-- RIGHT: PROPERTIES INSPECTOR & LAYERS -->
+    <aside id="inspector-sidebar">
+      <div class="inspector-tabs">
+        <button id="tab-props" class="tab-btn active">Properties</button>
+        <button id="tab-layers" class="tab-btn">Layers</button>
+      </div>
+
+      <!-- Properties Panel -->
+      <div id="inspector-props" class="inspector-content">
+        <!-- Injected dynamically based on selected element -->
+      </div>
+
+      <!-- Layers Panel -->
+      <div id="inspector-layers" class="inspector-content" style="display: none;">
+        <!-- Injected dynamically -->
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- ==========================================
+       CODE EXPORT MODAL
+       ========================================== -->
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal-window">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>&lt;/&gt;</span>
+          <span>Export Firmware Code</span>
+        </div>
+        <button id="modal-close" class="modal-close">✕</button>
+      </div>
+
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="arduino">Arduino C++ (TFT_eSPI)</button>
+        <button class="modal-tab" data-tab="header">luna_ui_elements.h (Library)</button>
+        <button class="modal-tab" data-tab="json">Project JSON</button>
+      </div>
+
+      <div class="modal-body">
+        <textarea id="code-output" class="code-view" readonly spellcheck="false"></textarea>
+      </div>
+
+      <div class="modal-footer">
+        <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">
+          Copy and paste directly into your <strong>1.69 Luna Firmware.ino</strong>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-download-code" class="btn-download">💾 Download File</button>
+          <button id="btn-copy-code" class="btn-copy">📋 Copy Code</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Application Scripts -->
+  <script src="js/components.js?v=5.0"></script>
+  <script src="js/code_generator.js?v=5.0"></script>
+  <script src="js/canvas.js?v=5.0"></script>
+  <script src="js/web_serial.js?v=5.0"></script>
+  <script src="js/app.js?v=5.0"></script>
+</body>
+</html>

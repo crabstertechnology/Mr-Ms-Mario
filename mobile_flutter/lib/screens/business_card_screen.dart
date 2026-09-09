@@ -68,8 +68,8 @@ class _BusinessCardScreenState extends State<BusinessCardScreen> {
   Future<void> _loadSavedCardData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _useCustomUrl = prefs.getBool("card_use_custom_url") ?? true;
-      _customUrlCtrl.text = prefs.getString("card_custom_url") ?? "";
+      _useCustomUrl = true;
+      _customUrlCtrl.text = prefs.getString("card_custom_url") ?? prefs.getString("card_generated_url") ?? "";
       
       _nameCtrl.text = prefs.getString("card_name") ?? "";
       _companyCtrl.text = prefs.getString("card_company") ?? "";
@@ -270,163 +270,49 @@ class _BusinessCardScreenState extends State<BusinessCardScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Mode Toggle Chips
-            Row(
-              children: [
-                ChoiceChip(
-                  label: Text("Custom Link / Portfolio", style: GoogleFonts.outfit(fontSize: 12)),
-                  selected: _useCustomUrl,
-                  selectedColor: accentColor.withOpacity(0.2),
-                  onSelected: (val) {
-                    if (val) setState(() => _useCustomUrl = true);
-                  },
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: Text("Luna Hosted Builder", style: GoogleFonts.outfit(fontSize: 12)),
-                  selected: !_useCustomUrl,
-                  selectedColor: accentColor.withOpacity(0.2),
-                  onSelected: (val) {
-                    if (val) setState(() => _useCustomUrl = false);
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Dynamic Form based on Selection
+            // Direct Link Configuration
             GlassCard(
               padding: const EdgeInsets.all(20),
-              child: _useCustomUrl
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          "Direct Link Configuration",
-                          style: GoogleFonts.outfit(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF0F172A),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "Enter any existing URL you want the watch QR code to open directly (e.g. Linktree, LinkedIn, GitHub, personal website).",
-                          style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B)),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildTextField(
-                          _customUrlCtrl,
-                          "Custom URL (e.g. https://linktr.ee/myname)",
-                          Icons.link,
-                          isRequired: true,
-                          keyboardType: TextInputType.url,
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accentColor,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 0,
-                          ),
-                          onPressed: _saveAndGenerateCard,
-                          child: Text(
-                            "Generate Link QR Code",
-                            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            "Card Builder (Self-Host or Default)",
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "Input details below and configure your hosting domain if you want to use your own web server.",
-                            style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B)),
-                          ),
-                          const SizedBox(height: 16),
-                          _buildTextField(_baseDomainCtrl, "Base Domain / Card URL Prefix", Icons.dns_outlined, isRequired: true),
-                          const Divider(height: 24, color: Color(0xFFE2E8F0)),
-                          Text(
-                            "Profile Details",
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(_nameCtrl, "Full Name", Icons.person, isRequired: true),
-                          const SizedBox(height: 12),
-                          _buildTextField(_companyCtrl, "Company Name", Icons.business),
-                          const SizedBox(height: 12),
-                          _buildTextField(_titleCtrl, "Job Title", Icons.work_outline),
-                          const SizedBox(height: 12),
-                          _buildTextField(_avatarUrlCtrl, "Profile Photo URL", Icons.image_outlined),
-                          const SizedBox(height: 20),
-
-                          Text(
-                            "Contact Information",
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(_phoneCtrl, "Phone Number", Icons.phone, keyboardType: TextInputType.phone),
-                          const SizedBox(height: 12),
-                          _buildTextField(_emailCtrl, "Email Address", Icons.email, keyboardType: TextInputType.emailAddress),
-                          const SizedBox(height: 12),
-                          _buildTextField(_websiteCtrl, "Website URL", Icons.language),
-                          const SizedBox(height: 12),
-                          _buildTextField(_locationCtrl, "Location / City", Icons.location_on_outlined),
-                          const SizedBox(height: 20),
-
-                          Text(
-                            "Social Handles",
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(_instagramCtrl, "Instagram Username", Icons.camera_alt_outlined),
-                          const SizedBox(height: 12),
-                          _buildTextField(_linkedinCtrl, "LinkedIn URL", Icons.link),
-                          const SizedBox(height: 12),
-                          _buildTextField(_bioCtrl, "Short Bio", Icons.notes, maxLines: 3),
-                          const SizedBox(height: 20),
-
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: accentColor,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              elevation: 0,
-                            ),
-                            onPressed: _saveAndGenerateCard,
-                            child: Text(
-                              "Generate Business Card",
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
-                            ),
-                          ),
-                        ],
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    "Direct Link Configuration",
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF0F172A),
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "Enter any existing URL you want the watch QR code to open directly (e.g. Linktree, LinkedIn, GitHub, personal website).",
+                    style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    _customUrlCtrl,
+                    "Custom URL (e.g. https://linktr.ee/myname)",
+                    Icons.link,
+                    isRequired: true,
+                    keyboardType: TextInputType.url,
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    onPressed: _saveAndGenerateCard,
+                    child: Text(
+                      "Generate Link QR Code",
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             const SizedBox(height: 20),

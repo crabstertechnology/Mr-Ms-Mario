@@ -83,6 +83,7 @@ class _MainDashboardState extends State<MainDashboard> {
   String _localActiveGifId = 'sprite_ai_0';
   String _localActiveLabel = 'Sprite AI 1';
   bool _isStreamingMap = false;
+  Timer? _pendingAudioTimer;
 
   List<Map<String, String>> _localAudioFiles = [];
   bool _isLoadingAudioFiles = false;
@@ -450,6 +451,7 @@ class _MainDashboardState extends State<MainDashboard> {
     _lunaLinkSearchController.dispose();
     _appSearchController.dispose();
     _audioSearchController.dispose();
+    _pendingAudioTimer?.cancel();
     _audioSynth.stop();
     super.dispose();
   }
@@ -1324,22 +1326,40 @@ class _MainDashboardState extends State<MainDashboard> {
     String activeGifId = _localActiveGifId;
     String activeLabel = _localActiveLabel;
 
-    if (ble.isConnected) {
+    if (ble.isConnected && ble.activeScreenMode.isNotEmpty) {
       final screenMode = ble.activeScreenMode.toUpperCase();
       if (screenMode == 'MAPS' || screenMode == 'MAP') {
         activeGifId = 'map';
         activeLabel = 'Navigation Map';
       } else if (screenMode == 'CLOCK') {
         activeGifId = 'clock';
-        activeLabel = 'Clock';
+        activeLabel = 'Clock Face';
+      } else if (screenMode == 'NOTIF' || screenMode == 'NOTIFICATIONS') {
+        activeGifId = 'notif';
+        activeLabel = 'Notifications';
+      } else if (screenMode == 'CALENDAR' || screenMode == 'CAL') {
+        activeGifId = 'calendar';
+        activeLabel = 'Calendar';
+      } else if (screenMode == 'GAMES' || screenMode == 'ARCADE') {
+        activeGifId = 'games';
+        activeLabel = 'Luna Arcade';
+      } else if (screenMode == 'SETTINGS' || screenMode == 'SETTING') {
+        activeGifId = 'settings';
+        activeLabel = 'Settings';
+      } else if (screenMode == 'POMODORO' || screenMode == 'POMO') {
+        activeGifId = 'pomodoro';
+        activeLabel = 'Pomodoro Timer';
       } else if (screenMode == 'CARD' || screenMode == 'QR CARD') {
         activeGifId = 'card';
         activeLabel = 'QR Business Card';
-      } else {
+      } else if (screenMode == 'LEVEL') {
+        activeGifId = 'level';
+        activeLabel = 'Level Sensor';
+      } else if (screenMode == 'FACE') {
         final exprId = ble.activeExpressionId;
         final rawLabel = ble.activeExpressionLabel.trim();
         
-        if (exprId >= 0 && exprId <= 5) {
+        if (exprId >= 0 && exprId < DatabaseService.animMapping.length) {
           activeGifId = 'sprite_ai_$exprId';
           final mapping = DatabaseService.animMapping['sprite_ai_$exprId'];
           activeLabel = rawLabel.isNotEmpty ? rawLabel : (mapping?['label'] ?? 'Sprite AI ${exprId + 1}');
@@ -1401,82 +1421,83 @@ class _MainDashboardState extends State<MainDashboard> {
   // Floating capsule Bottom Navigation Bar
   Widget _buildBottomNavigationBar() {
     final List<Map<String, dynamic>> items = [
-      {'icon': Icons.home, 'label': 'Home'},
-      {'icon': Icons.face, 'label': 'Expressions'},
-      {'icon': Icons.audiotrack, 'label': 'Sounds'},
-      {'icon': Icons.cloud_sync, 'label': 'Luna Link'},
-      {'icon': Icons.calendar_month, 'label': 'Calendar'},
-      {'icon': Icons.contact_mail, 'label': 'Card'},
-      {'icon': Icons.person, 'label': 'Profile'},
+      {'icon': Icons.home_rounded, 'label': 'Home'},
+      {'icon': Icons.face_rounded, 'label': 'Expressions'},
+      {'icon': Icons.audiotrack_rounded, 'label': 'Sounds'},
+      {'icon': Icons.cloud_sync_rounded, 'label': 'Luna Link'},
+      {'icon': Icons.calendar_month_rounded, 'label': 'Calendar'},
+      {'icon': Icons.contact_mail_rounded, 'label': 'Card'},
+      {'icon': Icons.person_rounded, 'label': 'Profile'},
     ];
 
     return Container(
-      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-      height: 68,
+      margin: const EdgeInsets.only(left: 8, right: 8, bottom: 12),
+      height: 66,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: _accentColor.withOpacity(0.15), width: 1.2),
         boxShadow: [
           BoxShadow(
             color: _accentColor.withOpacity(0.10),
-            blurRadius: 18,
+            blurRadius: 16,
             spreadRadius: 1,
             offset: const Offset(0, 4),
           ),
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: List.generate(items.length, (idx) {
             final isSelected = _activeTabIdx == idx;
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  _activeTabIdx = idx;
-                  if (idx == 6) {
-                    _currentSettingsSection = 'categories';
-                  }
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isSelected ? _accentColor : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedScale(
-                      scale: isSelected ? 1.15 : 1.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
+            return Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() {
+                    _activeTabIdx = idx;
+                    if (idx == 6) {
+                      _currentSettingsSection = 'categories';
+                    }
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isSelected ? _accentColor : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
                         items[idx]['icon'] as IconData,
-                        color: isSelected ? Colors.white : const Color(0xFF9E9E9E),
+                        color: isSelected ? Colors.white : const Color(0xFF94A3B8),
                         size: 20,
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      items[idx]['label'] as String,
-                      style: GoogleFonts.outfit(
-                        color: isSelected ? Colors.white : const Color(0xFF9E9E9E),
-                        fontSize: 9.5,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                        letterSpacing: 0.2,
+                      const SizedBox(height: 3),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          items[idx]['label'] as String,
+                          maxLines: 1,
+                          style: GoogleFonts.outfit(
+                            color: isSelected ? Colors.white : const Color(0xFF64748B),
+                            fontSize: 9.0,
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -2081,7 +2102,7 @@ class _MainDashboardState extends State<MainDashboard> {
               child: SingleChildScrollView(
                 key: const PageStorageKey('expressions_scroll'),
                 padding: const EdgeInsets.only(bottom: 20),
-                child: _buildExpressionsPanel(db, ble),
+                child: _buildExpressionsPanel(db, ble, activeGifId),
               ),
             ),
           ],
@@ -2144,7 +2165,7 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
-  Widget _buildExpressionsPanel(DatabaseService db, BLEService ble) {
+  Widget _buildExpressionsPanel(DatabaseService db, BLEService ble, String activeGifId) {
     // Filter lists
     final search = _searchController.text.toLowerCase();
     List<GifModel> filteredGifs = db.gifs.where((gif) {
@@ -2180,7 +2201,7 @@ class _MainDashboardState extends State<MainDashboard> {
           itemCount: filteredGifs.length,
           itemBuilder: (context, index) {
             final gif = filteredGifs[index];
-            return _buildGifCard(db, ble, gif);
+            return _buildGifCard(db, ble, gif, activeGifId);
           },
         ),
       ],
@@ -2708,12 +2729,14 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  Widget _buildGifCard(DatabaseService db, BLEService ble, GifModel gif) {
+  Widget _buildGifCard(DatabaseService db, BLEService ble, GifModel gif, String activeGifId) {
+    final isCurrentActive = (activeGifId == gif.id);
     return _GifCardWidget(
       gif: gif,
       db: db,
       ble: ble,
-      onTap: () async {
+      isActive: isCurrentActive,
+      onTap: () {
         final mapping = DatabaseService.animMapping[gif.id] ??
             {'expr': 0, 'sound': 0, 'label': gif.name};
         final exprVal = mapping['expr'] as int;
@@ -2725,10 +2748,11 @@ class _MainDashboardState extends State<MainDashboard> {
         });
 
         ble.addLog("Executing expression: ${gif.name}", "ANIM");
-        await ble.transmitExpression(exprVal, gif.name);
+        ble.transmitExpression(exprVal, gif.name);
 
+        _pendingAudioTimer?.cancel();
         if (soundVal > 0) {
-          Future.delayed(const Duration(milliseconds: 150), () {
+          _pendingAudioTimer = Timer(const Duration(milliseconds: 50), () {
             ble.transmitAudio(soundVal);
           });
         }
@@ -3132,38 +3156,6 @@ class _MainDashboardState extends State<MainDashboard> {
             ],
           ),
         ),
-        const SizedBox(height: 20),
-
-        // Gestures mappings
-        GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                "HARDWARE TTP233 GESTURES",
-                style: GoogleFonts.outfit(color: const Color(0xFFFFCDD2), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
-              ),
-              const SizedBox(height: 16),
-
-              // Helper gesture dropdown build
-              _buildGestureDropdown("Single Tap Action", db.touchSingle, gifOptions, (val) async {
-                await db.updateTouchSingle(val);
-                _syncSettingsToRobot(db, ble);
-              }),
-              const SizedBox(height: 12),
-              _buildGestureDropdown("Double Tap Action", db.touchDouble, gifOptions, (val) async {
-                await db.updateTouchDouble(val);
-                _syncSettingsToRobot(db, ble);
-              }),
-              const SizedBox(height: 12),
-              _buildGestureDropdown("Long Press Action", db.touchLong, gifOptions, (val) async {
-                await db.updateTouchLong(val);
-                _syncSettingsToRobot(db, ble);
-              }),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
         // Smartwatch Custom Wallpaper Manager — Luna Display
         GlassCard(
           child: Column(
@@ -3608,9 +3600,34 @@ class _MainDashboardState extends State<MainDashboard> {
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
-        // OLED Simulator Container
+        // Firmware Screen Mode Quick Selector
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildScreenChip("Face", "sprite_ai_0", Icons.face_rounded, activeGifId, ble),
+              const SizedBox(width: 8),
+              _buildScreenChip("Clock", "clock", Icons.watch_later_outlined, activeGifId, ble),
+              const SizedBox(width: 8),
+              _buildScreenChip("Notifs", "notif", Icons.notifications_none_rounded, activeGifId, ble),
+              const SizedBox(width: 8),
+              _buildScreenChip("Calendar", "calendar", Icons.calendar_month_rounded, activeGifId, ble),
+              const SizedBox(width: 8),
+              _buildScreenChip("Arcade", "games", Icons.sports_esports_outlined, activeGifId, ble),
+              const SizedBox(width: 8),
+              _buildScreenChip("Settings", "settings", Icons.settings_outlined, activeGifId, ble),
+              const SizedBox(width: 8),
+              _buildScreenChip("Pomodoro", "pomodoro", Icons.timer_outlined, activeGifId, ble),
+              const SizedBox(width: 8),
+              _buildScreenChip("Card", "card", Icons.qr_code_2_rounded, activeGifId, ble),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // OLED Simulator Container with Interactive Touch & Swipe
         Center(
           child: GestureDetector(
             onTap: () {
@@ -3628,6 +3645,17 @@ class _MainDashboardState extends State<MainDashboard> {
                 ble.transmitText("TOUCH_SIM:LONG");
               }
             },
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity != null) {
+                if (details.primaryVelocity! < -200) {
+                  // Swipe Left -> Next screen
+                  _cycleWatchScreen(1, ble);
+                } else if (details.primaryVelocity! > 200) {
+                  // Swipe Right -> Prev screen
+                  _cycleWatchScreen(-1, ble);
+                }
+              }
+            },
             child: OLEDSimulator(
               activeGifId: activeGifId,
               activeLabel: activeLabel,
@@ -3636,7 +3664,46 @@ class _MainDashboardState extends State<MainDashboard> {
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 8),
+
+        // Active screen pill indicator with cycle buttons
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: accentColor.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _cycleWatchScreen(-1, ble),
+                  child: Icon(Icons.chevron_left_rounded, size: 18, color: accentColor),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  activeLabel.toUpperCase(),
+                  style: GoogleFonts.outfit(
+                    color: accentColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _cycleWatchScreen(1, ble),
+                  child: Icon(Icons.chevron_right_rounded, size: 18, color: accentColor),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
 
         // Robot Status Details Grid
         _buildRobotStatusGrid(primary, ble),
@@ -3674,107 +3741,8 @@ class _MainDashboardState extends State<MainDashboard> {
         _buildSendMessageSection(ble),
         const SizedBox(height: 20),
 
-        _buildMapStreamingSection(ble),
-        const SizedBox(height: 20),
-
         // Quick Actions panel
         _buildQuickActionsPanel(ble),
-      ],
-    );
-  }
-
-  Widget _buildMapStreamingSection(BLEService ble) {
-    const mapGreen = Color(0xFF10B981); // Navigation Emerald Green
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSectionHeader("1.69\" Navigation Map UI (240x280 ST7789)", Icons.map, mapGreen),
-        const SizedBox(height: 12),
-        GlassCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Screen Map Canvas Preview Box (1.69" 240x280 display ratio)
-              Container(
-                height: 270,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: mapGreen.withOpacity(0.4), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    // Exact Google Maps Turn-by-Turn Navigation Custom Canvas
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: CustomPaint(
-                        size: const Size(double.infinity, 270),
-                        painter: MapPreviewPainter(isStreaming: true),
-                      ),
-                    ),
-                    Positioned(
-                      top: 14,
-                      right: 14,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black87,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: mapGreen.withOpacity(0.5)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.navigation, color: mapGreen, size: 12),
-                            const SizedBox(width: 4),
-                            Text(
-                              "1.69\" (240x280 ST7789)",
-                              style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle_outline, color: mapGreen, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Turn-by-turn navigation guidance is synchronized automatically from phone notifications.",
-                        style: GoogleFonts.outfit(color: textColor70, fontSize: 11),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -3915,6 +3883,107 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
         ),
       ],
+    );
+  }
+
+  void _cycleWatchScreen(int direction, BLEService ble) {
+    const screens = [
+      {'id': 'sprite_ai_0', 'label': 'Robot Face', 'cmd': 'FACE'},
+      {'id': 'card', 'label': 'Digital Card', 'cmd': 'CARD'},
+      {'id': 'clock', 'label': 'Clock Face', 'cmd': 'CLOCK'},
+      {'id': 'notif', 'label': 'Notifications', 'cmd': 'NOTIF'},
+      {'id': 'calendar', 'label': 'Calendar', 'cmd': 'CALENDAR'},
+      {'id': 'games', 'label': 'Luna Arcade', 'cmd': 'GAMES'},
+      {'id': 'settings', 'label': 'Settings', 'cmd': 'SETTINGS'},
+      {'id': 'pomodoro', 'label': 'Pomodoro Timer', 'cmd': 'POMODORO'},
+    ];
+
+    int curIdx = 0;
+    for (int i = 0; i < screens.length; i++) {
+      if (_localActiveGifId == screens[i]['id'] || _localActiveGifId.startsWith(screens[i]['id']!)) {
+        curIdx = i;
+        break;
+      }
+    }
+
+    final nextIdx = (curIdx + direction + screens.length) % screens.length;
+    final target = screens[nextIdx];
+
+    setState(() {
+      _localActiveGifId = target['id']!;
+      _localActiveLabel = target['label']!;
+    });
+
+    if (ble.isConnected) {
+      ble.transmitText("SCREEN:${target['cmd']}");
+      if (direction > 0) {
+        ble.transmitText("TOUCH_SIM:NEXT");
+      } else {
+        ble.transmitText("TOUCH_SIM:PREV");
+      }
+    }
+  }
+
+  Widget _buildScreenChip(String label, String screenId, IconData icon, String currentActiveId, BLEService ble) {
+    final isSelected = (currentActiveId == screenId) ||
+        (screenId == 'sprite_ai_0' && (currentActiveId.startsWith('sprite_ai_') || currentActiveId.startsWith('gif_') || !['clock', 'notif', 'calendar', 'games', 'settings', 'pomodoro', 'card', 'map'].contains(currentActiveId)));
+
+    final accent = _accentColor;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _localActiveGifId = screenId;
+          _localActiveLabel = label;
+        });
+        if (ble.isConnected) {
+          String cmd = "FACE";
+          if (screenId == 'clock') cmd = "CLOCK";
+          else if (screenId == 'notif') cmd = "NOTIF";
+          else if (screenId == 'calendar') cmd = "CALENDAR";
+          else if (screenId == 'games') cmd = "GAMES";
+          else if (screenId == 'settings') cmd = "SETTINGS";
+          else if (screenId == 'pomodoro') cmd = "POMODORO";
+          else if (screenId == 'card') cmd = "CARD";
+          ble.transmitText("SCREEN:$cmd");
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? accent : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? accent : Colors.black.withOpacity(0.08),
+            width: 1.2,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: accent.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: isSelected ? Colors.white : const Color(0xFF64748B)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                color: isSelected ? Colors.white : const Color(0xFF334155),
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -4080,7 +4149,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      // ── Playback controls ─────────────────────────────────────────
+                      // Playback controls
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -4114,7 +4183,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       const SizedBox(height: 6),
                       const Divider(color: Colors.black12, height: 1),
                       const SizedBox(height: 10),
-                      // ── Volume slider ──────────────────────────────────────────
+                      // Volume slider
                       Row(
                         children: [
                           Icon(Icons.volume_down, color: textColor60, size: 18),
@@ -4138,7 +4207,6 @@ class _MainDashboardState extends State<MainDashboard> {
                                 onChanged: !hasSpeaker ? null : (val) {
                                   audioStream.setVolume(val.toInt());
                                 },
-                                // Send BLE command only when user releases finger
                                 onChangeEnd: !hasSpeaker ? null : (val) {
                                   ble.transmitVolume(val.toInt());
                                 },
@@ -4153,7 +4221,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           ),
                         ],
                       ),
-                      // ── Bass slider ────────────────────────────────────────────
+                      // Bass slider
                       Row(
                         children: [
                           Icon(Icons.graphic_eq, color: textColor60, size: 18),
@@ -4177,7 +4245,6 @@ class _MainDashboardState extends State<MainDashboard> {
                                 onChanged: !hasSpeaker ? null : (val) {
                                   audioStream.setBass(val.toInt());
                                 },
-                                // Send BLE command only when user releases finger
                                 onChangeEnd: !hasSpeaker ? null : (val) {
                                   ble.transmitBass(val.toInt());
                                 },
@@ -4465,115 +4532,6 @@ class _MainDashboardState extends State<MainDashboard> {
                 foregroundColor: Colors.white,
               ),
               child: const Text("SEND"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showAiChatDialog(BLEService ble) {
-    final TextEditingController chatInputController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return AlertDialog(
-              backgroundColor: Colors.white,
-              title: Text("AI Companion Chat", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    height: 120,
-                    width: 300,
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.black.withOpacity(0.06)),
-                    ),
-                    child: SingleChildScrollView(
-                      child: Text(
-                        "Mr. Luna: Hello! How is your day going? Let's write some code together!",
-                        style: GoogleFonts.outfit(color: textColor70, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: chatInputController,
-                    style: GoogleFonts.outfit(color: textColor),
-                    decoration: InputDecoration(
-                      hintText: "Chat with your AI Companion...",
-                      hintStyle: GoogleFonts.outfit(color: textColor24),
-                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black.withOpacity(0.1))),
-                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentColor)),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text("CLOSE", style: TextStyle(color: textColor60)),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (chatInputController.text.isNotEmpty) {
-                      ble.transmitMarqueeText("AI CHAT...");
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: const Text("Transmitting AI Prompt..."), backgroundColor: _accentColor),
-                      );
-                      Navigator.pop(context);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accentColor,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text("SEND"),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showNotificationCenterDialog(BLEService ble) {
-    final List<Map<String, dynamic>> notifs = [
-      {'label': 'Birthday Reminder \u{1F382}', 'text': 'HAPPY BIRTHDAY!'},
-      {'label': 'Meeting Reminder \u{1F4C5}', 'text': 'MEETING IN 5 MINS'},
-      {'label': 'Task Reminder \u{2705}', 'text': 'DRINK WATER / STAND UP'},
-      {'label': 'Weather Alert \u{26C8}\u{FE0F}', 'text': 'HEAVY RAIN EXPECTED'},
-    ];
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF0F0E1A),
-          title: Text("Notification Center", style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: notifs.map((n) {
-              return ListTile(
-                title: Text(n['label'] as String, style: GoogleFonts.outfit(color: textColor, fontSize: 13)),
-                trailing: const Icon(Icons.send, color: Color(0xFFE53935), size: 16),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await ble.transmitMarqueeText(n['text'] as String);
-                },
-              );
-            }).toList(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("CLOSE"),
             ),
           ],
         );
@@ -6105,8 +6063,6 @@ class _MainDashboardState extends State<MainDashboard> {
               );
             },
           ),
-        const SizedBox(height: 28),
-        _buildAlarmsSection(db, ble),
       ],
     );
   }
@@ -6128,126 +6084,6 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
       ],
     );
-  }
-
-  Widget _buildAlarmsSection(DatabaseService db, BLEService ble) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSectionHeader("Alarms & Reminders", Icons.alarm, Colors.teal.shade600),
-        const SizedBox(height: 12),
-        GlassCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (db.alarms.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                    child: Text(
-                      "No active alarms. Tap below to create one.",
-                      style: GoogleFonts.outfit(color: textColor60, fontSize: 13),
-                    ),
-                  ),
-                )
-              else
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: db.alarms.length,
-                  separatorBuilder: (context, index) => Divider(color: textColor12, height: 16),
-                  itemBuilder: (context, index) {
-                    final alarm = db.alarms[index];
-                    return Row(
-                      children: [
-                        Icon(Icons.alarm, color: Colors.teal.shade400, size: 24),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                alarm.formatTime(db.is12HourFormat),
-                                style: GoogleFonts.outfit(
-                                  color: textColor,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (alarm.label.isNotEmpty)
-                                Text(
-                                  alarm.label,
-                                  style: GoogleFonts.outfit(
-                                    color: textColor60,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Switch(
-                          value: alarm.isEnabled,
-                          activeColor: Colors.teal.shade400,
-                          onChanged: (val) {
-                            db.toggleAlarm(alarm.id);
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
-                          onPressed: () {
-                            db.deleteAlarm(alarm.id);
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => _addAlarmFlow(db, ble),
-                icon: const Icon(Icons.add_alarm),
-                label: const Text("ADD NEW ALARM"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal.shade600,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _addAlarmFlow(DatabaseService db, BLEService ble) async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-    if (picked != null) {
-      final alarm = AlarmModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        hour: picked.hour,
-        minute: picked.minute,
-        label: "Alarm",
-        isEnabled: true,
-      );
-      await db.addAlarm(alarm);
-
-      final hh = picked.hour.toString().padLeft(2, '0');
-      final mm = picked.minute.toString().padLeft(2, '0');
-      if (ble.isConnected) {
-        await ble.transmitCalendarEvent("alarm", "$hh:$mm", "Alarm");
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Alarm set for $hh:$mm!"),
-          backgroundColor: const Color(0xFF10B981),
-        ),
-      );
-    }
   }
 
   Widget _buildNotificationSyncPanel(DatabaseService db, BLEService ble) {
@@ -7819,12 +7655,14 @@ class _GifCardWidget extends StatefulWidget {
   final GifModel gif;
   final DatabaseService db;
   final BLEService ble;
+  final bool isActive;
   final VoidCallback onTap;
 
   const _GifCardWidget({
     required this.gif,
     required this.db,
     required this.ble,
+    this.isActive = false,
     required this.onTap,
   });
 
@@ -7988,9 +7826,21 @@ class _GifCardWidgetState extends State<_GifCardWidget>
       onTap: widget.onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0x66161526),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          color: widget.isActive ? previewColor.withOpacity(0.18) : const Color(0x66161526),
+          border: Border.all(
+            color: widget.isActive ? previewColor : Colors.white.withOpacity(0.06),
+            width: widget.isActive ? 2.0 : 1.0,
+          ),
           borderRadius: BorderRadius.circular(12),
+          boxShadow: widget.isActive
+              ? [
+                  BoxShadow(
+                    color: previewColor.withOpacity(0.4),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
@@ -8105,6 +7955,49 @@ class _GifCardWidgetState extends State<_GifCardWidget>
                   ),
                 ),
               ),
+
+              // Active Playing Indicator
+              if (widget.isActive)
+                Positioned(
+                  bottom: 42,
+                  left: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: previewColor,
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: previewColor.withOpacity(0.6),
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: const BoxDecoration(
+                            color: Colors.black,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          "PLAYING",
+                          style: GoogleFonts.outfit(
+                            color: Colors.black,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
