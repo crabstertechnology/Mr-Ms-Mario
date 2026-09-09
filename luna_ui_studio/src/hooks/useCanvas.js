@@ -63,17 +63,25 @@ export function useCanvas() {
 
   // Delete Screen
   const deleteScreen = useCallback((screenId) => {
-    if (screens.length <= 1) return false
+    let nextActive = null
+    let didDelete = false
+
     setScreens(prev => {
+      if (prev.length <= 1) return prev
       const next = prev.filter(s => s.id !== screenId)
-      const nextActive = activeScreenId === screenId ? next[0].id : activeScreenId
-      setActiveScreenId(nextActive)
+      if (next.length === prev.length) return prev // screenId not found
+      didDelete = true
+      nextActive = activeScreenId === screenId ? next[0].id : activeScreenId
       saveHistory(next, nextActive)
       return next
     })
-    setSelectedId(null)
-    return true
-  }, [screens.length, activeScreenId, saveHistory])
+
+    if (didDelete && nextActive) {
+      setActiveScreenId(nextActive)
+      setSelectedId(null)
+    }
+    return didDelete
+  }, [activeScreenId, saveHistory])
 
   // Duplicate Screen
   const duplicateScreen = useCallback((screenId) => {

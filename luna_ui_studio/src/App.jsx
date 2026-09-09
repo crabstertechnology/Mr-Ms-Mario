@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import styled from 'styled-components'
 import TopBar from './components/TopBar'
 import PaletteSidebar from './components/Palette/PaletteSidebar'
@@ -49,6 +49,7 @@ function App() {
   const [compileOpen, setCompileOpen] = useState(false)
   const [flowMapOpen, setFlowMapOpen] = useState(false)
   const [toast, setToast] = useState(null)
+  const initializedRef = useRef(false)
 
   const showToast = useCallback((msg) => {
     setToast(msg)
@@ -69,8 +70,11 @@ function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [deleteSelected, duplicateSelected, undo, setMode, showToast])
 
-  // Load default multi-screen project with interactive block mapping on mount
+  // Load default multi-screen project with interactive block mapping once on mount
   useEffect(() => {
+    if (initializedRef.current) return
+    initializedRef.current = true
+
     // Only initialize if screen 1 has no elements yet
     if (screens.length === 1 && screens[0].elements.length === 0) {
       // 1. Setup Screen 1 (Home)
@@ -257,6 +261,14 @@ function App() {
         activeScreenId={activeScreenId}
         onSelectScreen={setActiveScreenId}
         onAddScreen={addScreen}
+        onDeleteScreen={(id) => {
+          const success = deleteScreen(id)
+          if (success) {
+            showToast('✓ Deleted screen')
+          } else {
+            showToast('⚠️ Cannot delete the only remaining screen')
+          }
+        }}
         onUpdateElementActions={updateElementActions}
         onEnterTestMode={() => {
           setMode('test')

@@ -9,6 +9,7 @@ export default function FlowMapModal({
   activeScreenId,
   onSelectScreen,
   onAddScreen,
+  onDeleteScreen,
   onUpdateElementActions,
   onEnterTestMode
 }) {
@@ -164,6 +165,14 @@ export default function FlowMapModal({
                   </ActionsList>
 
                   <CardFooter>
+                    {screens.length > 1 && (
+                      <DeleteScreenCardBtn
+                        title={`Delete ${screen.name}`}
+                        onClick={() => onDeleteScreen && onDeleteScreen(screen.id)}
+                      >
+                        🗑️ Delete Screen
+                      </DeleteScreenCardBtn>
+                    )}
                     <EditScreenBtn onClick={() => { onSelectScreen(screen.id); onClose(); }}>
                       ✏️ Edit in Canvas
                     </EditScreenBtn>
@@ -478,7 +487,25 @@ const ActionPill = styled.div`
 const CardFooter = styled.div`
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const DeleteScreenCardBtn = styled.button`
+  border: none;
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  &:hover {
+    background: #ef4444;
+    color: #fff;
+    transform: translateY(-1px);
+  }
 `
 
 const EditScreenBtn = styled.button`

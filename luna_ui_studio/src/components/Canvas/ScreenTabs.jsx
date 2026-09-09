@@ -80,13 +80,11 @@ export default function ScreenTabs({
                 </ActionBtn>
                 {screens.length > 1 && (
                   <ActionBtn
-                    title="Delete Screen"
+                    title={`Delete "${s.name}"`}
                     $danger
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (window.confirm(`Delete screen "${s.name}"?`)) {
-                        onDeleteScreen(s.id)
-                      }
+                      onDeleteScreen(s.id)
                     }}
                   >
                     ✕
@@ -203,18 +201,22 @@ const TabActions = styled.div`
 const ActionBtn = styled.button`
   border: none;
   background: transparent;
-  padding: 1px 3px;
-  font-size: 9px;
+  padding: 2px 5px;
+  font-size: 11px;
   cursor: pointer;
-  border-radius: 3px;
-  opacity: 0.6;
+  border-radius: 4px;
+  opacity: 0.7;
   color: inherit;
-  transition: opacity 0.15s, background 0.15s;
+  transition: all 0.15s;
 
   &:hover {
     opacity: 1;
-    background: rgba(0,0,0,0.12);
-    color: ${p => p.$danger ? '#ef4444' : 'inherit'};
+    background: ${p => p.$danger ? '#ef4444' : 'rgba(0,0,0,0.15)'};
+    color: ${p => p.$danger ? '#ffffff' : 'inherit'};
+    transform: scale(1.15);
+  }
+  &:active {
+    transform: scale(0.95);
   }
 `
 
