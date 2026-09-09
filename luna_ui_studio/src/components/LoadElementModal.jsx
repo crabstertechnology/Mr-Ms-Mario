@@ -3,10 +3,18 @@
 // Compiles pasted UIverse / React + styled-components code
 // with full working animations, live preview, and studio registration.
 // ============================================================
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import styled from 'styled-components'
 import { compileReactComponent, inferElementMetadata } from '../utils/reactCompiler'
 import { registerCustomElement } from '../ui-elements/registry'
+import {
+  getSavedComponents,
+  saveComponent,
+  deleteComponent,
+  downloadComponentFile,
+  exportAllComponents,
+  importComponentsFromFile,
+} from '../utils/customComponentStorage'
 
 const PRESETS = [
   {
@@ -258,6 +266,42 @@ export default function LoadElementModal({ open, onClose, onAddElement }) {
   const [label, setLabel] = useState('BUTTON')
   const [compileStatus, setCompileStatus] = useState({ success: false, error: null })
   const [CompiledComp, setCompiledComp] = useState(null)
+  const [savedComponents, setSavedComponents] = useState([])
+  const [saveStatus, setSaveStatus] = useState(null) // 'saved' | 'error' | null
+  const [showSaved, setShowSaved] = useState(false)
+  const importRef = useRef(null)
+
+  // Load saved components from localStorage on open
+  useEffect(() => {
+    if (open) {
+      setSavedComponents(getSavedComponents())
+    }
+  }, [open])
+
+  // Auto-register saved components into studio palette on load
+  useEffect(() => {
+    const saved = getSavedComponents()
+    saved.forEach(comp => {
+      const res = compileReactComponent(comp.code)
+      if (!res.error && res.Component) {
+        registerCustomElement(comp.id, {
+          name: comp.name,
+          category: comp.category || 'custom',
+          description: `Saved custom component: ${comp.name}`,
+          defaultProps: {
+            x: 40, y: 100,
+            w: comp.width || 160,
+            h: comp.height || 48,
+            label: comp.label || 'BUTTON',
+            bgColor: '#1e293b',
+            borderColor: '#3b82f6',
+            textColor: '#ffffff',
+          },
+          component: res.Component,
+        })
+      }
+    })
+  }, [])
 
   // Compile code on change
   useEffect(() => {
@@ -281,6 +325,55 @@ export default function LoadElementModal({ open, onClose, onAddElement }) {
     setCode(preset.code)
     setName(preset.name)
     setCategory(preset.category)
+  }
+
+  const handleLoadSaved = (saved) => {
+    setSelectedPreset(saved.id)
+    setCode(saved.code)
+    setName(saved.name)
+    setCategory(saved.category || 'custom')
+    setWidth(saved.width || 160)
+    setHeight(saved.height || 48)
+    setLabel(saved.label || 'BUTTON')
+    setShowSaved(false)
+  }
+
+  const handleDeleteSaved = (id, e) => {
+    e.stopPropagation()
+    deleteComponent(id)
+    setSavedComponents(getSavedComponents())
+  }
+
+  const handleSaveToFile = () => {
+    if (!compileStatus.success) return
+    try {
+      saveComponent({ name, category, code, width, height, label })
+      setSavedComponents(getSavedComponents())
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus(null), 2500)
+    } catch {
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus(null), 2500)
+    }
+  }
+
+  const handleDownloadFile = () => {
+    downloadComponentFile(name, code)
+  }
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const count = await importComponentsFromFile(file)
+      setSavedComponents(getSavedComponents())
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus(null), 2500)
+      alert(`✅ Imported ${count} new component(s) successfully!`)
+    } catch (err) {
+      alert('❌ Import failed: ' + err.message)
+    }
+    e.target.value = ''
   }
 
   const handleRegisterAndAdd = () => {
@@ -345,12 +438,60 @@ export default function LoadElementModal({ open, onClose, onAddElement }) {
             $active={selectedPreset === 'custom'}
             onClick={() => {
               setSelectedPreset('custom')
+              setCode('')
               setName('My Custom Component')
+              setCategory('custom')
             }}
           >
-            Custom / Paste Own Code
+            ✏️ Paste New Code
           </PresetBtn>
+          <SavedBtn onClick={() => setShowSaved(s => !s)} $active={showSaved}>
+            📁 My Saved ({savedComponents.length})
+          </SavedBtn>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json"
+            style={{ display: 'none' }}
+            onChange={handleImport}
+          />
+          <SavedBtn onClick={() => importRef.current?.click()}>
+            ⬆️ Import
+          </SavedBtn>
+          {savedComponents.length > 0 && (
+            <SavedBtn onClick={exportAllComponents}>
+              ⬇️ Export All
+            </SavedBtn>
+          )}
         </PresetsBar>
+
+        {/* Saved Components Dropdown */}
+        {showSaved && (
+          <SavedPanel>
+            <SavedPanelHeader>
+              <span>📁 My Saved Components ({savedComponents.length})</span>
+              <CloseBtn onClick={() => setShowSaved(false)} style={{ fontSize: 12, padding: '2px 8px' }}>✕</CloseBtn>
+            </SavedPanelHeader>
+            {savedComponents.length === 0 ? (
+              <SavedEmpty>No saved components yet. Compile a component and click "Save to Library" to save it here.</SavedEmpty>
+            ) : (
+              <SavedList>
+                {savedComponents.map(comp => (
+                  <SavedItem key={comp.id} onClick={() => handleLoadSaved(comp)}>
+                    <SavedItemInfo>
+                      <SavedItemName>{comp.name}</SavedItemName>
+                      <SavedItemMeta>{comp.category} · {comp.width}×{comp.height}px · saved {new Date(comp.savedAt).toLocaleDateString()}</SavedItemMeta>
+                    </SavedItemInfo>
+                    <SavedItemActions>
+                      <SavedActionBtn title="Download as .jsx" onClick={e => { e.stopPropagation(); downloadComponentFile(comp.name, comp.code) }}>⬇️</SavedActionBtn>
+                      <SavedActionBtn title="Delete" $danger onClick={e => handleDeleteSaved(comp.id, e)}>🗑️</SavedActionBtn>
+                    </SavedItemActions>
+                  </SavedItem>
+                ))}
+              </SavedList>
+            )}
+          </SavedPanel>
+        )}
 
         {/* Content Body */}
         <ModalBody>
@@ -445,16 +586,38 @@ export default function LoadElementModal({ open, onClose, onAddElement }) {
 
         {/* Footer */}
         <ModalFooter>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            Compiled with in-browser Babel + React 19 + styled-components engine.
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Compiled with in-browser Babel + React 19 + styled-components engine.
+            </span>
+            {saveStatus === 'saved' && (
+              <SaveBadge>✅ Saved to Library!</SaveBadge>
+            )}
+            {saveStatus === 'error' && (
+              <SaveBadge $error>❌ Save failed</SaveBadge>
+            )}
           </div>
           <FooterActions>
             <CancelBtn onClick={onClose}>Cancel</CancelBtn>
+            <DownloadBtn
+              disabled={!compileStatus.success}
+              onClick={handleDownloadFile}
+              title="Download the component code as a .jsx file"
+            >
+              ⬇️ Download .jsx
+            </DownloadBtn>
+            <SaveLibBtn
+              disabled={!compileStatus.success}
+              onClick={handleSaveToFile}
+              title="Save this component to the persistent library (survives page refresh)"
+            >
+              💾 Save to Library
+            </SaveLibBtn>
             <LoadBtn
               disabled={!compileStatus.success}
               onClick={handleRegisterAndAdd}
             >
-              ➕ Add to Studio Canvas & Palette
+              ➕ Add to Canvas
             </LoadBtn>
           </FooterActions>
         </ModalFooter>
@@ -772,5 +935,149 @@ const LoadBtn = styled.button`
     background: #1d4ed8;
     transform: translateY(-1px);
     box-shadow: 0 6px 18px rgba(37,99,235,0.45);
+  }
+`
+
+const SavedBtn = styled.button`
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid ${p => p.$active ? 'var(--accent-blue)' : 'var(--border-subtle)'};
+  background: ${p => p.$active ? 'rgba(37,99,235,0.12)' : 'var(--bg-surface)'};
+  color: ${p => p.$active ? 'var(--accent-blue)' : 'var(--text-secondary)'};
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  &:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+`
+
+const SavedPanel = styled.div`
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border-subtle);
+  max-height: 220px;
+  overflow-y: auto;
+  animation: slideDown 0.15s ease-out;
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+`
+
+const SavedPanelHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-inset);
+`
+
+const SavedEmpty = styled.div`
+  padding: 20px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  font-style: italic;
+`
+
+const SavedList = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const SavedItem = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.1s;
+  &:hover { background: var(--bg-surface); }
+  &:last-child { border-bottom: none; }
+`
+
+const SavedItemInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const SavedItemName = styled.div`
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+`
+
+const SavedItemMeta = styled.div`
+  font-size: 10px;
+  color: var(--text-muted);
+`
+
+const SavedItemActions = styled.div`
+  display: flex;
+  gap: 4px;
+`
+
+const SavedActionBtn = styled.button`
+  background: none;
+  border: 1px solid ${p => p.$danger ? 'rgba(239,68,68,0.3)' : 'var(--border-subtle)'};
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+  &:hover {
+    background: ${p => p.$danger ? 'rgba(239,68,68,0.12)' : 'var(--bg-surface)'};
+    border-color: ${p => p.$danger ? '#ef4444' : 'var(--accent-blue)'};
+  }
+`
+
+const SaveBadge = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: ${p => p.$error ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)'};
+  color: ${p => p.$error ? '#ef4444' : '#22c55e'};
+  border: 1px solid ${p => p.$error ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'};
+  animation: fadeIn 0.2s ease;
+  @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+`
+
+const DownloadBtn = styled.button`
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &:not(:disabled):hover { border-color: #38bdf8; color: #38bdf8; background: rgba(56,189,248,0.08); }
+`
+
+const SaveLibBtn = styled.button`
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(34,197,94,0.4);
+  background: rgba(34,197,94,0.1);
+  color: #22c55e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &:not(:disabled):hover {
+    background: rgba(34,197,94,0.18);
+    border-color: #22c55e;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(34,197,94,0.25);
   }
 `
