@@ -1,0 +1,63 @@
+/* ============================================================
+   Luna Display Studio — Global CSS
+   White + Neumorphic Design System
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --font-ui: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Neumorphic white palette */
+  --bg-base:        #e8ecf0;
+  --bg-surface:     #eef1f5;
+  --bg-raised:      #f4f6f8;
+  --bg-inset:       #dde2e8;
+  --shadow-light:   #ffffff;
+  --shadow-dark:    #c8cdd4;
+
+  --text-primary:   #1e2530;
+  --text-secondary: #4a5568;
+  --text-muted:     #8a95a3;
+  --text-accent:    #2563eb;
+
+  --accent-blue:    #2563eb;
+  --accent-cyan:    #06b6d4;
+  --accent-green:   #10b981;
+  --accent-yellow:  #f59e0b;
+  --accent-red:     #ef4444;
+  --accent-purple:  #7c3aed;
+
+  --border-subtle:  #d1d8e0;
+  --border-focus:   #2563eb;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* Neumorphic shadow mixins */
+  --neu-raised: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
+  --neu-inset:  inset 4px 4px 10px var(--shadow-dark), inset -4px -4px 10px var(--shadow-light);
+  --neu-pressed: inset 3px 3px 7px var(--shadow-dark), inset -3px -3px 7px var(--shadow-light);
+  --neu-button: 4px 4px 10px var(--shadow-dark), -4px -4px 10px var(--shadow-light);
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+button { font-family: var(--font-ui); cursor: pointer; }
+input, select, textarea { font-family: var(--font-ui); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-inset); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--shadow-dark); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #aab0b8; }

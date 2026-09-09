@@ -1,7 +1,7 @@
 {
   "navigation": {
     "selectedUserPageObject": "[luna.eez-project]:/userPages/14",
-    "selectedGlobalVariableObject": "[luna.eez-project]:/variables/globalVariables/27",
+    "selectedGlobalVariableObject": "[luna.eez-project]:/variables/globalVariables/20",
     "subnavigationSelectedItems": {
       "variables-tab/sub-navigation/selected-item": "Global"
     }
@@ -155,7 +155,7 @@
                 {
                   "type": "tabset",
                   "id": "#3a10fdda-7232-4328-b9ec-c6dfb06032d8",
-                  "weight": 1,
+                  "weight": 0.48466257668711654,
                   "enableClose": false,
                   "children": [
                     {
@@ -171,7 +171,7 @@
                 {
                   "type": "tabset",
                   "id": "#9ff015b6-ae88-436f-ad1d-7cf41ef5d554",
-                  "weight": 1,
+                  "weight": 1.5153374233128833,
                   "enableClose": false,
                   "children": [
                     {
@@ -1183,15 +1183,17 @@
         "0": {
           "0": {},
           "4": {
-            "0": {},
-            "$selected": true
-          }
+            "0": {
+              "$selected": true
+            }
+          },
+          "5": {}
         }
       },
       "transform": {
         "translate": {
           "x": -120,
-          "y": -140
+          "y": -40
         },
         "scale": 1
       },
