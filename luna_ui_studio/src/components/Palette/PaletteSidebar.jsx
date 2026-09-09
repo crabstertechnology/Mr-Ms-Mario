@@ -78,9 +78,13 @@ function ElementCard({ compKey, comp, onAdd }) {
     e.dataTransfer.effectAllowed = 'copy'
   }
 
-  const scaleW = 220
-  const scaleH = Math.min(p.h || 60, 120)
-  const scale = Math.min(scaleW / (p.w || 200), 1)
+  const compW = p.w || 200
+  const compH = p.h || 60
+  // Scale to fit within 228px width preview, max 80px height
+  const scaleX = 228 / compW
+  const scaleY = 80 / compH
+  const scale = Math.min(scaleX, scaleY, 1)
+  const scaledH = Math.ceil(compH * scale)
 
   return (
     <Card draggable onDragStart={handleDragStart}>
@@ -89,19 +93,29 @@ function ElementCard({ compKey, comp, onAdd }) {
         <CardBadge>{comp.category}</CardBadge>
       </CardHeader>
 
-      <PreviewBox style={{ height: Math.round(scaleH * scale) + 20 }}>
-        <PreviewInner style={{
-          transform: `scale(${scale})`,
-          transformOrigin: 'top left',
-          width: p.w || 200,
-          height: p.h || 60,
+      <PreviewBox>
+        <div style={{
+          height: Math.max(scaledH + 16, 40),
+          position: 'relative',
+          overflow: 'hidden',
         }}>
-          <Comp {...p} />
-        </PreviewInner>
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: `translate(-50%, -50%) scale(${scale})`,
+            transformOrigin: 'center center',
+            width: compW,
+            height: compH,
+            pointerEvents: 'none',
+          }}>
+            <Comp {...p} />
+          </div>
+        </div>
       </PreviewBox>
 
       <CardFooter>
-        <FooterHint>Click or Drag to add</FooterHint>
+        <FooterHint>Drag to canvas</FooterHint>
         <AddBtn onClick={() => onAdd(compKey)}>+ Add</AddBtn>
       </CardFooter>
     </Card>
@@ -238,6 +252,7 @@ const PreviewBox = styled.div`
   position: relative;
 `
 
+
 const CompileBanner = styled.div`
   margin: 8px 10px 0;
   padding: 8px 12px;
@@ -260,12 +275,6 @@ const CompileBanner = styled.div`
   }
 `
 
-const PreviewInner = styled.div`
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  pointer-events: auto;
-`
 
 const CardFooter = styled.div`
   display: flex;

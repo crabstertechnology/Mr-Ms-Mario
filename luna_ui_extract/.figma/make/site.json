@@ -1,0 +1,10 @@
+{
+  "description": "Luna is a futuristic desktop companion and smartwatch interface that enhances productivity with features like notifications, calendars, games, and navigation.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

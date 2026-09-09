@@ -15,7 +15,8 @@ export default function TopBar({
   onClear,
   onExport,
   onOpenCompile,
-  onOpenFlowMap
+  onOpenFlowMap,
+  onOpenFigma
 }) {
   const [serialConnected, setSerialConnected] = useState(false)
 
@@ -91,6 +92,9 @@ export default function TopBar({
       </ToolbarCenter>
 
       <RightActions>
+        <FigmaBtn onClick={onOpenFigma} title="Launch Figma Luna OS Interactive Device Simulator">
+          ✨ Figma Luna Flow
+        </FigmaBtn>
         <FlowBtn onClick={onOpenFlowMap} title="View Visual UI Navigation & Block Map">
           🗺️ Flow Map
         </FlowBtn>
@@ -338,4 +342,27 @@ const ExportBtn = styled.button`
   transition: all 0.2s;
   &:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(37,99,235,0.45); }
   &:active { transform: none; }
+`
+
+const FigmaBtn = styled.button`
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(56, 189, 248, 0.4);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(147, 51, 234, 0.15));
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  &:hover {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(147, 51, 234, 0.25));
+    border-color: #38bdf8;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
+  }
 `

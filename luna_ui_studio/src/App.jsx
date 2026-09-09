@@ -7,6 +7,7 @@ import InspectorSidebar from './components/Inspector/InspectorSidebar'
 import ExportModal from './components/ExportModal'
 import LoadElementModal from './components/LoadElementModal'
 import FlowMapModal from './components/FlowMapModal'
+import FigmaLunaModal from './components/FigmaLunaModal'
 import { useCanvas } from './hooks/useCanvas'
 
 function App() {
@@ -48,6 +49,7 @@ function App() {
   const [exportOpen, setExportOpen] = useState(false)
   const [compileOpen, setCompileOpen] = useState(false)
   const [flowMapOpen, setFlowMapOpen] = useState(false)
+  const [figmaOpen, setFigmaOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const initializedRef = useRef(false)
 
@@ -174,6 +176,7 @@ function App() {
         onExport={() => setExportOpen(true)}
         onOpenCompile={() => setCompileOpen(true)}
         onOpenFlowMap={() => setFlowMapOpen(true)}
+        onOpenFigma={() => setFigmaOpen(true)}
       />
 
       <Workspace>
@@ -274,6 +277,12 @@ function App() {
           setMode('test')
           showToast('🎮 Interactive Test Mode Enabled! Click buttons to test.')
         }}
+      />
+
+      {/* Figma Luna OS Flow Simulator Modal */}
+      <FigmaLunaModal
+        open={figmaOpen}
+        onClose={() => setFigmaOpen(false)}
       />
 
       {toast && <Toast>{toast}</Toast>}
