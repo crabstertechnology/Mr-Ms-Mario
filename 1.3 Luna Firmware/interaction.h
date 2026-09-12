@@ -1,13 +1,12 @@
-// =============================================================================
-// interaction.h  —  Luna Firmware Dual-Button Input Handler
+  // =============================================================================
+// interaction.h  —  Luna Firmware Dual-Button Input Handler (No Gesture Delay)
 // =============================================================================
 // Button 1 (BTN_EXPR_PIN):
-//   • Main Screen: Single click = next expression, Double click = clock screen
-//   • Settings    : Single click = navigate UP (menu option --)
+//   • Click     : Next expression (Face) / Action / Cycle style / Next event
+//   • Long press: Return to Face screen / Back
 // Button 2 (BTN_SETTINGS_PIN):
-//   • Main Screen: Single click = open settings
-//   • Settings    : Single click = navigate DOWN (menu option ++)
-//                   Long press   = select / confirm highlighted option
+//   • Click     : Advance to Next Screen (Face -> Clock -> Notifs -> Cal -> Games -> Card -> Setup)
+//   • Long press: Confirm / Select in Settings
 // =============================================================================
 #ifndef INTERACTION_H
 #define INTERACTION_H
@@ -18,102 +17,84 @@
 // ── Exposed button events ────────────────────────────────────────────────────
 enum ButtonEvent {
   BTN_NONE         = 0,
-  BTN1_SINGLE,          // Button 1 single click
-  BTN1_DOUBLE,          // Button 1 double click
-  BTN1_LONG,            // Button 1 long press
-  BTN2_SINGLE,          // Button 2 single click
-  BTN2_DOUBLE,          // Button 2 double click
-  BTN2_LONG,            // Button 2 long press
+  BTN1_SINGLE,          // Button 1 direct click (immediate on release)
+  BTN1_DOUBLE,          // (kept for enum compat)
+  BTN1_LONG,            // Button 1 long press (> 600ms)
+  BTN2_SINGLE,          // Button 2 direct click (immediate on release)
+  BTN2_DOUBLE,          // (kept for enum compat)
+  BTN2_LONG             // Button 2 long press (> 600ms)
 };
 
-// ── Per-button state machine ─────────────────────────────────────────────────
+// ── Per-button immediate debounced state machine (no gesture delay) ─────────
 struct BtnState {
-  int     pin;
-  bool    lastRaw;
-  bool    debounced;
+  int           pin;
+  bool          lastRaw;
+  bool          debounced;
   unsigned long lastDebounceMs;
-
   unsigned long pressStartMs;
-  unsigned long releaseMs;
-  bool    pressed;
-  bool    longFired;
-  int     clickCount;
+  bool          pressed;
+  bool          longFired;
 
-  // config
-  static const unsigned long DEBOUNCE_MS   = 40;   // 40 ms
-  static const unsigned long LONG_PRESS_MS = 700;  // 700 ms
-  static const unsigned long DBL_CLICK_MS  = 350;  // window after 1st release
+  static const unsigned long DEBOUNCE_MS   = 30;   // 30 ms debounce
+  static const unsigned long LONG_PRESS_MS = 600;  // 600 ms long press
 
   void begin(int p, bool pullup = true) {
     pin = p;
-    lastRaw       = HIGH;
-    debounced     = HIGH;
-    lastDebounceMs = 0;
-    pressStartMs  = 0;
-    releaseMs     = 0;
-    pressed       = false;
-    longFired     = false;
-    clickCount    = 0;
     if (pullup) {
       pinMode(pin, INPUT_PULLUP);
     } else {
       pinMode(pin, INPUT);
     }
+    bool initPressed = (digitalRead(pin) == LOW);
+    lastRaw        = initPressed;
+    debounced      = initPressed;
+    lastDebounceMs = millis();
+    pressStartMs   = 0;
+    pressed        = initPressed;
+    longFired      = false;
   }
 
-  // Call every loop(); returns a raw event or BTN_NONE
-  // eventBase: the BTN_x_SINGLE value for this button (e.g. BTN1_SINGLE)
-  ButtonEvent poll(int singleEvt, int doubleEvt, int longEvt) {
-    bool raw    = (digitalRead(pin) == LOW); // active-low with INPUT_PULLUP
+  // Poll button: returns singleEvt immediately on release, or longEvt if held >= 600ms
+  ButtonEvent poll(int singleEvt, int longEvt) {
+    bool raw = (digitalRead(pin) == LOW); // active-low with INPUT_PULLUP
     unsigned long now = millis();
 
-    // ── Debounce ──────────────────────────────────────────────────────────
     if (raw != lastRaw) {
       lastDebounceMs = now;
     }
     lastRaw = raw;
 
-    bool stable = (now - lastDebounceMs) >= DEBOUNCE_MS;
-
-    if (stable && raw != debounced) {
-      debounced = raw;
-      if (debounced) {
-        // ── Press edge ────────────────────────────────────────────────────
-        pressed      = true;
-        pressStartMs = now;
-        longFired    = false;
-      } else {
-        // ── Release edge ──────────────────────────────────────────────────
-        pressed   = false;
-        releaseMs = now;
-        if (!longFired) {
-          clickCount++;
-          // Triple+ clicks treated as single to avoid user confusion
-          if (clickCount > 2) clickCount = 1;
+    if ((now - lastDebounceMs) >= DEBOUNCE_MS) {
+      if (raw != debounced) {
+        debounced = raw;
+        if (debounced) {
+          // Press edge
+          pressed      = true;
+          pressStartMs = now;
+          longFired    = false;
+        } else {
+          // Release edge — fire single click immediately with zero gesture delay!
+          pressed = false;
+          if (!longFired) {
+            return (ButtonEvent)singleEvt;
+          }
         }
       }
     }
 
-    // ── Long press detection (fires while held) ───────────────────────────
+    // Long press detection while held
     if (pressed && !longFired && (now - pressStartMs) >= LONG_PRESS_MS) {
-      longFired  = true;
-      clickCount = 0; // cancel any pending tap
-      return (ButtonEvent)longEvt;
-    }
-
-    // ── Tap/double-tap timeout resolution (after release) ─────────────────
-    if (!pressed && clickCount > 0 && (now - releaseMs) >= DBL_CLICK_MS) {
-      int cnt    = clickCount;
-      clickCount = 0;
-      if (cnt == 1) return (ButtonEvent)singleEvt;
-      if (cnt == 2) return (ButtonEvent)doubleEvt;
+      longFired = true;
+      if (longEvt != BTN_NONE) {
+        return (ButtonEvent)longEvt;
+      }
     }
 
     return BTN_NONE;
   }
 };
 
-// ── LunaInteraction: manages both buttons ────────────────────────────────────
+// ── LunaInteraction: manages both physical buttons ──────────────────────────
 class LunaInteraction {
 private:
   BtnState btn1;
@@ -121,21 +102,21 @@ private:
 
 public:
   void begin() {
-    btn1.begin(BTN_EXPR_PIN,     true); // INPUT_PULLUP, active-low
-    btn2.begin(BTN_SETTINGS_PIN, true); // INPUT_PULLUP, active-low
+    btn1.begin(BTN_EXPR_PIN,     true); // Button 1: Pin 8 (INPUT_PULLUP, active-low)
+    btn2.begin(BTN_SETTINGS_PIN, true); // Button 2: Pin 9 (INPUT_PULLUP, active-low)
   }
 
-  // Poll both buttons; returns the first event found (priority: btn1 → btn2)
+  // Poll both buttons with priority: btn1 -> btn2
   ButtonEvent update() {
-    ButtonEvent e1 = btn1.poll(BTN1_SINGLE, BTN1_DOUBLE, BTN1_LONG);
+    ButtonEvent e1 = btn1.poll(BTN1_SINGLE, BTN1_LONG);
     if (e1 != BTN_NONE) return e1;
 
-    ButtonEvent e2 = btn2.poll(BTN2_SINGLE, BTN_NONE, BTN_NONE);
+    ButtonEvent e2 = btn2.poll(BTN2_SINGLE, BTN2_LONG);
     return e2;
   }
 };
 
-// ── Keep backwards-compatible TouchEvent for any legacy call sites ───────────
+// ── Keep backwards-compatible TouchEvent for legacy call sites ───────────────
 enum TouchEvent {
   TOUCH_NONE        = 0,
   TOUCH_TAP,

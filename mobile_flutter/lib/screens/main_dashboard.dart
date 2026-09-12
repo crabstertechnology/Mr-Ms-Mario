@@ -158,6 +158,10 @@ class _MainDashboardState extends State<MainDashboard> {
   void _dismissAlarm() {
     _alarmSoundTimer?.cancel();
     _alarmSoundTimer = null;
+    final ble = Provider.of<BLEService>(context, listen: false);
+    if (ble.isConnected) {
+      ble.dismissHardwareAlarm();
+    }
     setState(() {
       _ringingAlarm = null;
     });
@@ -345,6 +349,30 @@ class _MainDashboardState extends State<MainDashboard> {
 
     final firebase = Provider.of<FirebaseService>(context, listen: false);
     final db = Provider.of<DatabaseService>(context, listen: false);
+
+    ble.onHardwareEventsSynced = (hwEvents) {
+      if (mounted) {
+        db.syncFromHardwareEvents(hwEvents);
+      }
+    };
+    ble.onHardwareAlarmRinging = (ringId, ringTitle) {
+      if (mounted && _ringingAlarm == null) {
+        final dummyAlarm = AlarmModel(
+          id: ringId,
+          hour: DateTime.now().hour,
+          minute: DateTime.now().minute,
+          label: ringTitle,
+          isEnabled: true,
+        );
+        _triggerAlarm(dummyAlarm, ble);
+      }
+    };
+    ble.onHardwareAlarmDismissed = () {
+      if (mounted && _ringingAlarm != null) {
+        _dismissAlarm();
+      }
+    };
+
     ble.onPrimaryTouchTriggered = (eventType, expr, sound) {
       if (firebase.pairedFriendUid != null) {
         String customLabel = eventType;
@@ -3622,6 +3650,10 @@ class _MainDashboardState extends State<MainDashboard> {
               _buildScreenChip("Pomodoro", "pomodoro", Icons.timer_outlined, activeGifId, ble),
               const SizedBox(width: 8),
               _buildScreenChip("Card", "card", Icons.qr_code_2_rounded, activeGifId, ble),
+              if (ble.isNavActive) ...[
+                const SizedBox(width: 8),
+                _buildScreenChip("Maps", "map", Icons.navigation_rounded, activeGifId, ble),
+              ],
             ],
           ),
         ),
@@ -3887,12 +3919,14 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   void _cycleWatchScreen(int direction, BLEService ble) {
-    const screens = [
+    final screens = [
       {'id': 'sprite_ai_0', 'label': 'Robot Face', 'cmd': 'FACE'},
       {'id': 'card', 'label': 'Digital Card', 'cmd': 'CARD'},
       {'id': 'clock', 'label': 'Clock Face', 'cmd': 'CLOCK'},
       {'id': 'notif', 'label': 'Notifications', 'cmd': 'NOTIF'},
       {'id': 'calendar', 'label': 'Calendar', 'cmd': 'CALENDAR'},
+      if (ble.isNavActive)
+        {'id': 'map', 'label': 'Navigation Map', 'cmd': 'MAPS'},
       {'id': 'games', 'label': 'Luna Arcade', 'cmd': 'GAMES'},
       {'id': 'settings', 'label': 'Settings', 'cmd': 'SETTINGS'},
       {'id': 'pomodoro', 'label': 'Pomodoro Timer', 'cmd': 'POMODORO'},
@@ -3941,6 +3975,7 @@ class _MainDashboardState extends State<MainDashboard> {
           if (screenId == 'clock') cmd = "CLOCK";
           else if (screenId == 'notif') cmd = "NOTIF";
           else if (screenId == 'calendar') cmd = "CALENDAR";
+          else if (screenId == 'map') cmd = "MAPS";
           else if (screenId == 'games') cmd = "GAMES";
           else if (screenId == 'settings') cmd = "SETTINGS";
           else if (screenId == 'pomodoro') cmd = "POMODORO";
@@ -5668,12 +5703,18 @@ class _MainDashboardState extends State<MainDashboard> {
                     final hh = selectedTime.hour.toString().padLeft(2, '0');
                     final mm = selectedTime.minute.toString().padLeft(2, '0');
                     final timeStr = "$hh:$mm";
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    final dateStr = (localSelectedType == 'alarm')
+                        ? "*"
+                        : "${date.day.toString().padLeft(2, '0')} ${monthNames[date.month - 1]}";
 
                     if (ble.isConnected) {
-                      await ble.transmitCalendarEvent(
-                        newEvent.type,
-                        timeStr,
-                        newEvent.title,
+                      await ble.transmitHardwareEvent(
+                        id: newEvent.id,
+                        type: newEvent.type,
+                        date: dateStr,
+                        time: timeStr,
+                        title: newEvent.title,
                       );
                     }
 
@@ -5907,14 +5948,50 @@ class _MainDashboardState extends State<MainDashboard> {
         const SizedBox(height: 20),
 
         // Scheduled Events List Header
-        Text(
-          "SCHEDULED EVENTS (${db.events.length})",
-          style: GoogleFonts.outfit(
-            color: textColor60,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "SCHEDULED EVENTS (${db.events.length})",
+              style: GoogleFonts.outfit(
+                color: textColor60,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+              ),
+            ),
+            if (ble.isConnected)
+              InkWell(
+                onTap: () async {
+                  await ble.queryHardwareEvents();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Syncing reminders, meetings & alarms from Luna hardware..."),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.sync, color: Color(0xFF10B981), size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        "LUNA SYNC (${ble.hardwareEvents.length})",
+                        style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 10),
 
@@ -5995,13 +6072,34 @@ class _MainDashboardState extends State<MainDashboard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            event.title,
-                            style: GoogleFonts.outfit(
-                              color: textColor,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  event.title,
+                                  style: GoogleFonts.outfit(
+                                    color: textColor,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (ble.hardwareEvents.any((h) => h.id == event.id))
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  margin: const EdgeInsets.only(left: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
+                                  ),
+                                  child: Text(
+                                    "ON LUNA",
+                                    style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -6029,32 +6127,46 @@ class _MainDashboardState extends State<MainDashboard> {
                               );
                               return;
                             }
-                            await ble.transmitCalendarEvent(event.type, timeStr, event.title);
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            final dateStr = (event.type == 'alarm')
+                                ? "*"
+                                : "${event.dateTime.day.toString().padLeft(2, '0')} ${monthNames[event.dateTime.month - 1]}";
+                            await ble.transmitHardwareEvent(
+                              id: event.id,
+                              type: event.type,
+                              date: dateStr,
+                              time: timeStr,
+                              title: event.title,
+                            );
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Pushed '${event.title}' to robot!"),
+                                content: Text("Pushed '${event.title}' to Luna hardware!"),
                                 backgroundColor: const Color(0xFF10B981),
                               ),
                             );
                           },
                           icon: const Icon(Icons.send, color: Color(0xFF10B981), size: 18),
-                          tooltip: "Push notification to robot",
+                          tooltip: "Push to Luna hardware",
                         ),
                         IconButton(
                           onPressed: () async {
+                            final deletedTitle = event.title;
                             await db.deleteEvent(event.id);
                             if (isAlarm) {
                               await db.deleteAlarm(event.id);
                             }
+                            if (ble.isConnected) {
+                              await ble.deleteHardwareEvent(event.id);
+                            }
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Event '${event.title}' deleted"),
+                                content: Text("Event '$deletedTitle' deleted permanently from Luna hardware & app"),
                                 backgroundColor: Colors.redAccent,
                               ),
                             );
                           },
                           icon: const Icon(Icons.delete, color: Color(0xFFEF4444), size: 18),
-                          tooltip: "Delete event",
+                          tooltip: "Delete permanently",
                         ),
                       ],
                     ),

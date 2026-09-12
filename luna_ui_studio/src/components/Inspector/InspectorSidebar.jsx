@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import styled from 'styled-components'
 import { hexToRGB565 } from '../../ui-elements/code-generator'
 import ActionsMappingPanel from './ActionsMappingPanel'
+import ScreenInspectorPanel from './ScreenInspectorPanel'
 
 export default function InspectorSidebar({
   element,
@@ -14,27 +15,70 @@ export default function InspectorSidebar({
   onDelete,
   screens = [],
   activeScreenId = 'screen_1',
+  activeScreen,
+  onUpdateScreen,
   onUpdateActions,
   onAddScreen,
-  onTestTrigger
+  onTestTrigger,
+  onTestSwipe
 }) {
-  const [activeTab, setActiveTab] = useState('props')
+  const [activeTab, setActiveTab] = useState('screen')
+
+  // When an element is selected, automatically show props tab; when deselected, show screen tab
+  useEffect(() => {
+    if (element) {
+      setActiveTab('props')
+    } else {
+      setActiveTab('screen')
+    }
+  }, [element?.id])
 
   const hasActions = element?.actions && element.actions.length > 0
+  const curScreen = activeScreen || screens.find(s => s.id === activeScreenId) || screens[0]
 
   return (
     <Inspector>
       <Tabs>
-        <Tab $active={activeTab === 'props'} onClick={() => setActiveTab('props')}>Properties</Tab>
-        <Tab $active={activeTab === 'layers'} onClick={() => setActiveTab('layers')}>Layers</Tab>
+        <Tab $active={activeTab === 'screen'} onClick={() => setActiveTab('screen')}>
+          🖥️ Screen
+        </Tab>
+        <Tab $active={activeTab === 'props'} onClick={() => setActiveTab('props')}>
+          Properties
+        </Tab>
+        <Tab $active={activeTab === 'layers'} onClick={() => setActiveTab('layers')}>
+          Layers
+        </Tab>
         <Tab $active={activeTab === 'mapping'} onClick={() => setActiveTab('mapping')}>
           ⚡ Mapping {hasActions ? `(${element.actions.length})` : ''}
         </Tab>
       </Tabs>
 
       <TabContent>
-        {activeTab === 'props' ? (
-          <PropertiesPanel element={element} onUpdate={onUpdate} />
+        {activeTab === 'screen' ? (
+          <ScreenInspectorPanel
+            screen={curScreen}
+            screens={screens}
+            onUpdateScreen={onUpdateScreen}
+            onAddScreen={onAddScreen}
+            onTestSwipe={onTestSwipe}
+          />
+        ) : activeTab === 'props' ? (
+          element ? (
+            <PropertiesPanel
+              element={element}
+              onUpdate={onUpdate}
+              curScreen={curScreen}
+              onUpdateScreen={onUpdateScreen}
+            />
+          ) : (
+            <ScreenInspectorPanel
+              screen={curScreen}
+              screens={screens}
+              onUpdateScreen={onUpdateScreen}
+              onAddScreen={onAddScreen}
+              onTestSwipe={onTestSwipe}
+            />
+          )
         ) : activeTab === 'layers' ? (
           <LayersPanel
             elements={elements}
@@ -59,7 +103,7 @@ export default function InspectorSidebar({
   )
 }
 
-function PropertiesPanel({ element, onUpdate }) {
+function PropertiesPanel({ element, onUpdate, curScreen, onUpdateScreen }) {
   if (!element) return (
     <EmptyState>
       <EmptyIcon>✦</EmptyIcon>
@@ -69,6 +113,7 @@ function PropertiesPanel({ element, onUpdate }) {
 
   const p = element.props
   const set = (key, val) => onUpdate(element.id, { [key]: val })
+  const isPattern = element.type?.startsWith('pattern_')
 
   const colorKeys = Object.keys(p).filter(k => typeof p[k] === 'string' && (p[k].startsWith('#') || p[k].startsWith('rgba')))
   const textKeys = Object.keys(p).filter(k =>
@@ -87,6 +132,28 @@ function PropertiesPanel({ element, onUpdate }) {
           <TypeBadge>{element.name}</TypeBadge>
         </PropRow>
       </Section>
+
+      {isPattern && onUpdateScreen && curScreen && (
+        <Section>
+          <SectionTitle>Pattern Preset Action</SectionTitle>
+          <PatternActionBtn
+            onClick={() => {
+              const pKey = element.type.replace('pattern_', '')
+              const mapped = pKey === 'stars' ? 'stars'
+                : pKey === 'cyber_grid' ? 'grid'
+                : pKey === 'dot_matrix' ? 'dots'
+                : pKey === 'crt_scanlines' ? 'scanlines'
+                : pKey === 'carbon_fiber' ? 'carbon'
+                : pKey === 'hexagon' ? 'hex'
+                : 'stars'
+              onUpdateScreen(curScreen.id, { bgType: 'pattern', bgPattern: mapped })
+            }}
+          >
+            🌌 Set as Screen Background
+          </PatternActionBtn>
+          <HintSubtext>Applies this pattern directly as the full-screen display background.</HintSubtext>
+        </Section>
+      )}
 
       <Section>
         <SectionTitle>Geometry (pixels)</SectionTitle>
@@ -461,4 +528,36 @@ const LayerBtn = styled.button`
   align-items: center;
   justify-content: center;
   &:hover { background: var(--shadow-dark); }
+`
+
+const PatternActionBtn = styled.button`
+  width: 100%;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+  transition: all 0.2s ease;
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.5);
+  }
+  &:active {
+    transform: translateY(0);
+  }
+`
+
+const HintSubtext = styled.div`
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+  line-height: 1.3;
 `

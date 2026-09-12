@@ -1,5 +1,5 @@
 Write-Host 'Compiling 1.3 Luna Firmware (ST7789 1.3")...' -ForegroundColor Cyan
-arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc --output-dir mobile_app\bin "1.3 Luna Firmware\1.3 Luna Firmware.ino"
+arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=custom,CDCOnBoot=cdc --output-dir mobile_app\bin "1.3 Luna Firmware\1.3 Luna Firmware.ino"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "1.3 Luna Firmware Compilation failed!" -ForegroundColor Red
     exit 1

@@ -24,9 +24,10 @@ void handleRobotCommand(String cmd);
 
 #include "luna_network.h"
 
+
 // Hardware Interface Objects
 Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
-GFXcanvas16 display(SCREEN_WIDTH, SCREEN_HEIGHT);
+LunaCanvas16 display(SCREEN_WIDTH, SCREEN_HEIGHT);
 LunaFace face(tft, display);
 LunaAudio audio;
 volatile int micAmplitude = 0;
@@ -87,56 +88,214 @@ String relType = "";
 String robotVariant = "ms_luna";
 
 struct NVSEventItem {
-  String type;
-  String time;
-  String title;
+  char id[20];     // Unique ID (e.g. "1726123456789" or "ev_0")
+  char type[12];   // "meeting", "reminder", "alarm", "birthday"
+  char date[12];   // "12 Sep" (or "*" for daily)
+  char time[6];    // "HH:MM"
+  char title[32];  // event title
   bool active;
 };
-NVSEventItem nvsEvents[5];
+static const int MAX_NVS_EVENTS = 10;
+NVSEventItem nvsEvents[MAX_NVS_EVENTS];
 int nvsEventCount = 0;
 int lastTriggeredAlarmMinute = -1;
+unsigned long alarmRingStartTime = 0;
+String activeRingingId = "";
+String activeRingingType = "";
+String activeRingingTitle = "";
+String activeRingingTime = "";
 
-void saveCalendarEventToNVS(String type, String time, String title) {
-  for (int i = 4; i > 0; i--) {
-    nvsEvents[i] = nvsEvents[i - 1];
-  }
-  nvsEvents[0].type = type;
-  nvsEvents[0].time = time;
-  nvsEvents[0].title = title;
-  nvsEvents[0].active = true;
-  if (nvsEventCount < 5) nvsEventCount++;
-
+void saveAllEventsToNVS() {
   preferences.begin("luna", false);
   preferences.putInt("cal_cnt", nvsEventCount);
+  char key[12];
+  char val[96];
   for (int i = 0; i < nvsEventCount; i++) {
-    String key = "cal_" + String(i);
-    String val = nvsEvents[i].type + "|" + nvsEvents[i].time + "|" + nvsEvents[i].title;
-    preferences.putString(key.c_str(), val);
+    snprintf(key, sizeof(key), "cal_%d", i);
+    snprintf(val, sizeof(val), "%s|%s|%s|%s|%s|%d",
+      nvsEvents[i].id,
+      nvsEvents[i].type,
+      nvsEvents[i].date,
+      nvsEvents[i].time,
+      nvsEvents[i].title,
+      nvsEvents[i].active ? 1 : 0
+    );
+    preferences.putString(key, val);
+  }
+  // Clear any dangling old keys beyond nvsEventCount
+  for (int i = nvsEventCount; i < MAX_NVS_EVENTS; i++) {
+    snprintf(key, sizeof(key), "cal_%d", i);
+    if (preferences.isKey(key)) {
+      preferences.remove(key);
+    }
   }
   preferences.end();
 }
 
 void loadCalendarEventsFromNVS() {
+  char key[12];
   preferences.begin("luna", false);
   robotVariant = preferences.getString("robot_var", "ms_luna");
   nvsEventCount = preferences.getInt("cal_cnt", 0);
-  if (nvsEventCount > 5) nvsEventCount = 5;
+  if (nvsEventCount > MAX_NVS_EVENTS) nvsEventCount = MAX_NVS_EVENTS;
+
+  face.clearCalendarEvents();
+
   for (int i = 0; i < nvsEventCount; i++) {
-    String key = "cal_" + String(i);
-    String val = preferences.getString(key.c_str(), "");
-    if (val.length() > 0) {
-      int sep1 = val.indexOf('|');
-      int sep2 = val.indexOf('|', sep1 + 1);
-      if (sep1 > 0 && sep2 > sep1) {
-        nvsEvents[i].type = val.substring(0, sep1);
-        nvsEvents[i].time = val.substring(sep1 + 1, sep2);
-        nvsEvents[i].title = val.substring(sep2 + 1);
+    snprintf(key, sizeof(key), "cal_%d", i);
+    String s = preferences.getString(key, "");
+    if (s.length() > 0) {
+      int seps[6];
+      int sepCount = 0;
+      int lastPos = -1;
+      while ((lastPos = s.indexOf('|', lastPos + 1)) >= 0 && sepCount < 6) {
+        seps[sepCount++] = lastPos;
+      }
+
+      if (sepCount >= 5) {
+        // Format: id|type|date|time|title|active
+        String idStr    = s.substring(0, seps[0]);
+        String typeStr  = s.substring(seps[0] + 1, seps[1]);
+        String dateStr  = s.substring(seps[1] + 1, seps[2]);
+        String timeStr  = s.substring(seps[2] + 1, seps[3]);
+        String titleStr = s.substring(seps[3] + 1, seps[4]);
+        int actVal      = s.substring(seps[4] + 1).toInt();
+
+        strncpy(nvsEvents[i].id,    idStr.c_str(),    sizeof(nvsEvents[i].id) - 1);    nvsEvents[i].id[sizeof(nvsEvents[i].id)-1] = 0;
+        strncpy(nvsEvents[i].type,  typeStr.c_str(),  sizeof(nvsEvents[i].type) - 1);  nvsEvents[i].type[sizeof(nvsEvents[i].type)-1] = 0;
+        strncpy(nvsEvents[i].date,  dateStr.c_str(),  sizeof(nvsEvents[i].date) - 1);  nvsEvents[i].date[sizeof(nvsEvents[i].date)-1] = 0;
+        strncpy(nvsEvents[i].time,  timeStr.c_str(),  sizeof(nvsEvents[i].time) - 1);  nvsEvents[i].time[sizeof(nvsEvents[i].time)-1] = 0;
+        strncpy(nvsEvents[i].title, titleStr.c_str(), sizeof(nvsEvents[i].title) - 1); nvsEvents[i].title[sizeof(nvsEvents[i].title)-1] = 0;
+        nvsEvents[i].active = (actVal != 0);
+
+        face.addCalendarEvent(nvsEvents[i].id, nvsEvents[i].type, nvsEvents[i].date, nvsEvents[i].time, nvsEvents[i].title);
+      } else if (sepCount >= 2) {
+        // Legacy format: type|time|title
+        String typeStr  = s.substring(0, seps[0]);
+        String timeStr  = s.substring(seps[0] + 1, seps[1]);
+        String titleStr = s.substring(seps[1] + 1);
+        char genId[16];
+        snprintf(genId, sizeof(genId), "ev_%d", i);
+
+        strncpy(nvsEvents[i].id,    genId,            sizeof(nvsEvents[i].id) - 1);
+        strncpy(nvsEvents[i].type,  typeStr.c_str(),  sizeof(nvsEvents[i].type) - 1);  nvsEvents[i].type[sizeof(nvsEvents[i].type)-1] = 0;
+        strncpy(nvsEvents[i].date,  "*",              sizeof(nvsEvents[i].date) - 1);
+        strncpy(nvsEvents[i].time,  timeStr.c_str(),  sizeof(nvsEvents[i].time) - 1);  nvsEvents[i].time[sizeof(nvsEvents[i].time)-1] = 0;
+        strncpy(nvsEvents[i].title, titleStr.c_str(), sizeof(nvsEvents[i].title) - 1); nvsEvents[i].title[sizeof(nvsEvents[i].title)-1] = 0;
         nvsEvents[i].active = true;
-        face.addCalendarEvent(nvsEvents[i].type, nvsEvents[i].time, nvsEvents[i].title);
+
+        face.addCalendarEvent(nvsEvents[i].id, nvsEvents[i].type, nvsEvents[i].date, nvsEvents[i].time, nvsEvents[i].title);
       }
     }
   }
   preferences.end();
+}
+
+void addOrUpdateHardwareEvent(const String& id, const String& type, const String& date, const String& time, const String& title) {
+  int foundIdx = -1;
+  for (int i = 0; i < nvsEventCount; i++) {
+    if (id.length() > 0 && strcmp(nvsEvents[i].id, id.c_str()) == 0) {
+      foundIdx = i;
+      break;
+    }
+  }
+
+  if (foundIdx != -1) {
+    // Update existing event
+    strncpy(nvsEvents[foundIdx].type,  type.c_str(),  sizeof(nvsEvents[foundIdx].type) - 1);  nvsEvents[foundIdx].type[sizeof(nvsEvents[foundIdx].type)-1] = 0;
+    strncpy(nvsEvents[foundIdx].date,  date.c_str(),  sizeof(nvsEvents[foundIdx].date) - 1);  nvsEvents[foundIdx].date[sizeof(nvsEvents[foundIdx].date)-1] = 0;
+    strncpy(nvsEvents[foundIdx].time,  time.c_str(),  sizeof(nvsEvents[foundIdx].time) - 1);  nvsEvents[foundIdx].time[sizeof(nvsEvents[foundIdx].time)-1] = 0;
+    strncpy(nvsEvents[foundIdx].title, title.c_str(), sizeof(nvsEvents[foundIdx].title) - 1); nvsEvents[foundIdx].title[sizeof(nvsEvents[foundIdx].title)-1] = 0;
+    nvsEvents[foundIdx].active = true;
+  } else {
+    // Insert new event at front
+    if (nvsEventCount >= MAX_NVS_EVENTS) {
+      nvsEventCount = MAX_NVS_EVENTS - 1;
+    }
+    for (int i = nvsEventCount; i > 0; i--) {
+      nvsEvents[i] = nvsEvents[i - 1];
+    }
+    String realId = id;
+    if (realId.length() == 0) realId = String(millis());
+    strncpy(nvsEvents[0].id,    realId.c_str(), sizeof(nvsEvents[0].id) - 1);    nvsEvents[0].id[sizeof(nvsEvents[0].id)-1] = 0;
+    strncpy(nvsEvents[0].type,  type.c_str(),   sizeof(nvsEvents[0].type) - 1);  nvsEvents[0].type[sizeof(nvsEvents[0].type)-1] = 0;
+    strncpy(nvsEvents[0].date,  date.c_str(),   sizeof(nvsEvents[0].date) - 1);  nvsEvents[0].date[sizeof(nvsEvents[0].date)-1] = 0;
+    strncpy(nvsEvents[0].time,  time.c_str(),   sizeof(nvsEvents[0].time) - 1);  nvsEvents[0].time[sizeof(nvsEvents[0].time)-1] = 0;
+    strncpy(nvsEvents[0].title, title.c_str(),  sizeof(nvsEvents[0].title) - 1); nvsEvents[0].title[sizeof(nvsEvents[0].title)-1] = 0;
+    nvsEvents[0].active = true;
+    nvsEventCount++;
+  }
+
+  saveAllEventsToNVS();
+  face.addCalendarEvent(id, type, date, time, title);
+  Serial.printf("[NVS] Event saved: '%s' [%s] @ %s (%s)\n", title.c_str(), type.c_str(), time.c_str(), date.c_str());
+}
+
+void saveCalendarEventToNVS(const String& type, const String& time, const String& title) {
+  addOrUpdateHardwareEvent(String(millis()), type, "*", time, title);
+}
+
+bool deleteHardwareEvent(const String& id) {
+  int foundIdx = -1;
+  for (int i = 0; i < nvsEventCount; i++) {
+    if (strcmp(nvsEvents[i].id, id.c_str()) == 0 ||
+        (strlen(nvsEvents[i].id) == 0 && strcmp(nvsEvents[i].title, id.c_str()) == 0)) {
+      foundIdx = i;
+      break;
+    }
+  }
+
+  if (foundIdx != -1) {
+    for (int i = foundIdx; i < nvsEventCount - 1; i++) {
+      nvsEvents[i] = nvsEvents[i + 1];
+    }
+    nvsEvents[nvsEventCount - 1].active = false;
+    nvsEventCount--;
+    saveAllEventsToNVS();
+    face.removeCalendarEvent(id);
+    Serial.printf("[NVS] Deleted event %s permanently. Remaining: %d\n", id.c_str(), nvsEventCount);
+    return true;
+  }
+  return false;
+}
+
+void clearAllHardwareEvents() {
+  nvsEventCount = 0;
+  saveAllEventsToNVS();
+  face.clearCalendarEvents();
+  Serial.println(F("[NVS] All events cleared permanently."));
+}
+
+void sendAllEventsToBLE() {
+  if (!ble.isConnected()) return;
+  ble.sendLog("EVT_START:" + String(nvsEventCount));
+  delay(10);
+  for (int i = 0; i < nvsEventCount; i++) {
+    if (nvsEvents[i].active) {
+      String payload = "EVT:" + String(nvsEvents[i].id) + "|" +
+                                String(nvsEvents[i].type) + "|" +
+                                String(nvsEvents[i].date) + "|" +
+                                String(nvsEvents[i].time) + "|" +
+                                String(nvsEvents[i].title);
+      ble.sendLog(payload);
+      delay(15);
+    }
+  }
+  ble.sendLog("EVT_END");
+}
+
+void dismissAlarmRinging() {
+  if (isAlarmRinging || isReminderRinging || face.isAlarmRingingActive()) {
+    isAlarmRinging = false;
+    isReminderRinging = false;
+    face.setAlarmRinging(false);
+    audio.playSound(SOUND_COIN);
+    Serial.println(F("[Alarm] Ringing dismissed."));
+    if (ble.isConnected()) {
+      ble.sendLog("ALARM_DISMISSED:" + activeRingingId);
+    }
+    activeRingingId = "";
+  }
 }
 
 // Software Real-Time Clock variables
@@ -144,7 +303,7 @@ int rtcHour = 12;
 int rtcMinute = 0;
 int rtcSecond = 0;
 String rtcDay = "Mon";
-String rtcDate = "06 Jul";
+String rtcDate = "12 Sep";
 unsigned long lastRtcMillis = 0;
 bool is12HourFormat = false;
 
@@ -152,26 +311,59 @@ void checkHardwareScheduledAlarms() {
   if (rtcSecond == 0 && rtcMinute != lastTriggeredAlarmMinute) {
     char currentHHMM[6];
     snprintf(currentHHMM, sizeof(currentHHMM), "%02d:%02d", rtcHour, rtcMinute);
-    String currentStr = String(currentHHMM);
+
+    String normRtcDate = rtcDate;
+    normRtcDate.trim();
 
     for (int i = 0; i < nvsEventCount; i++) {
-      if (nvsEvents[i].active && nvsEvents[i].time == currentStr) {
+      if (!nvsEvents[i].active) continue;
+
+      // 1. Check exact time match
+      if (strcmp(nvsEvents[i].time, currentHHMM) != 0) continue;
+
+      // 2. Check calendar date match
+      String evDate = String(nvsEvents[i].date);
+      evDate.trim();
+      bool dateMatches = false;
+      if (evDate.length() == 0 || evDate == "*" || evDate.equalsIgnoreCase("daily")) {
+        dateMatches = true; // Daily recurring alarm
+      } else {
+        // Compare with RTC date (e.g. "12 Sep")
+        if (evDate.equalsIgnoreCase(normRtcDate)) {
+          dateMatches = true;
+        } else if (normRtcDate.length() > 0 && evDate.indexOf(normRtcDate) >= 0) {
+          dateMatches = true;
+        } else if (normRtcDate.length() > 0 && normRtcDate.indexOf(evDate) >= 0) {
+          dateMatches = true;
+        }
+      }
+
+      if (dateMatches) {
         lastTriggeredAlarmMinute = rtcMinute;
         isReminderRinging = true;
+        isAlarmRinging = true;
+        alarmRingStartTime = millis();
         lastReminderSoundTime = millis();
-        String formattedType = nvsEvents[i].type;
-        if (formattedType.length() > 0) {
-          formattedType[0] = toupper(formattedType[0]);
-        }
-        face.setDetailedNotification(formattedType, nvsEvents[i].title, rtcHour, rtcMinute);
-        if (nvsEvents[i].type == "birthday") {
-          audio.playSound(SOUND_POWERUP);
-        } else if (nvsEvents[i].type == "alarm") {
+        lastAlarmSoundTime = millis();
+
+        activeRingingId    = String(nvsEvents[i].id);
+        activeRingingType  = String(nvsEvents[i].type);
+        activeRingingTitle = String(nvsEvents[i].title);
+        activeRingingTime  = String(nvsEvents[i].time);
+
+        // Wake screen if asleep
+        isAsleep = false;
+
+        // Show visual ringing overlay on screen
+        face.setAlarmRinging(true, activeRingingType, activeRingingTitle, activeRingingTime);
+
+        // Immediate ringing sound
+        if (strcmp(nvsEvents[i].type, "birthday") == 0 || strcmp(nvsEvents[i].type, "alarm") == 0) {
           audio.playSound(SOUND_POWERUP);
         } else {
-          audio.playSound(SOUND_COIN);
+          audio.playSound(SOUND_CHIRP);
         }
-        Serial.println("Offline Hardware Alarm Ringing for: " + nvsEvents[i].title + " @ " + currentStr);
+        Serial.println("Scheduled Hardware Alarm Ringing for: " + activeRingingTitle + " @ " + activeRingingTime + " (" + activeRingingType + ")");
         break;
       }
     }
@@ -258,19 +450,16 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
   
   if (label.length() > 0) {
     label.toUpperCase();
-    // Search ALL_GIFS_TABLE for a match
     int foundIdx = -1;
-    for (int i = 0; i < ALL_GIFS_COUNT; i++) {
-      char nameBuf[32];
-      strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[i].name));
-      if (label.equals(nameBuf)) {
+    for (int i = 0; i < SPRITE_AI13_ANIMATION_COUNT; i++) {
+      if (label.equals(getSpriteAi13AnimName(i))) {
         foundIdx = i;
         break;
       }
     }
     if (foundIdx != -1) {
       face.setGifIndex(foundIdx);
-      expr = EXPR_ALL_GIF;
+      expr = (Expression)foundIdx;
     }
   }
   
@@ -278,17 +467,7 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
   if (label.length() > 0) {
     face.setStateLabel(label);
   } else {
-    // Fallback to default labels
-    switch (expr) {
-      case EXPR_IDLE: face.setStateLabel("IDLE"); break;
-      case EXPR_HAPPY: face.setStateLabel("HAPPY"); break;
-      case EXPR_SAD: face.setStateLabel("SAD"); break;
-      case EXPR_ANGRY: face.setStateLabel("ANGRY"); break;
-      case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
-      case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
-      case EXPR_WINK: face.setStateLabel("WINK"); break;
-      default: face.setStateLabel("IDLE"); break;
-    }
+    face.setStateLabel(getExpressionName((int)expr));
   }
   
   // Play appropriate reaction sound effect automatically
@@ -328,11 +507,36 @@ void handleBLEText(String text) {
   handleRobotCommand(text);
 }
 
+void notifyScreenAndExprSync() {
+  if (!ble.isConnected()) return;
+  
+  String screenName = "FACE";
+  switch (currentScreen) {
+    case SCREEN_FACE: screenName = "FACE"; break;
+    case SCREEN_CARD: screenName = "CARD"; break;
+    case SCREEN_CLOCK: screenName = "CLOCK"; break;
+    case SCREEN_NOTIFICATIONS: screenName = "NOTIF"; break;
+    case SCREEN_CALENDAR: screenName = "CALENDAR"; break;
+    case SCREEN_GAMES: screenName = "GAMES"; break;
+    case SCREEN_SETTINGS: screenName = "SETTINGS"; break;
+    case SCREEN_MAPS: screenName = "MAPS"; break;
+    default: screenName = "FACE"; break;
+  }
+  
+  int animIndex = (int)face.getExpression();
+  String label = face.getStateLabel();
+  ble.sendLog("EXPR_SYNC:" + String(animIndex) + "|" + label);
+  ble.sendLog("SCREEN_SYNC:" + screenName);
+  
+  unsigned long uptimeSec = millis() / 1000;
+  ble.updateStatus(uptimeSec, touchCount, batteryVolts, (Expression)animIndex, label);
+}
+
 void handleRobotCommand(String text) {
   lastInteractionTime = millis();
   lastExpressionCycleTime = millis(); // Reset cycle timer on interaction
   
-  if (mapsActive && !text.startsWith("MAP:")) {
+  if (mapsActive && !text.startsWith("MAP") && !text.startsWith("SCREEN:") && !text.startsWith("CALL:") && !text.startsWith("TIME:")) {
     Serial.println("[BLE] Ignored command because MAPS is active");
     return;
   }
@@ -483,8 +687,42 @@ void handleRobotCommand(String text) {
     } else {
       Serial.println("OK:ModelVariantAlreadyMatching:" + robotVariant);
     }
+  } else if (text == "EVT_GET" || text == "CAL_GET") {
+    sendAllEventsToBLE();
+  } else if (text.startsWith("EVT_ADD:")) {
+    // Command format: EVT_ADD:id,type,date,time,title
+    String payload = text.substring(8);
+    int c1 = payload.indexOf(',');
+    int c2 = payload.indexOf(',', c1 + 1);
+    int c3 = payload.indexOf(',', c2 + 1);
+    int c4 = payload.indexOf(',', c3 + 1);
+    if (c1 > 0 && c2 > c1 && c3 > c2 && c4 > c3) {
+      String id    = payload.substring(0, c1);
+      String type  = payload.substring(c1 + 1, c2);
+      String date  = payload.substring(c2 + 1, c3);
+      String time  = payload.substring(c3 + 1, c4);
+      String title = payload.substring(c4 + 1);
+
+      addOrUpdateHardwareEvent(id, type, date, time, title);
+      if (ble.isConnected()) {
+        ble.sendLog("EVT_ADD_OK:" + id);
+      }
+    }
+  } else if (text.startsWith("EVT_DEL:") || text.startsWith("CAL_DEL:")) {
+    int colon = text.indexOf(':');
+    String id = text.substring(colon + 1);
+    id.trim();
+    bool ok = deleteHardwareEvent(id);
+    if (ble.isConnected()) {
+      ble.sendLog(ok ? ("EVT_DEL_OK:" + id) : ("EVT_DEL_FAIL:" + id));
+    }
+  } else if (text == "CAL_CLEAR" || text == "EVT_CLEAR") {
+    clearAllHardwareEvents();
+    if (ble.isConnected()) {
+      ble.sendLog("EVT_CLEAR_OK");
+    }
   } else if (text.startsWith("CAL:")) {
-    // Command format: CAL:type,time,title
+    // Legacy Command format: CAL:type,time,title
     String payload = text.substring(4);
     int firstComma = payload.indexOf(',');
     int secondComma = payload.indexOf(',', firstComma + 1);
@@ -492,77 +730,108 @@ void handleRobotCommand(String text) {
       String type = payload.substring(0, firstComma);
       String time = payload.substring(firstComma + 1, secondComma);
       String title = payload.substring(secondComma + 1);
-      
+
       Serial.println("Calendar Event: type=" + type + ", time=" + time + ", title=" + title);
-      
-      // Save in RAM and NVS persistent Flash memory
-      face.addCalendarEvent(type, time, title);
-      saveCalendarEventToNVS(type, time, title);
+      addOrUpdateHardwareEvent(String(millis()), type, "*", time, title);
     }
-  } else if (text.startsWith("ALARM:")) {
-    String state = text.substring(6);
-    if (state == "START") {
-      isAlarmRinging = true;
-      face.setExpression(EXPR_CLOCK);
-      face.setStateLabel("ALARM!");
-      Serial.println("Alarm triggered via BLE/Wi-Fi.");
+  } else if (text.startsWith("ALARM:") || text == "EVT_DISMISS") {
+    if (text == "EVT_DISMISS") {
+      dismissAlarmRinging();
     } else {
-      isAlarmRinging = false;
-      face.setExpression(EXPR_IDLE);
-      face.setStateLabel("IDLE");
-      Serial.println("Alarm stopped/dismissed.");
+      String state = text.substring(6);
+      if (state == "START") {
+        isAlarmRinging = true;
+        alarmRingStartTime = millis();
+        face.setAlarmRinging(true, "alarm", "ALARM RINGING", String(rtcHour) + ":" + String(rtcMinute));
+        face.setExpression(EXPR_CLOCK);
+        face.setStateLabel("ALARM!");
+        Serial.println("Alarm triggered via BLE/Wi-Fi.");
+      } else {
+        dismissAlarmRinging();
+        face.setExpression(EXPR_IDLE);
+        face.setStateLabel("IDLE");
+        Serial.println("Alarm stopped/dismissed.");
+      }
+    }
+  } else if (text.startsWith("SCREEN:")) {
+    String arg = text.substring(7);
+    arg.toUpperCase();
+    arg.trim();
+    int sVal = -1;
+    if (arg == "CLOCK") sVal = SCREEN_CLOCK;
+    else if (arg == "NOTIF" || arg == "NOTIFICATIONS") sVal = SCREEN_NOTIFICATIONS;
+    else if (arg == "CALENDAR" || arg == "CAL") sVal = SCREEN_CALENDAR;
+    else if (arg == "MAP" || arg == "MAPS") sVal = SCREEN_MAPS;
+    else if (arg == "GAMES" || arg == "ARCADE") sVal = SCREEN_GAMES;
+    else if (arg == "FACE" || arg == "EYES") sVal = SCREEN_FACE;
+    else if (arg == "CARD") sVal = SCREEN_CARD;
+    else if (arg == "SETTINGS") sVal = SCREEN_SETTINGS;
+    else sVal = arg.toInt();
+
+    if (sVal >= 0 && sVal < SCREEN_MAX) {
+      currentScreen = (SmartwatchScreen)sVal;
+      settingsActive = false;
+      gamesActive = false;
+      gamePlaying = false;
+      notificationsActive = false;
+      notifyScreenAndExprSync();
+      Serial.printf("OK:ScreenSwitched:%d\n", sVal);
     }
   } else if (text.startsWith("MAP:")) {
-    // Command format: MAP:direction,distance,description OR MAP:EXIT
+    // Command format: MAP:direction,turnDist,road,totalTime,totalDist,eta OR MAP:EXIT
     String payload = text.substring(4);
     payload.trim();
     if (payload == "EXIT") {
       mapsActive = false;
-      currentScreen = SCREEN_FACE;
+      currentScreen = SCREEN_CLOCK;
       face.setExpression(EXPR_IDLE);
       lastExpressionCycleTime = millis() - activeNotificationDurationMs;
+      notifyScreenAndExprSync();
       Serial.println("Maps Navigation Exited.");
       return;
     }
-    int firstComma = payload.indexOf(',');
-    String direction = "";
-    String distance = "";
-    String description = "";
-
-    if (firstComma < 0) {
-      direction = payload;
-    } else {
-      direction = payload.substring(0, firstComma);
-      String rest = payload.substring(firstComma + 1);
-      int secondComma = rest.indexOf(',');
-      if (secondComma < 0) {
-        distance = rest;
-      } else {
-        distance = rest.substring(0, secondComma);
-        description = rest.substring(secondComma + 1);
+    String parts[6];
+    int partIdx = 0;
+    int start = 0;
+    for (int i = 0; i <= payload.length() && partIdx < 6; i++) {
+      if (i == payload.length() || payload.charAt(i) == ',') {
+        parts[partIdx++] = payload.substring(start, i);
+        start = i + 1;
       }
     }
+
+    String direction = (partIdx >= 1) ? parts[0] : "";
+    String turnDist  = (partIdx >= 2) ? parts[1] : "";
+    String road      = (partIdx >= 3) ? parts[2] : "";
+    String totalTime = (partIdx >= 4) ? parts[3] : "";
+    String totalDist = (partIdx >= 5) ? parts[4] : "";
+    String eta       = (partIdx >= 6) ? parts[5] : "";
+
     direction.trim();
-    distance.trim();
-    description.trim();
-    // IMPORTANT: toUpperCase() modifies in-place on Arduino but we must reassign
-    direction.toUpperCase(); // modifies in-place
-    String dirUpper = direction; // ensure we use the modified value
-    
-    Serial.println("[MAP] direction='" + dirUpper + "' distance='" + distance + "' desc='" + description + "'");
-    
-    bool shouldBeep = (!mapsActive) || (dirUpper != face.getMapDirection());
-    
+    turnDist.trim();
+    road.trim();
+    totalTime.trim();
+    totalDist.trim();
+    eta.trim();
+    direction.toUpperCase();
+
+    Serial.printf("[MAP] dir='%s' turnDist='%s' road='%s' time='%s' dist='%s' eta='%s'\n",
+                  direction.c_str(), turnDist.c_str(), road.c_str(), totalTime.c_str(), totalDist.c_str(), eta.c_str());
+
+    bool shouldBeep = (!mapsActive) || (direction != face.getMapDirection());
+
     mapsActive = true;
-    currentScreen = SCREEN_MAPS;  // <-- CRITICAL: actually show the map screen
-    lastInteractionTime = millis(); // reset inactivity timer so map stays visible
-    face.setMapNavigation(dirUpper, distance, description);
-    
+    currentScreen = SCREEN_MAPS;
+    isAsleep = false;
+    lastInteractionTime = millis();
+    face.setMapTelemetry(direction, turnDist, road, totalTime, totalDist, eta);
+    notifyScreenAndExprSync();
+
     if (shouldBeep) {
       audio.playSound(SOUND_CHIRP);
     }
-    
-    activeNotificationDurationMs = 20000; // 20 seconds visibility for turn navigation
+
+    activeNotificationDurationMs = 20000;
   } else if (text == "CALL:START") {
     audio.micStreaming = true;
     audio.audioMode = LunaAudio::AUDIO_MODE_STREAM;
@@ -871,37 +1140,19 @@ void applySettings(String payload) {
   face.setFrameDelay(gifSpeed);
 
   // defaultGif: 99 = Cycle Mode
-  //             0-8 = base Expression enum
-  //             values >= 100 = specific GIF index (index = value - 100) in ALL_GIFS_TABLE
+  //             0-11 = Sprite AI animation index
   if (defaultGif == 99) {
     isCycleMode = true;
     cycleExpression();
   } else {
     isCycleMode = false;
-    if (defaultGif >= 100) {
-      int gifIdx = defaultGif - 100;
-      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-        face.setGifIndex(gifIdx);
-        face.setExpression(EXPR_ALL_GIF);
-        
-        char nameBuf[32];
-        strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIdx].name));
-        face.setStateLabel(String(nameBuf));
-      }
-    } else {
-      face.setDefaultExpression((Expression)defaultGif);
-      face.setExpression((Expression)defaultGif);
-      switch ((Expression)defaultGif) {
-        case EXPR_IDLE: face.setStateLabel("IDLE"); break;
-        case EXPR_HAPPY: face.setStateLabel("HAPPY"); break;
-        case EXPR_SAD: face.setStateLabel("SAD"); break;
-        case EXPR_ANGRY: face.setStateLabel("ANGRY"); break;
-        case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
-        case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
-        case EXPR_WINK: face.setStateLabel("WINK"); break;
-        default: face.setStateLabel("IDLE"); break;
-      }
-    }
+    int animIdx = defaultGif;
+    if (animIdx >= 100) animIdx -= 100;
+    if (animIdx < 0 || animIdx >= SPRITE_AI13_ANIMATION_COUNT) animIdx = 0;
+    face.setGifIndex(animIdx);
+    face.setDefaultExpression((Expression)animIdx);
+    face.setExpression((Expression)animIdx);
+    face.setStateLabel(String(getSpriteAi13AnimName(animIdx)));
   }
 
   ble.setBLEActive(bleActive);
@@ -946,7 +1197,8 @@ void applySettings(String payload) {
 
 void setup() {
   Serial.begin(115200);
-  delay(100); // Faster boot!
+  delay(100);
+  display.allocate();
   
   // 1. Load persistence settings from NVS Preferences first
   preferences.begin("luna", false);
@@ -1006,16 +1258,12 @@ void setup() {
     isCycleMode = true;
   } else {
     isCycleMode = false;
-    if (defaultGif >= 100) {
-      int gifIdx = defaultGif - 100;
-      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-        face.setGifIndex(gifIdx);
-        face.setExpression(EXPR_ALL_GIF);
-      }
-    } else {
-      face.setDefaultExpression((Expression)defaultGif);
-      face.setExpression((Expression)defaultGif);
-    }
+    int animIdx = defaultGif;
+    if (animIdx >= 100) animIdx -= 100;
+    if (animIdx < 0 || animIdx >= SPRITE_AI13_ANIMATION_COUNT) animIdx = 0;
+    face.setGifIndex(animIdx);
+    face.setDefaultExpression((Expression)animIdx);
+    face.setExpression((Expression)animIdx);
   }
 
   // Perform Hardware Reset
@@ -1073,37 +1321,23 @@ void setup() {
   face.setFrameDelay(gifIntroSpeed);
   inIntroPhase = true;
 
-  if (gifIntro >= 100) {
-    int gifIdx = gifIntro - 100;
-    if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-      face.setGifIndex(gifIdx);
-      face.setExpression(EXPR_ALL_GIF);
-    }
-  } else {
-    face.setExpression((Expression)gifIntro);
-  }
+  int introIdx = gifIntro;
+  if (introIdx >= 100) introIdx -= 100;
+  if (introIdx < 0 || introIdx >= SPRITE_AI13_ANIMATION_COUNT) introIdx = 0;
+  face.setGifIndex(introIdx);
+  face.setExpression((Expression)introIdx);
 
   lastInteractionTime = millis();
   lastRtcMillis = millis();
   lastExpressionCycleTime = millis();
 
-  // Dump all loaded GIF names to serial for debugging
-  Serial.println("====== GIF TABLE DUMP ======");
-  Serial.print("Total GIFs loaded: ");
-  Serial.println(ALL_GIFS_COUNT);
-  for (int i = 0; i < ALL_GIFS_COUNT; i++) {
-    char gifName[32];
-    strcpy_P(gifName, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[i].name));
-    uint32_t cnt = (uint32_t)pgm_read_dword(&ALL_GIFS_TABLE[i].count);
-    Serial.print("GIF[");
-    Serial.print(i);
-    Serial.print("] ");
-    Serial.print(gifName);
-    Serial.print(" (");
-    Serial.print(cnt);
-    Serial.println(" frames)");
+  // Dump all loaded Sprite AI animation names to serial for debugging
+  Serial.println("====== SPRITE AI ANIMATION DUMP ======");
+  Serial.printf("Total Sprite Animations: %d (4 frames each)\n", SPRITE_AI13_ANIMATION_COUNT);
+  for (int i = 0; i < SPRITE_AI13_ANIMATION_COUNT; i++) {
+    Serial.printf("ANIM[%d] %s (4 frames)\n", i, getSpriteAi13AnimName(i));
   }
-  Serial.println("=============================");
+  Serial.println("======================================");
   if (!SPIFFS.begin(true)) {
     Serial.println("SPIFFS Mount Failed");
   }
@@ -1112,53 +1346,25 @@ void setup() {
   network.init();
 }
 
-// Global index for all-gifs cycling — advances through all 63 entries
-int allGifCycleIdx = 0;
+// Global index for sprite-ai cycling — advances through all 12 animations
+int spriteAnimCycleIdx = 0;
 
 void cycleExpression() {
-  allGifCycleIdx = random(0, ALL_GIFS_COUNT);
-  face.setGifIndex(allGifCycleIdx);
-  face.setExpression(EXPR_ALL_GIF);
-  // Read GIF name from PROGMEM — update stateLabel so BLE status mirrors hardware
-  char gifName[32];
-  strcpy_P(gifName, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[allGifCycleIdx].name));
-  face.setStateLabel(String(gifName));   // <-- critical: keeps app simulator in sync
-  uint32_t cnt = (uint32_t)pgm_read_dword(&ALL_GIFS_TABLE[allGifCycleIdx].count);
-  Serial.print("PLAYING RANDOM:GIF[");
-  Serial.print(allGifCycleIdx);
-  Serial.print("/");
-  Serial.print(ALL_GIFS_COUNT - 1);
-  Serial.print("] ");
-  Serial.print(gifName);
-  Serial.print(" (");
-  Serial.print(cnt);
-  Serial.println(" frames)");
+  spriteAnimCycleIdx = (spriteAnimCycleIdx + 1) % SPRITE_AI13_ANIMATION_COUNT;
+  face.setGifIndex(spriteAnimCycleIdx);
+  face.setExpression((Expression)spriteAnimCycleIdx);
+  const char* animName = getSpriteAi13AnimName(spriteAnimCycleIdx);
+  face.setStateLabel(String(animName));
+  Serial.printf("PLAYING ANIM[%d/%d]: %s (4 frames)\n",
+    spriteAnimCycleIdx, SPRITE_AI13_ANIMATION_COUNT - 1, animName);
 }
 
 String getExpressionName(int expr) {
-  if (expr >= 100) {
-    int gifIndex = expr - 100;
-    if (gifIndex >= 0 && gifIndex < ALL_GIFS_COUNT) {
-      char nameBuf[32];
-      strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIndex].name));
-      String name = String(nameBuf);
-      name.toUpperCase();
-      return name;
-    }
+  if (expr >= 100) expr -= 100;
+  if (expr >= 0 && expr < SPRITE_AI13_ANIMATION_COUNT) {
+    return String(getSpriteAi13AnimName(expr));
   }
-  switch (expr) {
-    case 0: return "IDLE";
-    case 1: return "HAPPY";
-    case 2: return "SAD";
-    case 3: return "ANGRY";
-    case 4: return "SURPRISED";
-    case 5: return "SLEEPING";
-    case 6: return "WINK";
-    case 7: return "TEXT";
-    case 8: return "CLOCK";
-    case 9: return "MAP";
-    default: return "HAPPY";
-  }
+  return "IDLE";
 }
 
 void executeTouchAction(int actionType, TouchEvent eventType) {
@@ -1198,34 +1404,20 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
       audio.playSound(SOUND_CHIRP);
       Serial.println("BLE Toggle touch action ignored (BLE is always ON)");
     } else if (actionType >= 20) {
-      // Specific GIF index: actionType = 20 + gifIndex
-      int gifIdx = actionType - 20;
-      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-        face.setGifIndex(gifIdx);
-        face.setExpression(EXPR_ALL_GIF);
-        allGifCycleIdx = gifIdx; // keep cycle state in sync
+      // Specific Sprite AI anim index: actionType = 20 + animIdx
+      int animIdx = actionType - 20;
+      if (animIdx >= 0 && animIdx < SPRITE_AI13_ANIMATION_COUNT) {
+        face.setGifIndex(animIdx);
+        face.setExpression((Expression)animIdx);
+        spriteAnimCycleIdx = animIdx;
         audio.playSound(SOUND_COIN);
-        char gifName[32];
-        strcpy_P(gifName, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIdx].name));
-        Serial.print("Touch triggered specific GIF #");
-        Serial.print(gifIdx);
-        Serial.print(": ");
-        Serial.println(gifName);
+        Serial.printf("Touch triggered specific Anim #%d: %s\n", animIdx, getSpriteAi13AnimName(animIdx));
       }
-    } else if (actionType >= 10 && actionType <= 16) {
-      // Legacy base expression (0-6): actionType = 10 + exprId
+    } else if (actionType >= 10 && actionType < 10 + SPRITE_AI13_ANIMATION_COUNT) {
       Expression target = (Expression)(actionType - 10);
       face.setExpression(target);
-      switch (target) {
-        case EXPR_HAPPY: audio.playSound(SOUND_POWERUP); break;
-        case EXPR_SAD: audio.playSound(SOUND_POWERDOWN); break;
-        case EXPR_ANGRY: audio.playSound(SOUND_GAMEOVER); break;
-        case EXPR_SURPRISED: audio.playSound(SOUND_JUMP); break;
-        case EXPR_SLEEPING: audio.playSound(SOUND_POWERDOWN); break;
-        case EXPR_WINK: audio.playSound(SOUND_CHIRP); break;
-        default: audio.playSound(SOUND_CHIRP); break;
-      }
-      Serial.print("Triggered base expression: ");
+      audio.playSound(SOUND_CHIRP);
+      Serial.print("Triggered expression: ");
       Serial.println(actionType - 10);
     }
   }
@@ -1555,32 +1747,48 @@ void handleBtn2Single() {
   audio.prebuffering = true;
   face.setStateLabel("IDLE");
   audio.playSound(SOUND_COIN);
+  notifyScreenAndExprSync();
   Serial.printf("[BTN2] Cycled screen to %d\n", currentScreen);
+}
+
+void handleBtn2Long() {
+  lastInteractionTime = millis();
+  if (mapsActive) return;
+
+  if (currentScreen == SCREEN_SETTINGS && settingsActive) {
+    if (menuOption == 6) {
+      adjustOption(6, 1);
+    } else if (menuOption == 7) {
+      adjustOption(7, 1);
+    } else {
+      optionSelected = !optionSelected;
+      audio.playSound(SOUND_CHIRP);
+    }
+    return;
+  }
+
+  // Return to Face screen on long press
+  currentScreen = SCREEN_FACE;
+  settingsActive = false;
+  optionSelected = false;
+  gamesActive = false;
+  gamePlaying = false;
+  notificationsActive = false;
+  notificationSelected = false;
+  audio.playSound(SOUND_STARTUP);
+  notifyScreenAndExprSync();
+  Serial.println("[BTN2 LONG] Switched to FACE screen");
 }
 
 void updateStateLabel() {
   if (currentScreen == SCREEN_FACE) {
     Expression expr = face.getExpression();
-    switch (expr) {
-      case EXPR_IDLE: face.setStateLabel("IDLE"); break;
-      case EXPR_HAPPY: face.setStateLabel("HAPPY"); break;
-      case EXPR_SAD: face.setStateLabel("SAD"); break;
-      case EXPR_ANGRY: face.setStateLabel("ANGRY"); break;
-      case EXPR_SURPRISED: face.setStateLabel("SURPRISE"); break;
-      case EXPR_SLEEPING: face.setStateLabel("SLEEP"); break;
-      case EXPR_WINK: face.setStateLabel("WINK"); break;
-      case EXPR_ALL_GIF: {
-        int gifIdx = face.getGifIndex();
-        if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
-          char nameBuf[32];
-          strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[gifIdx].name));
-          face.setStateLabel(String(nameBuf));
-        } else {
-          face.setStateLabel("IDLE");
-        }
-        break;
-      }
-      default: face.setStateLabel("IDLE"); break;
+    if ((int)expr >= 0 && (int)expr < SPRITE_AI13_ANIMATION_COUNT) {
+      face.setStateLabel(String(getSpriteAi13AnimName((int)expr)));
+    } else if (expr == EXPR_ALL_GIF) {
+      face.setStateLabel(String(getSpriteAi13AnimName(face.getGifIndex())));
+    } else {
+      face.setStateLabel("IDLE");
     }
   } else if (currentScreen == SCREEN_GAMES) {
     if (gamePlaying) {
@@ -1618,14 +1826,21 @@ void updateStateLabel() {
 void loop() {
   unsigned long now = millis();
 
-  // ── 0. Poll unified button handler ──────────────────────────────────────
+  // ── 0. Poll unified button handler (immediate click on release, zero gesture delay) ──
   ButtonEvent btnEvt = interaction.update();
-  switch (btnEvt) {
-    case BTN1_SINGLE: handleBtn1Single(); break;
-    case BTN1_DOUBLE: handleBtn1Double(); break;
-    case BTN1_LONG:   handleBtn1Long();   break;
-    case BTN2_SINGLE: handleBtn2Single(); break;
-    default: break;
+  if (btnEvt != BTN_NONE) {
+    if (isAlarmRinging || isReminderRinging || face.isAlarmRingingActive()) {
+      dismissAlarmRinging();
+    } else {
+      switch (btnEvt) {
+        case BTN1_SINGLE: handleBtn1Single(); break;
+        case BTN1_DOUBLE: handleBtn1Double(); break;
+        case BTN1_LONG:   handleBtn1Long();   break;
+        case BTN2_SINGLE: handleBtn2Single(); break;
+        case BTN2_LONG:   handleBtn2Long();   break;
+        default: break;
+      }
+    }
   }
 
   // 1. Maintain BLE stack status and connection advertisement
@@ -1673,23 +1888,13 @@ void loop() {
     } else if (cmd == "GET") {
       Serial.println("SETTINGS:" + String(bleActive ? "1" : "0") + "," + String(gifSpeed) + "," + String(defaultGif) + "," + String(gifIntro) + "," + String(touchSingle) + "," + String(touchDouble) + "," + String(touchLong) + "," + String(negativeDisplay ? "1" : "0"));
     } else if (cmd == "LIST") {
-      // Re-print all GIF entries for debugging
-      Serial.println("====== GIF TABLE DUMP ======");
-      Serial.print("Total GIFs loaded: ");
-      Serial.println(ALL_GIFS_COUNT);
-      for (int i = 0; i < ALL_GIFS_COUNT; i++) {
-        char gifName[32];
-        strcpy_P(gifName, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[i].name));
-        uint32_t cnt = (uint32_t)pgm_read_dword(&ALL_GIFS_TABLE[i].count);
-        Serial.print("GIF[");
-        Serial.print(i);
-        Serial.print("] ");
-        Serial.print(gifName);
-        Serial.print(" (");
-        Serial.print(cnt);
-        Serial.println(" frames)");
+      // Re-print all Sprite AI animation entries for debugging
+      Serial.println("====== SPRITE AI ANIMATION DUMP ======");
+      Serial.printf("Total Sprite Animations: %d (4 frames each)\n", SPRITE_AI13_ANIMATION_COUNT);
+      for (int i = 0; i < SPRITE_AI13_ANIMATION_COUNT; i++) {
+        Serial.printf("ANIM[%d] %s (4 frames)\n", i, getSpriteAi13AnimName(i));
       }
-      Serial.println("=============================");
+      Serial.println("======================================");
     } else {
       // Fallback: forward generic commands (e.g. MAP:, NOTIF:, EXPR:, AUDIO:) to the robot command handler
       handleRobotCommand(cmd);
@@ -1728,43 +1933,32 @@ void loop() {
       if (isCycleMode) {
         cycleExpression();
       } else {
-        if (defaultGif >= 100) {
-          face.setGifIndex(defaultGif - 100);
-          face.setExpression(EXPR_ALL_GIF);
-        } else {
-          face.setExpression((Expression)defaultGif);
-        }
+        int animIdx = defaultGif;
+        if (animIdx >= 100) animIdx -= 100;
+        if (animIdx < 0 || animIdx >= SPRITE_AI13_ANIMATION_COUNT) animIdx = 0;
+        face.setGifIndex(animIdx);
+        face.setExpression((Expression)animIdx);
       }
       lastExpressionCycleTime = now;
     }
   } else {
     // Regular operation expression cycling (only when on SCREEN_FACE screen)
     if (currentScreen == SCREEN_FACE && !isAsleep) {
-      if (face.getExpression() == EXPR_ALL_GIF) {
-        if (face.isGifFinished()) {
-          face.clearGifFinished();
-          if (isCycleMode) {
-            // Only switch to a different random GIF if at least 8 seconds has elapsed since last cycle!
-            if (now - lastExpressionCycleTime >= 8000) {
-              cycleExpression();
-              lastExpressionCycleTime = now;
-            }
-          }
+      if (isCycleMode) {
+        // Switch to next sprite animation every 8 seconds in cycle mode
+        if (now - lastExpressionCycleTime >= 8000) {
+          cycleExpression();
+          lastExpressionCycleTime = now;
         }
       } else {
-        // Return to random emoji cycling/default expression after notification duration
+        // Return to default expression after notification duration
         if (!isReminderRinging && (now - lastExpressionCycleTime >= (unsigned long)activeNotificationDurationMs)) {
           face.headerText = ""; // Clear header overlay
-          if (isCycleMode) {
-            cycleExpression();
-          } else {
-            if (defaultGif >= 100) {
-              face.setGifIndex(defaultGif - 100);
-              face.setExpression(EXPR_ALL_GIF);
-            } else {
-              face.setExpression((Expression)defaultGif);
-            }
-          }
+          int animIdx = defaultGif;
+          if (animIdx >= 100) animIdx -= 100;
+          if (animIdx < 0 || animIdx >= SPRITE_AI13_ANIMATION_COUNT) animIdx = 0;
+          face.setGifIndex(animIdx);
+          face.setExpression((Expression)animIdx);
           lastExpressionCycleTime = now;
         }
       }

@@ -7,15 +7,18 @@
 #include <Preferences.h>
 #include "config.h"
 #include "audio.h"
+#include "imu.h"
 
 // External references
 extern bool gamesActive;
 extern bool gamePlaying;
 extern int gameMenuOption;
 extern int gameSelected;
+extern float gamesScrollPx;
 
 extern bool virtualBtn1;
 extern bool virtualBtn2;
+extern LunaIMU imu;
 
 class LunaGames {
 private:
@@ -189,6 +192,31 @@ public:
     }
   }
 
+  // Accelerometer & Gyroscope 6-Axis Motion Steering Engine
+  // Returns normalized lateral deflection: < 0 for left, > 0 for right
+  float getTiltSteer() {
+    if (!imu.isInitialized()) return 0.0f;
+    float ax = 0.0f, ay = 0.0f, az = 1.0f;
+    float gx = 0.0f, gy = 0.0f, gz = 0.0f;
+    if (!imu.readMotion(ax, ay, az, gx, gy, gz)) return 0.0f;
+
+    // Lateral tilt acceleration on portrait 240x280 (ST7789):
+    // Tilting right makes ay negative, so -ay is positive.
+    // Tilting left makes ay positive, so -ay is negative.
+    float lateral = -ay;
+
+    // Combine angular velocity (gyro roll rate in dps) for zero-latency flick/reaction
+    lateral += (-gy * 0.0025f);
+
+    const float deadzone = 0.06f;
+    if (lateral > deadzone) {
+      return constrain((lateral - deadzone) / 0.35f, 0.0f, 1.6f);
+    } else if (lateral < -deadzone) {
+      return -constrain((-lateral - deadzone) / 0.35f, 0.0f, 1.6f);
+    }
+    return 0.0f;
+  }
+
   void resetRacer() {
     int carW = SCREEN_WIDTH == 240 ? 16 : 8;
     int carH = SCREEN_WIDTH == 240 ? 28 : 14;
@@ -343,143 +371,181 @@ public:
   void drawMenu(GFXcanvas16& display) {
     extern String robotVariant;
     extern bool negativeDisplay;
-    uint16_t themeAccent, themeBg, themeCardBg, themeText, themeBorder;
-    if (!negativeDisplay) {
-      // Light Theme
-      themeBg      = TFT_WHITE;
-      themeText    = 0x2104; // Charcoal Black
-      themeAccent  = (robotVariant == "mr_luna") ? 0x197A : 0xF8B8; // Royal Blue or Luna Pink
-      themeCardBg  = 0xF7BE; // Soft Pastel Gray
-      themeBorder  = 0xD69A; // Light Grey
-    } else {
-      // Dark Theme
-      themeBg      = TFT_BLACK;
-      themeText    = TFT_WHITE;
-      themeAccent  = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
-      themeCardBg  = 0x0842;
-      themeBorder  = 0x2104;
-    }
+    uint16_t themeAccent  = 0x001F; // Deep Royal Blue
+    uint16_t themeBg      = 0xFFFF; // Crisp Pure White
+    uint16_t themeText    = 0x1082; // Deep Graphite/Black
+    uint16_t themeBorder  = 0xCE79; // Crisp light grey hairline
+    uint16_t themeSubText = 0x632C; // Muted titanium slate
 
-    display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
+    // Clear display below status bar
+    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
 
-    display.setTextSize(SCREEN_WIDTH == 240 ? 2 : 1);
-    display.setTextColor(themeAccent);
-    display.setCursor((SCREEN_WIDTH - 11 * (SCREEN_WIDTH == 240 ? 12 : 6)) / 2, SCREEN_WIDTH == 240 ? 28 : 12);
+    // ── Header ──────────────────────────────────────────────────────────────
+    display.setTextSize(2);
+    display.setTextColor(themeText);
+    display.setCursor(20, 28);
     display.print("LUNA ARCADE");
-    display.drawFastHLine(6, SCREEN_WIDTH == 240 ? 48 : 24, SCREEN_WIDTH - 12, themeBorder);
+    display.fillCircle(168, 35, 3, themeAccent);
 
-    const char* gameNames[] = {
-      "LUNA RACER",
-      "LUNA SPACE",
-      "FLAPPY MOCHY",
-      "COIN CATCHER",
-      "MOCHY JUMP",
-      "STACKER",
-      "MEMORY MATRIX",
-      "EXIT ARCADE"
+    display.drawFastHLine(20, 46, SCREEN_WIDTH - 40, themeBorder);
+
+    // ── Game Titles & Metadata ──────────────────────────────────────────────
+    int opt = constrain(gameMenuOption, 0, 7);
+
+    const char* titlesL1[] = {
+      "LUNA", "LUNA", "FLAPPY", "COIN", "MOCHY", "STACKER", "MEMORY", "EXIT"
+    };
+    const char* titlesL2[] = {
+      "RACER", "SPACE", "MOCHY", "CATCHER", "JUMP", "TOWER", "MATRIX", "ARCADE"
+    };
+    int highScores[] = {
+      racHighScore, spcHighScore, flapHighScore, catHighScore, jumpHighScore, stkHighScore, memHighScore, 0
     };
 
-    int itemsPerPage = 4;
-    int scrollOffset = 0;
-    if (gameMenuOption >= itemsPerPage) {
-      scrollOffset = gameMenuOption - itemsPerPage + 1;
-    }
-
-    int spacing = SCREEN_WIDTH == 240 ? 32 : 20;
-    int startY = SCREEN_WIDTH == 240 ? 58 : 30;
-
-    for (int idx = 0; idx < itemsPerPage; idx++) {
-      int optIdx = idx + scrollOffset;
-      if (optIdx >= 8) break;
-
-      int yPos = startY + idx * spacing;
-      bool sel = (gameMenuOption == optIdx);
-      
-      uint16_t boxBg = sel ? themeAccent : themeCardBg;
-      uint16_t boxText = sel ? TFT_WHITE : themeText;
-      uint16_t itemAccent = sel ? boxText : themeAccent;
-
-      if (sel) {
-        display.fillRoundRect(6, yPos, SCREEN_WIDTH - 12, SCREEN_WIDTH == 240 ? 28 : 17, 6, boxBg);
-        display.drawRoundRect(6, yPos, SCREEN_WIDTH - 12, SCREEN_WIDTH == 240 ? 28 : 17, 6, themeAccent);
-        display.setTextColor(boxText);
-      } else {
-        display.fillRoundRect(6, yPos, SCREEN_WIDTH - 12, SCREEN_WIDTH == 240 ? 28 : 17, 6, themeCardBg);
-        display.setTextColor(themeText);
-      }
-      
-      // Draw icon
-      int ix = 14;
-      int iy = yPos + (SCREEN_WIDTH == 240 ? 8 : 3);
-      switch (optIdx) {
-        case 0:
-          display.fillRect(ix + 2, iy + 4, 8, 4, itemAccent);
-          display.fillRect(ix + 1, iy + 2, 2, 2, 0x4208);
-          display.fillRect(ix + 9, iy + 2, 2, 2, 0x4208);
-          display.fillRect(ix + 1, iy + 8, 2, 2, 0x4208);
-          display.fillRect(ix + 9, iy + 8, 2, 2, 0x4208);
-          break;
-        case 1:
-          display.fillTriangle(ix + 6, iy, ix + 2, iy + 4, ix + 10, iy + 4, itemAccent);
-          display.fillRect(ix + 3, iy + 4, 7, 6, itemAccent);
-          display.fillTriangle(ix + 1, iy + 8, ix + 3, iy + 8, ix + 3, iy + 10, itemAccent);
-          display.fillTriangle(ix + 11, iy + 8, ix + 9, iy + 8, ix + 9, iy + 10, itemAccent);
-          break;
-        case 2:
-          display.fillCircle(ix + 6, iy + 6, 4, itemAccent);
-          display.fillTriangle(ix + 9, iy + 5, ix + 9, iy + 7, ix + 12, iy + 6, 0xFDA0);
-          display.fillTriangle(ix + 3, iy + 6, ix + 5, iy + 4, ix + 5, iy + 8, TFT_WHITE);
-          break;
-        case 3:
-          {
-            uint16_t coinColor = !negativeDisplay ? 0xD560 : 0xFFE0; // Amber/Gold or Yellow
-            display.drawCircle(ix + 6, iy + 6, 5, coinColor);
-            display.fillCircle(ix + 6, iy + 6, 3, coinColor);
-          }
-          break;
-        case 4:
-          display.drawLine(ix + 6, iy, ix + 6, iy + 12, itemAccent);
-          display.drawLine(ix + 6, iy, ix + 2, iy + 4, itemAccent);
-          display.drawLine(ix + 6, iy, ix + 10, iy + 4, itemAccent);
-          break;
-        case 5:
-          display.fillRect(ix + 2, iy + 8, 8, 3, itemAccent);
-          display.fillRect(ix + 4, iy + 4, 4, 3, itemAccent);
-          display.fillRect(ix + 5, iy,     2, 3, itemAccent);
-          break;
-        case 6:
-          display.drawRect(ix + 1, iy + 1, 10, 10, itemAccent);
-          display.drawFastHLine(ix + 1, iy + 5, 10, itemAccent);
-          display.drawFastVLine(ix + 5, iy + 1, 10, itemAccent);
-          break;
-        case 7:
-          display.drawLine(ix + 1, iy + 6, ix + 11, iy + 6, itemAccent);
-          display.drawLine(ix + 1, iy + 6, ix + 5, iy + 2, itemAccent);
-          display.drawLine(ix + 1, iy + 6, ix + 5, iy + 10, itemAccent);
-          break;
-      }
-      
-      display.setCursor(32, yPos + (SCREEN_WIDTH == 240 ? 6 : 5));
-      display.print(gameNames[optIdx]);
-    }
-
-    // Scroll dots
-    int dotAreaY = SCREEN_WIDTH == 240 ? 194 : 122;
-    int dotSpacing = SCREEN_WIDTH == 240 ? 12 : 8;
-    int dotsStartX = (SCREEN_WIDTH - 8 * dotSpacing) / 2;
-    for (int i = 0; i < 8; i++) {
-      if (i == gameMenuOption) {
-        display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY, SCREEN_WIDTH == 240 ? 8 : 5, SCREEN_WIDTH == 240 ? 4 : 2, 1, themeAccent);
-      } else {
-        display.fillRoundRect(dotsStartX + i * dotSpacing + 2, dotAreaY + 1, SCREEN_WIDTH == 240 ? 4 : 2, SCREEN_WIDTH == 240 ? 2 : 1, 1, themeBorder);
-      }
-    }
-
-    display.setTextSize(1);
+    // Dominant 2-line title
+    display.setTextSize(3);
     display.setTextColor(themeText);
-    String hint = "Tap: Select | Swipe: Scroll";
-    display.setCursor((SCREEN_WIDTH - hint.length() * 6) / 2, SCREEN_WIDTH == 240 ? 208 : 140);
-    display.print(hint);
+    display.setCursor(20, 56);
+    display.print(titlesL1[opt]);
+
+    display.setTextColor(themeAccent);
+    display.setCursor(20, 84);
+    display.print(titlesL2[opt]);
+
+    // Metadata tagline
+    display.setTextSize(1);
+    display.setTextColor(themeSubText);
+    display.setCursor(20, 114);
+    if (opt < 7) {
+      char scoreBuf[40];
+      if (opt == 0 || opt == 1 || opt == 3 || opt == 4) {
+        snprintf(scoreBuf, sizeof(scoreBuf), "HI:%d // GYRO TILT ACTIVE", highScores[opt]);
+      } else {
+        snprintf(scoreBuf, sizeof(scoreBuf), "SIMULATION // HI-SCORE: %d", highScores[opt]);
+      }
+      display.print(scoreBuf);
+    } else {
+      display.print("RETURN // WATCH INTERFACE");
+    }
+
+    // ── Futuristic Wireframe Silhouette Preview ($Y \in [128, 185]$) ────────
+    int cx = 120;
+    int cy = 154;
+
+    switch (opt) {
+      case 0: { // LUNA RACER: Aerodynamic wireframe speedster
+        display.drawFastHLine(cx - 50, cy - 14, 25, 0xCE79);
+        display.drawFastHLine(cx - 60, cy,      30, themeBorder);
+        display.drawFastHLine(cx - 45, cy + 14, 20, 0xCE79);
+        display.drawTriangle(cx + 34, cy, cx - 20, cy - 16, cx - 20, cy + 16, themeAccent);
+        display.fillTriangle(cx + 26, cy, cx - 14, cy - 12, cx - 14, cy + 12, 0xF7BE);
+        display.fillRect(cx - 26, cy - 18, 10, 6, themeText);
+        display.fillRect(cx - 26, cy + 12, 10, 6, themeText);
+        display.fillRect(cx + 12, cy - 16, 8, 4, themeText);
+        display.fillRect(cx + 12, cy + 12, 8, 4, themeText);
+        display.fillCircle(cx - 2, cy, 3, themeAccent);
+      } break;
+
+      case 1: { // LUNA SPACE: Starfighter
+        display.drawCircle(cx, cy, 32, themeBorder);
+        display.drawFastHLine(cx - 38, cy, 76, 0xCE79);
+        display.drawFastVLine(cx, cy - 38, 76, 0xCE79);
+        display.drawTriangle(cx, cy - 24, cx - 22, cy + 18, cx + 22, cy + 18, themeAccent);
+        display.fillTriangle(cx, cy - 18, cx - 14, cy + 14, cx + 14, cy + 14, 0xF7BE);
+        display.fillTriangle(cx, cy + 26, cx - 6, cy + 18, cx + 6, cy + 18, 0x07E0);
+      } break;
+
+      case 2: { // FLAPPY MOCHY: Cyber Companion
+        display.drawFastVLine(cx - 40, cy - 26, 18, themeBorder);
+        display.drawFastVLine(cx - 40, cy + 8,  20, themeBorder);
+        display.drawFastVLine(cx + 40, cy - 20, 14, themeBorder);
+        display.drawFastVLine(cx + 40, cy + 12, 18, themeBorder);
+        display.fillCircle(cx, cy, 12, themeAccent);
+        display.drawCircle(cx, cy, 14, themeText);
+        display.fillCircle(cx + 4, cy - 3, 3, 0xFFFF);
+        display.fillTriangle(cx + 12, cy, cx + 12, cy + 4, cx + 20, cy + 2, 0xFD20);
+        display.drawLine(cx - 8, cy, cx - 18, cy - 12, themeText);
+        display.drawLine(cx - 18, cy - 12, cx - 4, cy - 4, themeText);
+      } break;
+
+      case 3: { // COIN CATCHER: Precision Prism
+        display.drawCircle(cx, cy, 26, themeBorder);
+        display.drawLine(cx, cy - 20, cx + 18, cy, 0xFD20);
+        display.drawLine(cx + 18, cy, cx, cy + 20, 0xFD20);
+        display.drawLine(cx, cy + 20, cx - 18, cy, 0xFD20);
+        display.drawLine(cx - 18, cy, cx, cy - 20, 0xFD20);
+        display.drawLine(cx, cy - 20, cx, cy + 20, 0xFD20);
+        display.fillCircle(cx, cy, 6, 0xFD20);
+      } break;
+
+      case 4: { // MOCHY JUMP: Layered Platforms
+        display.drawFastHLine(cx - 36, cy + 18, 30, themeAccent);
+        display.drawFastHLine(cx - 6,  cy + 2,  32, themeAccent);
+        display.drawFastHLine(cx + 12, cy - 16, 28, themeAccent);
+        display.fillCircle(cx + 10, cy - 26, 6, themeText);
+        display.drawLine(cx + 10, cy - 8, cx + 10, cy - 18, 0x07E0);
+        display.drawLine(cx + 7, cy - 14, cx + 10, cy - 18, 0x07E0);
+        display.drawLine(cx + 13, cy - 14, cx + 10, cy - 18, 0x07E0);
+      } break;
+
+      case 5: { // STACKER: Monolithic Blocks
+        display.drawFastVLine(cx, cy - 28, 56, 0xCE79);
+        display.drawRect(cx - 24, cy + 12, 48, 10, themeAccent);
+        display.drawRect(cx - 18, cy,      36, 10, themeAccent);
+        display.drawRect(cx - 12, cy - 12, 24, 10, themeText);
+        display.fillRect(cx - 6,  cy - 24, 12, 8,  themeAccent);
+      } break;
+
+      case 6: { // MEMORY MATRIX: Neural Grid
+        display.drawRect(cx - 22, cy - 22, 44, 44, themeBorder);
+        display.drawFastHLine(cx - 22, cy, 44, themeBorder);
+        display.drawFastVLine(cx, cy - 22, 44, themeBorder);
+        display.fillCircle(cx - 11, cy - 11, 5, 0x07E0);
+        display.fillCircle(cx + 11, cy - 11, 5, themeAccent);
+        display.fillCircle(cx - 11, cy + 11, 5, 0xFD20);
+        display.fillCircle(cx + 11, cy + 11, 5, 0xF800);
+      } break;
+
+      case 7: { // EXIT ARCADE
+        display.drawCircle(cx, cy, 24, 0xF800);
+        display.drawLine(cx - 8, cy, cx + 8, cy, 0xF800);
+        display.drawLine(cx - 8, cy, cx - 2, cy - 6, 0xF800);
+        display.drawLine(cx - 8, cy, cx - 2, cy + 6, 0xF800);
+      } break;
+    }
+
+    // ── Floating Action Trigger Button ($Y \in [194, 228]$) ─────────────────
+    int btnW = 140;
+    int btnH = 34;
+    int btnX = (SCREEN_WIDTH - btnW) / 2;
+    int btnY = 194;
+
+    uint16_t btnColor = (opt == 7) ? 0xF800 : themeAccent;
+    display.fillRoundRect(btnX, btnY, btnW, btnH, 8, btnColor);
+
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    const char* btnTxt = (opt == 7) ? "EXIT <" : "PLAY >";
+    int bW = strlen(btnTxt) * 12;
+    display.setCursor(btnX + (btnW - bW) / 2, btnY + 9);
+    display.print(btnTxt);
+
+    // ── Carousel Indicator Rail ($Y=238) ────────────────────────────────────
+    int dotStartX = 72;
+    for (int d = 0; d < 8; d++) {
+      int dx = dotStartX + d * 14;
+      if (d == opt) {
+        display.fillRoundRect(dx - 4, 238, 12, 4, 2, btnColor);
+      } else {
+        display.fillCircle(dx, 240, 2, themeBorder);
+      }
+    }
+
+    // Bottom navigation hint
+    display.setTextSize(1);
+    display.setTextColor(themeSubText);
+    display.setCursor(26, 256);
+    display.print("SWIPE: BROWSE // TAP: LAUNCH");
   }
 
   // --- Game 1: Luna Racer ---
@@ -514,13 +580,19 @@ public:
         racSpeed = SCREEN_WIDTH == 240 ? 4.0f : 2.5f;
       }
 
+      float tilt = getTiltSteer();
+      float steerDelta = 0.0f;
       if (btn1 && !btn2) {
-        racPlayerX -= 3;
-        if (racPlayerX < G_X + 16) racPlayerX = G_X + 16;
+        steerDelta -= 3.5f;
       } else if (btn2 && !btn1) {
-        racPlayerX += 3;
-        if (racPlayerX > G_R - 16 - carW) racPlayerX = G_R - 16 - carW;
+        steerDelta += 3.5f;
       }
+      if (fabsf(tilt) > 0.01f) {
+        steerDelta += tilt * 5.2f;
+      }
+      racPlayerX += steerDelta;
+      if (racPlayerX < G_X + 16) racPlayerX = G_X + 16;
+      if (racPlayerX > G_R - 16 - carW) racPlayerX = G_R - 16 - carW;
 
       racRoadScroll += racSpeed;
       if (racRoadScroll >= 40) racRoadScroll = 0;
@@ -651,14 +723,19 @@ public:
           spcPartLife[p] = 12;
         }
       }
-      else if (btn1 && !btn2) {
-        spcPlayerX -= 3;
-        if (spcPlayerX < G_X + pw + 4) spcPlayerX = G_X + pw + 4;
+      float tilt = getTiltSteer();
+      float steerDelta = 0.0f;
+      if (btn1 && !btn2) {
+        steerDelta -= 3.5f;
+      } else if (btn2 && !btn1) {
+        steerDelta += 3.5f;
       }
-      else if (btn2 && !btn1) {
-        spcPlayerX += 3;
-        if (spcPlayerX > G_R - pw - 4) spcPlayerX = G_R - pw - 4;
+      if (fabsf(tilt) > 0.01f) {
+        steerDelta += tilt * 5.5f;
       }
+      spcPlayerX += steerDelta;
+      if (spcPlayerX < G_X + pw + 4) spcPlayerX = G_X + pw + 4;
+      if (spcPlayerX > G_R - pw - 4) spcPlayerX = G_R - pw - 4;
 
       if (millis() - spcLastShoot > 350) {
         spcLastShoot = millis();
@@ -1077,14 +1154,19 @@ public:
     int coinR = SCREEN_WIDTH == 240 ? 5 : 3;
 
     if (!catGameOver) {
-      if (btn1) {
-        catPlayerX -= 4;
-        if (catPlayerX < G_X + 8) catPlayerX = G_X + 8;
+      float tilt = getTiltSteer();
+      float steerDelta = 0.0f;
+      if (btn1 && !btn2) {
+        steerDelta -= 4.0f;
+      } else if (btn2 && !btn1) {
+        steerDelta += 4.0f;
       }
-      if (btn2) {
-        catPlayerX += 4;
-        if (catPlayerX > G_R - basketW - 8) catPlayerX = G_R - basketW - 8;
+      if (fabsf(tilt) > 0.01f) {
+        steerDelta += tilt * 6.0f;
       }
+      catPlayerX += steerDelta;
+      if (catPlayerX < G_X + 8) catPlayerX = G_X + 8;
+      if (catPlayerX > G_R - basketW - 8) catPlayerX = G_R - basketW - 8;
 
       float fallSpeed = SCREEN_WIDTH == 240 ? (2.0f + catScore / 80.0f) : (1.4f + catScore / 80.0f);
       for (int i = 0; i < 3; i++) {
@@ -1191,12 +1273,17 @@ public:
     int pH = SCREEN_WIDTH == 240 ? 16 : 10;
 
     if (!jumpGameOver) {
-      if (btn1) {
-        jumpPlayerX -= 3.0f;
+      float tilt = getTiltSteer();
+      float steerDelta = 0.0f;
+      if (btn1 && !btn2) {
+        steerDelta -= 3.2f;
+      } else if (btn2 && !btn1) {
+        steerDelta += 3.2f;
       }
-      if (btn2) {
-        jumpPlayerX += 3.0f;
+      if (fabsf(tilt) > 0.01f) {
+        steerDelta += tilt * 5.2f;
       }
+      jumpPlayerX += steerDelta;
 
       if (jumpPlayerX < G_X - pW) jumpPlayerX = G_R - pW;
       if (jumpPlayerX > G_R + pW) jumpPlayerX = G_X - pW;

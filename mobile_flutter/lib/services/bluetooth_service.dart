@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'database_service.dart';
+import '../models/calendar_event.dart';
 
 class BLEService with ChangeNotifier {
   static const String serviceUuid = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
@@ -56,6 +57,27 @@ class BLEService with ChangeNotifier {
   int _activeExpressionId = 0;
   String _activeExpressionLabel = "IDLE";
   String _activeScreenMode = "FACE";
+
+  // Hardware Stored Events & Reminders
+  List<CalendarEvent> _hardwareEvents = [];
+  bool _isHardwareEventsSynced = false;
+
+  List<CalendarEvent> get hardwareEvents => _hardwareEvents;
+  bool get isHardwareEventsSynced => _isHardwareEventsSynced;
+
+  Function(List<CalendarEvent>)? onHardwareEventsSynced;
+  Function(String id, String title)? onHardwareAlarmRinging;
+  VoidCallback? onHardwareAlarmDismissed;
+
+  // Live GPS Navigation tracking
+  String _navDirection = "STRAIGHT";
+  String _navDistance = "--";
+  String _navDescription = "";
+  String _navRoad = "";
+  String _navTotalTime = "";
+  String _navTotalDist = "";
+  String _navEta = "";
+  bool _isNavActive = false;
 
   // Companion Device Properties
   BluetoothDevice? _companionDevice;
@@ -154,6 +176,14 @@ class BLEService with ChangeNotifier {
   int get activeExpressionId => _activeExpressionId;
   String get activeExpressionLabel => _activeExpressionLabel;
   String get activeScreenMode => _activeScreenMode;
+  String get navDirection => _navDirection;
+  String get navDistance => _navDistance;
+  String get navDescription => _navDescription;
+  String get navRoad => _navRoad;
+  String get navTotalTime => _navTotalTime;
+  String get navTotalDist => _navTotalDist;
+  String get navEta => _navEta;
+  bool get isNavActive => _isNavActive;
   List<String> get consoleLogs => _consoleLogs;
   String get serverIp => _serverIp;
   bool get hasSpeaker => false;
@@ -667,6 +697,7 @@ class BLEService with ChangeNotifier {
 
       // Sync clock to hardware after successful connection
       Future.delayed(const Duration(milliseconds: 700), () => syncClockToHardware());
+      Future.delayed(const Duration(milliseconds: 1400), () => queryHardwareEvents());
 
       // App is Single Source of Truth: push app's stored robot variant and negative display settings to hardware upon connection
       Future.delayed(const Duration(milliseconds: 900), () async {
@@ -811,6 +842,72 @@ class BLEService with ChangeNotifier {
               onSettingsSyncedFromWatch!(clockStyle, oledBrightness, negativeDisplay, silent);
             }
           }
+        } else if (logMsg.startsWith("EVT_START:")) {
+          _hardwareEvents.clear();
+          _isHardwareEventsSynced = false;
+          notifyListeners();
+        } else if (logMsg.startsWith("EVT:")) {
+          final payload = logMsg.substring(4);
+          final parts = payload.split('|');
+          if (parts.length >= 5) {
+            final id = parts[0].trim();
+            final type = parts[1].trim();
+            final dateStr = parts[2].trim();
+            final timeStr = parts[3].trim();
+            final title = parts[4].trim();
+
+            DateTime parsedDt = DateTime.now();
+            final timeParts = timeStr.split(':');
+            int h = timeParts.isNotEmpty ? (int.tryParse(timeParts[0]) ?? 12) : 12;
+            int m = timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0;
+
+            if (dateStr.isNotEmpty && dateStr != "*") {
+              final dParts = dateStr.split(' ');
+              if (dParts.length >= 2) {
+                int day = int.tryParse(dParts[0]) ?? parsedDt.day;
+                const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                int monIdx = months.indexOf(dParts[1].toLowerCase());
+                int mon = (monIdx >= 0) ? (monIdx + 1) : parsedDt.month;
+                parsedDt = DateTime(parsedDt.year, mon, day, h, m);
+              } else {
+                parsedDt = DateTime(parsedDt.year, parsedDt.month, parsedDt.day, h, m);
+              }
+            } else {
+              parsedDt = DateTime(parsedDt.year, parsedDt.month, parsedDt.day, h, m);
+            }
+
+            final eventItem = CalendarEvent(
+              id: id,
+              title: title,
+              dateTime: parsedDt,
+              type: type,
+            );
+            _hardwareEvents.removeWhere((e) => e.id == id);
+            _hardwareEvents.add(eventItem);
+            notifyListeners();
+          }
+        } else if (logMsg.startsWith("EVT_END")) {
+          _isHardwareEventsSynced = true;
+          notifyListeners();
+          if (onHardwareEventsSynced != null) {
+            onHardwareEventsSynced!(_hardwareEvents);
+          }
+        } else if (logMsg.startsWith("EVT_DEL_OK:")) {
+          final id = logMsg.substring(11).trim();
+          _hardwareEvents.removeWhere((e) => e.id == id);
+          notifyListeners();
+        } else if (logMsg.startsWith("ALARM_RING:")) {
+          final payload = logMsg.substring(11);
+          final parts = payload.split('|');
+          final ringId = parts.isNotEmpty ? parts[0] : "";
+          final ringTitle = parts.length > 1 ? parts[1] : "Alarm";
+          if (onHardwareAlarmRinging != null) {
+            onHardwareAlarmRinging!(ringId, ringTitle);
+          }
+        } else if (logMsg.startsWith("ALARM_DISMISSED")) {
+          if (onHardwareAlarmDismissed != null) {
+            onHardwareAlarmDismissed!();
+          }
         }
         
         _robotEventsController.add(logMsg);
@@ -948,6 +1045,26 @@ class BLEService with ChangeNotifier {
     await _writeTextWithAck(text, "Text Command");
   }
 
+  Future<void> transmitNavTelemetry(String payload) async {
+    if (!_isConnected || _textChar == null) {
+      await _transmitWifiCommand(payload);
+      return;
+    }
+    try {
+      final bytes = utf8.encode(payload);
+      final bool writeNR = _textChar!.properties.writeWithoutResponse;
+      await _textChar!.write(bytes, withoutResponse: writeNR);
+      addLog("Transmitted Nav: '$payload'", "NAV");
+    } catch (e) {
+      addLog("Nav transmit fallback: $e", "ERROR");
+      try {
+        await _textChar!.write(utf8.encode(payload), withoutResponse: false);
+      } catch (e2) {
+        addLog("Nav transmit write failed: $e2", "ERROR");
+      }
+    }
+  }
+
   // ── Image Transfer Helpers ─────────────────────────────────────────────
 
   /// Returns true if the image BLE characteristic is available.
@@ -1026,6 +1143,34 @@ class BLEService with ChangeNotifier {
   Future<void> transmitCalendarEvent(String type, String time, String title) async {
     final payloadStr = 'CAL:$type,$time,$title';
     await _writeTextWithAck(payloadStr, "Calendar Event");
+  }
+
+  Future<void> transmitHardwareEvent({
+    required String id,
+    required String type,
+    required String date,
+    required String time,
+    required String title,
+  }) async {
+    final payloadStr = 'EVT_ADD:$id,$type,$date,$time,$title';
+    await _writeTextWithAck(payloadStr, "Add Hardware Event");
+  }
+
+  Future<void> deleteHardwareEvent(String id) async {
+    final payloadStr = 'EVT_DEL:$id';
+    await _writeTextWithAck(payloadStr, "Delete Hardware Event");
+  }
+
+  Future<void> queryHardwareEvents() async {
+    await _writeTextWithAck('EVT_GET', "Query Hardware Events");
+  }
+
+  Future<void> clearAllHardwareEvents() async {
+    await _writeTextWithAck('EVT_CLEAR', "Clear Hardware Events");
+  }
+
+  Future<void> dismissHardwareAlarm() async {
+    await _writeTextWithAck('EVT_DISMISS', "Dismiss Hardware Alarm");
   }
 
   Future<void> transmitSaveSettings({
@@ -1107,6 +1252,42 @@ class BLEService with ChangeNotifier {
     } catch (e) {
       print("Error sending map chunk: $e");
     }
+  }
+
+  void updateNavigation(
+    String direction,
+    String distance,
+    String description, {
+    String road = '',
+    String totalTime = '',
+    String totalDist = '',
+    String eta = '',
+  }) {
+    _navDirection = direction;
+    _navDistance = distance;
+    _navDescription = description;
+    _navRoad = road;
+    _navTotalTime = totalTime;
+    _navTotalDist = totalDist;
+    _navEta = eta;
+    _isNavActive = true;
+    _activeScreenMode = "MAPS";
+    notifyListeners();
+  }
+
+  void clearNavigation() {
+    _isNavActive = false;
+    _navDirection = "STRAIGHT";
+    _navDistance = "--";
+    _navDescription = "";
+    _navRoad = "";
+    _navTotalTime = "";
+    _navTotalDist = "";
+    _navEta = "";
+    if (_activeScreenMode == "MAPS") {
+      _activeScreenMode = "CLOCK";
+    }
+    notifyListeners();
   }
 
   Future<void> transmitSleep( ) async {

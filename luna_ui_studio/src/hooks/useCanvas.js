@@ -9,18 +9,13 @@ function snap(val, grid) {
   return Math.round(val / grid) * grid
 }
 
-const INITIAL_SCREENS = [
-  {
-    id: 'screen_1',
-    name: 'Screen 1 (Home)',
-    bgColor: '#0b0f19',
-    elements: []
-  }
-]
+import { LUNA_CANONICAL_SCREENS } from '../data/canonicalScreens.js'
+export { LUNA_CANONICAL_SCREENS }
+export const INITIAL_SCREENS = LUNA_CANONICAL_SCREENS
 
 export function useCanvas() {
   const [screens, setScreens] = useState(INITIAL_SCREENS)
-  const [activeScreenId, setActiveScreenId] = useState('screen_1')
+  const [activeScreenId, setActiveScreenId] = useState('screen_home')
   const [selectedId, setSelectedId] = useState(null)
   const [zoom, setZoom] = useState(1.5)
   const [gridSnap, setGridSnap] = useState(1)
@@ -49,6 +44,16 @@ export function useCanvas() {
       id: newId,
       name: newName,
       bgColor: '#0b0f19',
+      bgType: 'color',
+      bgGradient: 'radial-gradient(ellipse at 50% 30%, #0d1829 0%, #06080f 60%, #000000 100%)',
+      bgPattern: 'none',
+      bgImage: '',
+      isScrollable: false,
+      maxScrollY: 400,
+      gestures: {
+        swipeLeft: { actionType: 'none', targetScreenId: null, transition: 'slide-left' },
+        swipeRight: { actionType: 'none', targetScreenId: null, transition: 'slide-right' },
+      },
       elements: []
     }
     setScreens(prev => {
@@ -98,6 +103,16 @@ export function useCanvas() {
       id: newId,
       name: `${src.name} (Copy)`,
       bgColor: src.bgColor || '#0b0f19',
+      bgType: src.bgType || 'color',
+      bgGradient: src.bgGradient || '',
+      bgPattern: src.bgPattern || 'none',
+      bgImage: src.bgImage || '',
+      isScrollable: src.isScrollable || false,
+      maxScrollY: src.maxScrollY || 400,
+      gestures: src.gestures ? JSON.parse(JSON.stringify(src.gestures)) : {
+        swipeLeft: { actionType: 'none', targetScreenId: null, transition: 'slide-left' },
+        swipeRight: { actionType: 'none', targetScreenId: null, transition: 'slide-right' },
+      },
       elements: dupElements
     }
     setScreens(prev => {
@@ -123,7 +138,16 @@ export function useCanvas() {
   // Set Screen Background
   const setScreenBg = useCallback((screenId, color) => {
     setScreens(prev => {
-      const next = prev.map(s => s.id === screenId ? { ...s, bgColor: color } : s)
+      const next = prev.map(s => s.id === screenId ? { ...s, bgColor: color, bgType: 'color' } : s)
+      saveHistory(next, activeScreenId)
+      return next
+    })
+  }, [activeScreenId, saveHistory])
+
+  // Update Screen Properties (Full Display Scroll, Gestures, Backgrounds, etc.)
+  const updateScreen = useCallback((screenId, screenUpdate) => {
+    setScreens(prev => {
+      const next = prev.map(s => s.id === screenId ? { ...s, ...screenUpdate } : s)
       saveHistory(next, activeScreenId)
       return next
     })
@@ -133,6 +157,7 @@ export function useCanvas() {
   const addElement = useCallback((type, x, y, targetScreenId = null) => {
     const comp = UI_COMPONENTS[type]
     if (!comp) return
+    const isPattern = comp.category === 'patterns'
     const snapTo = gridSnap > 1 ? gridSnap : 1
     const el = {
       id: genId(),
@@ -141,15 +166,18 @@ export function useCanvas() {
       actions: [], // Block action mappings
       props: {
         ...comp.defaultProps,
-        x: Math.round(Math.max(0, Math.min(x, 240 - (comp.defaultProps.w || 80))) / snapTo) * snapTo,
-        y: Math.round(Math.max(0, Math.min(y, 280 - (comp.defaultProps.h || 40))) / snapTo) * snapTo,
+        x: isPattern ? 0 : Math.round(Math.max(0, Math.min(x, 240 - (comp.defaultProps.w || 80))) / snapTo) * snapTo,
+        y: isPattern ? 0 : Math.round(Math.max(0, Math.min(y, 280 - (comp.defaultProps.h || 40))) / snapTo) * snapTo,
+        w: isPattern ? 240 : (comp.defaultProps.w || 80),
+        h: isPattern ? 280 : (comp.defaultProps.h || 40),
       }
     }
     const scrId = targetScreenId || activeScreenId
     setScreens(prev => {
       const next = prev.map(s => {
         if (s.id === scrId) {
-          return { ...s, elements: [...s.elements, el] }
+          // If it's a pattern, insert as background layer (at index 0) so other elements stay on top
+          return { ...s, elements: isPattern ? [el, ...s.elements] : [...s.elements, el] }
         }
         return s
       })
@@ -326,6 +354,7 @@ export function useCanvas() {
     duplicateScreen,
     renameScreen,
     setScreenBg,
+    updateScreen,
 
     elements,
     selectedId,

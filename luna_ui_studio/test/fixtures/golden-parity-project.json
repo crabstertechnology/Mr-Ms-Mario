@@ -1,0 +1,1333 @@
+{
+  "version": "1.0.0",
+  "name": "Luna Golden Parity Reference Project",
+  "device": {
+    "id": "waveshare_esp32s3_touch_lcd_169",
+    "name": "Waveshare ESP32-S3 Touch LCD 1.69\"",
+    "width": 240,
+    "height": 280,
+    "colorDepth": 16,
+    "orientation": "portrait",
+    "touch": true,
+    "mcu": "ESP32-S3",
+    "displayController": "ST7789",
+    "touchController": "CST816T",
+    "panelOffsetX": 0,
+    "panelOffsetY": 20,
+    "maxFps": 60,
+    "flashSizeMb": 16,
+    "hasPsram": true,
+    "psramType": "OPI",
+    "capabilities": {
+      "maxWidth": 240,
+      "maxHeight": 280,
+      "colorDepth": 16,
+      "supportsTouch": true,
+      "supportsDoubleBuffer": true, 
+      "supportsImages": true,
+      "supportsCustomFonts": true,
+      "supportsOpacity": false,
+      "supportsRotation": false,
+      "supportsScale": false,
+      "supportsAnimation": false,
+      "supports3DTransform": false,
+      "supportsBlur": false,
+      "supportsDirtyRects": false,
+      "supportsAntiAliasing": false,
+      "supportsClipping": false
+    }
+  },
+  "activeScreenId": "screen_main",
+  "screens": [
+    {
+      "id": "screen_main",
+      "name": "Telemetry Dashboard",
+      "background": {
+        "type": "pattern",
+        "color": "#060a12",
+        "pattern": "stars"
+      },
+      "isScrollable": false,
+      "maxScrollY": 280,
+      "gestures": {
+        "swipeLeft": {
+          "type": "navigate",
+          "targetScreenId": "screen_secondary",
+          "transition": "slide-left"
+        }
+      },
+      "children": [
+        {
+          "id": "node_heading_1",
+          "type": "custom_label",
+          "name": "Dashboard Heading",
+          "layout": {
+            "x": 20,
+            "y": 16,
+            "width": 200,
+            "height": 32,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "backgroundColor": "#1e293b88",
+            "borderRadius": 6,
+            "opacity": 1
+          },
+          "typography": {
+            "align": "center",
+            "color": "#38bdf8",
+            "fontFamily": "Outfit",
+            "fontSize": 16,
+            "fontWeight": 800
+          },
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 20,
+                "y": 16,
+                "width": 200,
+                "height": 32,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "backgroundColor": "#1e293b88",
+                "borderRadius": 6,
+                "opacity": 1
+              },
+              "typography": {
+                "align": "center",
+                "color": "#38bdf8",
+                "fontFamily": "Outfit",
+                "fontSize": 16,
+                "fontWeight": 800
+              }
+            }
+          },
+          "events": [],
+          "animations": [],
+          "assetReferences": [],
+          "properties": {
+            "text": "LUNA CORE OS"
+          }
+        },
+        {
+          "id": "node_card_1",
+          "type": "card_glass",
+          "name": "Reactor Status Card",
+          "layout": {
+            "x": 16,
+            "y": 56,
+            "width": 208,
+            "height": 76,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "backgroundColor": "#0f172acc",
+            "borderColor": "#00f2fe44",
+            "borderRadius": 12,
+            "borderWidth": 1,
+            "opacity": 1
+          },
+          "typography": {
+            "align": "left",
+            "color": "#ffffff",
+            "fontFamily": "Outfit",
+            "fontSize": 13,
+            "fontWeight": 700
+          },
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 16,
+                "y": 56,
+                "width": 208,
+                "height": 76,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "backgroundColor": "#0f172acc",
+                "borderColor": "#00f2fe44",
+                "borderRadius": 12,
+                "borderWidth": 1,
+                "opacity": 1
+              },
+              "typography": {
+                "align": "left",
+                "color": "#ffffff",
+                "fontFamily": "Outfit",
+                "fontSize": 13,
+                "fontWeight": 700
+              }
+            },
+            "active": {
+              "style": {
+                "borderColor": "#00f2fe"
+              }
+            }
+          },
+          "events": [],
+          "animations": [],
+          "assetReferences": [],
+          "properties": {
+            "subtitle": "Nominal • 98.4% Efficiency",
+            "subtextColor": "#94a3b8",
+            "title": "Core Reactor"
+          }
+        },
+        {
+          "id": "node_btn_navigate",
+          "type": "uiv_btn_happy_coding",
+          "name": "Inspect Nodes Button",
+          "layout": {
+            "x": 25,
+            "y": 142,
+            "width": 190,
+            "height": 46,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "backgroundColor": "#EEF2FF",
+            "borderColor": "#536DFE",
+            "borderRadius": 10,
+            "borderWidth": 2,
+            "opacity": 1
+          },
+          "typography": {
+            "align": "center",
+            "color": "#536DFE",
+            "fontFamily": "Outfit",
+            "fontSize": 13,
+            "fontWeight": 700
+          },
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 25,
+                "y": 142,
+                "width": 190,
+                "height": 46,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "backgroundColor": "#EEF2FF",
+                "borderColor": "#536DFE",
+                "borderRadius": 10,
+                "borderWidth": 2,
+                "opacity": 1
+              },
+              "typography": {
+                "align": "center",
+                "color": "#536DFE",
+                "fontFamily": "Outfit",
+                "fontSize": 13,
+                "fontWeight": 700
+              }
+            },
+            "pressed": {
+              "style": {
+                "backgroundColor": "#c7d2fe"
+              }
+            }
+          },
+          "events": [
+            {
+              "id": "evt_nav_subsystems",
+              "trigger": "onClick",
+              "action": {
+                "id": "act_nav_subsystems",
+                "type": "navigate",
+                "targetScreenId": "screen_secondary",
+                "transition": "slide-left"
+              }
+            }
+          ],
+          "animations": [],
+          "assetReferences": [],
+          "properties": {
+            "label": "Go to Subsystems"
+          }
+        },
+        {
+          "id": "node_spinner_1",
+          "type": "loader_spinner",
+          "name": "Pulse Sync Spinner",
+          "layout": {
+            "x": 90,
+            "y": 202,
+            "width": 60,
+            "height": 60,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "accentColor": "#00f2fe",
+            "backgroundColor": "#1e293b",
+            "opacity": 1
+          },
+          "typography": {
+            "align": "center",
+            "color": "#00f2fe",
+            "fontFamily": "JetBrains Mono",
+            "fontSize": 9,
+            "fontWeight": 600
+          },
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 90,
+                "y": 202,
+                "width": 60,
+                "height": 60,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "accentColor": "#00f2fe",
+                "backgroundColor": "#1e293b",
+                "opacity": 1
+              },
+              "typography": {
+                "align": "center",
+                "color": "#00f2fe",
+                "fontFamily": "JetBrains Mono",
+                "fontSize": 9,
+                "fontWeight": 600
+              }
+            }
+          },
+          "events": [],
+          "animations": [
+            {
+              "id": "anim_spin_1",
+              "property": "rotation",
+              "from": 0,
+              "to": 360,
+              "durationMs": 1200,
+              "easing": "linear",
+              "loop": true
+            }
+          ],
+          "assetReferences": [],
+          "properties": {
+            "label": "SYNCING",
+            "size": 30
+          }
+        },
+        {
+          "id": "node_image_badge",
+          "type": "image",
+          "name": "Luna Emblem Badge",
+          "layout": {
+            "x": 104,
+            "y": 242,
+            "width": 32,
+            "height": 32,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "backgroundColor": "#00000000",
+            "borderColor": "#00f2fe",
+            "borderRadius": 4,
+            "borderWidth": 1,
+            "opacity": 1
+          },
+          "typography": {},
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 104,
+                "y": 242,
+                "width": 32,
+                "height": 32,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "backgroundColor": "#00000000",
+                "borderColor": "#00f2fe",
+                "borderRadius": 4,
+                "borderWidth": 1,
+                "opacity": 1
+              }
+            }
+          },
+          "events": [],
+          "animations": [],
+          "assetReferences": [
+            "asset_luna_badge"
+          ],
+          "properties": {
+            "assetId": "asset_luna_badge"
+          }
+        },
+        {
+          "id": "node_telemetry_mono",
+          "type": "custom_label",
+          "name": "Monospace Telemetry Label",
+          "layout": {
+            "x": 16,
+            "y": 260,
+            "width": 140,
+            "height": 14,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "backgroundColor": "#00000000",
+            "borderRadius": 0,
+            "opacity": 1
+          },
+          "typography": {
+            "align": "left",
+            "color": "#38bdf8",
+            "fontFamily": "JetBrains Mono",
+            "fontSize": 9,
+            "fontWeight": 600
+          },
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 16,
+                "y": 260,
+                "width": 140,
+                "height": 14,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "backgroundColor": "#00000000",
+                "borderRadius": 0,
+                "opacity": 1
+              },
+              "typography": {
+                "align": "left",
+                "color": "#38bdf8",
+                "fontFamily": "JetBrains Mono",
+                "fontSize": 9,
+                "fontWeight": 600
+              }
+            }
+          },
+          "events": [],
+          "animations": [],
+          "assetReferences": [],
+          "properties": {
+            "text": "FPS:60 RAM:8MB [OK]"
+          }
+        },
+        {
+          "id": "node_build_label",
+          "type": "custom_label",
+          "name": "Build Number Label",
+          "layout": {
+            "x": 160,
+            "y": 260,
+            "width": 64,
+            "height": 14,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "backgroundColor": "#00000000",
+            "borderRadius": 0,
+            "opacity": 1
+          },
+          "typography": {
+            "align": "right",
+            "color": "#64748b",
+            "fontFamily": "JetBrains Mono",
+            "fontSize": 9,
+            "fontWeight": 600
+          },
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 160,
+                "y": 260,
+                "width": 64,
+                "height": 14,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "backgroundColor": "#00000000",
+                "borderRadius": 0,
+                "opacity": 1
+              },
+              "typography": {
+                "align": "right",
+                "color": "#64748b",
+                "fontFamily": "JetBrains Mono",
+                "fontSize": 9,
+                "fontWeight": 600
+              }
+            }
+          },
+          "events": [],
+          "animations": [],
+          "assetReferences": [],
+          "properties": {
+            "text": "#2409"
+          }
+        }
+      ],
+      "metadata": {}
+    },
+    {
+      "id": "screen_secondary",
+      "name": "Subsystems View",
+      "background": {
+        "type": "color",
+        "color": "#0b0f19",
+        "pattern": "none"
+      },
+      "isScrollable": false,
+      "maxScrollY": 280,
+      "gestures": {
+        "swipeRight": {
+          "type": "navigate",
+          "targetScreenId": "screen_main",
+          "transition": "slide-right"
+        }
+      },
+      "children": [
+        {
+          "id": "node_text_subsystems",
+          "type": "custom_label",
+          "name": "Subsystems Title",
+          "layout": {
+            "x": 20,
+            "y": 40,
+            "width": 200,
+            "height": 36,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "backgroundColor": "#111827",
+            "borderRadius": 4,
+            "opacity": 1
+          },
+          "typography": {
+            "align": "center",
+            "color": "#e2e8f0",
+            "fontFamily": "Outfit",
+            "fontSize": 14,
+            "fontWeight": 700
+          },
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 20,
+                "y": 40,
+                "width": 200,
+                "height": 36,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "backgroundColor": "#111827",
+                "borderRadius": 4,
+                "opacity": 1
+              },
+              "typography": {
+                "align": "center",
+                "color": "#e2e8f0",
+                "fontFamily": "Outfit",
+                "fontSize": 14,
+                "fontWeight": 700
+              }
+            }
+          },
+          "events": [],
+          "animations": [],
+          "assetReferences": [],
+          "properties": {
+            "text": "SUBSYSTEMS ACTIVE"
+          }
+        },
+        {
+          "id": "node_btn_return",
+          "type": "button_neon",
+          "name": "Return to Core Button",
+          "layout": {
+            "x": 40,
+            "y": 190,
+            "width": 160,
+            "height": 44,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "backgroundColor": "#0f172a",
+            "borderColor": "#00f2fe",
+            "borderRadius": 8,
+            "borderWidth": 2,
+            "opacity": 1
+          },
+          "typography": {
+            "align": "center",
+            "color": "#00f2fe",
+            "fontFamily": "Outfit",
+            "fontSize": 12,
+            "fontWeight": 700
+          },
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 40,
+                "y": 190,
+                "width": 160,
+                "height": 44,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "backgroundColor": "#0f172a",
+                "borderColor": "#00f2fe",
+                "borderRadius": 8,
+                "borderWidth": 2,
+                "opacity": 1
+              },
+              "typography": {
+                "align": "center",
+                "color": "#00f2fe",
+                "fontFamily": "Outfit",
+                "fontSize": 12,
+                "fontWeight": 700
+              }
+            },
+            "pressed": {
+              "style": {
+                "backgroundColor": "#00f2fe22"
+              }
+            }
+          },
+          "events": [
+            {
+              "id": "evt_nav_back",
+              "trigger": "onClick",
+              "action": {
+                "id": "act_nav_back",
+                "type": "navigate",
+                "targetScreenId": "screen_main",
+                "transition": "slide-right"
+              }
+            }
+          ],
+          "animations": [],
+          "assetReferences": [],
+          "properties": {
+            "label": "RETURN TO CORE"
+          }
+        },
+        {
+          "id": "node_long_text",
+          "type": "custom_label",
+          "name": "Channel Telemetry Long Text",
+          "layout": {
+            "x": 16,
+            "y": 242,
+            "width": 208,
+            "height": 24,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1
+          },
+          "style": {
+            "backgroundColor": "#00000000",
+            "borderRadius": 0,
+            "opacity": 1
+          },
+          "typography": {
+            "align": "center",
+            "color": "#94a3b8",
+            "fontFamily": "Outfit",
+            "fontSize": 12,
+            "fontWeight": 500
+          },
+          "children": [],
+          "states": {
+            "normal": {
+              "layout": {
+                "x": 16,
+                "y": 242,
+                "width": 208,
+                "height": 24,
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1
+              },
+              "style": {
+                "backgroundColor": "#00000000",
+                "borderRadius": 0,
+                "opacity": 1
+              },
+              "typography": {
+                "align": "center",
+                "color": "#94a3b8",
+                "fontFamily": "Outfit",
+                "fontSize": 12,
+                "fontWeight": 500
+              }
+            }
+          },
+          "events": [],
+          "animations": [],
+          "assetReferences": [],
+          "properties": {
+            "text": "Telemetry channels: Alpha, Beta (Active #01-42)"
+          }
+        }
+      ],
+      "metadata": {}
+    },
+    {
+      "id": "screen_parity_test",
+      "name": "Hardware Parity Test",
+      "_comment": "PHASE 4 parity screen",
+      "background": {
+        "type": "solid",
+        "color": "#000000",
+        "pattern": "none"
+      },
+      "isScrollable": false,
+      "maxScrollY": 280,
+      "children": [
+        {
+          "id": "pt_red",
+          "type": "container",
+          "_comment": "Pure RED 0xF800. If BLUE appears = byte-swap bug.",
+          "layout": {
+            "x": 5,
+            "y": 5,
+            "width": 40,
+            "height": 40
+          },
+          "style": {
+            "backgroundColor": "#ff0000",
+            "borderColor": "#ffffff",
+            "borderWidth": 1,
+            "borderRadius": 0,
+            "hasBg": true,
+            "hasBorder": true
+          },
+          "typography": {},
+          "properties": {}
+        },
+        {
+          "id": "pt_green",
+          "type": "container",
+          "_comment": "Pure GREEN 0x07E0.",
+          "layout": {
+            "x": 55,
+            "y": 5,
+            "width": 40,
+            "height": 40
+          },
+          "style": {
+            "backgroundColor": "#00ff00",
+            "borderColor": "#ffffff",
+            "borderWidth": 1,
+            "borderRadius": 0,
+            "hasBg": true,
+            "hasBorder": true
+          },
+          "typography": {},
+          "properties": {}
+        },
+        {
+          "id": "pt_blue",
+          "type": "container",
+          "_comment": "Pure BLUE 0x001F. If RED appears = byte-swap bug.",
+          "layout": {
+            "x": 105,
+            "y": 5,
+            "width": 40,
+            "height": 40
+          },
+          "style": {
+            "backgroundColor": "#0000ff",
+            "borderColor": "#ffffff",
+            "borderWidth": 1,
+            "borderRadius": 0,
+            "hasBg": true,
+            "hasBorder": true
+          },
+          "typography": {},
+          "properties": {}
+        },
+        {
+          "id": "pt_white",
+          "type": "container",
+          "_comment": "Terminal WHITE 0xFFFF.",
+          "layout": {
+            "x": 155,
+            "y": 5,
+            "width": 40,
+            "height": 40
+          },
+          "style": {
+            "backgroundColor": "#ffffff",
+            "borderColor": "#888888",
+            "borderWidth": 1,
+            "borderRadius": 0,
+            "hasBg": true,
+            "hasBorder": true
+          },
+          "typography": {},
+          "properties": {}
+        },
+        {
+          "id": "pt_black",
+          "type": "container",
+          "_comment": "Terminal BLACK 0x0000. White border for visibility.",
+          "layout": {
+            "x": 5,
+            "y": 55,
+            "width": 40,
+            "height": 40
+          },
+          "style": {
+            "backgroundColor": "#000000",
+            "borderColor": "#ffffff",
+            "borderWidth": 2,
+            "borderRadius": 0,
+            "hasBg": true,
+            "hasBorder": true
+          },
+          "typography": {},
+          "properties": {}
+        },
+        {
+          "id": "pt_gray",
+          "type": "container",
+          "_comment": "Mid GRAY 0x8410.",
+          "layout": {
+            "x": 55,
+            "y": 55,
+            "width": 40,
+            "height": 40
+          },
+          "style": {
+            "backgroundColor": "#808080",
+            "borderColor": "#ffffff",
+            "borderWidth": 1,
+            "borderRadius": 0,
+            "hasBg": true,
+            "hasBorder": true
+          },
+          "typography": {},
+          "properties": {}
+        },
+        {
+          "id": "pt_text_hello",
+          "type": "custom_label",
+          "_comment": "Text centering: Hello centered in 230px row.",
+          "layout": {
+            "x": 5,
+            "y": 110,
+            "width": 230,
+            "height": 20
+          },
+          "style": {},
+          "typography": {
+            "color": "#ffffff",
+            "fontSize": 14,
+            "fontFamily": "Outfit",
+            "align": "center"
+          },
+          "properties": {
+            "text": "Hello"
+          }
+        },
+        {
+          "id": "pt_text_clock",
+          "type": "custom_label",
+          "_comment": "Digit test: 12:30 left-aligned.",
+          "layout": {
+            "x": 10,
+            "y": 140,
+            "width": 100,
+            "height": 20
+          },
+          "style": {},
+          "typography": {
+            "color": "#00ffff",
+            "fontSize": 14,
+            "fontFamily": "Outfit",
+            "align": "left"
+          },
+          "properties": {
+            "text": "12:30"
+          }
+        },
+        {
+          "id": "pt_card",
+          "type": "card_basic",
+          "_comment": "Card geometry: rounded rect, title/subtitle offsets.",
+          "layout": {
+            "x": 10,
+            "y": 170,
+            "width": 220,
+            "height": 60
+          },
+          "style": {
+            "backgroundColor": "#1e293b",
+            "borderColor": "#334155",
+            "borderWidth": 1,
+            "borderRadius": 8,
+            "hasBg": true,
+            "hasBorder": true
+          },
+          "typography": {
+            "color": "#f1f5f9",
+            "fontSize": 13,
+            "fontFamily": "Outfit",
+            "align": "left"
+          },
+          "properties": {
+            "title": "Parity Card",
+            "subtitle": "Phase 4 Test",
+            "subtextColor": "#94a3b8"
+          }
+        },
+        {
+          "id": "pt_button",
+          "type": "btn_standard",
+          "_comment": "Button: OK centered in 100x32 button.",
+          "layout": {
+            "x": 70,
+            "y": 240,
+            "width": 100,
+            "height": 32
+          },
+          "style": {
+            "backgroundColor": "#3b82f6",
+            "borderColor": "#1d4ed8",
+            "borderWidth": 1,
+            "borderRadius": 6,
+            "hasBg": true,
+            "hasBorder": true
+          },
+          "typography": {
+            "color": "#ffffff",
+            "fontSize": 14,
+            "fontFamily": "Outfit",
+            "align": "center"
+          },
+          "properties": {
+            "label": "OK"
+          },
+          "events": [
+            {
+              "trigger": "onClick",
+              "action": {
+                "type": "navigate",
+                "targetScreenId": "screen_main"
+              }
+            }
+          ]
+        },
+        {
+          "id": "pt_image",
+          "type": "image",
+          "_comment": "Image test: 8x8 checkerboard at (195,55).",
+          "layout": {
+            "x": 195,
+            "y": 55,
+            "width": 32,
+            "height": 32
+          },
+          "style": {},
+          "typography": {},
+          "properties": {
+            "assetId": "pt_checkerboard_8x8",
+            "scaleMode": "nearest"
+          }
+        }
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset_luna_badge",
+      "name": "Luna Emblem Badge",
+      "type": "image",
+      "format": "rgb565",
+      "width": 16,
+      "height": 16,
+      "pixels565": [
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        2016,
+        2016,
+        63488,
+        63488,
+        2016,
+        2016,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        2016,
+        2016,
+        63488,
+        63488,
+        2016,
+        2016,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        2016,
+        2016,
+        63488,
+        63488,
+        2016,
+        2016,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        2016,
+        2016,
+        63488,
+        63488,
+        2016,
+        2016,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        65535,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        31,
+        2016,
+        63488,
+        63488,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        2016,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488,
+        63488
+      ]
+    },
+    {
+      "id": "pt_checkerboard_8x8",
+      "type": "image",
+      "_comment": "Synthetic 8x8 checkerboard red/blue",
+      "width": 8,
+      "height": 8,
+      "pixels565": [
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488,
+        31,
+        63488
+      ]
+    }
+  ],
+  "fonts": [],
+  "metadata": {
+    "createdAt": "1970-01-01T00:00:00.000Z",
+    "updatedAt": "1970-01-01T00:00:00.000Z",
+    "phase4ParityScreenAdded": true
+  }
+}

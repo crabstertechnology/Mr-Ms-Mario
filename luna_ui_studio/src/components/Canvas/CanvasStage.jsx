@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react'
 import styled, { keyframes } from 'styled-components'
 import { UI_COMPONENTS } from '../../ui-elements/registry'
 import ScreenTabs from './ScreenTabs'
+import { StarfieldBackground } from './StarfieldBackground'
 
 const DISPLAY_W = 240
 const DISPLAY_H = 280
@@ -52,6 +53,8 @@ export default function CanvasStage({
 
   const activeScreen = screens.find(s => s.id === activeScreenId) || screens[0]
 
+  const pointerStartRef = useRef({ x: 0, y: 0, time: 0, isDown: false, startScrollY: 0, hasScrolled: false })
+
   // Reset scroll on screen change
   useEffect(() => {
     setScrollY(0)
@@ -59,6 +62,153 @@ export default function CanvasStage({
     const timer = setTimeout(() => setTransitionAnim('none'), 350)
     return () => clearTimeout(timer)
   }, [activeScreenId])
+
+  const logEvent = useCallback((msg) => {
+    setActionLog(prev => [msg, ...prev.slice(0, 4)])
+  }, [])
+
+  const handlePointerDown = (e) => {
+    pointerStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      time: Date.now(),
+      isDown: true,
+      startScrollY: scrollY,
+      hasScrolled: false
+    }
+  }
+
+  const handlePointerMove = (e) => {
+    if (!pointerStartRef.current.isDown) return
+    const dx = (pointerStartRef.current.x - e.clientX) / zoom
+    const dy = (pointerStartRef.current.y - e.clientY) / zoom
+
+    // Full-display vertical scroll
+    if (activeScreen?.isScrollable && Math.abs(dy) > 4 && Math.abs(dy) > Math.abs(dx)) {
+      pointerStartRef.current.hasScrolled = true
+      const maxScroll = Math.max(0, (activeScreen.maxScrollY || 400) - DISPLAY_H)
+      setScrollY(Math.max(0, Math.min(maxScroll, pointerStartRef.current.startScrollY + dy)))
+    }
+  }
+
+  const handlePointerUp = (e) => {
+    if (!pointerStartRef.current.isDown) return
+    pointerStartRef.current.isDown = false
+
+    if (pointerStartRef.current.hasScrolled) return
+
+    const dx = e.clientX - pointerStartRef.current.x
+    const dy = e.clientY - pointerStartRef.current.y
+    const dt = Date.now() - pointerStartRef.current.time
+
+    // Detect screen-level horizontal swipe (drag > 35px in < 600ms)
+    if (Math.abs(dx) > 35 && Math.abs(dx) > Math.abs(dy) * 1.3 && dt < 600) {
+      if (dx < 0) {
+        // Swipe Left (finger moved left)
+        const act = activeScreen?.gestures?.swipeLeft
+        if (act && act.actionType === 'navigate' && act.targetScreenId) {
+          const target = screens.find(s => s.id === act.targetScreenId)
+          if (target) {
+            setTransitionAnim('slideLeft')
+            onSelectScreen(target.id)
+            logEvent(`👈 Swiped Left: Navigated to "${target.name}"`)
+            setTimeout(() => setTransitionAnim('none'), 350)
+            return
+          }
+        } else if (act && act.actionType === 'alert') {
+          setWatchAlert({ message: act.alertMessage || 'Swipe Left Triggered' })
+          return
+        }
+      } else {
+        // Swipe Right (finger moved right)
+        const act = activeScreen?.gestures?.swipeRight
+        if (act && act.actionType === 'navigate' && act.targetScreenId) {
+          const target = screens.find(s => s.id === act.targetScreenId)
+          if (target) {
+            setTransitionAnim('slideRight')
+            onSelectScreen(target.id)
+            logEvent(`👉 Swiped Right: Navigated to "${target.name}"`)
+            setTimeout(() => setTransitionAnim('none'), 350)
+            return
+          }
+        } else if (act && act.actionType === 'alert') {
+          setWatchAlert({ message: act.alertMessage || 'Swipe Right Triggered' })
+          return
+        }
+      }
+    }
+  }
+
+  const handleWheel = (e) => {
+    if (activeScreen?.isScrollable) {
+      e.preventDefault()
+      const maxScroll = Math.max(0, (activeScreen.maxScrollY || 400) - DISPLAY_H)
+      setScrollY(prev => Math.max(0, Math.min(maxScroll, prev + e.deltaY * 0.4)))
+    }
+  }
+
+  const getScreenBgStyle = () => {
+    if (isWireframe) {
+      return {
+        background: '#f8fafc',
+        backgroundImage: `linear-gradient(rgba(100,116,139,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(100,116,139,0.12) 1px, transparent 1px)`,
+        backgroundSize: `${8 * zoom}px ${8 * zoom}px`,
+      }
+    }
+    const bgType = activeScreen?.bgType || 'color'
+    if (bgType === 'stars' || (bgType === 'pattern' && activeScreen?.bgPattern === 'stars')) {
+      return { backgroundColor: '#090a0f' }
+    }
+    if (bgType === 'gradient' && activeScreen?.bgGradient) {
+      return { background: activeScreen.bgGradient }
+    }
+    if (bgType === 'image' && activeScreen?.bgImage) {
+      return {
+        backgroundImage: `url(${activeScreen.bgImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    }
+    if (bgType === 'pattern') {
+      const base = activeScreen?.bgColor || '#0b0f19'
+      const pattern = activeScreen?.bgPattern || 'grid'
+      if (pattern === 'grid') {
+        return {
+          backgroundColor: base,
+          backgroundImage: `linear-gradient(rgba(56,189,248,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.15) 1px, transparent 1px)`,
+          backgroundSize: `${16 * zoom}px ${16 * zoom}px`,
+        }
+      }
+      if (pattern === 'dots') {
+        return {
+          backgroundColor: base,
+          backgroundImage: `radial-gradient(rgba(56,189,248,0.3) 1.5px, transparent 1.5px)`,
+          backgroundSize: `${12 * zoom}px ${12 * zoom}px`,
+        }
+      }
+      if (pattern === 'scanlines') {
+        return {
+          backgroundColor: base,
+          backgroundImage: `repeating-linear-gradient(0deg, rgba(0,0,0,0.3) 0px, rgba(0,0,0,0.3) 2px, transparent 2px, transparent 4px)`,
+        }
+      }
+      if (pattern === 'carbon') {
+        return {
+          backgroundColor: base,
+          backgroundImage: `linear-gradient(45deg, rgba(0,0,0,0.4) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.4) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.4) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.4) 75%)`,
+          backgroundSize: `${10 * zoom}px ${10 * zoom}px`,
+        }
+      }
+      if (pattern === 'hex') {
+        return {
+          backgroundColor: base,
+          backgroundImage: `radial-gradient(circle at 50% 50%, rgba(56,189,248,0.2) 2px, transparent 2px)`,
+          backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+        }
+      }
+    }
+    return { backgroundColor: activeScreen?.bgColor || '#0b0f19' }
+  }
 
   const snapVal = (v) => gridSnap > 1 ? Math.round(v / gridSnap) * gridSnap : Math.round(v)
 
@@ -84,10 +234,6 @@ export default function CanvasStage({
       onSelect(null)
     }
   }
-
-  const logEvent = useCallback((msg) => {
-    setActionLog(prev => [msg, ...prev.slice(0, 4)])
-  }, [])
 
   // Execute mapped action block in Interactive Test Mode
   const handleElementActionTrigger = useCallback((el) => {
@@ -167,16 +313,29 @@ export default function CanvasStage({
               style={{
                 width: DISPLAY_W * zoom,
                 height: DISPLAY_H * zoom,
-                background: isWireframe ? '#f8fafc' : (activeScreen?.bgColor || '#0b0f19'),
-                backgroundImage: isWireframe
-                  ? `linear-gradient(rgba(100,116,139,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(100,116,139,0.12) 1px, transparent 1px)`
-                  : 'none',
-                backgroundSize: isWireframe ? `${8 * zoom}px ${8 * zoom}px` : 'auto',
+                cursor: activeScreen?.isScrollable ? 'grab' : 'default',
+                ...getScreenBgStyle(),
               }}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               onClick={handleBackdropClick}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onWheel={handleWheel}
             >
+              {/* Screen Scrollable Indicator Badge */}
+              {activeScreen?.isScrollable && (
+                <ScrollBadgeTitle>
+                  📜 SCROLLABLE ({Math.round(scrollY)}px)
+                </ScrollBadgeTitle>
+              )}
+
+              {/* Animated Cosmic Starfield Background (Parallax 3-layer stars) */}
+              {(activeScreen?.bgType === 'stars' || (activeScreen?.bgType === 'pattern' && activeScreen?.bgPattern === 'stars')) && (
+                <StarfieldBackground />
+              )}
+
               {/* Animated Screen Content Container for Scrolling and Transitions */}
               <ScreenContent
                 $anim={transitionAnim}
@@ -541,6 +700,22 @@ const Screen = styled.div`
   user-select: none;
 `
 
+const ScrollBadgeTitle = styled.div`
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  pointer-events: none;
+`
+
 const ScreenContent = styled.div`
   position: relative;
   transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -548,6 +723,20 @@ const ScreenContent = styled.div`
     animation: slideScreen 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
     @keyframes slideScreen {
       from { transform: translateX(30px); opacity: 0.5; }
+      to { transform: none; opacity: 1; }
+    }
+  `}
+  ${p => p.$anim === 'slideLeft' && `
+    animation: slideLeftAnim 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    @keyframes slideLeftAnim {
+      from { transform: translateX(60px); opacity: 0.3; }
+      to { transform: none; opacity: 1; }
+    }
+  `}
+  ${p => p.$anim === 'slideRight' && `
+    animation: slideRightAnim 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    @keyframes slideRightAnim {
+      from { transform: translateX(-60px); opacity: 0.3; }
       to { transform: none; opacity: 1; }
     }
   `}

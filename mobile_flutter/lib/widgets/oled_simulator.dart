@@ -151,7 +151,7 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
   Widget _buildStatusBar(DateTime now, int batteryPct, bool isConnected, Color accent, Color textCol, Color bgCol) {
     return Container(
       height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       decoration: BoxDecoration(
         color: bgCol,
         border: Border(bottom: BorderSide(color: textCol.withOpacity(0.12), width: 1)),
@@ -1034,55 +1034,202 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
     );
   }
 
-  // ── Navigation Map Screen ──
-  Widget _buildMapScreen() {
+  // ── Navigation Map Screen (Canonical 240x280 Design - Full Screen) ──
+  Widget _buildMapScreen(BLEService ble, DatabaseService db, Color accent, Color textCol, Color bgCol, Color cardBg) {
+    final now = DateTime.now();
+    final isNavActive = ble.isNavActive;
+    final dirUpper = ble.navDirection.toUpperCase();
+    final distStr = (ble.navDistance.isEmpty || ble.navDistance == "--")
+        ? (isNavActive ? "---" : "250 m")
+        : ble.navDistance;
+
+    IconData dirIcon = Icons.navigation_rounded;
+    String dirLabel = ble.navRoad.isNotEmpty ? ble.navRoad : "Go Straight";
+
+    if (dirUpper.contains("LEFT")) {
+      dirIcon = Icons.turn_left_rounded;
+      if (ble.navRoad.isEmpty) dirLabel = "Turn Left";
+    } else if (dirUpper.contains("RIGHT")) {
+      dirIcon = Icons.turn_right_rounded;
+      if (ble.navRoad.isEmpty) dirLabel = "Turn Right";
+    } else if (dirUpper.contains("UTURN") || dirUpper.contains("U-TURN")) {
+      dirIcon = Icons.u_turn_left_rounded;
+      if (ble.navRoad.isEmpty) dirLabel = "Make U-Turn";
+    } else if (dirUpper.contains("ROUNDABOUT") || dirUpper.contains("ROUND")) {
+      dirIcon = Icons.roundabout_right_rounded;
+      if (ble.navRoad.isEmpty) dirLabel = "Roundabout";
+    }
+
+    String summaryStr = "";
+    if (ble.navTotalTime.isNotEmpty && ble.navTotalDist.isNotEmpty) {
+      summaryStr = "${ble.navTotalTime} · ${ble.navTotalDist}";
+    } else if (ble.navTotalTime.isNotEmpty) {
+      summaryStr = ble.navTotalTime;
+    } else if (ble.navTotalDist.isNotEmpty) {
+      summaryStr = ble.navTotalDist;
+    } else if (ble.navDescription.isNotEmpty) {
+      summaryStr = ble.navDescription;
+    } else {
+      summaryStr = "GPS SYNC";
+    }
+
+    final etaStr = ble.navEta.isNotEmpty ? "ETA ${ble.navEta}" : "ON ROUTE";
+
+    // Format watch clock
+    String clockStr;
+    if (db.is12HourFormat) {
+      int h12 = now.hour % 12;
+      if (h12 == 0) h12 = 12;
+      clockStr = "$h12:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}";
+    } else {
+      clockStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    }
+
     return Container(
       width: 240,
       height: 280,
-      color: const Color(0xFF1E293B),
-      padding: const EdgeInsets.all(12),
+      color: bgCol,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ── 1. Upper Maneuver & Distance Card ──
+          Expanded(
+            flex: 13,
+            child: Container(
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: textCol.withOpacity(0.08), width: 1.2),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: accent.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(dirIcon, color: accent, size: 36),
+                  ),
+                  Text(
+                    distStr,
+                    style: GoogleFonts.outfit(
+                      color: textCol,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  Text(
+                    dirLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      color: accent,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // ── 2. Route Telemetry Card ──
+          Expanded(
+            flex: 10,
+            child: Container(
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: textCol.withOpacity(0.08), width: 1.2),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Text(
+                    "REMAINING TRIP",
+                    style: GoogleFonts.outfit(
+                      color: textCol.withOpacity(0.5),
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  Text(
+                    summaryStr,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      color: textCol,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Divider(height: 1, color: textCol.withOpacity(0.08)),
+                  Text(
+                    etaStr,
+                    style: GoogleFonts.outfit(
+                      color: accent,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // ── 3. Bottom Live & Watch Time Bar ──
           Container(
-            padding: const EdgeInsets.all(16),
+            height: 28,
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF38BDF8), width: 3),
+              color: cardBg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: textCol.withOpacity(0.08), width: 1.2),
             ),
-            child: const Icon(Icons.navigation, color: Color(0xFF38BDF8), size: 48),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            "250 m",
-            style: GoogleFonts.outfit(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            "Turn Right on Main St",
-            textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(
-              color: const Color(0xFF94A3B8),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0EA5E9).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF0EA5E9)),
-            ),
-            child: Text(
-              "GPS NAV ACTIVE",
-              style: GoogleFonts.outfit(color: const Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      "MAPS LIVE",
+                      style: GoogleFonts.outfit(
+                        color: textCol.withOpacity(0.5),
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  clockStr,
+                  style: GoogleFonts.outfit(
+                    color: textCol,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1113,8 +1260,8 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
 
     Widget screenContent;
 
-    if (mode == 'map' || label.contains('map')) {
-      screenContent = _buildMapScreen();
+    if ((mode == 'map' || label.contains('map')) && ble.isNavActive) {
+      screenContent = _buildMapScreen(ble, db, oledThemeColor, textCol, bgCol, cardBg);
     } else if (mode == 'card' || label.contains('card')) {
       screenContent = _buildCardScreen(isMiss, oledThemeColor, textCol, bgCol, ble);
     } else if (mode == 'clock' || label.contains('clock')) {

@@ -30,8 +30,53 @@ class PhoneNotificationService {
         // Skip system/empty notifications
         if (title.isEmpty && text.isEmpty && subText.isEmpty && bigText.isEmpty) return;
 
-        // Check if the notification's app is allowed by user settings
         final pkgLower = packageName.toLowerCase();
+
+        // ── 0. NAVIGATION APPS TELEMETRY (Google Maps, etc.) ──────────────────
+        // Intercept navigation apps IMMEDIATELY!
+        // 1. Navigation is a core system service: bypass settings whitelist.
+        // 2. Transmit MAP: packet directly to show on hardware display.
+        // 3. NEVER fall through to NOTIF: so it NEVER shows as a screen card popup!
+        final isNavApp = pkgLower == 'com.google.android.apps.maps' ||
+            pkgLower.contains('ola') ||
+            pkgLower.contains('mappls') ||
+            pkgLower.contains('mapmyindia') ||
+            pkgLower.contains('waze') ||
+            pkgLower.contains('maps');
+
+        if (isNavApp) {
+          _bleService.addLog("Handling navigation telemetry for '$pkgLower'...", "NOTIF");
+          final mapInfo = _parseGoogleMapsNotification(title, text, subText, bigText, smallIcon, directionFromIcon);
+          final String direction    = mapInfo['direction'] ?? 'STRAIGHT';
+          final String turnDistance = mapInfo['turnDistance'] ?? '--';
+          final String road         = mapInfo['road'] ?? '';
+          final String totalTime    = mapInfo['totalTime'] ?? '';
+          final String totalDist    = mapInfo['totalDist'] ?? '';
+          final String eta          = mapInfo['eta'] ?? '';
+
+          _bleService.addLog("Nav Telemetry: dir=$direction, turn=$turnDistance, road='$road', time=$totalTime, dist=$totalDist, eta=$eta", "NOTIF");
+
+          // Update local state for simulator / dashboard
+          final summary = totalTime.isNotEmpty && totalDist.isNotEmpty
+              ? "$totalTime · $totalDist"
+              : (totalTime.isNotEmpty ? totalTime : eta);
+          _bleService.updateNavigation(
+            direction,
+            turnDistance,
+            summary,
+            road: road,
+            totalTime: totalTime,
+            totalDist: totalDist,
+            eta: eta,
+          );
+
+          // Fast direct unblocked BLE transmission (sub-5ms)
+          final navPayload = "MAP:$direction,$turnDistance,$road,$totalTime,$totalDist,$eta";
+          await _bleService.transmitNavTelemetry(navPayload);
+          return; // CRITICAL: NEVER fall through to NOTIF: (screen card)
+        }
+
+        // Check if the notification's app is allowed by user settings
         bool isAllowed = _dbService.allowedNotificationApps.contains(pkgLower);
 
         // Also check preset mapping for backward compatibility and convenience
@@ -77,30 +122,7 @@ class PhoneNotificationService {
           return;
         }
 
-        // Navigation Apps Notification Parser (Google Maps, Ola Maps, MapMyIndia/Mappls, Waze, etc.)
-        final isNavApp = pkgLower == 'com.google.android.apps.maps' ||
-            pkgLower.contains('ola') ||
-            pkgLower.contains('mappls') ||
-            pkgLower.contains('mapmyindia') ||
-            pkgLower.contains('waze') ||
-            pkgLower.contains('maps');
-
-        if (isNavApp) {
-          _bleService.addLog("Parsing navigation payload for '$pkgLower'...", "NOTIF");
-          final mapInfo = _parseGoogleMapsNotification(title, text, subText, bigText, smallIcon, directionFromIcon);
-          if (mapInfo != null) {
-            final String direction = mapInfo['direction']!;
-            final String distance = mapInfo['distance']!;
-            final String description = mapInfo['description']!;
-            _bleService.addLog("Nav Parsed: dir=$direction, dist=$distance, desc=$description", "NOTIF");
-            await _forwardToRobot("MAP:$direction,$distance,$description");
-            break;
-          } else {
-            _bleService.addLog("Nav parsing returned null for '$pkgLower'", "NOTIF");
-          }
-        }
-        
-        // Forward notification to the robot in detailed NOTIF:Title|Body format!
+        // Forward non-navigation notification to the robot in detailed NOTIF:Title|Body format!
         final String titleClean = title.replaceAll('|', ' ').trim();
         final String textClean = text.replaceAll('|', ' ').trim();
         final String displayMessage = "NOTIF:$titleClean|$textClean";
@@ -114,51 +136,100 @@ class PhoneNotificationService {
         final pkgRemovedLower = packageName.toLowerCase();
         _bleService.addLog("Notification removed: pkg=$packageName, syncEnabled=${_dbService.notificationSyncEnabled}", "NOTIF");
         if (!_dbService.notificationSyncEnabled) return;
-        if (pkgRemovedLower == 'com.google.android.apps.maps') {
-          _bleService.addLog("Forwarding MAP:EXIT to robot", "NOTIF");
-          await _forwardToRobot("MAP:EXIT");
+        final isRemovedNavApp = pkgRemovedLower == 'com.google.android.apps.maps' ||
+            pkgRemovedLower.contains('ola') ||
+            pkgRemovedLower.contains('mappls') ||
+            pkgRemovedLower.contains('mapmyindia') ||
+            pkgRemovedLower.contains('waze') ||
+            pkgRemovedLower.contains('maps');
+        if (isRemovedNavApp) {
+          _bleService.addLog("Navigation finished: Forwarding MAP:EXIT to robot", "NOTIF");
+          _bleService.clearNavigation();
+          await _bleService.transmitNavTelemetry("MAP:EXIT");
         }
     }
   }
 
-  Map<String, String>? _parseGoogleMapsNotification(String title, String text, String subText, String bigText, String smallIcon, String directionFromIcon) {
-    // From live logs: Google Maps sends text='Turn right', text='Turn left', text='Head west'
-    // subText='19 min · 8.2 km · 4:18 pm ETA'
-    // title is often empty during navigation
+  Map<String, String> _parseGoogleMapsNotification(String title, String text, String subText, String bigText, String smallIcon, String directionFromIcon) {
+    // Clean all non-breaking spaces, narrow spaces, and tabs
+    final cleanTitle = title.replaceAll('\u00a0', ' ').replaceAll('\u202f', ' ').replaceAll(',', ' ').trim();
+    final cleanText = text.replaceAll('\u00a0', ' ').replaceAll('\u202f', ' ').replaceAll(',', ' ').trim();
+    final cleanSubText = subText.replaceAll('\u00a0', ' ').replaceAll('\u202f', ' ').replaceAll(',', ' ').trim();
+    final cleanBigText = bigText.replaceAll('\u00a0', ' ').replaceAll('\u202f', ' ').replaceAll(',', ' ').trim();
 
-    final combined = "$title $text $subText $bigText".toLowerCase();
+    final combined = "$cleanTitle $cleanText $cleanSubText $cleanBigText".toLowerCase();
 
-    // ── 1. DISTANCE ──────────────────────────────────────────────────────────
-    // Use ALL fields so we get the km value from subText when title is empty.
-    // e.g. subText='19 min · 8.2 km · ...' → shows "8.2 KM" as remaining distance
-    final distanceRegex = RegExp(r'\b(\d+(?:[.,]\d+)?)\s*(m|km|ft|mi|meters|kilometers|feet|miles|yards|yd)\b');
-    final distMatch = distanceRegex.firstMatch(combined);
-    String distance = "--";
-    if (distMatch != null) {
-      String num  = distMatch.group(1)!;
-      String unit = distMatch.group(2)!.toLowerCase();
-      // Normalize unit
-      if (unit == "meters")     unit = "m";
+    // ── 1. NEXT TURN DISTANCE (e.g. "0 m", "200 m", "1.5 km") ──────────────
+    final distRegex = RegExp(r'\b(\d+(?:[.,]\d+)?)\s*(m|km|ft|mi|meters|kilometers|feet|miles|yards|yd)\b', caseSensitive: false);
+    var turnDistMatch = distRegex.firstMatch("$cleanTitle $cleanText");
+    String turnDistance = "--";
+    if (turnDistMatch != null) {
+      String num = turnDistMatch.group(1)!;
+      String unit = turnDistMatch.group(2)!.toLowerCase();
+      if (unit == "meters") unit = "m";
       if (unit == "kilometers") unit = "km";
-      if (unit == "feet")       unit = "ft";
-      if (unit == "miles")      unit = "mi";
-      if (unit == "yards")      unit = "yd";
-      distance = "$num $unit".toUpperCase();
+      if (unit == "feet") unit = "ft";
+      if (unit == "miles") unit = "mi";
+      if (unit == "yards") unit = "yd";
+      turnDistance = "$num $unit".toUpperCase();
     }
-    _bleService.addLog("Maps dist: '$distance'", "NOTIF");
 
-    // ── 2. DIRECTION ─────────────────────────────────────────────────────────
-    // Use the text field directly (most reliable per live logs: text='Turn right')
-    // Strip any "N min left" phrases first to prevent false LEFT matches
+    // ── 2. TOTAL REMAINING DISTANCE (e.g. "23 km" from subText) ─────────────
+    var totalDistMatch = distRegex.firstMatch("$cleanSubText $cleanBigText");
+    String totalDistance = "";
+    if (totalDistMatch != null) {
+      String num = totalDistMatch.group(1)!;
+      String unit = totalDistMatch.group(2)!.toLowerCase();
+      if (unit == "meters") unit = "m";
+      if (unit == "kilometers") unit = "km";
+      if (unit == "feet") unit = "ft";
+      if (unit == "miles") unit = "mi";
+      if (unit == "yards") unit = "yd";
+      totalDistance = "$num $unit".toUpperCase();
+    }
+    if (turnDistance == "--" && totalDistance.isNotEmpty) {
+      turnDistance = totalDistance;
+    }
+
+    // ── 3. TOTAL REMAINING TIME (e.g. "46 min", "1 hr 15 min") ──────────────
+    final durRegex = RegExp(
+      r'\b(?:\d+\s*(?:hr|hrs|hour|hours|h)\s*)?\d+\s*(?:min|mins|minutes)\b|\b\d+\s*(?:hr|hrs|hour|hours|h)\b',
+      caseSensitive: false,
+    );
+    final durMatch = durRegex.firstMatch("$cleanSubText $cleanBigText $cleanTitle $cleanText");
+    String totalTime = "";
+    if (durMatch != null) {
+      totalTime = durMatch.group(0)!.trim().toUpperCase()
+          .replaceAll(RegExp(r'\s*(?:MINUTES|MINS)\b'), ' MIN')
+          .replaceAll(RegExp(r'\s*(?:HOURS|HRS|HR)\b'), ' H');
+    }
+
+    // ── 4. ETA CLOCK TIME (e.g. "11:28 AM") ──────────────────────────────────
+    final etaRegex = RegExp(
+      r'\b\d{1,2}:\d{2}(?:\s*[AaPp][Mm])?\b',
+    );
+    final etaMatch = etaRegex.firstMatch("$cleanSubText $cleanBigText $cleanTitle $cleanText");
+    String eta = "";
+    if (etaMatch != null) {
+      eta = etaMatch.group(0)!.trim().toUpperCase();
+    }
+
+    // ── 5. ROAD / INSTRUCTION LABEL ──────────────────────────────────────────
+    String road = "";
+    if (cleanText.isNotEmpty && !cleanText.contains(RegExp(r'^\d+\s*[a-zA-Z]+$'))) {
+      road = cleanText;
+    } else if (cleanTitle.isNotEmpty && !cleanTitle.contains(RegExp(r'^\d+\s*[a-zA-Z]+$'))) {
+      road = cleanTitle;
+    }
+
+    // ── 6. DIRECTION ─────────────────────────────────────────────────────────
     final cleanedText = combined
         .replaceAll(RegExp(r'\b\d+\s*(?:min|mins|minute|minutes|hr|hrs|h)\s+left\b', caseSensitive: false), '')
         .replaceAll(RegExp(r'\bleft\b(?=\s*[·•])', caseSensitive: false), '');
 
     String direction = "STRAIGHT";
     final smallIconLower = smallIcon.toLowerCase();
-    _bleService.addLog("Maps parsed smallIcon: '$smallIconLower', directionFromIcon: '$directionFromIcon'", "NOTIF");
 
-    // Try using directionFromIcon first for explicit turns (determined via largeIcon bitmap)
     if (directionFromIcon == "LEFT" || directionFromIcon == "RIGHT") {
       direction = directionFromIcon;
     } else if (smallIconLower.contains("left") && !smallIconLower.contains("right")) {
@@ -172,22 +243,15 @@ class PhoneNotificationService {
     } else if (smallIconLower.contains("straight") || smallIconLower.contains("continue") || smallIconLower.contains("keep_ahead") || smallIconLower.contains("keep_straight")) {
       direction = "STRAIGHT";
     } else {
-      // Fallback to text parsing if smallIcon name doesn't contain a clear direction keyword
       if (RegExp(r'\bu.?turn\b').hasMatch(cleanedText)) {
         direction = "UTURN";
       } else if (RegExp(r'\b(roundabout|rotary|rond.point)\b').hasMatch(cleanedText)) {
         direction = "ROUNDABOUT";
       } else {
-        // Compare keyword indices to find the actual action direction (e.g. "Turn left on Right St.")
         final int leftIdx = cleanedText.indexOf('left');
         final int rightIdx = cleanedText.indexOf('right');
-        
         if (leftIdx != -1 && rightIdx != -1) {
-          if (leftIdx < rightIdx) {
-            direction = "LEFT";
-          } else {
-            direction = "RIGHT";
-          }
+          direction = leftIdx < rightIdx ? "LEFT" : "RIGHT";
         } else if (leftIdx != -1) {
           direction = "LEFT";
         } else if (rightIdx != -1) {
@@ -200,26 +264,13 @@ class PhoneNotificationService {
       }
     }
 
-    _bleService.addLog("Maps dir: '$direction' from: '$cleanedText' and smallIcon: '$smallIcon'", "NOTIF");
-
-    // ── 3. REMAINING TIME ────────────────────────────────────────────────────
-    final timeRegex = RegExp(
-      r'\b\d+\s*(?:hr|hrs|hour|hours|h)\s*\d+\s*(?:min|mins|minutes)\b|\b\d+\s*(?:min|mins|minutes)\b|\b\d+\s*(?:hr|hrs|hour|hours|h)\b',
-      caseSensitive: false,
-    );
-    final timeMatch = timeRegex.firstMatch("$subText $bigText $text $title");
-    String remainingTime = "";
-    if (timeMatch != null) {
-      remainingTime = timeMatch.group(0)!.trim().toLowerCase()
-          .replaceAll(RegExp(r'\s*(?:minutes|minute|mins)\b'), 'min')
-          .replaceAll(RegExp(r'\s*(?:hours|hour|hrs|hr)\b'), 'h')
-          .replaceAll(RegExp(r'\s+'), '');
-    }
-
     return {
       'direction': direction,
-      'distance': distance,
-      'description': remainingTime,
+      'turnDistance': turnDistance,
+      'road': road,
+      'totalTime': totalTime,
+      'totalDist': totalDistance,
+      'eta': eta,
     };
   }
 

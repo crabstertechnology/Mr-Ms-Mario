@@ -36,7 +36,7 @@
 #define STATUS_CHAR_UUID       "fb2f0e05-73ee-4f32-833d-1f2c6db8a102"
 #define AUDIO_STREAM_CHAR_UUID "a823e50b-71ee-48c5-9276-2e8c6db8a103"
 
-// Robot Expression States
+// Robot Expression States (12 Full-Color Sprite AI animations)
 enum Expression {
   EXPR_IDLE = 0,
   EXPR_HAPPY,
@@ -45,10 +45,15 @@ enum Expression {
   EXPR_SURPRISED,
   EXPR_SLEEPING,
   EXPR_WINK,
+  EXPR_EXCITED,
+  EXPR_LOVE,
+  EXPR_SCARED,
+  EXPR_LAUGH,
+  EXPR_PEACE,
   EXPR_TEXT,
   EXPR_CLOCK,
   EXPR_MAP,
-  EXPR_ALL_GIF = 10  // Auto-cycle from master ALL_GIFS_TABLE (all 63 animations)
+  EXPR_ALL_GIF
 };
 
 // Buzzer Sound Effects

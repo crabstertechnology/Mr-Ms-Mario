@@ -1,0 +1,795 @@
+// ============================================================================
+// GENERATED FILE — DO NOT EDIT MANUALLY.
+// SOURCE: Luna UI Studio Embedded Compiler
+// REGENERATE FROM STUDIO.
+// ============================================================================
+#include "GeneratedUI.h"
+
+static const LunaEvent s0_screen_main_n2_node_btn_navigate_events[1] = {
+  { "onClick", { LUNA_ACTION_NAVIGATE, "screen_secondary", 0 } },
+};
+
+static const LunaStyle s0_screen_main_n2_node_btn_navigate_pressedStyle = {
+  0xC69F,
+  0x537F,
+  2,
+  10,
+  255,
+  0x0000,
+  true,
+  false
+};
+
+static const LunaAnimation s0_screen_main_n3_node_spinner_1_anims[1] = {
+  { "rotation", 0, 360, 1200, true },
+};
+
+static const LunaNodeDef s0_screen_main_nodes[7] = {
+  {
+    "node_heading_1",
+    "custom_label",
+    LUNA_NODE_TEXT,
+    { 20, 16, 200, 32 },
+    {
+      0x1947,
+      0x0000,
+      0,
+      6,
+      255,
+      0x0000,
+      true,
+      false
+    },
+    {
+      0x3DFF,
+      16,
+      LUNA_ALIGN_CENTER,
+      "Outfit"
+    },
+    "LUNA CORE OS",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "node_card_1",
+    "card_glass",
+    LUNA_NODE_CARD,
+    { 16, 56, 208, 76 },
+    {
+      0x08A5,
+      0x079F,
+      1,
+      12,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xFFFF,
+      13,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    "Core Reactor",
+    "Nominal • 98.4% Efficiency",
+    0x9517,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "node_btn_navigate",
+    "uiv_btn_happy_coding",
+    LUNA_NODE_BUTTON,
+    { 25, 142, 190, 46 },
+    {
+      0xEF9F,
+      0x537F,
+      2,
+      10,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0x537F,
+      13,
+      LUNA_ALIGN_CENTER,
+      "Outfit"
+    },
+    "Go to Subsystems",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    &s0_screen_main_n2_node_btn_navigate_pressedStyle,
+    s0_screen_main_n2_node_btn_navigate_events,
+    1,
+    nullptr,
+    0
+  },
+  {
+    "node_spinner_1",
+    "loader_spinner",
+    LUNA_NODE_SPINNER,
+    { 90, 202, 60, 60 },
+    {
+      0x1947,
+      0x0000,
+      0,
+      0,
+      255,
+      0x079F,
+      true,
+      false
+    },
+    {
+      0x079F,
+      9,
+      LUNA_ALIGN_CENTER,
+      "JetBrains Mono"
+    },
+    "SYNCING",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_JETBRAINS_MONO_9,
+    nullptr,
+    nullptr,
+    0,
+    s0_screen_main_n3_node_spinner_1_anims,
+    1
+  },
+  {
+    "node_image_badge",
+    "image",
+    LUNA_NODE_IMAGE,
+    { 104, 242, 32, 32 },
+    {
+      0x0000,
+      0x079F,
+      1,
+      4,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    nullptr,
+    nullptr,
+    0x8410,
+    30,
+    "asset_luna_badge",
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "node_telemetry_mono",
+    "custom_label",
+    LUNA_NODE_TEXT,
+    { 16, 260, 140, 14 },
+    {
+      0x0000,
+      0x0000,
+      0,
+      0,
+      255,
+      0x0000,
+      true,
+      false
+    },
+    {
+      0x3DFF,
+      9,
+      LUNA_ALIGN_LEFT,
+      "JetBrains Mono"
+    },
+    "FPS:60 RAM:8MB [OK]",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_JETBRAINS_MONO_9,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "node_build_label",
+    "custom_label",
+    LUNA_NODE_TEXT,
+    { 160, 260, 64, 14 },
+    {
+      0x0000,
+      0x0000,
+      0,
+      0,
+      255,
+      0x0000,
+      true,
+      false
+    },
+    {
+      0x63B1,
+      9,
+      LUNA_ALIGN_RIGHT,
+      "JetBrains Mono"
+    },
+    "#2409",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_JETBRAINS_MONO_9,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+};
+
+static const LunaEvent s1_screen_secondary_n1_node_btn_return_events[1] = {
+  { "onClick", { LUNA_ACTION_NAVIGATE, "screen_main", 0 } },
+};
+
+static const LunaStyle s1_screen_secondary_n1_node_btn_return_pressedStyle = {
+  0x079F,
+  0x079F,
+  2,
+  8,
+  255,
+  0x0000,
+  true,
+  false
+};
+
+static const LunaNodeDef s1_screen_secondary_nodes[3] = {
+  {
+    "node_text_subsystems",
+    "custom_label",
+    LUNA_NODE_TEXT,
+    { 20, 40, 200, 36 },
+    {
+      0x10C4,
+      0x0000,
+      0,
+      4,
+      255,
+      0x0000,
+      true,
+      false
+    },
+    {
+      0xE75E,
+      14,
+      LUNA_ALIGN_CENTER,
+      "Outfit"
+    },
+    "SUBSYSTEMS ACTIVE",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "node_btn_return",
+    "button_neon",
+    LUNA_NODE_BUTTON,
+    { 40, 190, 160, 44 },
+    {
+      0x08A5,
+      0x079F,
+      2,
+      8,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0x079F,
+      12,
+      LUNA_ALIGN_CENTER,
+      "Outfit"
+    },
+    "RETURN TO CORE",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_12,
+    &s1_screen_secondary_n1_node_btn_return_pressedStyle,
+    s1_screen_secondary_n1_node_btn_return_events,
+    1,
+    nullptr,
+    0
+  },
+  {
+    "node_long_text",
+    "custom_label",
+    LUNA_NODE_TEXT,
+    { 16, 242, 208, 24 },
+    {
+      0x0000,
+      0x0000,
+      0,
+      0,
+      255,
+      0x0000,
+      true,
+      false
+    },
+    {
+      0x9517,
+      12,
+      LUNA_ALIGN_CENTER,
+      "Outfit"
+    },
+    "Telemetry channels: Alpha, Beta (Active #01-42)",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_12,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+};
+
+static const LunaEvent s2_screen_parity_test_n9_pt_button_events[1] = {
+  { "onClick", { LUNA_ACTION_NAVIGATE, "screen_main", 0 } },
+};
+
+static const LunaNodeDef s2_screen_parity_test_nodes[11] = {
+  {
+    "pt_red",
+    "container",
+    LUNA_NODE_CONTAINER,
+    { 5, 5, 40, 40 },
+    {
+      0xF800,
+      0xFFFF,
+      1,
+      0,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    nullptr,
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "pt_green",
+    "container",
+    LUNA_NODE_CONTAINER,
+    { 55, 5, 40, 40 },
+    {
+      0x07E0,
+      0xFFFF,
+      1,
+      0,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    nullptr,
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "pt_blue",
+    "container",
+    LUNA_NODE_CONTAINER,
+    { 105, 5, 40, 40 },
+    {
+      0x001F,
+      0xFFFF,
+      1,
+      0,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    nullptr,
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "pt_white",
+    "container",
+    LUNA_NODE_CONTAINER,
+    { 155, 5, 40, 40 },
+    {
+      0xFFFF,
+      0x8C51,
+      1,
+      0,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    nullptr,
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "pt_black",
+    "container",
+    LUNA_NODE_CONTAINER,
+    { 5, 55, 40, 40 },
+    {
+      0x0000,
+      0xFFFF,
+      2,
+      0,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    nullptr,
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "pt_gray",
+    "container",
+    LUNA_NODE_CONTAINER,
+    { 55, 55, 40, 40 },
+    {
+      0x8410,
+      0xFFFF,
+      1,
+      0,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    nullptr,
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "pt_text_hello",
+    "custom_label",
+    LUNA_NODE_TEXT,
+    { 5, 110, 230, 20 },
+    {
+      0x0000,
+      0x0000,
+      0,
+      0,
+      255,
+      0x0000,
+      false,
+      false
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_CENTER,
+      "Outfit"
+    },
+    "Hello",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "pt_text_clock",
+    "custom_label",
+    LUNA_NODE_TEXT,
+    { 10, 140, 100, 20 },
+    {
+      0x0000,
+      0x0000,
+      0,
+      0,
+      255,
+      0x0000,
+      false,
+      false
+    },
+    {
+      0x07FF,
+      14,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    "12:30",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "pt_card",
+    "card_basic",
+    LUNA_NODE_CONTAINER,
+    { 10, 170, 220, 60 },
+    {
+      0x1947,
+      0x320A,
+      1,
+      8,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xF7BF,
+      13,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    "Parity Card",
+    "Phase 4 Test",
+    0x9517,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+  {
+    "pt_button",
+    "btn_standard",
+    LUNA_NODE_CONTAINER,
+    { 70, 240, 100, 32 },
+    {
+      0x3C1E,
+      0x1A7B,
+      1,
+      6,
+      255,
+      0x0000,
+      true,
+      true
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_CENTER,
+      "Outfit"
+    },
+    "OK",
+    nullptr,
+    0x8410,
+    30,
+    nullptr,
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    s2_screen_parity_test_n9_pt_button_events,
+    1,
+    nullptr,
+    0
+  },
+  {
+    "pt_image",
+    "image",
+    LUNA_NODE_IMAGE,
+    { 195, 55, 32, 32 },
+    {
+      0x0000,
+      0x0000,
+      0,
+      0,
+      255,
+      0x0000,
+      false,
+      false
+    },
+    {
+      0xFFFF,
+      14,
+      LUNA_ALIGN_LEFT,
+      "Outfit"
+    },
+    nullptr,
+    nullptr,
+    0x8410,
+    30,
+    "pt_checkerboard_8x8",
+    &LUNA_FONT_OUTFIT_16,
+    nullptr,
+    nullptr,
+    0,
+    nullptr,
+    0
+  },
+};
+
+static const LunaScreenDef COMPILED_SCREENS[3] = {
+  {
+    "screen_main",
+    "Telemetry Dashboard",
+    0x0042,
+    "stars",
+    false,
+    280,
+    s0_screen_main_nodes,
+    7,
+    "screen_secondary",
+    nullptr
+  },
+  {
+    "screen_secondary",
+    "Subsystems View",
+    0x0863,
+    "none",
+    false,
+    280,
+    s1_screen_secondary_nodes,
+    3,
+    nullptr,
+    "screen_main"
+  },
+  {
+    "screen_parity_test",
+    "Hardware Parity Test",
+    0x0000,
+    "none",
+    false,
+    280,
+    s2_screen_parity_test_nodes,
+    11,
+    nullptr,
+    nullptr
+  },
+};
+
+const LunaProjectDef LUNA_COMPILED_PROJECT = {
+  "1.0.0",
+  "Luna Golden Parity Reference Project",
+  240,
+  280,
+  "screen_parity_test",
+  COMPILED_SCREENS,
+  3
+};

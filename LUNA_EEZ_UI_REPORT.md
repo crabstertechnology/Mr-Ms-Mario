@@ -11,12 +11,6 @@
 
 ## 2. 10/10 Complete Screens Created
 
-1. **`FaceScreen` (Screen 1 - Cute Robot Home)**
-   - Dominant robotic expression display supporting all 63 animation frames.
-   - Status bar header overlay (Time, System Title, Battery %, BLE Status).
-   - Dynamic expression pill indicator (`EXPR: HAPPY` / `IDLE`).
-   - Swipe navigation hint overlay (`< SWIPE FOR CLOCK / MENU >`).
-
 2. **`ClockScreen` (Screen 2 - Smartwatch Clock)**
    - Smartwatch digital time display (`12:34:56 PM`).
    - Full date & weekday string (`MON, 06 SEP 2026`).
@@ -43,11 +37,6 @@
      7. Memory Matrix
    - High-score and game HUD layout structure.
 
-6. **`MapsScreen` (Screen 6 - Sci-Fi Navigation HUD)**
-   - Large directional turn indicator (`TURN LEFT`, `STRAIGHT`, `TURN RIGHT`).
-   - Distance remaining (`250 m`).
-   - Full navigation instruction label (`Turn left onto Cyber Avenue`).
-   - `EXIT NAV` button to immediately exit navigation overlay.
 
 7. **`CardScreen` (Screen 7 - Digital Business Card)**
    - Centered 140×140 QR Code container with safe quiet margins for optical scanning.
@@ -64,10 +53,6 @@
      - Silent / Buzzer mode toggle
    - Save and Exit action triggers.
 
-9. **`LevelScreen` (Screen 9 - Precision 2-Axis Level Analyzer)**
-   - Circular target dial container with real-time X/Y bubble level indicator.
-   - Pitch (`+1.2°`) and Roll (`-0.4°`) telemetry readouts.
-   - `CALIBRATE` button to trigger IMU zeroing.
 
 10. **`PomoScreen` (Screen 10 - Pomodoro Focus Timer)**
     - Mode selection tabs (`FOCUS 25m`, `SHORT BREAK 5m`, `LONG BREAK 15m`).

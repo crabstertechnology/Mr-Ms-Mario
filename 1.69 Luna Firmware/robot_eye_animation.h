@@ -25,11 +25,13 @@ private:
   unsigned long lastFrameTime;
   bool playing;
   float fps;
+  int loopCount;
+  bool cycleCompleted;
 
 public:
   RobotEyeAnimation() 
     : state(ROBOT_EYE_IDLE), animIndex(0), currentFrame(0), frameCount(SPRITE_AI_FRAME_COUNT), 
-      frameDelayMs(125), lastFrameTime(0), playing(true), fps(8.0f) {}
+      frameDelayMs(125), lastFrameTime(0), playing(true), fps(8.0f), loopCount(0), cycleCompleted(false) {}
 
   void play() {
     playing = true;
@@ -42,12 +44,16 @@ public:
 
   void reset() {
     currentFrame = 0;
+    loopCount = 0;
+    cycleCompleted = false;
     lastFrameTime = millis();
   }
 
   void nextAnimation() {
     animIndex = (animIndex + 1) % SPRITE_AI_ANIMATION_COUNT;
     currentFrame = 0;
+    loopCount = 0;
+    cycleCompleted = false;
     lastFrameTime = millis();
   }
 
@@ -55,6 +61,8 @@ public:
     if (idx >= 0 && idx < SPRITE_AI_ANIMATION_COUNT) {
       animIndex = idx;
       currentFrame = 0;
+      loopCount = 0;
+      cycleCompleted = false;
       lastFrameTime = millis();
       playing = true;
     }
@@ -93,6 +101,8 @@ public:
     if (state != newState) {
       state = newState;
       currentFrame = 0;
+      loopCount = 0;
+      cycleCompleted = false;
       lastFrameTime = millis();
     }
   }
@@ -107,11 +117,20 @@ public:
     unsigned long now = millis();
     if (now - lastFrameTime >= (unsigned long)frameDelayMs) {
       lastFrameTime = now;
-      currentFrame = (currentFrame + 1) % frameCount;
+      currentFrame++;
+      if (currentFrame >= frameCount) {
+        currentFrame = 0;
+        loopCount++;
+        cycleCompleted = true;
+      }
       return true;
     }
     return false;
   }
+
+  bool isCycleCompleted() const { return cycleCompleted; }
+  void clearCycleCompleted() { cycleCompleted = false; }
+  int getLoopCount() const { return loopCount; }
 
   const uint16_t* getCurrentFrameData() const {
     return getSpriteAiFrame(animIndex, currentFrame);

@@ -5,8 +5,18 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include "config.h"
-#include "mochi_bitmaps.h"
+#include "sprite_ai_data_1_3.h"  // 1.69" GIF animations downscaled to 120x120 RGB565
 #include "image_logo.h"
+
+// 12 Full-Color Sprite AI animation names
+inline const char* getSpriteAi13AnimName(int idx) {
+  static const char* const names[12] = {
+    "IDLE", "HAPPY", "SAD", "ANGRY", "SURPRISED", "SLEEPING",
+    "WINK", "EXCITED", "LOVE", "SCARED", "LAUGH", "PEACE"
+  };
+  if (idx < 0 || idx >= SPRITE_AI13_ANIMATION_COUNT) return "IDLE";
+  return names[idx];
+}
 #include "qr_card.h"
 #include "wallpaper_image.h"
 
@@ -51,10 +61,161 @@ extern LunaAudio audio;
 extern float batteryVolts;
 extern bool silentMode;
 
+inline int getBatteryPercentage(float volts) {
+  int pct = 0;
+  if (volts >= 4.15f) pct = 100;
+  else if (volts >= 4.05f) pct = (int)(90 + (volts - 4.05f) * 100.0f);
+  else if (volts >= 3.95f) pct = (int)(80 + (volts - 3.95f) * 100.0f);
+  else if (volts >= 3.87f) pct = (int)(70 + (volts - 3.87f) * 125.0f);
+  else if (volts >= 3.82f) pct = (int)(60 + (volts - 3.82f) * 200.0f);
+  else if (volts >= 3.79f) pct = (int)(50 + (volts - 3.79f) * 333.0f);
+  else if (volts >= 3.75f) pct = (int)(40 + (volts - 3.75f) * 250.0f);
+  else if (volts >= 3.72f) pct = (int)(30 + (volts - 3.72f) * 333.0f);
+  else if (volts >= 3.68f) pct = (int)(20 + (volts - 3.68f) * 250.0f);
+  else if (volts >= 3.60f) pct = (int)(10 + (volts - 3.60f) * 125.0f);
+  else if (volts >= 3.30f) pct = (int)((volts - 3.30f) * 33.3f);
+  else pct = 0;
+  if (pct > 100) pct = 100;
+  if (pct < 0) pct = 0;
+  return pct;
+}
+
+// Custom dual-chunk canvas that splits 240x240 into two 57.6KB buffers (fits ESP32-C3 heap limits)
+class LunaCanvas16 : public GFXcanvas16 {
+private:
+  uint16_t* topBuf;
+  uint16_t* btmBuf;
+
+public:
+  LunaCanvas16(uint16_t w, uint16_t h)
+    : GFXcanvas16(w, h, false), topBuf(nullptr), btmBuf(nullptr) {}
+
+  bool allocate() {
+    if (!topBuf) {
+      topBuf = (uint16_t*)malloc(240 * 120 * sizeof(uint16_t));
+    }
+    if (!btmBuf) {
+      btmBuf = (uint16_t*)malloc(240 * 120 * sizeof(uint16_t));
+    }
+    buffer = topBuf; // Non-null pointer for Adafruit_GFX internal validity checks
+    buffer_owned = false;
+    if (topBuf && btmBuf) {
+      fillScreen(0x0000);
+      return true;
+    }
+    return false;
+  }
+
+  void drawPixel(int16_t x, int16_t y, uint16_t color) override {
+    if (x < 0 || x >= 240 || y < 0 || y >= 240) return;
+    if (y < 120) {
+      if (topBuf) topBuf[x + y * 240] = color;
+    } else {
+      if (btmBuf) btmBuf[x + (y - 120) * 240] = color;
+    }
+  }
+
+  void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) override {
+    if (y < 0 || y >= 240 || w <= 0) return;
+    if (x < 0) { w += x; x = 0; }
+    if (x + w > 240) w = 240 - x;
+    if (w <= 0) return;
+
+    uint16_t* p = (y < 120) ? (topBuf + y * 240 + x) : (btmBuf + (y - 120) * 240 + x);
+    if (p) {
+      for (int16_t i = 0; i < w; i++) p[i] = color;
+    }
+  }
+
+  void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) override {
+    if (x < 0 || x >= 240 || h <= 0) return;
+    if (y < 0) { h += y; y = 0; }
+    if (y + h > 240) h = 240 - y;
+    if (h <= 0) return;
+
+    for (int16_t i = 0; i < h; i++) {
+      int16_t cy = y + i;
+      if (cy < 120) {
+        if (topBuf) topBuf[x + cy * 240] = color;
+      } else {
+        if (btmBuf) btmBuf[x + (cy - 120) * 240] = color;
+      }
+    }
+  }
+
+  void fillScreen(uint16_t color) override {
+    if (topBuf) {
+      for (int i = 0; i < 240 * 120; i++) topBuf[i] = color;
+    }
+    if (btmBuf) {
+      for (int i = 0; i < 240 * 120; i++) btmBuf[i] = color;
+    }
+  }
+
+  void flush(Adafruit_ST7789& targetTft) {
+    if (topBuf) {
+      targetTft.drawRGBBitmap(0, 0, topBuf, 240, 120);
+    }
+    if (btmBuf) {
+      targetTft.drawRGBBitmap(0, 120, btmBuf, 240, 120);
+    }
+  }
+
+  // Blazingly fast 2x hardware scaling of 120x120 PROGMEM sprite to full 240x240 screen
+  void drawRGBBitmap2x(const uint16_t* pgmData) {
+    if (!topBuf || !btmBuf || !pgmData) return;
+
+    // Top half: sy 0..59 -> lines 0..119 in topBuf
+    for (int sy = 0; sy < 60; sy++) {
+      const uint16_t* srcRow = pgmData + sy * 120;
+      uint32_t* dst32_0 = (uint32_t*)(topBuf + (sy * 2) * 240);
+      uint32_t* dst32_1 = (uint32_t*)(topBuf + (sy * 2 + 1) * 240);
+      for (int sx = 0; sx < 120; sx++) {
+        uint16_t color = pgm_read_word(&srcRow[sx]);
+        uint32_t dColor = ((uint32_t)color << 16) | color;
+        dst32_0[sx] = dColor;
+        dst32_1[sx] = dColor;
+      }
+    }
+
+    // Bottom half: sy 60..119 -> lines 120..239 in btmBuf
+    for (int sy = 60; sy < 120; sy++) {
+      const uint16_t* srcRow = pgmData + sy * 120;
+      int by = sy - 60;
+      uint32_t* dst32_0 = (uint32_t*)(btmBuf + (by * 2) * 240);
+      uint32_t* dst32_1 = (uint32_t*)(btmBuf + (by * 2 + 1) * 240);
+      for (int sx = 0; sx < 120; sx++) {
+        uint16_t color = pgm_read_word(&srcRow[sx]);
+        uint32_t dColor = ((uint32_t)color << 16) | color;
+        dst32_0[sx] = dColor;
+        dst32_1[sx] = dColor;
+      }
+    }
+  }
+
+protected:
+  void drawFastRawHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
+    drawFastHLine(x, y, w, color);
+  }
+
+  void drawFastRawVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
+    drawFastVLine(x, y, h, color);
+  }
+
+  uint16_t getRawPixel(int16_t x, int16_t y) const {
+    if (x < 0 || x >= 240 || y < 0 || y >= 240) return 0;
+    if (y < 120) {
+      return topBuf ? topBuf[x + y * 240] : 0;
+    } else {
+      return btmBuf ? btmBuf[x + (y - 120) * 240] : 0;
+    }
+  }
+};
+
 class LunaFace {
 private:
   Adafruit_ST7789& tft;
-  GFXcanvas16& display;
+  LunaCanvas16& display;
   Expression currentExpr;
   Expression targetExpr;
   Expression defaultExpr; // Custom default expression for Idle state
@@ -74,10 +235,13 @@ private:
   String stateLabel;
   int frameDelayMs;
 
-  // Map navigation state
+  // Map navigation telemetry state
   String mapDirection;
   String mapDistance;
-  String mapDescription;
+  String mapRoad;
+  String mapTotalTime;
+  String mapTotalDist;
+  String mapEta;
 
   // Track BLE & WiFi status internally for top bar drawing
   bool bleConnectedStatus;
@@ -94,13 +258,19 @@ private:
   int notificationCount;
   int currentNotifViewIdx;
 
+public:
+  static const int MAX_FACE_CAL_EVENTS = 10;
   struct CalendarEventItem {
+    String id;
     String type;
+    String dateStr;
     String timeStr;
     String title;
     bool active;
   };
-  CalendarEventItem calendarEvents[5];
+
+private:
+  CalendarEventItem calendarEvents[MAX_FACE_CAL_EVENTS];
   int calendarEventCount;
   int currentCalViewIdx;
   bool showCalendarGrid;
@@ -112,14 +282,26 @@ private:
   String popupTitle;
   String popupBody;
 
+  // Alarm / Meeting / Reminder Ringing Overlay state
+  bool alarmRingingActive;
+  String ringingType;
+  String ringingTitle;
+  String ringingTime;
+
 public:
   String headerText;
-  LunaFace(Adafruit_ST7789& tftDisp, GFXcanvas16& disp) 
+
+  LunaFace(Adafruit_ST7789& tftDisp, LunaCanvas16& disp) 
     : tft(tftDisp), display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
     currentFrame = 0;
     currentGifIndex = 0;
     lastFrameTime = 0;
     gifFinished = false;
+
+    // Sprite AI animation state init
+    spriteAnimIndex = 0;
+    spriteFrameIndex = 0;
+    lastSpriteFrameTime = 0;
 
     notificationTitle = "";
     notificationText = "";
@@ -128,7 +310,10 @@ public:
 
     mapDirection = "STRAIGHT";
     mapDistance = "--";
-    mapDescription = "";
+    mapRoad = "";
+    mapTotalTime = "";
+    mapTotalDist = "";
+    mapEta = "";
 
     bleConnectedStatus = false;
     wifiConnectedStatus = false;
@@ -138,7 +323,7 @@ public:
     currentNotifViewIdx = 0;
     calendarEventCount = 0;
     currentCalViewIdx = 0;
-    showCalendarGrid = true;
+    showCalendarGrid = false; // Default to rich event card view
 
     popupActive = false;
     popupStartTime = 0;
@@ -147,59 +332,18 @@ public:
     popupBody = "";
     headerText = "";
 
+    alarmRingingActive = false;
+    ringingType = "ALARM";
+    ringingTitle = "";
+    ringingTime = "";
+
     for (int i = 0; i < 5; i++) {
       notificationHistory[i].active = false;
+    }
+    for (int i = 0; i < MAX_FACE_CAL_EVENTS; i++) {
       calendarEvents[i].active = false;
-    }
-  }
-
-  uint16_t getExpressionColor(Expression expr) {
-    Expression activeExpr = expr;
-    if (activeExpr == EXPR_IDLE) {
-      activeExpr = defaultExpr;
-    }
-    
-    if (activeExpr == EXPR_ALL_GIF) {
-      if (currentGifIndex >= 0 && currentGifIndex < ALL_GIFS_COUNT) {
-        char nameBuf[32];
-        strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[currentGifIndex].name));
-        String gifName = String(nameBuf);
-        gifName.toUpperCase();
-        
-        if (gifName.indexOf("LOVE") >= 0 || gifName.indexOf("ADORE") >= 0 || gifName.indexOf("SPARKLE") >= 0 || gifName.indexOf("GLOWING") >= 0) {
-          return 0xF97F; // Soft Pink
-        }
-        if (gifName.indexOf("ANGRY") >= 0 || gifName.indexOf("ENRAGE") >= 0 || gifName.indexOf("FURIOUS") >= 0 || gifName.indexOf("FIERCE") >= 0 || gifName.indexOf("DEVIL") >= 0 || gifName.indexOf("MENACING") >= 0 || gifName.indexOf("TOUGH") >= 0) {
-          return TFT_RED;
-        }
-        if (gifName.indexOf("CRY") >= 0 || gifName.indexOf("SICK") >= 0 || gifName.indexOf("DIZZY") >= 0 || gifName.indexOf("RAIN") >= 0 || gifName.indexOf("SOB") >= 0 || gifName.indexOf("WEEP") >= 0) {
-          return 0x5DFF; // Cyan/Blue
-        }
-        if (gifName.indexOf("SLEEP") >= 0 || gifName.indexOf("DROW") >= 0 || gifName.indexOf("YAWN") >= 0) {
-          return 0x91FF; // Lavender/Purple
-        }
-        if (gifName.indexOf("BUZZ") >= 0 || gifName.indexOf("CONTEMPT") >= 0 || gifName.indexOf("IRRITATED") >= 0 || gifName.indexOf("MISTAKE") >= 0 || gifName.indexOf("SCARE") >= 0) {
-          return TFT_ORANGE;
-        }
-        if (gifName.indexOf("DANCE") >= 0 || gifName.indexOf("ENERGETIC") >= 0 || gifName.indexOf("SPEED") >= 0 || gifName.indexOf("RUSH") >= 0 || gifName.indexOf("FAST") >= 0) {
-          return TFT_GREEN;
-        }
-        if (gifName.indexOf("HAPPY") >= 0 || gifName.indexOf("LAUGH") >= 0 || gifName.indexOf("PLAY") >= 0 || gifName.indexOf("SMILE") >= 0 || gifName.indexOf("SMIRK") >= 0 || gifName.indexOf("TEAS") >= 0 || gifName.indexOf("GIGGLE") >= 0 || gifName.indexOf("HELLO") >= 0) {
-          return TFT_YELLOW;
-        }
-      }
-      return TFT_CYAN;
-    }
-    
-    switch (activeExpr) {
-      case EXPR_IDLE:      return TFT_CYAN;
-      case EXPR_HAPPY:     return TFT_YELLOW;
-      case EXPR_SAD:       return 0x5DFF; // Soft Blue
-      case EXPR_ANGRY:     return TFT_RED;
-      case EXPR_SURPRISED: return 0xF97F; // Pink/Magenta
-      case EXPR_SLEEPING:  return 0x91FF; // Purple
-      case EXPR_WINK:      return TFT_YELLOW;
-      default:             return TFT_CYAN;
+      calendarEvents[i].id = "";
+      calendarEvents[i].title = "";
     }
   }
 
@@ -215,24 +359,14 @@ public:
     }
     
     if (exprToLabel == EXPR_ALL_GIF) {
-      if (currentGifIndex >= 0 && currentGifIndex < ALL_GIFS_COUNT) {
-        char nameBuf[32];
-        strcpy_P(nameBuf, (char*)pgm_read_ptr(&ALL_GIFS_TABLE[currentGifIndex].name));
-        stateLabel = String(nameBuf);
-      } else {
-        stateLabel = "IDLE";
-      }
+      stateLabel = String(getSpriteAi13AnimName(spriteAnimIndex));
+    } else if ((int)exprToLabel >= 0 && (int)exprToLabel < SPRITE_AI13_ANIMATION_COUNT) {
+      stateLabel = String(getSpriteAi13AnimName((int)exprToLabel));
     } else {
       switch (exprToLabel) {
-        case EXPR_IDLE:      stateLabel = "IDLE"; break;
-        case EXPR_HAPPY:     stateLabel = "HAPPY"; break;
-        case EXPR_SAD:       stateLabel = "SAD"; break;
-        case EXPR_ANGRY:     stateLabel = "ANGRY"; break;
-        case EXPR_SURPRISED: stateLabel = "SURPRISE"; break;
-        case EXPR_SLEEPING:  stateLabel = "SLEEP"; break;
-        case EXPR_WINK:      stateLabel = "WINK"; break;
         case EXPR_CLOCK:     stateLabel = "CLOCK"; break;
         case EXPR_TEXT:      stateLabel = "TEXT"; break;
+        case EXPR_MAP:       stateLabel = "MAPS"; break;
         default:             stateLabel = "IDLE"; break;
       }
     }
@@ -247,87 +381,17 @@ public:
     frameDelayMs = ms;
   }
 
-  int getGifFrameDelay(int gifIndex) {
-    static const uint8_t gifDelays[] PROGMEM = {
-      112, // 0  ADORE
-      112, // 1  ANGRY
-      52,  // 2  BLANK
-      252, // 3  BLINDING
-      112, // 4  BRAVE
-      112, // 5  BUZZING
-      92,  // 6  CONTEMPT
-      112, // 7  CRYING
-      112, // 8  DANCING
-      92,  // 9  DEVIL
-      52,  // 10 DISTRACTED
-      112, // 11 DIZZY
-      52,  // 12 DOWN
-      112, // 13 DROWSY
-      92,  // 14 ENCOURAGEMENT
-      52,  // 15 ENERGETIC
-      112, // 16 ENRAGED
-      92,  // 17 EVIL
-      92,  // 18 FAST
-      112, // 19 FIERCE
-      92,  // 20 FURIOUS
-      112, // 21 GIGGLE
-      112, // 22 GLOWING
-      112, // 23 GROWING
-      112, // 24 HANDSOME
-      112, // 25 HAPPY
-      92,  // 26 HELLO
-      112, // 27 IRRITATED
-      92,  // 28 LAUGHING
-      52,  // 29 LEFT
-      112, // 30 LOVE
-      92,  // 31 MENACING
-      112, // 32 MISTAKE
-      112, // 33 PLAYFUL
-      112, // 34 POLICE
-      112, // 35 RAIN
-      92,  // 36 RELAXED
-      52,  // 37 RIGHT
-      92,  // 38 RUSH
-      112, // 39 SCARED
-      112, // 40 SERENE
-      52,  // 41 SHRINK
-      52,  // 42 SHY
-      112, // 43 SICK
-      92,  // 44 SLEEPY
-      112, // 45 SMILE
-      52,  // 46 SMIRK
-      92,  // 47 SMOKE
-      112, // 48 SNEEZE
-      112, // 49 SOBBING
-      112, // 50 SPARKLE
-      52,  // 51 SPEED
-      112, // 52 SPLASH
-      112, // 53 SPRAYING
-      52,  // 54 SQUINT
-      112, // 55 SURPRISED
-      112, // 56 SUSHI
-      112, // 57 SWINGING
-      112, // 58 TEASING
-      122, // 59 TOUGH
-      92,  // 60 WEEPING
-      112, // 61 WINK
-      112, // 62 YAWN
-    };
-    if (gifIndex >= 0 && gifIndex < ALL_GIFS_COUNT) {
-      return pgm_read_byte(&gifDelays[gifIndex]);
-    }
-    return frameDelayMs;
-  }
-
   void setExpression(Expression expr) {
     if ((int)expr >= 100) {
       int gifIdx = (int)expr - 100;
-      if (gifIdx >= 0 && gifIdx < ALL_GIFS_COUNT) {
+      if (gifIdx >= 0 && gifIdx < SPRITE_AI13_ANIMATION_COUNT) {
         setGifIndex(gifIdx);
-        expr = EXPR_ALL_GIF;
+        expr = (Expression)gifIdx;
       }
+    } else if ((int)expr >= 0 && (int)expr < SPRITE_AI13_ANIMATION_COUNT) {
+      setGifIndex((int)expr);
     }
-    if (currentExpr == expr) return;
+    if (currentExpr == expr && expr != EXPR_ALL_GIF) return;
     targetExpr = expr;
     currentExpr = expr;
     currentFrame = 0;
@@ -348,7 +412,6 @@ public:
 
   // ------------------ Smartwatch Notification History ------------------
   void addNotification(String title, String body, String timeStr) {
-    // Shift elements
     for (int i = 4; i > 0; i--) {
       notificationHistory[i] = notificationHistory[i - 1];
     }
@@ -360,7 +423,7 @@ public:
     if (notificationCount < 5) {
       notificationCount++;
     }
-    currentNotifViewIdx = 0; // Reset index to show the latest
+    currentNotifViewIdx = 0;
   }
 
   void clearNotifications() {
@@ -381,30 +444,76 @@ public:
   int getCurrentNotifViewIdx() const { return currentNotifViewIdx; }
   void setCurrentNotifViewIdx(int idx) { currentNotifViewIdx = idx; }
 
-  // ------------------ Smartwatch Calendar Events ------------------
-  void addCalendarEvent(String type, String timeStr, String title) {
-    for (int i = 4; i > 0; i--) {
+  // ------------------ Smartwatch Calendar Events (Up to 20 slots) ------------------
+  void clearCalendarEvents() {
+    calendarEventCount = 0;
+    currentCalViewIdx = 0;
+    for (int i = 0; i < MAX_FACE_CAL_EVENTS; i++) {
+      calendarEvents[i].active = false;
+      calendarEvents[i].id = "";
+      calendarEvents[i].title = "";
+    }
+  }
+
+  void removeCalendarEvent(String id) {
+    int found = -1;
+    for (int i = 0; i < calendarEventCount; i++) {
+      if (calendarEvents[i].id == id || calendarEvents[i].title == id) {
+        found = i;
+        break;
+      }
+    }
+    if (found != -1) {
+      for (int i = found; i < calendarEventCount - 1; i++) {
+        calendarEvents[i] = calendarEvents[i + 1];
+      }
+      calendarEvents[calendarEventCount - 1].active = false;
+      calendarEventCount--;
+      if (currentCalViewIdx >= calendarEventCount && currentCalViewIdx > 0) {
+        currentCalViewIdx = calendarEventCount - 1;
+      }
+    }
+  }
+
+  void addCalendarEvent(String id, String type, String dateStr, String timeStr, String title) {
+    if (calendarEventCount < MAX_FACE_CAL_EVENTS) {
+      calendarEventCount++;
+    }
+    for (int i = calendarEventCount - 1; i > 0; i--) {
       calendarEvents[i] = calendarEvents[i - 1];
     }
+    calendarEvents[0].id = id;
     calendarEvents[0].type = type;
+    calendarEvents[0].dateStr = dateStr;
     calendarEvents[0].timeStr = timeStr;
     calendarEvents[0].title = title;
     calendarEvents[0].active = true;
-    
-    if (calendarEventCount < 5) {
-      calendarEventCount++;
-    }
     currentCalViewIdx = 0;
   }
 
+  void addCalendarEvent(String type, String timeStr, String title) {
+    addCalendarEvent(String(millis()), type, "*", timeStr, title);
+  }
+
   void cycleCalendarView() {
-    if (!showCalendarGrid && calendarEventCount > 0) {
+    if (calendarEventCount > 0) {
       currentCalViewIdx = (currentCalViewIdx + 1) % calendarEventCount;
     }
   }
 
   void toggleCalendarMode() {
     showCalendarGrid = !showCalendarGrid;
+  }
+
+  void setAlarmRinging(bool ringing, String type = "alarm", String title = "", String time = "") {
+    alarmRingingActive = ringing;
+    ringingType = type;
+    ringingTitle = title;
+    ringingTime = time;
+  }
+
+  bool isAlarmRingingActive() const {
+    return alarmRingingActive;
   }
 
   // ------------------ Notifications Adaptors ------------------
@@ -417,7 +526,7 @@ public:
     popupBody = body;
     popupActive = true;
     popupStartTime = millis();
-    popupDuration = 5000; // 5 seconds
+    popupDuration = 5000;
     
     char timeBuf[16];
     snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
@@ -433,11 +542,18 @@ public:
   }
 
   // ------------------ Map Navigation State ------------------
-  void setMapNavigation(String direction, String distance, String description) {
-    mapDirection = direction;
-    mapDistance = distance;
-    mapDescription = description;
+  void setMapTelemetry(String dir, String turnDist, String road, String tTime, String tDist, String eta) {
+    mapDirection = dir;
+    mapDistance = turnDist;
+    mapRoad = road;
+    mapTotalTime = tTime;
+    mapTotalDist = tDist;
+    mapEta = eta;
     setExpression(EXPR_MAP);
+  }
+
+  void setMapNavigation(String direction, String distance, String description) {
+    setMapTelemetry(direction, distance, description, "", "", "");
   }
 
   void setStateLabel(String label) {
@@ -453,16 +569,25 @@ public:
   }
 
   void setGifIndex(int idx) {
-    currentGifIndex = idx;
-    currentFrame = 0;
-    lastFrameTime = millis();
-    gifFinished = false;
-    expressionChanged = true;
-    updateLabelFromState();
+    if (idx >= 0 && idx < SPRITE_AI13_ANIMATION_COUNT) {
+      currentGifIndex = idx;
+      spriteAnimIndex = idx;
+      spriteFrameIndex = 0;
+      lastSpriteFrameTime = millis();
+      currentFrame = 0;
+      lastFrameTime = millis();
+      gifFinished = false;
+      expressionChanged = true;
+      updateLabelFromState();
+    }
   }
 
-  int getGifIndex() {
-    return currentGifIndex;
+  int getGifIndex() const {
+    return spriteAnimIndex;
+  }
+
+  int getGifCount() const {
+    return SPRITE_AI13_ANIMATION_COUNT;
   }
 
   bool isGifFinished() {
@@ -484,53 +609,10 @@ public:
 
     // Frame Animation logic
     if (currentExpr != EXPR_TEXT) {
-      int maxFrames = 1;
-      Expression exprToUpdate = currentExpr;
-      if (exprToUpdate == EXPR_IDLE) {
-        exprToUpdate = defaultExpr;
-      }
-      switch (exprToUpdate) {
-        case EXPR_IDLE:      maxFrames = ep_relaxed_frame_count; break;
-        case EXPR_HAPPY:     maxFrames = ep_happy_frame_count; break;
-        case EXPR_SAD:       maxFrames = ep_crying_frame_count; break;
-        case EXPR_ANGRY:     maxFrames = ep_angry_frame_count; break;
-        case EXPR_SURPRISED: maxFrames = ep_surprised_frame_count; break;
-        case EXPR_SLEEPING:  maxFrames = ep_sleepy_frame_count; break;
-        case EXPR_WINK:      maxFrames = ep_wink_frame_count; break;
-        case EXPR_CLOCK:     maxFrames = 1; break;
-        case EXPR_ALL_GIF: {
-          if (currentGifIndex < ALL_GIFS_COUNT) {
-            maxFrames = (int)pgm_read_dword(&ALL_GIFS_TABLE[currentGifIndex].count);
-          } else {
-            maxFrames = 1;
-          }
-          break;
-        }
-        default: maxFrames = 1; break;
-      }
+      int maxFrames = SPRITE_AI13_FRAME_COUNT;
+      int delayToUse = frameDelayMs;
 
-      int activeDelay;
-      if (exprToUpdate == EXPR_ALL_GIF) {
-        activeDelay = getGifFrameDelay(currentGifIndex);
-      } else {
-        switch (exprToUpdate) {
-          case EXPR_IDLE:      activeDelay = 92; break;
-          case EXPR_HAPPY:     activeDelay = 112; break;
-          case EXPR_SAD:       activeDelay = 112; break;
-          case EXPR_ANGRY:     activeDelay = 112; break;
-          case EXPR_SURPRISED: activeDelay = 112; break;
-          case EXPR_SLEEPING:  activeDelay = 92; break;
-          case EXPR_WINK:      activeDelay = 112; break;
-          default:             activeDelay = 100; break;
-        }
-      }
-      
-      if (frameDelayMs != 100) {
-        activeDelay = (int)(activeDelay * (frameDelayMs / 100.0f));
-      }
-      activeDelay = max(20, activeDelay);
-
-      if (now - lastFrameTime > (unsigned long)activeDelay) {
+      if (now - lastFrameTime >= (unsigned long)delayToUse) {
         lastFrameTime = now;
         currentFrame++;
         if (currentFrame >= maxFrames) {
@@ -539,15 +621,13 @@ public:
         }
         changed = true;
       }
-    }
-
-    // Scroll text logic
-    if (currentExpr == EXPR_TEXT) {
-      if (now - lastScrollTime > 15) {
+    } else {
+      // Text scrolling
+      if (now - lastScrollTime >= 30) {
         lastScrollTime = now;
         scrollPos -= 2;
-        int textLength = notificationText.length() * 18;
-        if (scrollPos < -textLength) {
+        int textWidth = notificationText.length() * 12;
+        if (scrollPos < -textWidth) {
           scrollPos = SCREEN_WIDTH;
         }
         changed = true;
@@ -556,152 +636,169 @@ public:
     return changed;
   }
 
+  // ------------------ Theme System (Precision Instrument OS) ------------------
+  struct ThemeColors {
+    uint16_t bg;
+    uint16_t text;
+    uint16_t accent;
+    uint16_t cardBg;
+    uint16_t border;
+    uint16_t subText;
+  };
+
+  ThemeColors getTheme() {
+    ThemeColors t;
+    if (!negativeDisplay) {
+      // Monolith Deep Black (Default - Precision Instrument OS)
+      t.bg      = 0x0000; // Deep pitch black
+      t.text    = 0xFFFF; // Crisp Pure White
+      t.accent  = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Electric Cyan or Luna Pink
+      t.cardBg  = 0x0842; // Dark graphite
+      t.border  = 0x2124; // 1px titanium precision rule
+      t.subText = 0x8410; // Muted technical silver
+    } else {
+      // Inverted High-Contrast
+      t.bg      = 0xFFFF;
+      t.text    = 0x0000;
+      t.accent  = 0x001F;
+      t.cardBg  = 0xEF5D;
+      t.border  = 0xCE79;
+      t.subText = 0x632C;
+    }
+    return t;
+  }
+
   // ------------------ Smartwatch UI Drawing Methods ------------------
-  
+
   void drawStatusBar(int hour, int minute) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent  = theme.accent;
+    uint16_t themeBg      = theme.bg;
+    uint16_t themeText    = theme.text;
+    uint16_t themeBorder  = theme.border;
+    uint16_t themeSubText = theme.subText;
 
-    // ── Background square bar running end-to-end ──────────────────────────
-    display.fillRect(0, 0, SCREEN_WIDTH, 24, themeCardBg);
-    display.drawFastHLine(0, 24, SCREEN_WIDTH, themeBorder);
+    // Status rail height 22px
+    display.fillRect(0, 0, SCREEN_WIDTH, 22, themeBg);
+    display.drawFastHLine(0, 22, SCREEN_WIDTH, themeBorder);
 
-    // ── Left zone: HH:MM (size 2 = 12px/char, 5 chars = 60px) ─────────────
+    // ── Left zone: HH:MM ─────────────
     display.setTextSize(2);
-    display.setTextColor(themeText, themeCardBg);
+    display.setTextColor(themeText);
     char tBuf[6];
     snprintf(tBuf, sizeof(tBuf), "%02d:%02d", hour, minute);
-    display.setCursor(8, 4);
-    display.print(tBuf);                          // 5 chars × 12px = 60px, ends at x=68
+    display.setCursor(14, 4);
+    display.print(tBuf);
 
     // ── Right zone: battery and connectivity ─────────
-    int bx = SCREEN_WIDTH - 28;
-    
-    // Draw battery outline
-    display.drawRect(bx, 6, 20, 12, themeText);
-    display.fillRect(bx + 20, 9, 2, 6, themeText);
-    
-    // Calculate battery percentage from voltage using calibrated LiPo discharge curve
-    int batteryPct = 0;
-    if (batteryVolts >= 4.15f) batteryPct = 100;
-    else if (batteryVolts >= 4.05f) batteryPct = 90 + (batteryVolts - 4.05f) * 100;
-    else if (batteryVolts >= 3.95f) batteryPct = 80 + (batteryVolts - 3.95f) * 100;
-    else if (batteryVolts >= 3.87f) batteryPct = 70 + (batteryVolts - 3.87f) * 125;
-    else if (batteryVolts >= 3.82f) batteryPct = 60 + (batteryVolts - 3.82f) * 200;
-    else if (batteryVolts >= 3.79f) batteryPct = 50 + (batteryVolts - 3.79f) * 333;
-    else if (batteryVolts >= 3.75f) batteryPct = 40 + (batteryVolts - 3.75f) * 250;
-    else if (batteryVolts >= 3.72f) batteryPct = 30 + (batteryVolts - 3.72f) * 333;
-    else if (batteryVolts >= 3.68f) batteryPct = 20 + (batteryVolts - 3.68f) * 250;
-    else if (batteryVolts >= 3.60f) batteryPct = 10 + (batteryVolts - 3.60f) * 125;
-    else if (batteryVolts >= 3.30f) batteryPct = (batteryVolts - 3.30f) * 33.3f;
-    else batteryPct = 0;
-    if (batteryPct > 100) batteryPct = 100;
-    if (batteryPct < 0) batteryPct = 0;
-    
-    // Proportional fill width (max 16 pixels)
-    int fillWidth = (batteryPct * 16) / 100;
-    uint16_t batteryColor = TFT_GREEN;
+    int bx = SCREEN_WIDTH - 32;
+
+    int batteryPct = getBatteryPercentage(batteryVolts);
+    uint16_t batteryColor = 0x07E0; // Green
     if (batteryPct < 20) {
-      batteryColor = TFT_RED;
-    } else if (batteryPct < 55) {
-      batteryColor = TFT_YELLOW;
-    }
-    if (fillWidth > 0) {
-      display.fillRect(bx + 2, 8, fillWidth, 8, batteryColor);
+      batteryColor = 0xF800; // Red
+    } else if (batteryPct < 50) {
+      batteryColor = 0xFFE0; // Amber
     }
 
-    // Battery percentage text next to icon (size 2 = 12px/char, 4 chars = 48px)
-    display.setTextColor(themeText, themeCardBg);
-    display.setTextSize(2);
+    // Battery icon
+    display.drawRect(bx, 6, 18, 10, themeSubText);
+    display.drawFastVLine(bx + 18, 8, 6, themeSubText);
+    int bars = (batteryPct * 4) / 100;
+    if (bars > 4) bars = 4;
+    for (int b = 0; b < bars; b++) {
+      display.fillRect(bx + 2 + b * 4, 8, 3, 6, batteryColor);
+    }
+
+    // Battery %
+    display.setTextColor(themeSubText);
+    display.setTextSize(1);
     String pctStr = String(batteryPct) + "%";
-    int pctStrW = pctStr.length() * 12;
-    display.setCursor(bx - 6 - pctStrW, 4);
+    int pctStrW = pctStr.length() * 6;
+    display.setCursor(bx - 4 - pctStrW, 7);
     display.print(pctStr);
 
-    // BLE dot (shifted left to make room for text)
-    uint16_t bleColor = bleConnectedStatus  ? (uint16_t)0x5DFF : themeSubText;
-    display.fillCircle(bx - 12 - pctStrW, 12, 3, bleColor);
+    // BLE glyph
+    int bleX = bx - 14 - pctStrW;
+    int bleY = 11;
+    uint16_t bleColor = bleConnectedStatus ? themeAccent : themeBorder;
+    if (bleConnectedStatus) {
+      display.drawLine(bleX, bleY - 4, bleX, bleY + 4, bleColor);
+      display.drawLine(bleX, bleY - 4, bleX + 3, bleY - 2, bleColor);
+      display.drawLine(bleX + 3, bleY - 2, bleX - 2, bleY + 2, bleColor);
+      display.drawLine(bleX - 2, bleY - 2, bleX + 3, bleY + 2, bleColor);
+      display.drawLine(bleX + 3, bleY + 2, bleX, bleY + 4, bleColor);
+    } else {
+      display.drawCircle(bleX, bleY, 2, bleColor);
+    }
 
-    // WiFi dot (shifted left to make room for text)
-    uint16_t wifiColor = wifiConnectedStatus ? (uint16_t)TFT_GREEN : themeSubText;
-    display.fillCircle(bx - 22 - pctStrW, 12, 3, wifiColor);
+    // Silent mode status indicator
+    if (silentMode) {
+      int silentX = bleX - 12;
+      int silentY = bleY;
+      uint16_t silentColor = 0xF800;
+      display.fillRect(silentX, silentY - 2, 2, 4, silentColor);
+      display.fillTriangle(silentX + 2, silentY - 4, silentX + 2, silentY + 4, silentX + 4, silentY, silentColor);
+      display.drawLine(silentX + 6, silentY - 2, silentX + 8, silentY, silentColor);
+    }
 
-    // ── Centre zone: screen name (size 1 = 6px/char) ─────
-    display.setTextColor(themeAccent, themeCardBg);
-    display.setTextSize(1);
+    // ── Centre zone: screen name pill ─────
     const char* nm = "LUNA";
     switch (currentScreen) {
-      case SCREEN_CLOCK:         nm = "CLOCK";     break;
-      case SCREEN_NOTIFICATIONS: nm = "NOTIFS";    break;
-      case SCREEN_CALENDAR:      nm = "CAL";       break;
-      case SCREEN_GAMES:         nm = "ARCADE";    break;
-      case SCREEN_FACE:          nm = "FACE";      break;
-      case SCREEN_MAPS:          nm = "MAPS";      break;
-      case SCREEN_CARD:          nm = "MY CARD";   break;
-      case SCREEN_SETTINGS:      nm = "SETTINGS";  break;
-      default:                   nm = "LUNA";      break;
+      case SCREEN_CLOCK:         nm = "CLOCK";   break;
+      case SCREEN_NOTIFICATIONS: nm = "NOTIFS";  break;
+      case SCREEN_CALENDAR:      nm = "CAL";     break;
+      case SCREEN_GAMES:         nm = "ARCADE";  break;
+      case SCREEN_FACE:          nm = "LUNA";    break;
+      case SCREEN_MAPS:          nm = "MAPS";    break;
+      case SCREEN_CARD:          nm = "CARD";    break;
+      case SCREEN_SETTINGS:      nm = "SETUP";   break;
+      default:                   nm = "LUNA";    break;
     }
-    int nmLen  = strlen(nm) * 6;               // size-1 chars
-    int leftEdge  = 70;                        // clear of HH:MM
-    int rightEdge = bx - 26 - pctStrW;         // clear of icons/dots
-    int nmX = leftEdge + (rightEdge - leftEdge - nmLen) / 2;
-    if (nmX < leftEdge) nmX = leftEdge;
-    if (nmX + nmLen > rightEdge) nmX = rightEdge - nmLen;
-    display.setCursor(nmX, 8);
-    display.print(nm);
+    int nmLen = strlen(nm) * 6;
+    int nmX = (SCREEN_WIDTH - nmLen) / 2;
+    if (nmX > 75 && nmX + nmLen < bx - 30) {
+      display.fillCircle(nmX - 5, 10, 2, themeAccent);
+      display.setTextColor(themeText);
+      display.setTextSize(1);
+      display.setCursor(nmX, 7);
+      display.print(nm);
+    }
   }
 
   void drawPopup() {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent = theme.accent;
+    uint16_t themeText   = theme.text;
+    uint16_t themeCardBg = theme.cardBg;
+    uint16_t themeBorder = theme.border;
 
-    uint16_t LUNA_CYAN   = themeAccent;
-    uint16_t LUNA_PINK   = 0xF8B8;
-    uint16_t LUNA_DARK   = themeCardBg;
-    uint16_t LUNA_GLASS  = themeBorder;
-
-    // 1. Premium Card Container
-    display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 12, LUNA_CYAN);
-    display.drawRoundRect(5, 5, SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 11, LUNA_PINK);
-    display.fillRoundRect(8, 8, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 16, 9, LUNA_DARK);
-
-    // 2. Cute Header Bar (Pink Heart Mascot)
-    int hx = 24, hy = 22;
-    display.fillCircle(hx - 2, hy, 3, LUNA_PINK);
-    display.fillCircle(hx + 2, hy, 3, LUNA_PINK);
-    display.fillTriangle(hx - 5, hy + 1, hx + 5, hy + 1, hx, hy + 6, LUNA_PINK);
+    display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 12, themeAccent);
+    display.fillRoundRect(6, 6, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 12, 10, themeCardBg);
 
     // Title Capsule
-    display.fillRoundRect(36, 13, 100, 18, 9, LUNA_GLASS);
-    display.setTextColor(themeText);
+    display.fillRoundRect(16, 14, 110, 18, 5, themeAccent);
+    display.setTextColor(TFT_WHITE);
     display.setTextSize(1);
-    display.setCursor(44, 18);
-    display.print("NEW ALERT  *");
+    display.setCursor(22, 19);
+    display.print("NEW ALERT");
 
-    display.drawFastHLine(12, 38, SCREEN_WIDTH - 24, LUNA_GLASS);
+    display.drawFastHLine(12, 38, SCREEN_WIDTH - 24, themeBorder);
     
-    // 3. Title & Content
+    // Title
     display.setTextColor(themeText);
     display.setTextSize(2);
-    display.setCursor(16, 48);
+    display.setCursor(16, 46);
     String title = popupTitle;
     if (title.length() > 16) title = title.substring(0, 14) + "...";
     display.print(title);
     
-    display.setTextColor(themeText);
+    // Body text
     display.setTextSize(2);
     int yStart = 72;
     int charsPerLine = (SCREEN_WIDTH - 32) / 12;
     int line = 0;
     int maxLines = (SCREEN_HEIGHT - 110) / 20;
-    if (maxLines < 3) maxLines = 3;
     for (unsigned int i = 0; i < popupBody.length() && line < maxLines; i += charsPerLine) {
       unsigned int endIdx = i + charsPerLine;
       if (endIdx > popupBody.length()) endIdx = popupBody.length();
@@ -711,78 +808,58 @@ public:
       line++;
     }
     
-    // 4. Dismiss indicator
+    // Dismiss hint
     display.setTextColor(themeAccent);
     display.setTextSize(1);
-    display.setCursor((SCREEN_WIDTH - 96) / 2, SCREEN_HEIGHT - 22);
-    display.print("[Tap to Dismiss]");
+    const char* dTxt = "[CLICK BUTTON TO DISMISS]";
+    int dW = strlen(dTxt) * 6;
+    display.setCursor((SCREEN_WIDTH - dW) / 2, SCREEN_HEIGHT - 20);
+    display.print(dTxt);
   }
 
   void drawNotificationPanel() {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent  = theme.accent;
+    uint16_t themeBg      = theme.bg;
+    uint16_t themeText    = theme.text;
+    uint16_t themeCardBg  = theme.cardBg;
+    uint16_t themeBorder  = theme.border;
+    uint16_t themeSubText = theme.subText;
 
-    uint16_t LUNA_CYAN   = themeAccent;
-    uint16_t LUNA_PINK   = 0xF8B8;
-    uint16_t LUNA_DARK   = themeCardBg;
-    uint16_t LUNA_GLASS  = themeBorder;
-    uint16_t LUNA_CORAL  = 0xFC10;
-
-    // Clear display below the status bar
-    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
 
     if (notificationCount == 0) {
-      // Sleeping face graphic
       int centerX = SCREEN_WIDTH / 2;
-      display.fillCircle(centerX, 70, 36, LUNA_GLASS);
-      display.drawCircle(centerX, 70, 36, LUNA_PINK);
-      
-      display.drawCircle(centerX - 12, 68, 6, themeText);
-      display.fillRect(centerX - 19, 60, 14, 8, LUNA_GLASS);
-      display.drawCircle(centerX + 12, 68, 6, themeText);
-      display.fillRect(centerX + 5, 60, 14, 8, LUNA_GLASS);
-      
-      display.fillCircle(centerX - 18, 76, 4, LUNA_CORAL);
-      display.fillCircle(centerX + 18, 76, 4, LUNA_CORAL);
-      
-      display.drawCircle(centerX, 76, 3, themeText);
-      display.fillRect(centerX - 4, 73, 8, 3, LUNA_GLASS);
-      
-      display.setTextColor(LUNA_CYAN);
-      display.setTextSize(1);
-      display.setCursor(centerX + 24, 40);
-      display.print("Z");
-      display.setCursor(centerX + 32, 32);
-      display.print("z");
+      display.fillCircle(centerX, 80, 28, themeCardBg);
+      display.drawCircle(centerX, 80, 28, themeAccent);
       
       display.setTextColor(themeText);
       display.setTextSize(2);
-      int lblW1 = 16 * 12;
-      display.setCursor((SCREEN_WIDTH - lblW1) / 2, 126);
-      display.print("No Notifications");
+      const char* h1 = "NO NOTIFS";
+      int w1 = strlen(h1) * 12;
+      display.setCursor((SCREEN_WIDTH - w1) / 2, 126);
+      display.print(h1);
       
       display.setTextColor(themeSubText);
       display.setTextSize(1);
-      int lblW2 = 18 * 6;
-      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 150);
-      display.print("History is empty");
+      const char* h2 = "HISTORY IS EMPTY";
+      int w2 = strlen(h2) * 6;
+      display.setCursor((SCREEN_WIDTH - w2) / 2, 150);
+      display.print(h2);
+
+      const char* nav = "BTN1: DISMISS // BTN2: NEXT";
+      int nw = strlen(nav) * 6;
+      display.setCursor((SCREEN_WIDTH - nw) / 2, SCREEN_HEIGHT - 18);
+      display.print(nav);
       return;
     }
     
-    // Draw Detail View or List View depending on selection
     if (notificationSelected) {
       NotificationItem& notif = notificationHistory[currentNotifViewIdx];
       
-      // Glowing Card Container
-      display.drawRoundRect(6, 26, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 10, LUNA_CYAN);
-      display.drawRoundRect(7, 27, SCREEN_WIDTH - 14, SCREEN_HEIGHT - 34, 9, LUNA_GLASS);
-      display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, LUNA_DARK);
+      display.drawRoundRect(6, 26, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 10, themeAccent);
+      display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, themeCardBg);
       
-      // Header
       display.setTextColor(themeText);
       display.setTextSize(2);
       display.setCursor(14, 34);
@@ -790,77 +867,66 @@ public:
       if (title.length() > 10) title = title.substring(0, 8) + "...";
       display.print(title);
       
-      display.setTextColor(LUNA_CYAN);
+      display.setTextColor(themeAccent);
       display.setTextSize(2);
       display.setCursor(SCREEN_WIDTH - 76, 34);
       display.print(notif.timeStr);
       
-      display.drawFastHLine(12, 54, SCREEN_WIDTH - 24, LUNA_GLASS);
+      display.drawFastHLine(12, 54, SCREEN_WIDTH - 24, themeBorder);
       
-      // Body Text
       display.setTextColor(themeText);
       display.setTextSize(2);
       int yStart = 64;
       int charsPerLine = (SCREEN_WIDTH - 28) / 12;
       int line = 0;
       int maxLines = (SCREEN_HEIGHT - 106) / 20;
-      if (maxLines < 4) maxLines = 4;
       for (unsigned int i = 0; i < notif.body.length() && line < maxLines; i += charsPerLine) {
         unsigned int endIdx = i + charsPerLine;
         if (endIdx > notif.body.length()) endIdx = notif.body.length();
-        String lineStr = notif.body.substring(i, endIdx);
         display.setCursor(14, yStart + line * 20);
-        display.print(lineStr);
+        display.print(notif.body.substring(i, endIdx));
         line++;
       }
       
-      // Indicator
       display.setTextColor(themeAccent);
       display.setTextSize(1);
-      char footerBuf[16];
-      snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentNotifViewIdx + 1, notificationCount);
+      char footerBuf[32];
+      snprintf(footerBuf, sizeof(footerBuf), "[%d/%d] BTN1: BACK // BTN2: NEXT", currentNotifViewIdx + 1, notificationCount);
       int footerW = strlen(footerBuf) * 6;
-      display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 20);
+      display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 18);
       display.print(footerBuf);
     } else {
-      // List View: Draw list of up to 5 stored notifications
-      // Header
       display.setTextColor(themeText);
       display.setTextSize(2);
-      display.setCursor(14, 32);
-      display.print("Notifications");
+      display.setCursor(14, 28);
+      display.print("NOTIFICATIONS");
       
-      display.drawFastHLine(12, 52, SCREEN_WIDTH - 24, LUNA_GLASS);
+      display.drawFastHLine(12, 48, SCREEN_WIDTH - 24, themeBorder);
       
-      for (int i = 0; i < notificationCount && i < 5; i++) {
-        int y = 58 + i * 33;
+      for (int i = 0; i < notificationCount && i < 4; i++) {
+        int y = 54 + i * 40;
         NotificationItem& notif = notificationHistory[i];
         
         if (notificationsActive && i == currentNotifViewIdx) {
-          // Highlight card background
-          display.fillRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_GLASS);
-          display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_CYAN);
+          display.fillRoundRect(8, y, SCREEN_WIDTH - 16, 36, 4, themeBorder);
+          display.drawRoundRect(8, y, SCREEN_WIDTH - 16, 36, 4, themeAccent);
         } else {
-          // Subtle border for inactive items
-          display.drawRoundRect(10, y, SCREEN_WIDTH - 20, 29, 4, LUNA_GLASS);
+          display.drawRoundRect(8, y, SCREEN_WIDTH - 16, 36, 4, themeBorder);
         }
         
-        // Title/Sender text
-        display.setCursor(16, y + 2);
+        display.setCursor(14, y + 4);
         display.setTextSize(2);
         display.setTextColor(themeText);
         String shortTitle = notif.title;
         if (shortTitle.length() > 11) shortTitle = shortTitle.substring(0, 9) + "..";
         display.print(shortTitle);
         
-        // Time text
-        display.setCursor(SCREEN_WIDTH - 55, y + 2);
+        display.setCursor(SCREEN_WIDTH - 52, y + 4);
         display.setTextSize(1);
-        display.setTextColor(LUNA_CYAN);
+        display.setTextColor(themeAccent);
         display.print(notif.timeStr);
         
-        // Body snippet text
-        display.setCursor(16, y + 18);
+        display.setCursor(14, y + 22);
         display.setTextSize(1);
         display.setTextColor(themeSubText);
         String snippet = notif.body;
@@ -868,405 +934,213 @@ public:
         display.print(snippet);
       }
       
-      // Bottom Tip / Footer
       display.setTextSize(1);
-      if (notificationsActive) {
-        display.setTextColor(themeAccent);
-        const char* tip = "B1: Read | B2: Next | B1 L: Exit";
-        int tipW = strlen(tip) * 6;
-        display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 16);
-        display.print(tip);
-      } else {
-        display.setTextColor(themeSubText);
-        const char* tip = "B1: Open | B2: Cycle";
-        int tipW = strlen(tip) * 6;
-        display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 16);
-        display.print(tip);
-      }
+      display.setTextColor(themeAccent);
+      const char* tip = "BTN1: OPEN // BTN2: SCREEN";
+      int tipW = strlen(tip) * 6;
+      display.setCursor((SCREEN_WIDTH - tipW) / 2, SCREEN_HEIGHT - 16);
+      display.print(tip);
     }
   }
 
   void drawCalendarEvents() {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent  = theme.accent;
+    uint16_t themeBg      = theme.bg;
+    uint16_t themeText    = theme.text;
+    uint16_t themeCardBg  = theme.cardBg;
+    uint16_t themeBorder  = theme.border;
+    uint16_t themeSubText = theme.subText;
 
-    // Clear display below the status bar
-    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
-
-    // Curved border container
-    display.drawRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 12, themeAccent);
-    display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 10, themeCardBg);
+    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
 
     if (calendarEventCount == 0) {
       int centerX = SCREEN_WIDTH / 2;
-      display.drawRect(centerX - 10, 62, 20, 20, themeSubText);
-      display.drawFastHLine(centerX - 10, 68, 20, themeSubText);
-      display.fillRect(centerX - 6, 58, 2, 6, themeSubText);
-      display.fillRect(centerX + 4, 58, 2, 6, themeSubText);
+      display.drawRect(centerX - 12, 60, 24, 24, themeSubText);
+      display.drawFastHLine(centerX - 12, 68, 24, themeSubText);
+      display.fillRect(centerX - 8, 56, 2, 6, themeSubText);
+      display.fillRect(centerX + 6, 56, 2, 6, themeSubText);
       
-      display.setTextColor(themeSubText, themeCardBg);
+      display.setTextColor(themeText);
       display.setTextSize(2);
-      int lblW1 = 9 * 12;
-      display.setCursor((SCREEN_WIDTH - lblW1) / 2, 98);
-      display.print("No Events");
-      display.setTextColor(themeSubText, themeCardBg);
-      display.setTextSize(2);
-      int lblW2 = 19 * 12;
-      display.setCursor((SCREEN_WIDTH - lblW2) / 2, 130);
-      display.print("Sync events via BLE");
+      const char* e1 = "NO EVENTS";
+      int ew1 = strlen(e1) * 12;
+      display.setCursor((SCREEN_WIDTH - ew1) / 2, 100);
+      display.print(e1);
+
+      display.setTextColor(themeSubText);
+      display.setTextSize(1);
+      const char* e2 = "SYNC EVENTS IN PHONE APP";
+      int ew2 = strlen(e2) * 6;
+      display.setCursor((SCREEN_WIDTH - ew2) / 2, 130);
+      display.print(e2);
+
+      const char* nav = "BTN1: GRID // BTN2: NEXT";
+      int nw = strlen(nav) * 6;
+      display.setCursor((SCREEN_WIDTH - nw) / 2, SCREEN_HEIGHT - 18);
+      display.print(nav);
       return;
     }
     
     CalendarEventItem& ev = calendarEvents[currentCalViewIdx];
-    
-    display.setTextColor(TFT_BLACK);
-    if (ev.type.indexOf("birthday") >= 0 || ev.type.indexOf("bday") >= 0) {
-      display.fillRoundRect(16, 38, 90, 20, 6, 0xF97F); // Pink label
-      display.setTextSize(1);
-      display.setCursor(22, 44);
-      display.print("BIRTHDAY");
-    } else {
-      display.fillRoundRect(16, 38, 90, 20, 6, TFT_YELLOW); // Yellow label
-      display.setTextSize(1);
-      display.setCursor(22, 44);
-      display.print("MEETING");
-    }
-    
-    display.setTextColor(themeAccent, themeCardBg);
-    display.setTextSize(2);
-    int timeW = ev.timeStr.length() * 12;
-    display.setCursor(SCREEN_WIDTH - 16 - timeW, 40);
+
+    // Card Container
+    display.drawRoundRect(6, 26, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 10, themeBorder);
+    display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, themeCardBg);
+
+    // Event Category Pill
+    String tUpper = ev.type;
+    tUpper.toUpperCase();
+    uint16_t pillColor = themeAccent;
+    if (tUpper.indexOf("ALARM") >= 0) pillColor = 0xF800; // Red
+    else if (tUpper.indexOf("REMIND") >= 0) pillColor = 0xFD20; // Amber
+    else if (tUpper.indexOf("BIRTH") >= 0 || tUpper.indexOf("BDAY") >= 0) pillColor = 0xF81F; // Magenta
+    else if (tUpper.indexOf("MEET") >= 0) pillColor = 0x051F; // Blue
+
+    display.fillRoundRect(14, 34, 76, 20, 4, pillColor);
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(20, 40);
+    display.print(tUpper.substring(0, 8));
+
+    // Time readout
+    display.setTextColor(themeText);
+    display.setTextSize(3);
+    display.setCursor(SCREEN_WIDTH - 96, 32);
     display.print(ev.timeStr);
-    
-    display.drawFastHLine(12, 66, SCREEN_WIDTH - 24, themeBorder);
-    
-    display.setTextColor(themeText, themeCardBg);
+
+    display.drawFastHLine(14, 60, SCREEN_WIDTH - 28, themeBorder);
+
+    // Title
+    display.setTextColor(themeText);
     display.setTextSize(2);
-    int yStart = 76;
+    int yT = 68;
     int charsPerLine = (SCREEN_WIDTH - 32) / 12;
     int line = 0;
-    int maxLines = (SCREEN_HEIGHT - 120) / 20;
-    for (unsigned int i = 0; i < ev.title.length() && line < maxLines; i += charsPerLine) {
+    for (unsigned int i = 0; i < ev.title.length() && line < 3; i += charsPerLine) {
       unsigned int endIdx = i + charsPerLine;
       if (endIdx > ev.title.length()) endIdx = ev.title.length();
-      String lineStr = ev.title.substring(i, endIdx);
-      display.setCursor(16, yStart + line * 20);
-      display.print(lineStr);
+      display.setCursor(16, yT + line * 20);
+      display.print(ev.title.substring(i, endIdx));
       line++;
     }
-    
-    display.setTextColor(themeSubText, themeCardBg);
-    display.setTextSize(2);
-    char footerBuf[16];
-    snprintf(footerBuf, sizeof(footerBuf), "[%d / %d]", currentCalViewIdx + 1, calendarEventCount);
-    int footerW = strlen(footerBuf) * 12;
-    display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 26);
-    display.print(footerBuf);
-  }
 
-  void parseDateInfo(String dateStr, String dayStr, int& dayOut, int& monthOut, int& yearOut, int& startWeekdayOut, int& daysInMonthOut) {
-    dayOut = 12;
-    monthOut = 7;
-    yearOut = 2026;
-    
-    dateStr.trim();
-    int spaceIdx = dateStr.indexOf(' ');
-    if (spaceIdx > 0) {
-      dayOut = dateStr.substring(0, spaceIdx).toInt();
-      if (dayOut <= 0) dayOut = 12;
-    }
-    
-    String monthStr = "";
-    if (spaceIdx > 0) {
-      int nextSpaceIdx = dateStr.indexOf(' ', spaceIdx + 1);
-      if (nextSpaceIdx > spaceIdx) {
-        monthStr = dateStr.substring(spaceIdx + 1, nextSpaceIdx);
-        yearOut = dateStr.substring(nextSpaceIdx + 1).toInt();
-        if (yearOut < 2000) yearOut = 2026;
-      } else {
-        monthStr = dateStr.substring(spaceIdx + 1);
-      }
-    }
-    
-    monthStr.trim();
-    monthStr.toUpperCase();
-    if (monthStr.startsWith("JAN")) monthOut = 1;
-    else if (monthStr.startsWith("FEB")) monthOut = 2;
-    else if (monthStr.startsWith("MAR")) monthOut = 3;
-    else if (monthStr.startsWith("APR")) monthOut = 4;
-    else if (monthStr.startsWith("MAY")) monthOut = 5;
-    else if (monthStr.startsWith("JUN")) monthOut = 6;
-    else if (monthStr.startsWith("JUL")) monthOut = 7;
-    else if (monthStr.startsWith("AUG")) monthOut = 8;
-    else if (monthStr.startsWith("SEP")) monthOut = 9;
-    else if (monthStr.startsWith("OCT")) monthOut = 10;
-    else if (monthStr.startsWith("NOV")) monthOut = 11;
-    else if (monthStr.startsWith("DEC")) monthOut = 12;
-    
-    int daysPerMonth[] = { 0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-    if (monthOut == 2) {
-      if ((yearOut % 4 == 0 && yearOut % 100 != 0) || (yearOut % 400 == 0)) {
-        daysInMonthOut = 29;
-      } else {
-        daysInMonthOut = 28;
-      }
-    } else if (monthOut >= 1 && monthOut <= 12) {
-      daysInMonthOut = daysPerMonth[monthOut];
+    display.drawFastHLine(14, 134, SCREEN_WIDTH - 28, themeBorder);
+
+    // Metadata
+    display.setTextSize(1);
+    display.setTextColor(themeSubText);
+    display.setCursor(16, 142);
+    if (ev.dateStr.length() > 0 && ev.dateStr != "*") {
+      display.printf("DATE   // %s", ev.dateStr.c_str());
     } else {
-      daysInMonthOut = 30;
+      display.print("DATE   // DAILY RECURRING");
     }
-    
-    int currentWeekday = 0;
-    dayStr.trim();
-    dayStr.toUpperCase();
-    if (dayStr.startsWith("SUN")) currentWeekday = 0;
-    else if (dayStr.startsWith("MON")) currentWeekday = 1;
-    else if (dayStr.startsWith("TUE")) currentWeekday = 2;
-    else if (dayStr.startsWith("WED")) currentWeekday = 3;
-    else if (dayStr.startsWith("THU")) currentWeekday = 4;
-    else if (dayStr.startsWith("FRI")) currentWeekday = 5;
-    else if (dayStr.startsWith("SAT")) currentWeekday = 6;
-    
-    startWeekdayOut = (currentWeekday - (dayOut - 1) % 7 + 7) % 7;
+
+    display.setCursor(16, 158);
+    display.print("STATUS // ACTIVE ON LUNA");
+
+    // Pagination
+    char pageBuf[32];
+    snprintf(pageBuf, sizeof(pageBuf), "INDEX %02d/%02d", currentCalViewIdx + 1, calendarEventCount);
+    display.setTextColor(themeAccent);
+    display.setCursor(16, 178);
+    display.print(pageBuf);
+
+    // Button navigation hints
+    display.setTextColor(themeSubText);
+    const char* navHint = "BTN1: NEXT // BTN2: SCREEN";
+    int nhw = strlen(navHint) * 6;
+    display.setCursor((SCREEN_WIDTH - nhw) / 2, SCREEN_HEIGHT - 18);
+    display.print(navHint);
   }
 
   void drawCalendarGrid(String dateStr, String dayStr) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent  = theme.accent;
+    uint16_t themeBg      = theme.bg;
+    uint16_t themeText    = theme.text;
+    uint16_t themeBorder  = theme.border;
+    uint16_t themeSubText = theme.subText;
 
-    int curDay, curMonth, curYear, startWeekday, daysInMonth;
-    parseDateInfo(dateStr, dayStr, curDay, curMonth, curYear, startWeekday, daysInMonth);
-    
-    // Clear display below status bar
-    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
 
-    // Draw Curved Border
-    display.drawRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 12, themeAccent);
-    display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 10, themeCardBg);
-    
-    // Month / Year header — size 2
+    // Month & Year header
     display.setTextSize(2);
-    display.setTextColor(themeText, themeCardBg);
-    char headerBuf[32];
-    const char* monthNames[] = { "", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER" };
-    snprintf(headerBuf, sizeof(headerBuf), "%s %d", (curMonth >= 1 && curMonth <= 12) ? monthNames[curMonth] : "JULY", curYear);
-    int headerW = strlen(headerBuf) * 12;
-    display.setCursor((SCREEN_WIDTH - headerW) / 2, 38);
-    display.print(headerBuf);
+    display.setTextColor(themeText);
+    display.setCursor(16, 28);
+    display.print("CALENDAR");
 
-    // Day-of-week header
-    int colWidth = 31;
-    int startX = 12;
-    int startY = 60;
-    display.setTextColor(themeAccent, themeCardBg);
-    display.setTextSize(2);
-    const char* dayLabels[] = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" };
-    for (int i = 0; i < 7; i++) {
-      display.setCursor(startX + i * colWidth + 4, startY);
-      display.print(dayLabels[i]);
-    }
-    display.drawFastHLine(8, startY + 16, SCREEN_WIDTH - 16, themeBorder);
-    
-    int col = startWeekday;
-    int row = 0;
-    int rowHeight = 22;
-    
-    for (int d = 1; d <= daysInMonth; d++) {
-      int x = startX + col * colWidth;
-      int y = startY + 22 + row * rowHeight;
+    display.setTextColor(themeSubText);
+    display.setCursor(136, 28);
+    display.print("2026");
 
-      if (d == curDay) {
-        display.fillCircle(x + 15, y + 7, 11, TFT_RED);
-        display.setTextColor(TFT_WHITE, TFT_RED);
-      } else {
-        display.setTextColor(themeText, themeCardBg);
-      }
+    display.drawFastHLine(14, 48, SCREEN_WIDTH - 28, themeBorder);
 
-      display.setCursor(d < 10 ? x + 10 : x + 4, y);
-      display.print(d);
-
-      col++;
-      if (col >= 7) {
-        col = 0;
-        row++;
-      }
-    }
-  }
-
-  void drawSettingsMenuLandscape(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
-
-    // Clear display below the status bar
-    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
-
-    // Clean border
-    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, themeAccent);
-    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 8, themeCardBg);
-
-    // Header label
-    display.setTextSize(2);
-    display.setTextColor(themeAccent, themeCardBg);
-    display.setCursor(72, 36);
-    display.print("SETTINGS");
-    display.drawFastHLine(12, 56, SCREEN_WIDTH - 24, themeBorder);
+    // Giant Day Hero
+    display.setTextSize(4);
+    display.setTextColor(themeText);
+    display.setCursor(18, 56);
+    display.print(dateStr.substring(0, 2));
 
     display.setTextSize(2);
-    int itemsPerPage = 4;
-    int scrollOffset = 0;
-    if (option >= itemsPerPage) {
-      scrollOffset = option - itemsPerPage + 1;
-    }
+    display.setTextColor(themeAccent);
+    display.setCursor(80, 58);
+    String dayUpper = dayStr;
+    dayUpper.toUpperCase();
+    display.print(dayUpper);
 
-    int itemHeight = 32;
+    display.drawRoundRect(80, 80, 48, 16, 4, themeAccent);
+    display.setTextSize(1);
+    display.setTextColor(themeText);
+    display.setCursor(86, 84);
+    display.print("TODAY");
 
-    for (int pageIdx = 0; pageIdx < itemsPerPage; pageIdx++) {
-      int optIdx = pageIdx + scrollOffset;
-      if (optIdx >= 8) break;
+    // Divider
+    display.drawFastHLine(14, 106, SCREEN_WIDTH - 28, themeBorder);
 
-      int yPos = 62 + pageIdx * itemHeight;
+    // Scheduled Events count preview
+    display.setTextSize(1);
+    display.setTextColor(themeSubText);
+    display.setCursor(16, 116);
+    display.printf("SCHEDULED EVENTS: %d", calendarEventCount);
 
-      bool isCurrent = (option == optIdx) && settingsActive;
-      
-      // Select box colors
-      uint16_t boxBg = selected ? themeAccent : themeBorder;
-      uint16_t boxText = selected ? TFT_WHITE : themeText;
-
-      if (isCurrent) {
-        display.fillRoundRect(10, yPos, SCREEN_WIDTH - 20, 30, 6, boxBg);
-        display.drawRoundRect(10, yPos, SCREEN_WIDTH - 20, 30, 6, themeAccent);
-        display.setTextColor(boxText, boxBg);
-      } else {
-        display.setTextColor(themeText, themeCardBg);
-      }
-
-      uint16_t bg = isCurrent ? boxBg : themeCardBg;
-      display.setCursor(18, yPos + 7);
-      switch (optIdx) {
-        case 0:
-          display.print("BLE");
-          {
-            String val = "ALWAYS ON";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
-          }
-          break;
-        case 1:
-          display.print("Speed");
-          {
-            String val = String(speed) + "ms";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
-          }
-          break;
-        case 2:
-          display.print("Clock Style");
-          {
-            String val = String(clockStyle);
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
-          }
-          break;
-        case 3:
-          display.print("Invert Screen");
-          {
-            String val = invertOn ? "ON" : "OFF";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
-          }
-          break;
-        case 4:
-          display.print("Brightness");
-          {
-            String val = "MED";
-            if (brightness == 1) val = "LOW";
-            else if (brightness == 3) val = "HIGH";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
-          }
-          break;
-        case 5:
-          display.print("Buzzer Sound");
-          {
-            String val = silentMode ? "MUTED" : "ON";
-            display.setCursor(222 - (val.length() * 12), yPos + 7);
-            display.print(val);
-          }
-          break;
-        case 6:
-          {
-            String val = "SAVE SETTINGS";
-            int startX = 10 + (220 - val.length() * 12) / 2;
-            display.setCursor(startX, yPos + 7);
-            if (!isCurrent) display.setTextColor(0x03E0, themeCardBg);
-            display.print(val);
-          }
-          break;
-        case 7:
-          {
-            String val = "EXIT MENU";
-            int startX = 10 + (220 - val.length() * 12) / 2;
-            display.setCursor(startX, yPos + 7);
-            if (!isCurrent) display.setTextColor(TFT_RED, themeCardBg);
-            display.print(val);
-          }
-          break;
-      }
-    }
-
-    if (settingsActive) {
-      // Scroll indicator dots at bottom
-      int totalItems = 8;
-      int dotAreaY = 208;
-      int dotSpacing = 14;
-      int dotsStartX = (SCREEN_WIDTH - totalItems * dotSpacing) / 2;
-      for (int i = 0; i < totalItems; i++) {
-        if (i == option) {
-          display.fillRoundRect(dotsStartX + i * dotSpacing, dotAreaY, 8, 4, 2, themeAccent);
-        } else {
-          display.fillRoundRect(dotsStartX + i * dotSpacing + 1, dotAreaY + 1, 4, 2, 1, themeBorder);
-        }
+    if (calendarEventCount > 0) {
+      for (int i = 0; i < calendarEventCount && i < 2; i++) {
+        int y = 132 + i * 32;
+        display.fillRoundRect(14, y, SCREEN_WIDTH - 28, 28, 4, themeBorder);
+        display.setCursor(20, y + 6);
+        display.setTextSize(1);
+        display.setTextColor(themeText);
+        display.printf("[%s] %s", calendarEvents[i].timeStr.c_str(), calendarEvents[i].title.c_str());
       }
     } else {
-      // Hint text
-      display.setTextSize(2);
-      display.setTextColor(themeSubText, themeCardBg);
-      String hint = "B1:Enter  B2:Next";
-      display.setCursor((SCREEN_WIDTH - hint.length() * 12) / 2, 206);
-      display.print(hint);
+      display.setCursor(16, 140);
+      display.print("No events scheduled for today.");
     }
+
+    display.setTextSize(1);
+    display.setTextColor(themeAccent);
+    const char* nav = "BTN1: EVENTS // BTN2: NEXT";
+    int nw = strlen(nav) * 6;
+    display.setCursor((SCREEN_WIDTH - nw) / 2, SCREEN_HEIGHT - 18);
+    display.print(nav);
   }
 
-  void drawBitmapScaled(int x, int y, const unsigned char* bitmap, int w, int h, int targetW, int targetH, uint16_t color) {
-    int lastSy = -1;
-    int rowOffset = 0;
-    int bytesPerRow = (w + 7) / 8;
-    for (int ty = 0; ty < targetH; ty++) {
-      int sy = (ty * h) / targetH;
-      if (sy != lastSy) {
-        lastSy = sy;
-        rowOffset = sy * bytesPerRow;
-      }
-      for (int tx = 0; tx < targetW; tx++) {
-        int sx = (tx * w) / targetW;
-        uint8_t byteVal = pgm_read_byte(&bitmap[rowOffset + (sx / 8)]);
-        if (byteVal & (128 >> (sx & 7))) {
-          display.drawPixel(x + tx, y + ty, color);
-        }
-      }
+  // ---- Sprite AI animation state (for primary expression face) ----
+  int spriteAnimIndex;      // which of the 12 sprite_ai animations is active (0-11)
+  int spriteFrameIndex;     // current frame within that animation (0-3)
+  unsigned long lastSpriteFrameTime;
+
+  // Map Expression -> sprite_ai animation index (all 12 animations supported)
+  int exprToSpriteAnim(Expression expr) {
+    Expression e = expr;
+    if (e == EXPR_IDLE) e = defaultExpr;
+    int idx = (int)e;
+    if (idx >= 0 && idx < SPRITE_AI13_ANIMATION_COUNT) {
+      return idx;
     }
+    return spriteAnimIndex;
   }
 
   void drawRobotFaceScreen() {
@@ -1274,476 +1148,404 @@ public:
     if (exprToDraw == EXPR_IDLE) {
       exprToDraw = defaultExpr;
     }
-    
-    // For 1.3" display: normal mode has blue background and white drawing.
-    // Inverted/Negative mode has white background and blue drawing.
-    uint16_t bgColor = negativeDisplay ? TFT_WHITE : TFT_BLUE; // Blue when normal, White when inverted
-    uint16_t color   = negativeDisplay ? TFT_BLUE : TFT_WHITE; // White when normal, Blue when inverted
-    
-    display.fillScreen(bgColor);
 
-    // Keep aspect ratio (2:1) and fit safely within circular smartwatch screen (210x105)
-    int targetW = 210;
-    int targetH = 105;
-    int xOffset = (SCREEN_WIDTH - targetW) / 2;
-    int yOffset = (SCREEN_HEIGHT - targetH) / 2;
-    
-    if (exprToDraw == EXPR_ALL_GIF) {
-      if (currentGifIndex < ALL_GIFS_COUNT) {
-        const unsigned char* const* frames =
-          (const unsigned char* const*)pgm_read_ptr(&ALL_GIFS_TABLE[currentGifIndex].frames);
-        int frameCount = (int)pgm_read_dword(&ALL_GIFS_TABLE[currentGifIndex].count);
-        int safeFrame = (currentFrame < frameCount) ? currentFrame : 0;
-        const unsigned char* frameData =
-          (const unsigned char*)pgm_read_ptr(&frames[safeFrame]);
-        if (frameData) {
-          drawBitmapScaled(xOffset, yOffset, frameData, 128, 64, targetW, targetH, color);
-        }
-      }
+    int animIdx = exprToSpriteAnim(exprToDraw);
+    if (animIdx != spriteAnimIndex) {
+      spriteAnimIndex = animIdx;
+      spriteFrameIndex = 0;
+      lastSpriteFrameTime = millis();
+    }
+
+    // Advance sprite frame timer
+    unsigned long now = millis();
+    if (now - lastSpriteFrameTime >= (unsigned long)frameDelayMs) {
+      lastSpriteFrameTime = now;
+      spriteFrameIndex = (spriteFrameIndex + 1) % SPRITE_AI13_FRAME_COUNT;
+    }
+
+    const uint16_t* frameData = getSpriteAi13Frame(spriteAnimIndex, spriteFrameIndex);
+    if (frameData != nullptr) {
+      display.drawRGBBitmap2x(frameData);
     } else {
-      const unsigned char* frameData = nullptr;
-      int frameIdx = currentFrame;
-      switch (exprToDraw) {
-        case EXPR_IDLE:
-          if (frameIdx < ep_relaxed_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_relaxed_frames[frameIdx]);
-          break;
-        case EXPR_HAPPY:
-          if (frameIdx < ep_happy_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_happy_frames[frameIdx]);
-          break;
-        case EXPR_SAD:
-          if (frameIdx < ep_crying_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_crying_frames[frameIdx]);
-          break;
-        case EXPR_ANGRY:
-          if (frameIdx < ep_angry_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_angry_frames[frameIdx]);
-          break;
-        case EXPR_SURPRISED:
-          if (frameIdx < ep_surprised_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_surprised_frames[frameIdx]);
-          break;
-        case EXPR_SLEEPING:
-          if (frameIdx < ep_sleepy_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_sleepy_frames[frameIdx]);
-          break;
-        case EXPR_WINK:
-          if (frameIdx < ep_wink_frame_count)
-            frameData = (const unsigned char*)pgm_read_ptr(&ep_wink_frames[frameIdx]);
-          break;
-        default:
-          break;
-      }
-      
-      if (frameData != nullptr) {
-        drawBitmapScaled(xOffset, yOffset, frameData, 128, 64, targetW, targetH, color);
-      }
+      display.fillScreen(TFT_BLACK);
+    }
+
+    // Silent mode indicator (top-right)
+    if (silentMode) {
+      uint16_t silentColor = TFT_WHITE;
+      int silentX = SCREEN_WIDTH - 20;
+      int silentY = 10;
+      display.fillRect(silentX, silentY - 2, 2, 4, silentColor);
+      display.fillTriangle(silentX + 2, silentY - 4, silentX + 2, silentY + 4, silentX + 4, silentY, silentColor);
+      display.drawLine(silentX + 6, silentY - 2, silentX + 8, silentY, silentColor);
+      display.drawLine(silentX + 8, silentY - 2, silentX + 6, silentY, silentColor);
     }
   }
 
   void drawMapScreenLandscape(int hour, int minute, bool is12Hour) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent  = theme.accent;
+    uint16_t themeBg      = theme.bg;
+    uint16_t themeText    = theme.text;
+    uint16_t themeCardBg  = theme.cardBg;
+    uint16_t themeBorder  = theme.border;
+    uint16_t themeSubText = theme.subText;
 
-    // Clear display below the status bar
-    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
-
+    // Full screen edge-to-edge 240x240 (No status bar)
+    display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
     display.setTextWrap(false);
 
-    // ── Background card ───────────────────────────────────────────────
-    display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
-    display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 10, themeCardBg);
+    int cardX = 6;
+    int cardW = SCREEN_WIDTH - 12; // 228
 
-    // ── Top label: "NAVIGATION" ───────────────────────────────────────
-    display.setTextSize(1);
-    display.setTextColor(themeText, themeCardBg);
-    int navW = 10 * 6;
-    display.setCursor((SCREEN_WIDTH - navW) / 2, 35);
-    display.print("NAVIGATION");
-    display.drawFastHLine(12, 45, SCREEN_WIDTH - 24, themeBorder);
+    // Upper Card: Maneuver & Distance (Y: 4..124, H = 120)
+    display.fillRoundRect(cardX, 4, cardW, 120, 10, themeCardBg);
+    display.drawRoundRect(cardX, 4, cardW, 120, 10, themeBorder);
 
-    // ── Arrow area (centered, 60x60px arrow in the middle) ───────────
     int cx = SCREEN_WIDTH / 2;
-    int cy = 108;  // vertical center of arrow area
+    int cy = 34;
 
-    if (mapDirection.indexOf("LEFT") >= 0) {
-      // LEFT arrow: large clear left-pointing arrow
-      // Stem: horizontal bar going left from centre
-      display.fillRect(cx - 30, cy - 8, 40, 16, themeText);
-      // Arrowhead pointing LEFT
-      display.fillTriangle(cx - 30, cy,
-                           cx - 10, cy - 26,
-                           cx - 10, cy + 26, themeText);
-      // Small vertical stem going down at the right end (road continues straight then turns)
-      display.fillRect(cx + 10, cy - 8, 14, 30, themeText);
+    String dirUpper = mapDirection;
+    dirUpper.toUpperCase();
 
-    } else if (mapDirection.indexOf("RIGHT") >= 0) {
-      // RIGHT arrow: large clear right-pointing arrow
-      display.fillRect(cx - 10, cy - 8, 40, 16, themeText);
-      // Arrowhead pointing RIGHT
-      display.fillTriangle(cx + 30, cy,
-                           cx + 10, cy - 26,
-                           cx + 10, cy + 26, themeText);
-      // Small vertical stem going down at the left end
-      display.fillRect(cx - 24, cy - 8, 14, 30, themeText);
-
-    } else if (mapDirection.indexOf("UTURN") >= 0 || mapDirection.indexOf("U-TURN") >= 0) {
-      // U-TURN: thick U shape with downward arrow
-      display.drawCircle(cx, cy - 14, 22, themeText);
-      display.drawCircle(cx, cy - 14, 20, themeText);
-      display.drawCircle(cx, cy - 14, 18, themeText);
-      // Erase the bottom half of the circles to make a U
-      display.fillRect(cx - 30, cy - 14, 60, 40, themeCardBg);
-      // Left leg
-      display.fillRect(cx - 24, cy - 14, 6, 32, themeText);
-      // Right leg with downward arrow at bottom
-      display.fillRect(cx + 18, cy - 14, 6, 24, themeText);
-      display.fillTriangle(cx + 21, cy + 18,
-                           cx + 10, cy + 8,
-                           cx + 32, cy + 8, themeText);
-
-    } else if (mapDirection.indexOf("ROUNDABOUT") >= 0 || mapDirection.indexOf("ROUND") >= 0) {
-      // ROUNDABOUT: circle with an exit arrow
-      display.drawCircle(cx, cy, 22, themeText);
-      display.drawCircle(cx, cy, 20, themeText);
-      // Fill inside card bg
-      display.fillCircle(cx, cy, 17, themeCardBg);
-      // Exit arrow pointing up-right
-      display.fillRect(cx + 14, cy - 28, 6, 24, themeText);
-      display.fillTriangle(cx + 17, cy - 34,
-                           cx + 10, cy - 24,
-                           cx + 24, cy - 24, themeText);
-      // Entry from bottom
-      display.fillRect(cx - 6, cy + 14, 12, 16, themeText);
-
+    if (dirUpper.indexOf("LEFT") >= 0) {
+      display.fillRect(cx + 8, cy - 6, 12, 30, themeAccent);
+      display.fillRect(cx - 18, cy - 6, 28, 12, themeAccent);
+      display.fillTriangle(cx - 30, cy, cx - 14, cy - 14, cx - 14, cy + 14, themeAccent);
+    } else if (dirUpper.indexOf("RIGHT") >= 0) {
+      display.fillRect(cx - 20, cy - 6, 12, 30, themeAccent);
+      display.fillRect(cx - 10, cy - 6, 28, 12, themeAccent);
+      display.fillTriangle(cx + 30, cy, cx + 14, cy - 14, cx + 14, cy + 14, themeAccent);
+    } else if (dirUpper.indexOf("UTURN") >= 0 || dirUpper.indexOf("U-TURN") >= 0) {
+      display.fillCircle(cx, cy - 8, 18, themeAccent);
+      display.fillCircle(cx, cy - 8, 10, themeCardBg);
+      display.fillRect(cx - 22, cy - 8, 44, 20, themeCardBg);
+      display.fillRect(cx - 18, cy - 8, 8, 24, themeAccent);
+      display.fillRect(cx + 10, cy - 8, 8, 18, themeAccent);
+      display.fillTriangle(cx + 14, cy + 20, cx + 4, cy + 8, cx + 24, cy + 8, themeAccent);
+    } else if (dirUpper.indexOf("ROUNDABOUT") >= 0 || dirUpper.indexOf("ROUND") >= 0) {
+      display.fillCircle(cx, cy, 18, themeAccent);
+      display.fillCircle(cx, cy, 11, themeCardBg);
+      display.fillRect(cx - 4, cy + 10, 8, 14, themeAccent);
+      display.fillTriangle(cx + 16, cy - 20, cx + 4, cy - 14, cx + 16, cy - 8, themeAccent);
     } else {
-      // STRAIGHT: tall upward arrow
-      display.fillRect(cx - 8, cy - 20, 16, 44, themeText);
-      display.fillTriangle(cx, cy - 40,
-                           cx - 22, cy - 20,
-                           cx + 22, cy - 20, themeText);
+      display.fillRect(cx - 6, cy - 6, 12, 32, themeAccent);
+      display.fillTriangle(cx, cy - 24, cx - 18, cy - 4, cx + 18, cy - 4, themeAccent);
     }
 
-    // ── Direction label text below arrow ────────────────────────────
-    display.setTextSize(2);
-    display.setTextColor(themeText, themeCardBg);
-    String dirLabel = "Go Straight";
-    if      (mapDirection.indexOf("LEFT")       >= 0) dirLabel = "Turn Left";
-    else if (mapDirection.indexOf("RIGHT")      >= 0) dirLabel = "Turn Right";
-    else if (mapDirection.indexOf("UTURN")      >= 0 ||
-             mapDirection.indexOf("U-TURN")     >= 0) dirLabel = "Make U-Turn";
-    else if (mapDirection.indexOf("ROUNDABOUT") >= 0 ||
-             mapDirection.indexOf("ROUND")      >= 0) dirLabel = "Roundabout";
-    int lblW = dirLabel.length() * 12;
-    display.setCursor((SCREEN_WIDTH - lblW) / 2, 152);
-    display.print(dirLabel);
-
-    // ── Bottom info bar ─────────────────────────────────────────────
-    display.drawFastHLine(8, 170, SCREEN_WIDTH - 16, themeBorder);
-    display.fillRoundRect(6, 172, SCREEN_WIDTH - 12, 50, 8, themeCardBg);
-    display.drawRoundRect(6, 172, SCREEN_WIDTH - 12, 50, 8, themeBorder);
-
-    // Distance — left side, large accent
+    // Next Turn Distance
     display.setTextSize(3);
-    display.setTextColor(themeAccent, themeCardBg);
+    display.setTextColor(themeText, themeCardBg);
     String distStr = (mapDistance == "" || mapDistance == "--") ? "---" : mapDistance;
-    display.setCursor(12, 179);
+    int distW = distStr.length() * 18;
+    int distX = (SCREEN_WIDTH - distW) / 2;
+    display.setCursor(distX, 64);
     display.print(distStr);
 
-    // ETA / description — right side, size 2 text
-    if (mapDescription != "") {
-      display.setTextSize(2);
-      display.setTextColor(themeText, themeCardBg);
-      int etaW = mapDescription.length() * 12;
-      int etaX = SCREEN_WIDTH - 12 - etaW;
-      if (etaX < 12) etaX = 12;
-      display.setCursor(etaX, 185);
-      display.print(mapDescription);
+    // Turn Instruction / Road
+    String dirLabel = mapRoad;
+    if (dirLabel.length() == 0) {
+      if (dirUpper.indexOf("LEFT") >= 0) dirLabel = "Turn Left";
+      else if (dirUpper.indexOf("RIGHT") >= 0) dirLabel = "Turn Right";
+      else if (dirUpper.indexOf("UTURN") >= 0 || dirUpper.indexOf("U-TURN") >= 0) dirLabel = "Make U-Turn";
+      else if (dirUpper.indexOf("ROUNDABOUT") >= 0 || dirUpper.indexOf("ROUND") >= 0) dirLabel = "Roundabout";
+      else dirLabel = "Continue Straight";
     }
+    display.setTextSize(2);
+    display.setTextColor(themeAccent, themeCardBg);
+    int rw = dirLabel.length() * 12;
+    int rx = (SCREEN_WIDTH - rw) / 2;
+    if (rx < cardX + 6) rx = cardX + 6;
+    display.setCursor(rx, 94);
+    display.print(dirLabel);
+
+    // Lower Card: Route Details (Y: 128..236, H = 108)
+    display.fillRoundRect(cardX, 128, cardW, 108, 10, themeCardBg);
+    display.drawRoundRect(cardX, 128, cardW, 108, 10, themeBorder);
+
+    display.setTextSize(1);
+    display.setTextColor(themeSubText, themeCardBg);
+    display.setCursor(cardX + 12, 138);
+    display.print("TRIP TELEMETRY");
+
+    display.drawFastHLine(cardX + 10, 150, cardW - 20, themeBorder);
+
+    display.setTextSize(2);
+    display.setTextColor(themeText, themeCardBg);
+    display.setCursor(cardX + 12, 160);
+    display.print(mapTotalTime.length() > 0 ? mapTotalTime : "IN TRANSIT");
+
+    display.setCursor(cardX + 12, 184);
+    display.setTextSize(1);
+    display.setTextColor(themeSubText, themeCardBg);
+    display.printf("DIST: %s", mapTotalDist.length() > 0 ? mapTotalDist.c_str() : "--");
+
+    display.setCursor(cardX + 12, 198);
+    display.printf("ETA : %s", mapEta.length() > 0 ? mapEta.c_str() : "--");
+
+    // Right-aligned clock
+    char cBuf[8];
+    snprintf(cBuf, sizeof(cBuf), "%02d:%02d", hour, minute);
+    display.setTextSize(2);
+    display.setTextColor(themeAccent, themeCardBg);
+    display.setCursor(SCREEN_WIDTH - 76, 170);
+    display.print(cBuf);
   }
 
   void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour, int steps) {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
-    uint16_t themeSubText = 0x7BCF; // Muted grey
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent  = theme.accent;
+    uint16_t themeBg      = theme.bg;
+    uint16_t themeText    = theme.text;
+    uint16_t themeBorder  = theme.border;
+    uint16_t themeSubText = theme.subText;
 
-    // Clear display below the status bar
-    display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
 
-    if (style == 0) {
-      // Style 0: Cyberpunk Dashboard (Light/Clean version)
-      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
-      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, themeCardBg);
+    int dispHour = hour;
+    if (is12Hour) {
+      dispHour = hour % 12;
+      if (dispHour == 0) dispHour = 12;
+    }
 
-      // Horizontal divider line
-      display.drawFastHLine(12, SCREEN_HEIGHT / 2 + 10, SCREEN_WIDTH - 24, themeBorder);
-
-      // Large Digital Time
-      display.setTextSize(4);
-      display.setTextColor(themeText, themeCardBg);
+    if ((style % 2) == 0) {
+      // ── STYLE 0: MONOLITH MINIMAL PRECISION WATCHFACE (240x240) ──────────
       char timeStr[6];
-      int dispHour = hour;
-      if (is12Hour) {
-        dispHour = hour % 12;
-        if (dispHour == 0) dispHour = 12;
-      }
       snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
-      int timeW = 5 * 24;
-      display.setCursor((SCREEN_WIDTH - timeW) / 2 - 10, SCREEN_HEIGHT / 2 - 28);
+
+      // Giant time at Y=36
+      display.setTextSize(5);
+      display.setTextColor(themeText);
+      display.setCursor(20, 36);
       display.print(timeStr);
 
-      // AM/PM or Seconds
-      display.setTextSize(1);
-      display.setTextColor(themeAccent, themeCardBg);
-      if (is12Hour) {
-        const char* ampm = (hour >= 12) ? "PM" : "AM";
-        display.setCursor((SCREEN_WIDTH - timeW) / 2 + timeW + 4, SCREEN_HEIGHT / 2 - 22);
-        display.print(ampm);
-      }
-      char secStr[16];
-      snprintf(secStr, sizeof(secStr), "%02d", second);
-      display.setCursor((SCREEN_WIDTH - timeW) / 2 + timeW + 4, SCREEN_HEIGHT / 2 - 10);
-      display.print(secStr);
-
-      // Date and Day — truncated to keep inside right margin
+      // Seconds / AM-PM
       display.setTextSize(2);
-      String dayDate = day + " " + date;
-      if ((int)dayDate.length() * 12 > SCREEN_WIDTH - 36) {
-        dayDate = day;  // fallback to just weekday abbreviation
+      display.setTextColor(themeAccent);
+      display.setCursor(182, 38);
+      if (is12Hour) {
+        display.print((hour >= 12) ? "PM" : "AM");
+      } else {
+        display.print(":");
+        if (second < 10) display.print("0");
+        display.print(second);
       }
-      display.setTextColor(themeText, themeCardBg);
-      display.setCursor(18, SCREEN_HEIGHT / 2 + 18);
-      display.print(dayDate);
 
-      // Steps widget — right-aligned, won't overlap day text
-      display.setTextColor(themeText, themeCardBg);
-      String stepStr = String(steps);
-      int stepW = (int)stepStr.length() * 12 + 14; // extra for foot icon
-      int stepX = SCREEN_WIDTH - 16 - stepW;
-      display.setCursor(stepX + 14, SCREEN_HEIGHT / 2 + 18);
-      display.print(stepStr);
-      // foot icon dots
-      int fx = stepX + 6;
-      int fy = SCREEN_HEIGHT / 2 + 24;
-      display.fillCircle(fx,     fy - 4, 2, themeAccent);
-      display.fillCircle(fx + 4, fy - 2, 2, themeAccent);
-      display.fillCircle(fx - 3, fy + 2, 1, themeAccent);
+      display.drawFastHLine(16, 84, SCREEN_WIDTH - 32, themeBorder);
 
-    } else if (style == 1) {
-      // Style 1: Minimalist Radial Gauge
-      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 16, themeAccent);
-      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 12, themeBg);
+      // Date Block
+      display.fillRect(16, 92, 2, 42, themeAccent);
 
-      // Center card
-      int cardW = 130;
-      int cardH = 46;
-      int cardX = (SCREEN_WIDTH - cardW) / 2;
-      int cardY = (SCREEN_HEIGHT - cardH) / 2 + 8;
-      display.fillRoundRect(cardX, cardY, cardW, cardH, 8, themeCardBg);
-      display.drawRoundRect(cardX, cardY, cardW, cardH, 8, themeBorder);
-
-      // Time
       display.setTextSize(3);
-      display.setTextColor(themeText, themeCardBg);
-      char timeStr[6];
-      int dispHour = hour;
-      if (is12Hour) {
-        dispHour = hour % 12;
-        if (dispHour == 0) dispHour = 12;
-      }
-      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
-      display.setCursor(cardX + 16, cardY + 12);
-      display.print(timeStr);
+      display.setTextColor(themeText);
+      display.setCursor(26, 92);
+      String dayUpper = day;
+      dayUpper.toUpperCase();
+      display.print(dayUpper);
 
-      display.setTextSize(1);
-      display.setTextColor(themeAccent, themeCardBg);
-      if (is12Hour) {
-        const char* ampm = (hour >= 12) ? "PM" : "AM";
-        display.setCursor(cardX + 104, cardY + 14);
-        display.print(ampm);
-      }
-      char secStr[6];
-      snprintf(secStr, sizeof(secStr), "%02d", second);
-      display.setCursor(cardX + 104, cardY + 24);
-      display.print(secStr);
-
-      // Sweeping Ring arc
-      int progressWidth = (second * (SCREEN_WIDTH - 48)) / 60;
-      display.drawRoundRect(24, 38, SCREEN_WIDTH - 48, 6, 3, themeBorder);
-      display.fillRoundRect(24, 38, progressWidth, 6, 3, themeAccent);
-
-      // Date
-      display.fillRoundRect(24, SCREEN_HEIGHT - 32, SCREEN_WIDTH - 48, 24, 6, themeCardBg);
-      display.drawRoundRect(24, SCREEN_HEIGHT - 32, SCREEN_WIDTH - 48, 24, 6, themeBorder);
       display.setTextSize(2);
-      display.setTextColor(themeText, themeCardBg);
-      String dStr = day + " " + date;
-      int dW = dStr.length() * 12;
-      display.setCursor((SCREEN_WIDTH - dW) / 2, SCREEN_HEIGHT - 28);
-      display.print(dStr);
+      display.setTextColor(themeSubText);
+      display.setCursor(26, 118);
+      String dateUpper = date;
+      dateUpper.toUpperCase();
+      display.print(dateUpper);
+
+      // Right-aligned secondary telemetry tags
+      display.setTextSize(1);
+      display.setTextColor(themeSubText);
+      display.setCursor(140, 94);  display.print("SYS // NOMINAL");
+      display.setCursor(140, 108); display.print("RTC // SYNCED");
+      display.setCursor(140, 122); display.print("PWR // OPTIMAL");
+
+      display.drawFastHLine(16, 142, SCREEN_WIDTH - 32, themeBorder);
+
+      // Lower Telemetry Rails
+      display.setTextSize(1);
+      display.setTextColor(themeSubText);
+      display.setCursor(16, 150);
+      display.print("ACTIVITY");
+
+      display.setTextSize(2);
+      display.setTextColor(themeText);
+      display.setCursor(16, 162);
+      display.print(steps);
+      display.setTextSize(1);
+      display.setTextColor(themeSubText);
+      display.print(" STPS");
+
+      display.drawFastHLine(16, 180, 90, themeBorder);
+      int stepW = (steps > 0) ? min(90, (steps * 90) / 10000) : 10;
+      display.drawFastHLine(16, 180, stepW, themeAccent);
+
+      // Power rail
+      int batteryPct = getBatteryPercentage(batteryVolts);
+      display.setTextSize(1);
+      display.setTextColor(themeSubText);
+      display.setCursor(130, 150);
+      display.print("TELEMETRY");
+
+      display.setTextSize(2);
+      display.setTextColor(themeText);
+      display.setCursor(130, 162);
+      display.print(batteryPct);
+      display.setTextSize(1);
+      display.setTextColor(themeSubText);
+      display.print("% PWR");
+
+      display.drawFastHLine(130, 180, 90, themeBorder);
+      int battW = min(90, (batteryPct * 90) / 100);
+      uint16_t battCol = (batteryPct < 25) ? 0xF800 : ((batteryPct < 55) ? 0xFFE0 : 0x07E0);
+      display.drawFastHLine(130, 180, battW, battCol);
+
+      // Button navigation hints
+      display.setTextSize(1);
+      display.setTextColor(themeSubText);
+      const char* hint = "BTN1: STYLE // BTN2: SCREEN";
+      int hw = strlen(hint) * 6;
+      display.setCursor((SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 18);
+      display.print(hint);
 
     } else {
-      // Style 2: Watch OS Grid
-      display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 12, themeAccent);
-      display.fillRoundRect(8, 32, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 40, 8, themeBg);
+      // ── STYLE 1: AEROSPACE CHRONO TELEMETRY (240x240) ──────────────
+      char hStr[4], mStr[4];
+      snprintf(hStr, sizeof(hStr), "%02d", dispHour);
+      snprintf(mStr, sizeof(mStr), "%02d", minute);
 
-      // Grid spacing — yield() prevents WDT resets during pixel loops
-      int gridSpacing = SCREEN_WIDTH / 10;
-      for (int x = gridSpacing; x < SCREEN_WIDTH; x += gridSpacing) {
-        display.drawFastVLine(x, 28, SCREEN_HEIGHT - 28, themeBorder);
-        yield();
-      }
-      for (int y = 28; y < SCREEN_HEIGHT; y += gridSpacing) {
-        display.drawFastHLine(0, y, SCREEN_WIDTH, themeBorder);
-        yield();
-      }
+      display.setTextSize(5);
+      display.setTextColor(themeText);
+      display.setCursor(20, 32);
+      display.print(hStr);
 
-      // Title Card
-      display.fillRoundRect(12, 34, 130, 20, 4, themeCardBg);
-      display.setTextColor(themeText, themeCardBg);
-      display.setTextSize(1);
-      display.setCursor(18, 40);
-      display.print("WATCH OS v3.0");
+      display.setTextColor(themeAccent);
+      display.setCursor(20, 80);
+      display.print(mStr);
 
-      // Time (Large & bold size 4)
-      display.setTextSize(4);
-      display.setTextColor(themeText, themeBg);
-      char timeStr[6];
-      int dispHour = hour;
-      if (is12Hour) {
-        dispHour = hour % 12;
-        if (dispHour == 0) dispHour = 12;
-      }
-      snprintf(timeStr, sizeof(timeStr), "%d:%02d", dispHour, minute);
-      display.setCursor(14, 62);
-      display.print(timeStr);
+      display.drawFastVLine(96, 30, 96, themeBorder);
 
       display.setTextSize(2);
-      if (is12Hour) {
-        display.setTextColor(themeAccent, themeBg);
-        display.setCursor(120 + (dispHour >= 10 ? 24 : 0), 62);
-        display.print((hour >= 12) ? "PM" : "AM");
-      }
-
-      // Steps widget (size 2, centered inside high contrast card)
-      display.fillRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, themeCardBg);
-      display.drawRoundRect(14, 110, SCREEN_WIDTH - 28, 28, 6, themeBorder);
-      display.setTextColor(themeText, themeCardBg);
-      display.setTextSize(2);
-      display.setCursor(20, 116);
-      display.print("STEPS: ");
-      display.print(steps);
-
-      // Date widget (size 2, centered inside high contrast card)
-      display.fillRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, themeCardBg);
-      display.drawRoundRect(14, 146, SCREEN_WIDTH - 28, 28, 6, themeBorder);
-      display.setTextColor(themeText, themeCardBg);
-      display.setTextSize(2);
-      display.setCursor(20, 152);
-      display.print("DATE: ");
+      display.setTextColor(themeText);
+      display.setCursor(108, 36);
       display.print(day);
-      display.print(", ");
+
+      display.setTextSize(2);
+      display.setTextColor(themeSubText);
+      display.setCursor(108, 58);
       display.print(date);
 
-      // Flashing block
-      display.fillRoundRect(SCREEN_WIDTH - 30, SCREEN_HEIGHT - 30, 12, 12, 3, (second % 2 == 0) ? themeAccent : themeBorder);
+      display.setTextSize(1);
+      display.setTextColor(themeAccent);
+      display.setCursor(108, 84);
+      display.printf("SEC: %02d", second);
+
+      display.setTextColor(themeSubText);
+      display.setCursor(108, 100);
+      display.printf("STP: %d", steps);
+
+      display.drawFastHLine(16, 136, SCREEN_WIDTH - 32, themeBorder);
+
+      int secW = (second * (SCREEN_WIDTH - 32)) / 60;
+      display.drawFastHLine(16, 154, SCREEN_WIDTH - 32, themeBorder);
+      display.drawFastHLine(16, 154, secW, themeAccent);
+
+      display.setTextSize(1);
+      display.setTextColor(themeSubText);
+      display.setCursor(16, 168);
+      display.print("AEROSPACE CHRONO // T-INDEX");
+
+      const char* hint = "BTN1: STYLE // BTN2: SCREEN";
+      int hw = strlen(hint) * 6;
+      display.setCursor((SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 18);
+      display.print(hint);
     }
   }
 
-  void drawTextScreen() {
-    uint16_t LUNA_CYAN   = 0x07FF;
-    uint16_t LUNA_PINK   = 0xF8B8;
-    uint16_t LUNA_DARK   = 0x0842;
-    uint16_t LUNA_GLASS  = 0x18E3;
+  void drawSettingsMenuLandscape(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent  = theme.accent;
+    uint16_t themeBg      = theme.bg;
+    uint16_t themeText    = theme.text;
+    uint16_t themeBorder  = theme.border;
+    uint16_t themeSubText = theme.subText;
 
-    display.setTextWrap(false);
-    
-    display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 12, LUNA_CYAN);
-    display.drawRoundRect(5, 5, SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 11, LUNA_PINK);
-    display.fillRoundRect(8, 8, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 16, 9, LUNA_DARK);
-    
-    // Envelope Folder Mascot Icon
-    int bx = 22, by = 20;
-    display.fillRoundRect(bx - 8, by - 6, 16, 12, 3, LUNA_PINK);
-    display.fillTriangle(bx - 8, by - 6, bx + 8, by - 6, bx, by, LUNA_DARK);
+    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
 
     display.setTextSize(2);
-    display.setTextColor(LUNA_CYAN);
-    display.setCursor(44, 12);
-    
-    String displayTitle = notificationTitle;
-    if (displayTitle.length() == 0) {
-      displayTitle = "Alert";
-    }
-    if (displayTitle.length() > 14) {
-      displayTitle = displayTitle.substring(0, 11) + "...";
-    }
-    display.print(displayTitle);
-    
-    display.drawFastHLine(12, 36, SCREEN_WIDTH - 24, LUNA_GLASS);
+    display.setTextColor(themeText);
+    display.setCursor(16, 26);
+    display.print("SETTINGS");
 
-    display.setTextColor(TFT_WHITE);
-    display.setTextSize(3);
-    
-    int textLength = notificationText.length() * 18;
-    if (textLength <= SCREEN_WIDTH - 24) {
-      int startX = (SCREEN_WIDTH - textLength) / 2;
-      display.setCursor(startX, SCREEN_HEIGHT / 2 - 12);
-      display.print(notificationText);
-    } else {
-      display.setCursor(scrollPos, SCREEN_HEIGHT / 2 - 12);
-      display.print(notificationText);
-    }
+    display.drawFastHLine(14, 44, SCREEN_WIDTH - 28, themeBorder);
 
-    display.setTextSize(2);
-    display.setTextColor(LUNA_PINK);
-    int footerW = 10 * 12;
-    display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 28);
-    display.print("Luna Alert");
-  }
+    const int CONTENT_TOP = 48;
+    const int ITEM_H      = 22;
+    const int TOTAL_ITEMS = 8;
 
-  int getMixedSizeTextWidth(String text) {
-    int w = 0;
-    for (unsigned int i = 0; i < text.length(); i++) {
-      char c = text.charAt(i);
-      if (c == ' ') {
-        w += 6;
-      } else if ((c >= '0' && c <= '9') || c == '.' || c == ':') {
-        w += 12;
-      } else {
-        w += 6;
+    const char* titles[] = {
+      "Brightness", "Sound FX", "Clock Face", "Speed",
+      "Theme", "Bluetooth", "Save", "Exit"
+    };
+
+    for (int i = 0; i < TOTAL_ITEMS; i++) {
+      int yPos = CONTENT_TOP + i * ITEM_H;
+      if (yPos >= SCREEN_HEIGHT - 24) break;
+
+      bool isCurrent = (option == i) && settingsActive;
+
+      if (isCurrent) {
+        display.fillRect(10, yPos + 2, 3, 16, themeAccent);
+      }
+
+      display.setTextSize(1);
+      display.setTextColor(isCurrent ? themeAccent : themeText);
+      display.setCursor(18, yPos + 6);
+      display.print(titles[i]);
+
+      int cX = 140;
+      int cY = yPos + 4;
+
+      display.setTextColor(themeSubText);
+      switch (i) {
+        case 0:
+          display.setCursor(cX, cY + 2);
+          display.print(brightness == 1 ? "33%" : (brightness == 2 ? "66%" : "100%"));
+          break;
+        case 1:
+          display.setCursor(cX, cY + 2);
+          display.print(!silentMode ? "ACTIVE" : "MUTED");
+          break;
+        case 2:
+          display.setCursor(cX, cY + 2);
+          display.print((clockStyle % 2 == 0) ? "MONOLITH" : "CHRONO");
+          break;
+        case 3:
+          display.setCursor(cX, cY + 2);
+          display.printf("%dms", speed);
+          break;
+        case 4:
+          display.setCursor(cX, cY + 2);
+          display.print(invertOn ? "LIGHT" : "DARK");
+          break;
+        case 5:
+          display.setCursor(cX, cY + 2);
+          display.print(bleOn ? "ON" : "OFF");
+          break;
+        case 6:
+          display.setCursor(cX, cY + 2);
+          display.print("PRESS");
+          break;
+        case 7:
+          display.setCursor(cX, cY + 2);
+          display.print("PRESS");
+          break;
       }
     }
-    return w;
-  }
 
-  void drawMixedSizeText(String text, int startX, int y2, int y1) {
-    int currentX = startX;
-    for (unsigned int i = 0; i < text.length(); i++) {
-      char c = text.charAt(i);
-      if (c == ' ') {
-        currentX += 6;
-      } else if ((c >= '0' && c <= '9') || c == '.' || c == ':') {
-        display.setTextSize(2);
-        display.setCursor(currentX, y2);
-        display.print(c);
-        currentX += 12;
-      } else {
-        display.setTextSize(1);
-        display.setCursor(currentX, y1);
-        display.print(c);
-        currentX += 6;
-      }
-    }
     display.setTextSize(1);
+    display.setTextColor(themeAccent);
+    const char* nav = "BTN1: MOVE // BTN2: SELECT";
+    int nw = strlen(nav) * 6;
+    display.setCursor((SCREEN_WIDTH - nw) / 2, SCREEN_HEIGHT - 16);
+    display.print(nav);
   }
 
   // ------------------ Primary Smartwatch Draw Adapter ------------------
@@ -1757,7 +1559,7 @@ public:
     if (popupActive) {
       drawPopup();
     } else {
-      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_GAMES && currentScreen != SCREEN_CARD) {
+      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_CARD) {
         drawStatusBar(hour, minute);
       }
       
@@ -1780,38 +1582,56 @@ public:
           break;
         case SCREEN_GAMES:
           if (!gamesActive) {
-            uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-            uint16_t themeBg     = TFT_WHITE;
-            uint16_t themeText   = 0x2104; // Charcoal/black
-            uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-            uint16_t themeBorder = 0xD69A; // Light Grey
-            uint16_t themeSubText = 0x7BCF; // Muted grey
+            ThemeColors theme = getTheme();
+            uint16_t themeAccent  = theme.accent;
+            uint16_t themeBg      = theme.bg;
+            uint16_t themeText    = theme.text;
+            uint16_t themeCardBg  = theme.cardBg;
+            uint16_t themeBorder  = theme.border;
+            uint16_t themeSubText = theme.subText;
 
-            // Clear display below the status bar
-            display.fillRect(0, 24, SCREEN_WIDTH, SCREEN_HEIGHT - 24, themeBg);
+            display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
 
-            // Draw initial Games screen with prompt
-            display.fillRoundRect(6, 30, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 36, 10, themeCardBg);
-            display.drawRoundRect(4, 28, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 32, 10, themeAccent);
+            display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 10, themeCardBg);
+            display.drawRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 10, themeBorder);
 
-            // Large Title
             display.setTextSize(2);
-            display.setTextColor(themeAccent, themeCardBg);
-            display.setCursor(54, 60);
+            display.setTextColor(themeAccent);
+            display.setCursor(20, 42);
             display.print("LUNA ARCADE");
-            
-            // Draw divider
-            display.drawFastHLine(20, 85, SCREEN_WIDTH - 40, themeBorder);
 
-            // Subtitle instructions
-            display.setTextSize(2);
-            display.setTextColor(themeText, themeCardBg);
-            display.setCursor(24, 115);
-            display.print("BTN1: START");
-            
-            display.setTextColor(themeSubText, themeCardBg);
-            display.setCursor(24, 155);
-            display.print("BTN2: CYCLE");
+            display.setTextSize(1);
+            display.setTextColor(themeSubText);
+            display.setCursor(20, 64);
+            display.print("7 RETRO ENGINE TITLES");
+
+            display.drawFastHLine(18, 78, SCREEN_WIDTH - 36, themeBorder);
+
+            // Center gamepad illustration
+            int icx = SCREEN_WIDTH / 2;
+            int icy = 114;
+            display.fillRoundRect(icx - 36, icy - 16, 72, 32, 6, themeBg);
+            display.drawRoundRect(icx - 36, icy - 16, 72, 32, 6, themeBorder);
+            display.fillRect(icx - 24, icy - 8, 6, 16, themeAccent);
+            display.fillRect(icx - 29, icy - 3, 16, 6, themeAccent);
+            display.fillCircle(icx + 18, icy - 3, 3, 0xF800);
+            display.fillCircle(icx + 10, icy + 4, 3, themeAccent);
+            display.fillCircle(icx + 26, icy + 4, 3, 0x07E0);
+
+            // Instructions
+            display.setTextSize(1);
+            display.setTextColor(themeText);
+            display.setCursor(24, 150);
+            display.print("BTN1 : START / JUMP / MOVE");
+
+            display.setTextColor(themeSubText);
+            display.setCursor(24, 168);
+            display.print("BTN2 : MENU / NEXT / EXIT");
+
+            const char* tip = "BTN1: LAUNCH // BTN2: SCREEN";
+            int tw = strlen(tip) * 6;
+            display.setCursor((SCREEN_WIDTH - tw) / 2, SCREEN_HEIGHT - 18);
+            display.print(tip);
           } else {
             if (!gamePlaying) {
               games.drawMenu(display);
@@ -1843,27 +1663,90 @@ public:
         case SCREEN_CARD:
           qrCard.drawQRScreen(display);
           break;
+        default:
+          drawRobotFaceScreen();
+          break;
       }
     }
 
     if (!popupActive && currentScreen == SCREEN_FACE && headerText.length() > 0) {
-      uint16_t headerBg = negativeDisplay ? TFT_WHITE : TFT_BLUE; // matches screen bgColor
-      uint16_t headerFg = negativeDisplay ? TFT_BLUE : TFT_WHITE; // matches screen drawing color
-      display.fillRect(0, 0, SCREEN_WIDTH, 24, headerBg);
+      uint16_t headerBg = negativeDisplay ? TFT_WHITE : TFT_BLUE;
+      uint16_t headerFg = negativeDisplay ? TFT_BLUE : TFT_WHITE;
+      display.fillRect(0, 0, SCREEN_WIDTH, 22, headerBg);
       display.setTextColor(headerFg);
       display.setTextSize(2);
       
-      // Center the header text
       int textW = headerText.length() * 12;
       int startX = (SCREEN_WIDTH - textW) / 2;
       if (startX < 0) startX = 0;
       
-      display.setCursor(startX, 4);
+      display.setCursor(startX, 3);
       display.print(headerText);
-      display.drawFastHLine(0, 24, SCREEN_WIDTH, headerFg);
+      display.drawFastHLine(0, 22, SCREEN_WIDTH, headerFg);
+    }
+
+    // ── Alarm / Meeting / Reminder Ringing Overlay ──
+    if (alarmRingingActive) {
+      int ox = 8;
+      int oy = 12;
+      int ow = SCREEN_WIDTH - 16;
+      int oh = SCREEN_HEIGHT - 24;
+      uint16_t alertColor = 0xF800; // Red for Alarm/Meeting
+      if (ringingType.indexOf("remind") >= 0) alertColor = 0xFD20; // Amber/Orange for Reminder
+      else if (ringingType.indexOf("bday") >= 0 || ringingType.indexOf("birth") >= 0) alertColor = 0xF81F; // Magenta for Birthday
+
+      // Pulsing border effect
+      bool pulse = ((millis() / 350) % 2 == 0);
+      display.fillRoundRect(ox, oy, ow, oh, 12, 0x0841); // Dark slate card
+      display.drawRoundRect(ox, oy, ow, oh, 12, pulse ? alertColor : TFT_WHITE);
+      display.drawRoundRect(ox + 1, oy + 1, ow - 2, oh - 2, 11, pulse ? alertColor : 0x4208);
+
+      // Event Type Badge
+      display.fillRoundRect(ox + 12, oy + 12, 106, 20, 5, alertColor);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(ox + 16, oy + 18);
+      String alertLabel = ringingType;
+      alertLabel.toUpperCase();
+      if (alertLabel.length() == 0) alertLabel = "ALARM";
+      display.print(alertLabel + " RINGING!");
+
+      // Event Time
+      display.setTextSize(3);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(ox + 12, oy + 38);
+      display.print(ringingTime.length() > 0 ? ringingTime : "NOW");
+
+      // Event Title
+      display.setTextSize(2);
+      display.setTextColor(alertColor);
+      int ty = oy + 70;
+      int cpl = (ow - 24) / 12;
+      int tLines = 0;
+      for (unsigned int i = 0; i < ringingTitle.length() && tLines < 3; i += cpl) {
+        unsigned int endI = i + cpl;
+        if (endI > ringingTitle.length()) endI = ringingTitle.length();
+        display.setCursor(ox + 12, ty + tLines * 18);
+        display.print(ringingTitle.substring(i, endI));
+        tLines++;
+      }
+
+      // Button dismissal prompt
+      int dbW = ow - 24;
+      int dbH = 32;
+      int dbX = ox + 12;
+      int dbY = oy + oh - 40;
+      display.fillRoundRect(dbX, dbY, dbW, dbH, 8, pulse ? alertColor : 0x2124);
+      display.setTextColor(TFT_WHITE);
+      display.setTextSize(1);
+      const char* dTxt = "CLICK BUTTON TO DISMISS";
+      int dtw = strlen(dTxt) * 6;
+      display.setCursor(dbX + (dbW - dtw) / 2, dbY + 12);
+      display.print(dTxt);
     }
     
-    tft.drawRGBBitmap(0, 0, display.getBuffer(), SCREEN_WIDTH, SCREEN_HEIGHT);
+    // Draw directly at (0, 0) for 1.3" display (no Y offset!)
+    display.flush(tft);
   }
 
   // Legacy compatibility
@@ -1871,7 +1754,7 @@ public:
     display.fillScreen(TFT_WHITE);
     drawStatusBar(12, 0);
     drawSettingsMenuLandscape(option, selected, bleOn, speed, clockStyle, invertOn, brightness);
-    tft.drawRGBBitmap(0, 0, display.getBuffer(), SCREEN_WIDTH, SCREEN_HEIGHT);
+    display.flush(tft);
   }
 };
 

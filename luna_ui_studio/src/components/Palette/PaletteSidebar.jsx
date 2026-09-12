@@ -71,51 +71,51 @@ export default function PaletteSidebar({ onAdd, onOpenCompileModal }) {
 
 function ElementCard({ compKey, comp, onAdd }) {
   const Comp = comp.component
-  const p = comp.defaultProps
+  const p = comp.defaultProps || {}
 
   const handleDragStart = (e) => {
     e.dataTransfer.setData('text/plain', compKey)
     e.dataTransfer.effectAllowed = 'copy'
   }
 
+  const isPattern = comp.category === 'patterns'
   const compW = p.w || 200
   const compH = p.h || 60
-  // Scale to fit within 228px width preview, max 80px height
-  const scaleX = 228 / compW
-  const scaleY = 80 / compH
-  const scale = Math.min(scaleX, scaleY, 1)
-  const scaledH = Math.ceil(compH * scale)
+  // Scale to fit within 210px width preview, max 70px height
+  const scaleX = 210 / compW
+  const scaleY = 70 / compH
+  const scale = isPattern ? 1 : Math.min(scaleX, scaleY, 1)
+  const previewH = isPattern ? 76 : Math.max(Math.ceil(compH * scale), 48)
 
   return (
     <Card draggable onDragStart={handleDragStart}>
       <CardHeader>
-        <CardName>{comp.name}</CardName>
-        <CardBadge>{comp.category}</CardBadge>
+        <CardName title={comp.name}>{comp.name}</CardName>
+        <CardBadge style={isPattern ? { background: 'rgba(124, 58, 237, 0.2)', color: '#c084fc', borderColor: 'rgba(124, 58, 237, 0.4)' } : undefined}>
+          {comp.category}
+        </CardBadge>
       </CardHeader>
 
-      <PreviewBox>
+      <PreviewBox style={{ height: previewH + 16 }}>
         <div style={{
-          height: Math.max(scaledH + 16, 40),
-          position: 'relative',
-          overflow: 'hidden',
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: isPattern ? 'translate(-50%, -50%)' : `translate(-50%, -50%) scale(${scale})`,
+          transformOrigin: 'center center',
+          width: isPattern ? '100%' : compW,
+          height: isPattern ? '100%' : compH,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
         }}>
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: `translate(-50%, -50%) scale(${scale})`,
-            transformOrigin: 'center center',
-            width: compW,
-            height: compH,
-            pointerEvents: 'none',
-          }}>
-            <Comp {...p} />
-          </div>
+          {Comp && <Comp {...p} w={isPattern ? 228 : compW} h={isPattern ? 76 : compH} />}
         </div>
       </PreviewBox>
 
       <CardFooter>
-        <FooterHint>Drag to canvas</FooterHint>
+        <FooterHint>{isPattern ? 'Drag or + Add' : 'Drag to canvas'}</FooterHint>
         <AddBtn onClick={() => onAdd(compKey)}>+ Add</AddBtn>
       </CardFooter>
     </Card>
@@ -125,9 +125,10 @@ function ElementCard({ compKey, comp, onAdd }) {
 // ── Styled Components ──────────────────────────────────────
 
 const Sidebar = styled.aside`
-  width: 248px;
-  min-width: 248px;
+  width: 256px;
+  min-width: 256px;
   height: 100%;
+  max-height: 100%;
   background: var(--bg-base);
   display: flex;
   flex-direction: column;
@@ -146,6 +147,7 @@ const SidebarHeader = styled.div`
   box-shadow: var(--neu-raised);
   margin: 10px 10px 0;
   border-radius: var(--radius-md);
+  flex-shrink: 0;
 `
 
 const HeaderTitle = styled.span`
@@ -173,6 +175,7 @@ const SearchBox = styled.input`
   font-size: 12px;
   color: var(--text-primary);
   outline: none;
+  flex-shrink: 0;
   &::placeholder { color: var(--text-muted); }
   &:focus { box-shadow: var(--neu-inset), 0 0 0 2px var(--accent-blue)44; }
 `
@@ -183,6 +186,7 @@ const CategoryTabs = styled.div`
   gap: 4px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 `
 
 const CatTab = styled.button`
@@ -200,22 +204,30 @@ const CatTab = styled.button`
 `
 
 const ElementsList = styled.div`
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
   overflow-y: auto;
-  padding: 8px;
+  overflow-x: hidden;
+  padding: 10px 10px 24px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 `
 
 const Card = styled.div`
+  flex-shrink: 0;
+  min-height: fit-content;
   background: var(--bg-raised);
+  border: 1px solid rgba(0, 0, 0, 0.05);
   border-radius: var(--radius-md);
   box-shadow: var(--neu-raised);
   overflow: hidden;
   cursor: grab;
   transition: transform 0.15s, box-shadow 0.15s;
-  &:hover { transform: translateY(-2px); box-shadow: 8px 8px 20px var(--shadow-dark), -8px -8px 20px var(--shadow-light); }
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 6px 6px 16px var(--shadow-dark), -6px -6px 16px var(--shadow-light);
+  }
   &:active { cursor: grabbing; transform: scale(0.98); }
 `
 
@@ -223,35 +235,40 @@ const CardHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 10px 6px;
+  padding: 8px 10px;
 `
 
 const CardName = styled.span`
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 145px;
 `
 
 const CardBadge = styled.span`
   font-size: 9px;
   font-weight: 700;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 10px;
-  background: var(--accent-blue)22;
+  background: rgba(37, 99, 235, 0.12);
   color: var(--accent-blue);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 `
 
 const PreviewBox = styled.div`
   margin: 0 8px;
-  background: var(--bg-inset);
+  background: #0b0f19;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-sm);
-  box-shadow: var(--neu-inset);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   position: relative;
 `
-
 
 const CompileBanner = styled.div`
   margin: 8px 10px 0;
@@ -264,6 +281,7 @@ const CompileBanner = styled.div`
   gap: 8px;
   cursor: pointer;
   color: var(--accent-blue);
+  flex-shrink: 0;
   transition: all 0.2s;
   &:hover {
     background: linear-gradient(135deg, rgba(37,99,235,0.18), rgba(124,58,237,0.2));
@@ -275,17 +293,18 @@ const CompileBanner = styled.div`
   }
 `
 
-
 const CardFooter = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 6px 10px 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
 `
 
 const FooterHint = styled.span`
   font-size: 10px;
   color: var(--text-muted);
+  font-weight: 500;
 `
 
 const AddBtn = styled.button`

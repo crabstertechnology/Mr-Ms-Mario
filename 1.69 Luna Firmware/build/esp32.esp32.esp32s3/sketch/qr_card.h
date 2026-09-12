@@ -48,7 +48,11 @@ public:
       qrGenerated = false;
       Serial.println("[QR] Loaded stored URL: " + url);
     } else {
-      configured = false;
+      strncpy(storedUrl, "https://shop.crabstertech.in", 255);
+      storedUrl[255] = '\0';
+      configured = true;
+      qrGenerated = false;
+      Serial.println("[QR] Default URL active: https://shop.crabstertech.in");
     }
   }
 

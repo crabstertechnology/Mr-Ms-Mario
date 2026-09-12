@@ -21,6 +21,7 @@ function App() {
     duplicateScreen,
     renameScreen,
     setScreenBg,
+    updateScreen,
 
     elements,
     selectedId,
@@ -72,57 +73,11 @@ function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [deleteSelected, duplicateSelected, undo, setMode, showToast])
 
-  // Load default multi-screen project with interactive block mapping once on mount
+  // Luna Canonical 8-Screen Monolith Project is initialized by default in useCanvas
   useEffect(() => {
     if (initializedRef.current) return
     initializedRef.current = true
-
-    // Only initialize if screen 1 has no elements yet
-    if (screens.length === 1 && screens[0].elements.length === 0) {
-      // 1. Setup Screen 1 (Home)
-      const clockId = addElement('digital_clock', 20, 20, 'screen_1')
-      const cardId = addElement('card_glass', 20, 95, 'screen_1')
-      const btn1Id = addElement('uiv_btn_happy_coding', 20, 205, 'screen_1')
-
-      // 2. Setup Screen 2 (Page 2)
-      const screen2Id = addScreen('Screen 2 (Page 2)')
-      const statId = addElement('card_stat', 20, 25, screen2Id)
-      const retroId = addElement('card_retro', 20, 110, screen2Id)
-      const btn2Id = addElement('uiv_btn_damith_yellow', 20, 205, screen2Id)
-
-      // 3. Map Button 1 on Screen 1 -> Navigates to Screen 2
-      if (btn1Id) {
-        updateElementActions(btn1Id, [
-          {
-            id: 'act_nav_to_s2',
-            trigger: 'onClick',
-            actionType: 'navigate',
-            targetScreenId: screen2Id,
-            transition: 'slide-left',
-            alertMessage: 'Taking you to Page 2...',
-          }
-        ])
-      }
-
-      // 4. Map Button 2 on Screen 2 -> Navigates back to Screen 1
-      if (btn2Id) {
-        updateElementActions(btn2Id, [
-          {
-            id: 'act_nav_to_s1',
-            trigger: 'onClick',
-            actionType: 'navigate',
-            targetScreenId: 'screen_1',
-            transition: 'slide-right',
-            alertMessage: 'Returning to Home...',
-          }
-        ])
-      }
-
-      // Switch back to Screen 1 as active initial view
-      setActiveScreenId('screen_1')
-      setSelectedId(null)
-    }
-  }, []) // eslint-disable-line
+  }, [])
 
   const handleAdd = (type) => {
     addElement(type, 40, 80)
@@ -156,6 +111,16 @@ function App() {
     } else if (act.actionType === 'toggle') {
       updateElement(el.id, { checked: !el.props.checked })
       showToast(`🔄 Tested: Toggled switch`)
+    }
+  }
+
+  const handleTestSwipe = (direction, gesture) => {
+    if (gesture?.actionType === 'navigate' && gesture?.targetScreenId) {
+      setActiveScreenId(gesture.targetScreenId)
+      const target = screens.find(s => s.id === gesture.targetScreenId)
+      showToast(`👈 Swiped ${direction === 'left' ? 'Left' : 'Right'} ➔ Navigated to "${target?.name || 'Screen'}"`)
+    } else if (gesture?.actionType === 'alert') {
+      showToast(`🔔 Swipe Alert: "${gesture.alertMessage || 'Gesture Triggered'}"`)
     }
   }
 
@@ -231,9 +196,12 @@ function App() {
           onDelete={deleteSelected}
           screens={screens}
           activeScreenId={activeScreenId}
+          activeScreen={activeScreen}
+          onUpdateScreen={updateScreen}
           onUpdateActions={updateElementActions}
           onAddScreen={addScreen}
           onTestTrigger={handleTestTrigger}
+          onTestSwipe={handleTestSwipe}
         />
       </Workspace>
 

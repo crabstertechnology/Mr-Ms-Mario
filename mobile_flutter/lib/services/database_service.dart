@@ -684,6 +684,32 @@ class DatabaseService with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> syncFromHardwareEvents(List<CalendarEvent> hwEvents) async {
+    for (final hwEvt in hwEvents) {
+      final existingIdx = _events.indexWhere((e) => e.id == hwEvt.id);
+      if (existingIdx != -1) {
+        _events[existingIdx] = hwEvt;
+      } else {
+        _events.add(hwEvt);
+      }
+      if (hwEvt.type == 'alarm') {
+        final existingAlarmIdx = _alarms.indexWhere((a) => a.id == hwEvt.id);
+        if (existingAlarmIdx == -1) {
+          _alarms.add(AlarmModel(
+            id: hwEvt.id,
+            hour: hwEvt.dateTime.hour,
+            minute: hwEvt.dateTime.minute,
+            label: hwEvt.title,
+            isEnabled: true,
+          ));
+        }
+      }
+    }
+    await _saveEventsToDisk();
+    await _saveAlarmsToDisk();
+    notifyListeners();
+  }
+
   Future<void> deleteEvent(String id) async {
     _events.removeWhere((e) => e.id == id);
     await _saveEventsToDisk();
