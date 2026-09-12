@@ -1345,8 +1345,7 @@ void applySettings(String payload) {
 
   if (partCount > 2) defaultGif  = parts[2].toInt();
   if (partCount > 3) gifIntro    = parts[3].toInt();
-  // parts[4], parts[5], parts[6] represent touch settings which are now removed/ignored.
-  if (partCount > 7) negativeDisplay = false; // Force White Theme (ignore app dark theme setting)
+  if (partCount > 7) negativeDisplay = (parts[7].toInt() == 1);
   if (partCount > 8) {
     gifIntroSpeed = 169;
   }
@@ -1438,8 +1437,7 @@ void setup() {
   defaultGif = preferences.getInt("defGif", 20);
   gifIntro = preferences.getInt("intGif", 20);
   // Gestures/touch settings no longer loaded
-  robotVariant = preferences.getString("robot_var", "ms_luna");
-  negativeDisplay = false; // Always boot in White Theme (Light Mode)
+  negativeDisplay = false; // Always Monolith Dark Mode
   preferences.putBool("neg", false);
   clockStyle = 0; // Force Style 0 (Luna OS) on boot
   preferences.putInt("clkStyle", 0);
@@ -1619,6 +1617,12 @@ void setup() {
   if (imgTransfer.hasWallpaper()) {
     Serial.println("[IMG] Saved wallpaper found — will display on SCREEN_WALLPAPER.");
   }
+
+  // Pre-populate starter notifications if empty
+  if (face.getNotificationCount() == 0) {
+    face.addNotification("Luna OS", "Welcome to Luna 1.69! Tap any card to view full message details.", "10:00");
+    face.addNotification("Mochy AI", "System running smooth at 60 FPS. Touch screen to interact.", "09:45");
+  }
 }
 
 // Global index for all-gifs cycling — advances through all 63 entries
@@ -1691,24 +1695,18 @@ void adjustOption(int option, int direction) {
       audio.playSound(SOUND_CHIRP);
       break;
 
-    case 4: // Theme Invert
-      negativeDisplay = !negativeDisplay;
-      tft.invertDisplay(negativeDisplay);
-      audio.playSound(SOUND_CHIRP);
-      break;
-
-    case 5: // Bluetooth LE
+    case 4: // Bluetooth LE
       bleActive = !bleActive;
       audio.playSound(SOUND_CHIRP);
       break;
 
-    case 6: // Save settings
+    case 5: // Save settings
       {
         preferences.begin("luna", false);
         preferences.putBool("ble",       bleActive);
         preferences.putInt("speed",      gifSpeed);
         preferences.putInt("clkStyle",   clockStyle);
-        preferences.putBool("neg",       negativeDisplay);
+        preferences.putBool("neg",       false);
         preferences.putInt("oledBright", oledBrightness);
         preferences.putBool("silent",    silentMode);
         preferences.end();
@@ -1717,14 +1715,13 @@ void adjustOption(int option, int direction) {
         
         // Notify app about changes!
         String silentValStr = silentMode ? "1" : "0";
-        String negValStr = negativeDisplay ? "1" : "0";
-        ble.sendLog("SET_SYNC:" + String(clockStyle) + "," + String(oledBrightness) + "," + negValStr + "," + silentValStr);
+        ble.sendLog("SET_SYNC:" + String(clockStyle) + "," + String(oledBrightness) + ",0," + silentValStr);
 
         optionSelected = false; // deselect
       }
       break;
 
-    case 7: // Exit settings
+    case 6: // Exit settings
       optionSelected = false;
       settingsActive = false;
       currentScreen  = SCREEN_CLOCK;
@@ -1740,6 +1737,15 @@ void adjustOption(int option, int direction) {
 void handleBtn1Single() {
   lastInteractionTime = millis();
   if (mapsActive) return;
+
+  // Dismiss popup toast on tap
+  if (face.isPopupActive()) {
+    face.setPopupDismiss();
+    audio.playSound(SOUND_POWERDOWN);
+    Serial.println("[BTN1] Dismissed popup notification");
+    notifyScreenAndExprSync();
+    return;
+  }
 
   if (inIntroPhase) {
     inIntroPhase = false;
@@ -1776,7 +1782,7 @@ void handleBtn1Single() {
       int canvasY = lastY - 20; // 20px screen offset calibration
       if (canvasY >= 48 && canvasY <= 260) {
         int optIdx = (int)((canvasY - 52 + settingsScrollPx) / 50.0f);
-        if (optIdx >= 0 && optIdx < 8) {
+        if (optIdx >= 0 && optIdx < 7) {
           menuOption = optIdx;
           optionSelected = true;
           adjustOption(optIdx, 1);
@@ -1851,38 +1857,36 @@ void handleBtn1Single() {
     audio.playSound(SOUND_CHIRP);
     Serial.printf("[BTN1] Cycled clock style -> %d\n", clockStyle);
   } else if (currentScreen == SCREEN_NOTIFICATIONS) {
-    if (!notificationsActive) {
-      if (face.getNotificationCount() > 0) {
-        notificationsActive = true;
-        face.setCurrentNotifViewIdx(0);
-        notificationSelected = false;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN1] Notifications screen ACTIVATED");
-      }
+    if (notificationSelected) {
+      // Detail View: tap anywhere or dismiss button exits back to list
+      notificationSelected = false;
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println("[BTN1] Exited Notification Detail View");
     } else {
-      if (notificationSelected) {
-        // Detail View: tap deselects/exits detail view
-        notificationSelected = false;
-        audio.playSound(SOUND_POWERDOWN);
-        Serial.println("[BTN1] Exited Notification Detail View");
-      } else {
-        int lastY = interaction.getLastY();
-        int canvasY = lastY - 20;
-        int optIdx = (canvasY - 54) / 36;
-        int notifCount = face.getNotificationCount();
-        if (optIdx >= 0 && optIdx < notifCount && optIdx < 5) {
-          if (face.getCurrentNotifViewIdx() == optIdx) {
-            // Tapped already highlighted notification -> Open it!
-            notificationSelected = true;
-            audio.playSound(SOUND_POWERUP);
-            Serial.printf("[BTN1] Opened Notification %d\n", optIdx);
-          } else {
-            // Highlight the tapped notification
-            face.setCurrentNotifViewIdx(optIdx);
-            audio.playSound(SOUND_CHIRP);
-            Serial.printf("[BTN1] Highlighted Notification -> %d\n", optIdx);
-          }
+      int lastY = interaction.getLastY();
+      int canvasY = lastY - 20; // 20px hardware panel offset
+      int notifCount = face.getNotificationCount();
+      int maxDisplay = min(notifCount, 3);
+      int tappedIdx = -1;
+      for (int i = 0; i < maxDisplay; i++) {
+        int cardY = 56 + i * 62;
+        if (canvasY >= cardY && canvasY <= cardY + 54) {
+          tappedIdx = i;
+          break;
         }
+      }
+      if (tappedIdx >= 0) {
+        notificationsActive = true;
+        face.setCurrentNotifViewIdx(tappedIdx);
+        notificationSelected = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.printf("[BTN1] Opened Notification Card %d\n", tappedIdx);
+      } else if (notifCount > 0) {
+        // Fallback: tap opens currently focused notification
+        notificationsActive = true;
+        notificationSelected = true;
+        audio.playSound(SOUND_POWERUP);
+        Serial.printf("[BTN1] Opened Notification %d (focus)\n", face.getCurrentNotifViewIdx());
       }
     }
     notifyScreenAndExprSync();
@@ -1985,10 +1989,11 @@ void handleBtn1Long() {
       notificationSelected = false;
       audio.playSound(SOUND_POWERDOWN);
       Serial.println("[BTN1 LONG] Exited notification detail view");
-    } else if (notificationsActive) {
+    } else if (notificationsActive && face.getNotificationCount() > 0) {
+      face.clearNotifications();
       notificationsActive = false;
       audio.playSound(SOUND_POWERDOWN);
-      Serial.println("[BTN1 LONG] Deactivated notifications screen");
+      Serial.println("[BTN1 LONG] Cleared all notifications");
     } else {
       currentScreen = SCREEN_CLOCK;
       audio.playSound(SOUND_STARTUP);
@@ -2433,7 +2438,7 @@ void loop() {
 
     // — Settings scroll —
     if (currentScreen == SCREEN_SETTINGS && settingsActive) {
-      const float SETTINGS_MAX = 8.0f * 50.0f - 206.0f;  // = 194.0f
+      const float SETTINGS_MAX = 7.0f * 50.0f - 206.0f;  // = 144.0f
       if (inScroll) {
         if (settingsWasScroll) {
           float dy = (float)(curY - settingsPrevY);

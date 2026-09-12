@@ -563,23 +563,13 @@ public:
 
   ThemeColors getTheme() {
     ThemeColors t;
-    if (!negativeDisplay) {
-      // Monolith Deep Black (Default - Precision Instrument OS)
-      t.bg      = 0x0000; // Deep pitch black
-      t.text    = 0xFFFF; // Crisp Pure White
-      t.accent  = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Electric Precision Cyan or Luna Pink
-      t.cardBg  = 0x0842; // Dark graphite
-      t.border  = 0x2124; // 1px titanium precision rule
-      t.subText = 0x8410; // Muted technical silver
-    } else {
-      // Inverted High-Contrast
-      t.bg      = 0xFFFF;
-      t.text    = 0x0000;
-      t.accent  = 0x001F;
-      t.cardBg  = 0xEF5D;
-      t.border  = 0xCE79;
-      t.subText = 0x632C;
-    }
+    // Monolith Deep Black (Precision Instrument OS - Always Dark Mode)
+    t.bg      = 0x0000; // Deep pitch black
+    t.text    = 0xFFFF; // Crisp Pure White
+    t.accent  = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8; // Electric Precision Cyan or Luna Pink
+    t.cardBg  = 0x0842; // Dark graphite
+    t.border  = 0x2945; // Subtle dark border
+    t.subText = 0x9CD3; // Muted technical silver
     return t;
   }
 
@@ -696,67 +686,114 @@ public:
     }
   }
 
-  void drawPopup() {
-    uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x001F : 0xF8B8;
-    uint16_t themeBg     = TFT_WHITE;
-    uint16_t themeText   = 0x2104; // Charcoal/black
-    uint16_t themeCardBg = (robotVariant == "mr_luna") ? 0xE7FC : 0xFDF2; // Light Pastel
-    uint16_t themeBorder = 0xD69A; // Light Grey
+  // Helper for rendering word-wrapped text cleanly without breaking words in half
+  void drawWordWrappedText(const String& text, int x, int y, int maxWidth, int maxLines, int lineHeight, uint16_t color, uint8_t textSize) {
+    display.setTextSize(textSize);
+    display.setTextColor(color);
+    int charWidth = 6 * textSize;
+    int maxCharsPerLine = maxWidth / charWidth;
+    if (maxCharsPerLine <= 0) return;
 
-    uint16_t LUNA_CYAN   = themeAccent;
-    uint16_t LUNA_PINK   = 0xF8B8;
-    uint16_t LUNA_DARK   = themeCardBg;
-    uint16_t LUNA_GLASS  = themeBorder;
-
-    // 1. Premium Card Container
-    display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 12, LUNA_CYAN);
-    display.drawRoundRect(5, 5, SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 11, LUNA_PINK);
-    display.fillRoundRect(8, 8, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 16, 9, LUNA_DARK);
-
-    // 2. Cute Header Bar (Pink Heart Mascot)
-    int hx = 24, hy = 22;
-    display.fillCircle(hx - 2, hy, 3, LUNA_PINK);
-    display.fillCircle(hx + 2, hy, 3, LUNA_PINK);
-    display.fillTriangle(hx - 5, hy + 1, hx + 5, hy + 1, hx, hy + 6, LUNA_PINK);
-
-    // Title Capsule
-    display.fillRoundRect(36, 13, 100, 18, 9, LUNA_GLASS);
-    display.setTextColor(themeText);
-    display.setTextSize(1);
-    display.setCursor(44, 18);
-    display.print("NEW ALERT  *");
-
-    display.drawFastHLine(12, 38, SCREEN_WIDTH - 24, LUNA_GLASS);
-    
-    // 3. Title & Content
-    display.setTextColor(themeText);
-    display.setTextSize(2);
-    display.setCursor(16, 48);
-    String title = popupTitle;
-    if (title.length() > 16) title = title.substring(0, 14) + "...";
-    display.print(title);
-    
-    display.setTextColor(themeText);
-    display.setTextSize(2);
-    int yStart = 72;
-    int charsPerLine = (SCREEN_WIDTH - 32) / 12;
     int line = 0;
-    int maxLines = (SCREEN_HEIGHT - 110) / 20;
-    if (maxLines < 3) maxLines = 3;
-    for (unsigned int i = 0; i < popupBody.length() && line < maxLines; i += charsPerLine) {
-      unsigned int endIdx = i + charsPerLine;
-      if (endIdx > popupBody.length()) endIdx = popupBody.length();
-      String lineStr = popupBody.substring(i, endIdx);
-      display.setCursor(16, yStart + line * 20);
-      display.print(lineStr);
+    int startIdx = 0;
+    int len = text.length();
+
+    while (startIdx < len && line < maxLines) {
+      // Skip leading spaces on new line
+      while (startIdx < len && text.charAt(startIdx) == ' ') startIdx++;
+      if (startIdx >= len) break;
+
+      int remaining = len - startIdx;
+      if (remaining <= maxCharsPerLine) {
+        display.setCursor(x, y + line * lineHeight);
+        display.print(text.substring(startIdx));
+        break;
+      }
+
+      // Look for a break point within maxCharsPerLine
+      int breakIdx = startIdx + maxCharsPerLine;
+      int spaceIdx = -1;
+      for (int i = breakIdx; i > startIdx; i--) {
+        if (text.charAt(i) == ' ' || text.charAt(i) == '\n') {
+          spaceIdx = i;
+          break;
+        }
+      }
+
+      if (spaceIdx > startIdx) {
+        display.setCursor(x, y + line * lineHeight);
+        display.print(text.substring(startIdx, spaceIdx));
+        startIdx = spaceIdx + 1;
+      } else {
+        // No space found — forced break
+        display.setCursor(x, y + line * lineHeight);
+        display.print(text.substring(startIdx, breakIdx));
+        startIdx = breakIdx;
+      }
       line++;
     }
-    
-    // 4. Dismiss indicator
-    display.setTextColor(themeAccent);
+  }
+
+  void drawPopup() {
+    const uint16_t accentCol = (robotVariant == "mr_luna") ? 0x07FF : 0xFD99; // Cyan or soft pink
+    const uint16_t cardBg    = 0x0841; // Dark graphite
+    const uint16_t textCol   = 0xFFFF; // White
+    const uint16_t subCol    = 0x8410; // Silver
+    const uint16_t borderCol = accentCol;
+
+    // ── Outer glow borders (double ring) ──────────────────────────────────────
+    display.drawRoundRect(2,  2,  SCREEN_WIDTH - 4,  SCREEN_HEIGHT - 4,  14, borderCol);
+    display.drawRoundRect(3,  3,  SCREEN_WIDTH - 6,  SCREEN_HEIGHT - 6,  13, 0x4A49);
+    // ── Card fill ─────────────────────────────────────────────────────────────
+    display.fillRoundRect(5,  5,  SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 11, cardBg);
+
+    // ── Header strip ──────────────────────────────────────────────────────────
+    display.fillRoundRect(5, 5, SCREEN_WIDTH - 10, 36, 11, 0x18C3); // Darker header area
+    // Notification bell icon (3 circles + base)
+    int bx = 22, by = 23;
+    display.fillCircle(bx, by - 3, 5, accentCol);
+    display.fillRect(bx - 6, by + 2, 13, 4, accentCol);
+    display.fillCircle(bx, by + 8, 2, accentCol);
+    display.fillRect(bx - 6, by + 2, 13, 2, 0x18C3); // Cut top of base
+    // App / sender badge
+    display.fillRoundRect(38, 14, 90, 17, 8, 0x2945);
     display.setTextSize(1);
-    display.setCursor((SCREEN_WIDTH - 96) / 2, SCREEN_HEIGHT - 22);
-    display.print("[Tap to Dismiss]");
+    display.setTextColor(accentCol);
+    display.setCursor(44, 19);
+    display.print("NEW MESSAGE");
+    // Time badge (right side)
+    display.setTextColor(subCol);
+    display.setCursor(SCREEN_WIDTH - 42, 19);
+    display.print("NOW");
+
+    display.drawFastHLine(8, 41, SCREEN_WIDTH - 16, 0x2124);
+
+    // ── Sender / App Title ────────────────────────────────────────────────────
+    display.setTextSize(2);
+    display.setTextColor(accentCol);
+    display.setCursor(14, 50);
+    String title = popupTitle;
+    if (title.length() > 15) title = title.substring(0, 13) + "..";
+    display.print(title);
+
+    display.drawFastHLine(8, 72, SCREEN_WIDTH - 16, 0x2124);
+
+    // ── Message body — size 2 with smart word wrapping ─────────────────────
+    drawWordWrappedText(popupBody, 14, 82, SCREEN_WIDTH - 28, 6, 22, textCol, 2);
+
+    // ── Dismiss progress bar (counts down over popup duration) ────────────────
+    unsigned long elapsed  = millis() - popupStartTime;
+    int barW   = SCREEN_WIDTH - 28;
+    int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
+    if (barFill < 0) barFill = 0;
+    display.drawRoundRect(14, SCREEN_HEIGHT - 22, barW, 8, 3, 0x2124);
+    display.fillRoundRect(15, SCREEN_HEIGHT - 21, barFill, 6, 2, accentCol);
+
+    // ── Tap-to-dismiss hint ───────────────────────────────────────────────────
+    display.setTextSize(1);
+    display.setTextColor(subCol);
+    display.setCursor((SCREEN_WIDTH - 84) / 2, SCREEN_HEIGHT - 11);
+    display.print("TAP TO DISMISS");
   }
 
   void drawNotificationPanel() {
@@ -819,63 +856,55 @@ public:
     if (notificationSelected) {
       NotificationItem& notif = notificationHistory[currentNotifViewIdx];
 
-      // Micro metadata header pill
-      display.drawRoundRect(20, 54, 76, 16, 4, themeAccent);
+      // ── Sender badge + timestamp row ──────────────────────────────────────
+      display.fillRoundRect(20, 52, 84, 18, 5, 0x18C3);
+      display.drawRoundRect(20, 52, 84, 18, 5, themeAccent);
       display.setTextSize(1);
       display.setTextColor(themeAccent);
-      display.setCursor(26, 58);
+      display.setCursor(26, 57);
       display.print("MESSAGE");
 
-      // Timestamp
       display.setTextColor(themeSubText);
-      display.setCursor(150, 58);
+      display.setCursor(SCREEN_WIDTH - 48, 57);
       display.print(notif.timeStr);
 
-      // Sender / Title
+      // ── Sender / Title (size 2 = 12px tall, bold) ────────────────────────
       display.setTextSize(2);
       display.setTextColor(themeText);
-      display.setCursor(20, 78);
+      display.setCursor(20, 76);
       String shortTitle = notif.title;
-      if (shortTitle.length() > 16) shortTitle = shortTitle.substring(0, 15) + "..";
+      if (shortTitle.length() > 15) shortTitle = shortTitle.substring(0, 13) + "..";
       display.print(shortTitle);
 
-      display.drawFastHLine(20, 104, SCREEN_WIDTH - 40, themeBorder);
+      display.drawFastHLine(14, 100, SCREEN_WIDTH - 28, themeAccent);
 
-      // Body Card Container
-      display.fillRoundRect(18, 112, SCREEN_WIDTH - 36, 104, 6, 0x0842);
-      display.drawRoundRect(18, 112, SCREEN_WIDTH - 36, 104, 6, themeBorder);
+      // ── Body Card — enlarged to fit size-2 text ──────────────────────────
+      display.fillRoundRect(14, 106, SCREEN_WIDTH - 28, 134, 6, theme.cardBg);
+      display.drawRoundRect(14, 106, SCREEN_WIDTH - 28, 134, 6, themeBorder);
+      // Accent left bar
+      display.fillRect(14, 114, 3, 118, themeAccent);
 
-      // Full Message Body in neat size 1 typography with clean padding
-      display.setTextSize(1);
-      display.setTextColor(themeText);
-      int yStart = 122;
-      int charsPerLine = 31;
-      int line = 0;
-      for (unsigned int i = 0; i < notif.body.length() && line < 7; i += charsPerLine) {
-        unsigned int endIdx = i + charsPerLine;
-        if (endIdx > notif.body.length()) endIdx = notif.body.length();
-        display.setCursor(26, yStart + line * 13);
-        display.print(notif.body.substring(i, endIdx));
-        line++;
-      }
+      // ── Full body text — SIZE 2 (12px) with word wrapping for comfortable reading ───
+      drawWordWrappedText(notif.body, 22, 116, SCREEN_WIDTH - 44, 5, 23, themeText, 2);
 
-      // Bottom control bar
+      // ── Bottom control row ───────────────────────────────────────────────
       char footBuf[24];
-      snprintf(footBuf, sizeof(footBuf), "ITEM %d OF %d", currentNotifViewIdx + 1, notificationCount);
+      snprintf(footBuf, sizeof(footBuf), "%d / %d", currentNotifViewIdx + 1, notificationCount);
       display.setTextSize(1);
       display.setTextColor(themeAccent);
-      display.setCursor(20, 232);
+      display.setCursor(20, 248);
       display.print(footBuf);
 
-      // Dismiss Pill Button
-      display.drawRoundRect(150, 226, 68, 20, 4, themeBorder);
-      display.setCursor(162, 232);
-      display.setTextColor(themeSubText);
-      display.print("DISMISS");
+      // Dismiss pill button
+      display.fillRoundRect(142, 242, 80, 18, 5, theme.cardBg);
+      display.drawRoundRect(142, 242, 80, 18, 5, themeAccent);
+      display.setCursor(152, 247);
+      display.setTextColor(themeAccent);
+      display.print("DISMISS >");
 
       display.setTextColor(themeBorder);
-      display.setCursor(34, 256);
-      display.print("TAP: RETURN // HOLD: CLEAR");
+      display.setCursor(20, 266);
+      display.print("TAP: BACK  HOLD: CLEAR ALL");
 
     } else {
       // ── Clean Notification Timeline Stream ────────────────────────────────
@@ -886,7 +915,8 @@ public:
         bool isSel = (notificationsActive && i == currentNotifViewIdx);
 
         // Card Container
-        display.fillRoundRect(16, y, SCREEN_WIDTH - 32, 54, 6, isSel ? 0x10A2 : 0x0842);
+        uint16_t cBg = isSel ? (negativeDisplay ? 0xE73C : 0x10A2) : theme.cardBg;
+        display.fillRoundRect(16, y, SCREEN_WIDTH - 32, 54, 6, cBg);
         display.drawRoundRect(16, y, SCREEN_WIDTH - 32, 54, 6, isSel ? themeAccent : themeBorder);
         if (isSel) {
           display.fillRect(16, y + 8, 3, 38, themeAccent);
@@ -948,21 +978,40 @@ public:
     display.drawFastHLine(20, 42, SCREEN_WIDTH - 40, themeBorder);
 
     if (calendarEventCount == 0) {
+      // Empty state card
+      display.fillRoundRect(16, 56, SCREEN_WIDTH - 32, 136, 8, theme.cardBg);
+      display.drawRoundRect(16, 56, SCREEN_WIDTH - 32, 136, 8, themeBorder);
+      display.fillRect(16, 68, 3, 112, themeAccent);
+
+      // Category / Status pill
+      display.drawRoundRect(28, 68, 76, 16, 4, themeAccent);
+      display.setTextSize(1);
+      display.setTextColor(themeAccent);
+      display.setCursor(34, 72);
+      display.print("ALL CLEAR");
+
+      // Balanced Title (Size 2 = 12x16 font, crisp and perfectly sized)
       display.setTextSize(2);
       display.setTextColor(themeText);
-      display.setCursor(20, 80);
+      display.setCursor(28, 96);
       display.print("NO EVENTS");
 
+      // Clean message — comfortably inside box margins
       display.setTextSize(1);
       display.setTextColor(themeSubText);
-      display.setCursor(20, 106);
-      display.print("Timeline synchronized via BLE.");
-      display.setCursor(20, 122);
-      display.print("No pending agenda items for today.");
+      display.setCursor(28, 126);
+      display.print("No meetings scheduled today.");
+      display.setCursor(28, 142);
+      display.print("Your schedule is free.");
+
+      // Sync status tag
+      display.setTextColor(themeAccent);
+      display.setCursor(28, 166);
+      display.print("CALENDAR SYNC // ACTIVE");
 
       display.setTextColor(themeBorder);
-      display.setCursor(44, 256);
-      display.print("TAP TO RETURN TO CALENDAR");
+      display.setCursor(34, 256);
+      display.print("TAP: RETURN // SWIPE: CALENDAR");
       return;
     }
 
@@ -1134,7 +1183,7 @@ public:
 
     // TODAY badge
     display.drawRoundRect(92, 80, 50, 16, 4, themeAccent);
-    display.fillRoundRect(93, 81, 48, 14, 3, 0x0842);
+    display.fillRoundRect(93, 81, 48, 14, 3, theme.cardBg);
     display.setTextSize(1);
     display.setTextColor(themeText);
     display.setCursor(99, 84);
@@ -1155,7 +1204,7 @@ public:
       bool isToday = (d == curDay);
       if (isToday) {
         display.drawRoundRect(rx, 114, 34, 30, 6, themeAccent);
-        display.fillRoundRect(rx + 1, 115, 32, 28, 5, 0x0842);
+        display.fillRoundRect(rx + 1, 115, 32, 28, 5, theme.cardBg);
         display.setTextColor(themeText);
       } else {
         display.setTextColor(themeSubText);
@@ -1193,7 +1242,7 @@ public:
         CalendarEventItem& ev = calendarEvents[eIdx];
 
         // Card container
-        display.fillRoundRect(18, ey, SCREEN_WIDTH - 36, 36, 5, 0x0842);
+        display.fillRoundRect(18, ey, SCREEN_WIDTH - 36, 36, 5, theme.cardBg);
         display.drawRoundRect(18, ey, SCREEN_WIDTH - 36, 36, 5, themeBorder);
         display.fillRect(18, ey, 3, 36, themeAccent);
 
@@ -1231,8 +1280,9 @@ public:
       display.print("[ ALL CLEAR ]");
 
       // Card container filling Y in [170, 248]
-      display.fillRoundRect(18, 170, SCREEN_WIDTH - 36, 78, 6, 0x0842);
+      display.fillRoundRect(18, 170, SCREEN_WIDTH - 36, 78, 6, theme.cardBg);
       display.drawRoundRect(18, 170, SCREEN_WIDTH - 36, 78, 6, themeBorder);
+      display.fillRect(18, 178, 3, 62, themeAccent);
 
       // Status indicator
       display.fillCircle(28, 184, 3, 0x07E0);
@@ -1246,24 +1296,22 @@ public:
       display.setCursor(28, 196);
       display.print("FOCUS WINDOW");
 
-      display.setTextSize(1);
-      display.setTextColor(themeSubText);
-      display.setCursor(160, 202);
-      display.print("ACTIVE");
+
 
       // Productivity / Day progress bar
-      display.drawFastHLine(28, 222, SCREEN_WIDTH - 56, themeBorder);
+      display.drawFastHLine(28, 220, SCREEN_WIDTH - 56, themeBorder);
       int dayProgressW = constrain(((curDay % 10) + 1) * 18, 20, SCREEN_WIDTH - 56);
-      display.drawFastHLine(28, 222, dayProgressW, themeAccent);
+      display.drawFastHLine(28, 220, dayProgressW, themeAccent);
 
+      // Clean status line — NO OVERFLOWING TEXT
       display.setTextSize(1);
       display.setTextColor(themeSubText);
-      display.setCursor(28, 232);
-      display.print("SCHEDULE // SYNCHRONIZED & NOMINAL");
+      display.setCursor(28, 228);
+      display.print("STATUS // ALL CLEAR");
 
       display.setTextColor(themeBorder);
-      display.setCursor(34, 256);
-      display.print("CALENDAR SYNCED // COMPANION ACTIVE");
+      display.setCursor(30, 256);
+      display.print("CALENDAR SYNCED // READY");
     }
   }
 
@@ -1290,7 +1338,7 @@ public:
     const int CONTENT_TOP    = 52;
     const int CONTENT_BOTTOM = 258;
     const int ITEM_H         = 50;
-    const int TOTAL_ITEMS    = 8;
+    const int TOTAL_ITEMS    = 7;
     float     scrollPx       = settingsScrollPx;
 
     const char* titles[] = {
@@ -1298,7 +1346,6 @@ public:
       "Sound FX",
       "Clock Face",
       "Speed",
-      "Theme",
       "Bluetooth",
       "Save",
       "Exit"
@@ -1308,7 +1355,6 @@ public:
       "// DISPLAY",
       "",
       "// WATCHFACE",
-      "",
       "",
       "// WIRELESS",
       "// SYSTEM",
@@ -1341,7 +1387,7 @@ public:
 
       // Title (Strictly left column: X in [20, 140])
       display.setTextSize(2);
-      display.setTextColor(isCurrent ? themeText : 0xCE79);
+      display.setTextColor(isCurrent ? themeText : themeSubText);
       display.setCursor(20, rowY + 2);
       display.print(titles[i]);
 
@@ -1372,7 +1418,7 @@ public:
             display.setCursor(cX + 16, cY + 7);
             display.print("ACTIVE");
           } else {
-            display.fillRoundRect(cX, cY, cW, cH, 4, 0x0842);
+            display.fillRoundRect(cX, cY, cW, cH, 4, theme.cardBg);
             display.drawRoundRect(cX, cY, cW, cH, 4, themeBorder);
             display.setTextSize(1);
             display.setTextColor(themeSubText);
@@ -1403,15 +1449,7 @@ public:
           display.print("ms");
         } break;
 
-        case 4: { // Theme Invert
-          display.drawRoundRect(cX, cY, cW, cH, 4, themeBorder);
-          display.setTextSize(1);
-          display.setTextColor(invertOn ? themeAccent : themeSubText);
-          display.setCursor(cX + 18, cY + 7);
-          display.print(invertOn ? "LIGHT" : "DARK");
-        } break;
-
-        case 5: { // BLE
+        case 4: { // BLE
           display.drawRoundRect(cX, cY, cW, cH, 4, themeBorder);
           display.setTextSize(1);
           display.setTextColor(bleOn ? 0x07E0 : themeSubText);
@@ -1419,15 +1457,15 @@ public:
           display.print(bleOn ? "ON" : "OFF");
         } break;
 
-        case 6: { // Save
+        case 5: { // Save
           display.fillRoundRect(cX, cY, cW, cH, 4, themeAccent);
           display.setTextSize(1);
-          display.setTextColor(0x0000);
+          display.setTextColor(TFT_WHITE);
           display.setCursor(cX + 20, cY + 7);
           display.print("SAVE");
         } break;
 
-        case 7: { // Exit
+        case 6: { // Exit
           display.drawRoundRect(cX, cY, cW, cH, 4, 0xF800);
           display.setTextSize(1);
           display.setTextColor(0xF800);
