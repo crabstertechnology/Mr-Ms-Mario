@@ -28,6 +28,10 @@
 // ST7789 1.69" TFT Display Settings (Resolution: 240x280)
 #define SCREEN_WIDTH 240
 #define SCREEN_HEIGHT 280
+// Hardware SPI Clock Frequency: 40 MHz ensures pristine signal integrity, meeting ST7789 setup/hold timing and eliminating sparkle/bus noise
+#define TFT_SPI_SPEED 40000000UL
+// Backlight PWM Frequency: 10 kHz eliminates optical beat frequencies with the 60 Hz LCD refresh rate and stops coil whine
+#define TFT_PWM_FREQ  10000
 
 // Touch Column Boundaries (0 to 240 pixels width)
 #define TOUCH_LEFT_LIMIT 80

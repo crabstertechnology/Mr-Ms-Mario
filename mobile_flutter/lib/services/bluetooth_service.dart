@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'database_service.dart';
+import 'notification_service.dart';
 import '../models/calendar_event.dart';
 
 class BLEService with ChangeNotifier {
@@ -813,6 +814,22 @@ class BLEService with ChangeNotifier {
             final sound = int.tryParse(parts[2]) ?? 2;
             _triggerRelationshipActionDirect(fromPrimary: true, eventType: eventType, expr: expr, sound: sound);
           }
+        } else if (logMsg.startsWith("CALL_ACT:REJECT")) {
+          addLog("Hardware requested CALL REJECT", "CALL");
+          PhoneNotificationService.rejectCall();
+        } else if (logMsg.startsWith("CALL_ACT:MUTE")) {
+          addLog("Hardware requested CALL MUTE", "CALL");
+          PhoneNotificationService.muteCall();
+        } else if (logMsg.startsWith("REPLY:")) {
+          final payload = logMsg.substring(6);
+          String pkg = "com.whatsapp";
+          String replyText = payload;
+          if (payload.startsWith("WA:")) {
+            pkg = "com.whatsapp";
+            replyText = payload.substring(3);
+          }
+          addLog("Hardware requested Quick Reply: '$replyText' to $pkg", "NOTIF");
+          PhoneNotificationService.sendQuickReply(pkg, replyText);
         } else if (logMsg.startsWith("TOUCH:")) {
           final event = logMsg.substring(6); // TAP, DOUBLE, TRIPLE, LONG
           _triggerRelationshipAction(fromPrimary: true, eventType: event);

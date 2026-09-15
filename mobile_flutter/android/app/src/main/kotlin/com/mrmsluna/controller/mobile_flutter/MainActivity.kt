@@ -235,7 +235,44 @@ class MainActivity: FlutterActivity() {
                                 result.error("DECODE_ERROR", e.message, null)
                             }
                         }
-                    }.start()
+                "rejectCall" -> {
+                    var handled = MyNotificationListener.declineActiveCall()
+                    if (!handled) {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                            try {
+                                val telecomManager = getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+                                if (checkSelfPermission(android.Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED) {
+                                    telecomManager?.endCall()
+                                    handled = true
+                                    println("MainActivity - Call ended via TelecomManager")
+                                }
+                            } catch (e: Exception) {
+                                println("MainActivity - Error ending call via TelecomManager: ${e.message}")
+                            }
+                        }
+                    }
+                    result.success(handled)
+                }
+                "muteCall" -> {
+                    try {
+                        val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                            audioManager.adjustStreamVolume(android.media.AudioManager.STREAM_RING, android.media.AudioManager.ADJUST_MUTE, 0)
+                        } else {
+                            audioManager.ringerMode = android.media.AudioManager.RINGER_MODE_SILENT
+                        }
+                        println("MainActivity - Muted call ringer successfully")
+                        result.success(true)
+                    } catch (e: Exception) {
+                        println("MainActivity - Error muting ringer: ${e.message}")
+                        result.error("MUTE_ERROR", e.message, null)
+                    }
+                }
+                "sendQuickReply" -> {
+                    val pkg = call.argument<String>("package") ?: "com.whatsapp"
+                    val replyText = call.argument<String>("text") ?: ""
+                    val success = MyNotificationListener.sendQuickReply(this, pkg, replyText)
+                    result.success(success)
                 }
                 else -> result.notImplemented()
             }

@@ -44,6 +44,23 @@ class LunaBackgroundService : Service() {
                         "directionFromIcon" to directionFromIcon
                     ))
                 }
+            } else if (action == "com.mrmsluna.INCOMING_CALL") {
+                val caller = intent.getStringExtra("caller") ?: "Incoming Call"
+                val packageName = intent.getStringExtra("package") ?: ""
+                val engine = MainActivity.flutterEngine
+                if (engine != null) {
+                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.mrmsluna/notifications")
+                    channel.invokeMethod("onIncomingCall", mapOf(
+                        "caller" to caller,
+                        "package" to packageName
+                    ))
+                }
+            } else if (action == "com.mrmsluna.CALL_ENDED") {
+                val engine = MainActivity.flutterEngine
+                if (engine != null) {
+                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.mrmsluna/notifications")
+                    channel.invokeMethod("onCallEnded", emptyMap<String, String>())
+                }
             } else if (action == "com.mrmsluna.NOTIFICATION_REMOVED") {
                 val packageName = intent.getStringExtra("package") ?: ""
                 val engine = MainActivity.flutterEngine
@@ -78,6 +95,8 @@ class LunaBackgroundService : Service() {
         val filter = IntentFilter()
         filter.addAction("com.mrmsluna.NOTIFICATION_RECEIVED")
         filter.addAction("com.mrmsluna.NOTIFICATION_REMOVED")
+        filter.addAction("com.mrmsluna.INCOMING_CALL")
+        filter.addAction("com.mrmsluna.CALL_ENDED")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {

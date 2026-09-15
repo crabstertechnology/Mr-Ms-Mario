@@ -423,10 +423,7 @@ void checkHardwareScheduledAlarms() {
         // Wake screen if dim/asleep
         if (isAsleep) {
           isAsleep = false;
-          int val = 120;
-          if (oledBrightness == 1) val = 60;
-          else if (oledBrightness == 3) val = 255;
-          analogWrite(TFT_BLK, val);
+          applyDisplayBrightness(oledBrightness);
         }
 
         // Show visual ringing overlay on screen
@@ -710,6 +707,239 @@ void handleBLEImageChunk(uint8_t* data, size_t len) {
     int pct = (int)(p * 100.0f);
     ble.sendLog("IMG_PROGRESS:" + String(pct));
   }
+}
+
+// ============================================================================
+// Animated High-Tech Wallpaper Transfer HUD & Progress Screen
+// Renders to double-buffered PSRAM canvas and pushes to ST7789 for 60fps zero-flicker
+// Features: Circular radar ring, orbiting comets, big bold percentage,
+//           animated gradient progress bar with moving shimmer wave,
+//           live KB transfer counter, dynamic status pill, and tech HUD aesthetics.
+// ============================================================================
+void drawWallpaperLoadingScreen() {
+  display.fillScreen(0x0000); // Obsidian black background
+
+  // 1. Subtle High-Tech Corner HUD Brackets
+  const uint16_t bracketCol = 0x02F3; // Tactical cyan
+  display.drawFastHLine(6, 6, 12, bracketCol);
+  display.drawFastVLine(6, 6, 12, bracketCol);
+  display.drawFastHLine(SCREEN_WIDTH - 18, 6, 12, bracketCol);
+  display.drawFastVLine(SCREEN_WIDTH - 7, 6, 12, bracketCol);
+  display.drawFastHLine(6, SCREEN_HEIGHT - 7, 12, bracketCol);
+  display.drawFastVLine(6, SCREEN_HEIGHT - 18, 12, bracketCol);
+  display.drawFastHLine(SCREEN_WIDTH - 18, SCREEN_HEIGHT - 7, 12, bracketCol);
+  display.drawFastVLine(SCREEN_WIDTH - 7, SCREEN_HEIGHT - 18, 12, bracketCol);
+
+  // 2. Top Header Pill: "LUNA SYNC" with Pulsing Connection Indicator
+  int pillX = 24, pillY = 12, pillW = 192, pillH = 24;
+  display.fillRoundRect(pillX, pillY, pillW, pillH, 12, 0x08A3); // Dark slate blue
+  display.drawRoundRect(pillX, pillY, pillW, pillH, 12, 0x19E7); // Subtle cyan-gray border
+
+  // Pulsing connection dot
+  bool pulseHigh = ((millis() / 250) % 2) == 0;
+  display.fillCircle(pillX + 14, pillY + 12, 4, pulseHigh ? 0x07FF : 0x0270);
+  display.drawCircle(pillX + 14, pillY + 12, 5, 0x05BF);
+
+  display.setTextColor(0x07FF); // Bright Electric Cyan
+  display.setTextSize(1);
+  display.setCursor(pillX + 28, pillY + 8);
+  display.print("RECEIVING WALLPAPER");
+
+  // 3. Central HUD Ring with Orbiting Comets & Big Animated Percentage
+  int cx = 120, cy = 94;
+  int ringR = 38;
+
+  // Background radar track
+  display.drawCircle(cx, cy, ringR, 0x18E3);
+  display.drawCircle(cx, cy, ringR - 1, 0x10A2);
+
+  // 12 Outer Radar Ticks
+  for (int a = 0; a < 360; a += 30) {
+    float rad = a * 0.0174532925f;
+    int x1 = cx + (int)(cos(rad) * (ringR + 2));
+    int y1 = cy + (int)(sin(rad) * (ringR + 2));
+    int x2 = cx + (int)(cos(rad) * (ringR + 5));
+    int y2 = cy + (int)(sin(rad) * (ringR + 5));
+    display.drawLine(x1, y1, x2, y2, 0x2965);
+  }
+
+  // Smooth Progress Calculation
+  static float smoothedProgress = 0.0f;
+  float targetProgress = imgTransfer.progress();
+  if (imgTransfer.state() == LunaImageTransfer::IDLE) {
+    smoothedProgress = 0.0f;
+  } else {
+    smoothedProgress += (targetProgress - smoothedProgress) * 0.20f;
+    if (smoothedProgress < 0.0f) smoothedProgress = 0.0f;
+    if (smoothedProgress > 1.0f) smoothedProgress = 1.0f;
+  }
+
+  // Progress Arc along ring
+  int progressDeg = (int)(smoothedProgress * 360.0f);
+  for (int d = 0; d < progressDeg; d += 2) {
+    float rad = (d - 90) * 0.0174532925f;
+    int px = cx + (int)(cos(rad) * ringR);
+    int py = cy + (int)(sin(rad) * ringR);
+    display.drawPixel(px, py, 0x07FF);
+    int px2 = cx + (int)(cos(rad) * (ringR - 1));
+    int py2 = cy + (int)(sin(rad) * (ringR - 1));
+    display.drawPixel(px2, py2, 0x3CF7);
+  }
+
+  // Orbiting Comet Particles (Dynamic spinning beacon)
+  float orbitAngle = (float)(millis() % 2000) / 2000.0f * 6.2831853f;
+  for (int i = 0; i < 4; i++) {
+    float a = orbitAngle - (i * 0.22f);
+    int ox = cx + (int)(cos(a) * (ringR + 1));
+    int oy = cy + (int)(sin(a) * (ringR + 1));
+    uint16_t dotCol = (i == 0) ? 0xFFFF : (i == 1 ? 0x07FF : (i == 2 ? 0x04DF : 0x0217));
+    int dotR = (i == 0) ? 3 : (i == 1 ? 2 : 1);
+    display.fillCircle(ox, oy, dotR, dotCol);
+  }
+
+  // Big Bold Percentage inside Ring
+  int pct = (int)(smoothedProgress * 100.0f);
+  if (pct > 100) pct = 100;
+  char pctStr[8];
+  snprintf(pctStr, sizeof(pctStr), "%d%%", pct);
+
+  display.setTextSize(3);
+  int textLen = strlen(pctStr);
+  int textW = textLen * 18; // 6px * 3 = 18px per char
+  int textX = cx - (textW / 2);
+  int textY = cy - 11;
+
+  // Drop shadow for 3D depth
+  display.setTextColor(0x01A3);
+  display.setCursor(textX + 2, textY + 2);
+  display.print(pctStr);
+
+  // Main text in Bright Crisp White
+  display.setTextColor(0xFFFF);
+  display.setCursor(textX, textY);
+  display.print(pctStr);
+
+  // 4. The Animated Progress Bar
+  int barX = 20, barY = 154, barW = 200, barH = 16, barR = 8;
+  
+  // Outer frame & track
+  display.drawRoundRect(barX, barY, barW, barH, barR, 0x2987);
+  display.drawRoundRect(barX - 1, barY - 1, barW + 2, barH + 2, barR + 1, 0x1143);
+  display.fillRoundRect(barX + 2, barY + 2, barW - 4, barH - 4, barR - 2, 0x08A2);
+
+  // Precision hash marks in empty track
+  for (int tx = barX + 8; tx < barX + barW - 8; tx += 12) {
+    display.drawFastVLine(tx, barY + 5, barH - 10, 0x1124);
+  }
+
+  // Active Progress Fill
+  int maxFillW = barW - 4;
+  int currentFillW = (int)(smoothedProgress * maxFillW);
+
+  if (currentFillW > 0) {
+    // Gradient fill from deep electric blue (0x0257) to bright neon cyan (0x07FF)
+    for (int col = 0; col < currentFillW; col++) {
+      float ratio = (float)col / (float)maxFillW;
+      uint8_t r = (uint8_t)(0 + ratio * 0);
+      uint8_t g = (uint8_t)(16 + ratio * 47); // green: 16 to 63
+      uint8_t b = (uint8_t)(24 + ratio * 7);  // blue: 24 to 31
+      uint16_t color = (r << 11) | (g << 5) | b;
+      
+      int colX = barX + 2 + col;
+      display.drawFastVLine(colX, barY + 2, barH - 4, color);
+    }
+
+    // Glowing leading edge
+    int edgeX = barX + 2 + currentFillW - 1;
+    if (edgeX < barX + barW - 3) {
+      display.drawFastVLine(edgeX, barY + 2, barH - 4, 0xFFFF);     // Bright white head
+      if (edgeX > barX + 2) {
+        display.drawFastVLine(edgeX - 1, barY + 2, barH - 4, 0x7FFF); // Cyan glow
+      }
+    }
+
+    // Continuous Animated Shimmer Wave (energy pulse sweep across progress bar)
+    int pulseCycle = (millis() / 4) % (maxFillW + 80);
+    int pulseX = (barX + 2) + pulseCycle - 40;
+    int pulseW = 18;
+    for (int pi = 0; pi < pulseW; pi++) {
+      int px = pulseX + pi;
+      if (px >= barX + 2 && px <= barX + 2 + currentFillW - 1) {
+        float dist = 1.0f - (fabs(pi - (pulseW / 2.0f)) / (pulseW / 2.0f));
+        if (dist > 0.0f) {
+          uint8_t r = (uint8_t)(dist * 28);
+          uint8_t g = (uint8_t)(45 + dist * 18);
+          uint8_t b = (uint8_t)(25 + dist * 6);
+          uint16_t shimmerCol = (r << 11) | (g << 5) | b;
+          display.drawFastVLine(px, barY + 3, barH - 6, shimmerCol);
+        }
+      }
+    }
+  }
+
+  // 5. Transfer Data Stats (KB counter)
+  float recKB = (float)imgTransfer.receivedBytes() / 1024.0f;
+  float totKB = (float)imgTransfer.expectedSize() / 1024.0f;
+  char statsBuf[36];
+  snprintf(statsBuf, sizeof(statsBuf), "%.1f KB / %.1f KB", recKB, totKB);
+
+  display.setTextSize(1);
+  int statsW = strlen(statsBuf) * 6;
+  display.setTextColor(0xCE79); // Clean metallic silver
+  display.setCursor(cx - (statsW / 2), 178);
+  display.print(statsBuf);
+
+  // 6. Animated Status Capsule
+  int capX = 24, capY = 198, capW = 192, capH = 26;
+  display.fillRoundRect(capX, capY, capW, capH, 6, 0x08A3);
+  display.drawRoundRect(capX, capY, capW, capH, 6, 0x19E7);
+
+  // Animated loading dots
+  int dotCount = (millis() / 300) % 4;
+  char dots[5] = "";
+  for (int d = 0; d < dotCount; d++) {
+    dots[d] = '.';
+  }
+  dots[dotCount] = '\0';
+
+  char statusBuf[40];
+  uint16_t statusColor = 0x07FF;
+
+  if (imgTransfer.state() == LunaImageTransfer::VERIFYING) {
+    snprintf(statusBuf, sizeof(statusBuf), "VERIFYING CRC%s", dots);
+    statusColor = 0xFDE0; // Amber
+  } else if (imgTransfer.state() == LunaImageTransfer::DECODING) {
+    snprintf(statusBuf, sizeof(statusBuf), "APPLYING WALLPAPER%s", dots);
+    statusColor = 0x07E0; // Neon Green
+  } else if (imgTransfer.state() == LunaImageTransfer::DONE_OK) {
+    snprintf(statusBuf, sizeof(statusBuf), "TRANSFER COMPLETE!");
+    statusColor = 0x07E0; // Bright Green
+  } else {
+    snprintf(statusBuf, sizeof(statusBuf), "DOWNLOADING%s", dots);
+    statusColor = 0x07FF; // Cyan
+  }
+
+  display.setTextColor(statusColor);
+  int stW = strlen(statusBuf) * 6;
+  display.setCursor(cx - (stW / 2), capY + 9);
+  display.print(statusBuf);
+
+  // 7. Footer Hint & Ambient Pulsing Dots
+  display.setTextColor(0x632C); // Muted slate gray
+  const char* hint = "KEEP PHONE CONNECTED";
+  int hintW = strlen(hint) * 6;
+  display.setCursor(cx - (hintW / 2), 236);
+  display.print(hint);
+
+  // Ambient 3-dot traveling wave
+  for (int di = 0; di < 3; di++) {
+    float wave = sin((millis() / 200.0f) + di * 1.0f);
+    uint16_t waveCol = (wave > 0.3f) ? 0x07FF : (wave > -0.3f ? 0x03EF : 0x1165);
+    display.fillCircle(cx - 16 + di * 16, 258, 2, waveCol);
+  }
+
+  // 8. Blit Double-Buffered Canvas to Physical Screen (Offset Y=20 for 1.69" LCD)
+  tft.drawRGBBitmap(0, 20, display.getBuffer(), SCREEN_WIDTH, SCREEN_HEIGHT);
 }
 
 void handleRobotCommand(String text) {
@@ -1201,6 +1431,22 @@ void handleRobotCommand(String text) {
         audio.playSound(SOUND_CHIRP);
       }
     }
+  } else if (text.startsWith("CALL:RING:") || text.startsWith("CALL:RING")) {
+    String caller = "Incoming Call";
+    if (text.startsWith("CALL:RING:")) {
+      caller = text.substring(10);
+      caller.trim();
+      if (caller.length() == 0) caller = "Incoming Call";
+    }
+    isAsleep = false;
+    applyDisplayBrightness(oledBrightness);
+    lastInteractionTime = millis();
+    face.setCallRinging(true, caller);
+    audio.playSound(SOUND_CHIRP);
+    Serial.printf("[CALL] Ringing alert for: %s\n", caller.c_str());
+  } else if (text == "CALL:END" || text.startsWith("CALL:END")) {
+    face.dismissIncomingCall();
+    Serial.println("[CALL] Ended");
   } else if (text.startsWith("NOTIF:")) {
     // Command format: NOTIF:Title|Body
     String payload = text.substring(6);
@@ -1226,11 +1472,7 @@ void handleRobotCommand(String text) {
       if (imgTransfer.startTransfer(imgSize, imgCrc)) {
         currentScreen = SCREEN_WALLPAPER;
         lastInteractionTime = millis();
-        tft.fillScreen(ST77XX_BLACK);
-        tft.setTextColor(ST77XX_WHITE);
-        tft.setTextSize(2);
-        tft.setCursor(20, 120);
-        tft.println("Receiving...");
+        drawWallpaperLoadingScreen();
         ble.sendLog("IMG_READY");
         Serial.printf("[IMG] Transfer started: %u bytes, CRC=0x%08X\n", imgSize, imgCrc);
       } else {
@@ -1246,8 +1488,11 @@ void handleRobotCommand(String text) {
       audio.playSound(SOUND_POWERUP);
       ble.sendLog("IMG_OK");
       Serial.println("[IMG] Transfer complete and wallpaper displayed.");
-      // Stay on wallpaper screen
+      // Stay on wallpaper screen and immediately render
       currentScreen = SCREEN_WALLPAPER;
+      drawWallpaperLoadingScreen();
+      delay(200);
+      imgTransfer.drawWallpaper();
       lastInteractionTime = millis();
     } else {
       audio.playSound(SOUND_POWERDOWN);
@@ -1309,6 +1554,100 @@ void handleRobotCommand(String text) {
     audio.playSound(SOUND_CHIRP); // alert user
     activeNotificationDurationMs = notificationDurationMs;
   }
+}
+
+void applyDisplayBrightness(int level) {
+  #ifdef TFT_BLK
+  uint8_t duty = 255;
+  if (level == 1) duty = 90;       // Low: comfortable night reading, soft & clear
+  else if (level == 2) duty = 230; // Medium: vibrant, rich colors and bright reds (default)
+  else duty = 255;                 // High: maximum outdoor sunlight readability
+  analogWrite(TFT_BLK, duty);
+  #endif
+}
+
+// ============================================================================
+// ST7789 Enhanced Hardware Calibration for Waveshare 1.69" (240x280 IPS)
+// Calibrates VCOM, positive/negative gamma curves, gate drive, and power levels
+// to achieve rich red saturation, lifelike shadow gradations (no black crush),
+// pristine color fidelity / originality, and zero noise.
+// ============================================================================
+void configureST7789HardwareEnhanced() {
+  // 1. RAM Control (0xB0) - Little Endian / RGB mode with 5 to 6-bit conversion (r0 = r5, b0 = b5)
+  // Ensures 5-bit red and blue are mapped across full 6-bit DAC range for maximum red brightness & vibrancy
+  const uint8_t ramctrl[] = { 0x00, 0xE0 };
+  tft.sendCommand(0xB0, ramctrl, sizeof(ramctrl));
+
+  // 2. Porch Timing Setting (0xB2 - PORCTRL)
+  // Calibrated porch eliminates horizontal scanline ripple and frame timing jitter
+  const uint8_t porctrl[] = { 0x0C, 0x0C, 0x00, 0x33, 0x33 };
+  tft.sendCommand(0xB2, porctrl, sizeof(porctrl));
+
+  // 3. Gate Voltage Control (0xB7 - GCTRL)
+  // VGH = 13.26V, VGL = -10.43V for strong gate pinch-off, eliminating subthreshold leakage
+  const uint8_t gctrl[] = { 0x35 };
+  tft.sendCommand(0xB7, gctrl, sizeof(gctrl));
+
+  // 4. VCOM Setting (0xBB - VCOMS)
+  // 0x28 (1.10V) — Balanced factory standard VCOM for 240x280 IPS panels.
+  // Preserves natural shadow luminance in normal photos without shadow crush or dulling
+  const uint8_t vcoms[] = { 0x28 };
+  tft.sendCommand(0xBB, vcoms, sizeof(vcoms));
+
+  // 5. LCM Control (0xC0 - LCMCTRL)
+  const uint8_t lcmctrl[] = { 0x2C };
+  tft.sendCommand(0xC0, lcmctrl, sizeof(lcmctrl));
+
+  // 6. VDV and VRH Command Enable (0xC2 - VDVVRHEN)
+  const uint8_t vdvvrhen[] = { 0x01 };
+  tft.sendCommand(0xC2, vdvvrhen, sizeof(vdvvrhen));
+
+  // 7. VRH Set (0xC3 - VRHS)
+  // 0x10 -> VREG1OUT = +4.30V, VREG2OUT = -4.30V. Natural dynamic range preserving original color saturation
+  const uint8_t vrhs[] = { 0x10 };
+  tft.sendCommand(0xC3, vrhs, sizeof(vrhs));
+
+  // 8. VDV Set (0xC4 - VDVS)
+  const uint8_t vdvs[] = { 0x20 }; // VDV = 0V
+  tft.sendCommand(0xC4, vdvs, sizeof(vdvs));
+
+  // 9. Frame Rate Control in Normal Mode (0xC6 - FRCTRL2)
+  // 0x0F = 60 Hz dot clock frame rate. Prevents beat frequencies and provides optimal LCD crystal charge time
+  const uint8_t frctrl[] = { 0x0F };
+  tft.sendCommand(0xC6, frctrl, sizeof(frctrl));
+
+  // 10. Power Control 1 (0xD0 - PWCTRL1)
+  // AVDD = 6.8V, AVCL = -4.8V, VDD = 2.3V
+  const uint8_t pwctrl[] = { 0xA4, 0xA1 };
+  tft.sendCommand(0xD0, pwctrl, sizeof(pwctrl));
+
+  // 11. Positive Voltage Gamma Control (0xE0 - PVGAMCTRL)
+  // Calibrated IPS gamma curve: smooth shadow gradation (prevents heavy shadows in photos),
+  // linear mid-to-high color response preserving original photo color fidelity and punchy bright reds
+  const uint8_t pvgamctrl[] = {
+    0xD0, 0x00, 0x02, 0x07, 0x0A, 0x28, 0x32, 0x44, 0x42, 0x06, 0x0E, 0x12, 0x14, 0x17
+  };
+  tft.sendCommand(0xE0, pvgamctrl, sizeof(pvgamctrl));
+
+  // 12. Negative Voltage Gamma Control (0xE1 - NVGAMCTRL)
+  // Symmetric negative polarity curve ensures perfect DC balance and clean color retention
+  const uint8_t nvgamctrl[] = {
+    0xD0, 0x00, 0x02, 0x07, 0x0A, 0x28, 0x31, 0x54, 0x47, 0x0E, 0x1C, 0x17, 0x1B, 0x1E
+  };
+  tft.sendCommand(0xE1, nvgamctrl, sizeof(nvgamctrl));
+
+  // 13. Ensure Display Inversion is ON (0x21 - INVON) for IPS normally-black operation
+  tft.sendCommand(0x21);
+
+  // 14. Normal Display Mode On (0x13 - NORON)
+  tft.sendCommand(0x13);
+  delay(10);
+
+  // 15. Display ON (0x29 - DISPON)
+  tft.sendCommand(0x29);
+  delay(10);
+  
+  Serial.println(F("[TFT] ST7789 Enhanced Hardware Calibration applied (Bright Red & Smooth Shadow Gamma)."));
 }
 
 void drawRGBBitmapScaled(int16_t x, int16_t y, const uint16_t *bitmap, int16_t w, int16_t h, int16_t targetW, int16_t targetH) {
@@ -1387,10 +1726,8 @@ void applySettings(String payload) {
   tft.invertDisplay(true);
   
   #ifdef TFT_BLK
-  analogWriteFrequency(TFT_BLK, 24000); // 24 kHz high-frequency PWM
-  if (oledBrightness == 1) analogWrite(TFT_BLK, 30);
-  else if (oledBrightness == 2) analogWrite(TFT_BLK, 128);
-  else analogWrite(TFT_BLK, 255);
+  analogWriteFrequency(TFT_BLK, TFT_PWM_FREQ);
+  applyDisplayBrightness(oledBrightness);
   #endif
   
   Serial.print("NegativeDisplay set to: ");
@@ -1565,18 +1902,22 @@ void setup() {
   
   // Initialize ST7789 Display in SPI MODE 3 (240x320 resolution controller mode)
   tft.init(240, 320, SPI_MODE3);
-  tft.setSPISpeed(80000000UL); // 80 MHz SPI speed for ultra-smooth 60 FPS rendering
-  tft.setRotation(2);          // Rotate right to make it vertical!
+  tft.setSPISpeed(TFT_SPI_SPEED); // 40 MHz for rock-solid signal integrity, zero bus errors & zero sparkle noise
+  tft.setRotation(2);             // Rotate right to make it vertical!
+  
+  // Apply enhanced hardware registers (calibrated gamma, VCOM, gate voltage, porch timing)
+  configureST7789HardwareEnhanced();
   
   tft.invertDisplay(true);   // Standard color representation for IPS screen during logo — gives white background
   tft.fillScreen(ST77XX_WHITE);
   
   display.fillScreen(ST77XX_WHITE);
   
-  // Apply saved brightness setting
-  if (oledBrightness == 1) analogWrite(TFT_BLK, 30);
-  else if (oledBrightness == 2) analogWrite(TFT_BLK, 128);
-  else analogWrite(TFT_BLK, 255);
+  // Apply 10 kHz PWM frequency to backlight to eliminate optical beat noise
+  #ifdef TFT_BLK
+  analogWriteFrequency(TFT_BLK, TFT_PWM_FREQ);
+  #endif
+  applyDisplayBrightness(oledBrightness);
 
   // Display startup logo on white background
   int logoSize = (SCREEN_WIDTH < SCREEN_HEIGHT) ? SCREEN_WIDTH : SCREEN_HEIGHT;
@@ -1668,9 +2009,7 @@ void adjustOption(int option, int direction) {
         oledBrightness--;
         if (oledBrightness < 1) oledBrightness = 3;
       }
-      if (oledBrightness == 1) analogWrite(TFT_BLK, 40);
-      else if (oledBrightness == 2) analogWrite(TFT_BLK, 140);
-      else analogWrite(TFT_BLK, 255);
+      applyDisplayBrightness(oledBrightness);
       audio.playSound(SOUND_CHIRP);
       break;
 
@@ -1858,7 +2197,19 @@ void handleBtn1Single() {
     Serial.printf("[BTN1] Cycled clock style -> %d\n", clockStyle);
   } else if (currentScreen == SCREEN_NOTIFICATIONS) {
     if (notificationSelected) {
-      // Detail View: tap anywhere or dismiss button exits back to list
+      int lastX = interaction.getLastX();
+      int canvasY = interaction.getMappedY();
+      int notifIdx = face.getCurrentNotifViewIdx();
+      String notifTitle = face.getNotificationTitle(notifIdx);
+      if ((notifTitle.startsWith("WA:") || notifTitle.indexOf("WhatsApp") >= 0) &&
+          lastX >= 14 && lastX <= 128 && canvasY >= 235 && canvasY <= 265) {
+        face.openQuickReply();
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[NOTIF] Opened WhatsApp Quick Reply sheet");
+        notifyScreenAndExprSync();
+        return;
+      }
+      // Detail View: tap anywhere else or dismiss button exits back to list
       notificationSelected = false;
       audio.playSound(SOUND_POWERDOWN);
       Serial.println("[BTN1] Exited Notification Detail View");
@@ -2403,9 +2754,79 @@ void loop() {
   // ── 0.6. Poll unified touch handler (only when awake) ───────────────────
   ButtonEvent btnEvt = interaction.update();
   if (btnEvt != BTN_NONE) {
-    if (isAlarmRinging || isReminderRinging || face.isAlarmRingingActive()) {
+    if (face.isCallRingingActive()) {
+      int curX = interaction.getLastX();
+      int curY = interaction.getMappedY();
+      // Buttons area is Y: 195..265
+      if (curY >= 195 && curY <= 265) {
+        if (curX < 120) {
+          face.muteIncomingCall();
+          ble.sendLog("CALL_ACT:MUTE");
+          audio.playSound(SOUND_CHIRP);
+          Serial.println("[CALL] User tapped MUTE");
+        } else {
+          face.dismissIncomingCall();
+          ble.sendLog("CALL_ACT:REJECT");
+          audio.playSound(SOUND_POWERDOWN);
+          Serial.println("[CALL] User tapped CUT");
+        }
+      }
+      btnEvt = BTN_NONE; // consume touch so call screen handles it!
+    } else if (face.isQuickReplyActive()) {
+      int curY = interaction.getMappedY();
+      if (curY >= 60 && curY < 95) {
+        String reply = face.getQuickReplyPreset(0);
+        ble.sendLog("REPLY:WA:" + reply);
+        face.closeQuickReply();
+        notificationSelected = false;
+        audio.playSound(SOUND_CHIRP);
+        Serial.printf("[WA] Quick reply sent: %s\n", reply.c_str());
+      } else if (curY >= 95 && curY < 128) {
+        String reply = face.getQuickReplyPreset(1);
+        ble.sendLog("REPLY:WA:" + reply);
+        face.closeQuickReply();
+        notificationSelected = false;
+        audio.playSound(SOUND_CHIRP);
+        Serial.printf("[WA] Quick reply sent: %s\n", reply.c_str());
+      } else if (curY >= 128 && curY < 161) {
+        String reply = face.getQuickReplyPreset(2);
+        ble.sendLog("REPLY:WA:" + reply);
+        face.closeQuickReply();
+        notificationSelected = false;
+        audio.playSound(SOUND_CHIRP);
+        Serial.printf("[WA] Quick reply sent: %s\n", reply.c_str());
+      } else if (curY >= 161 && curY < 194) {
+        String reply = face.getQuickReplyPreset(3);
+        ble.sendLog("REPLY:WA:" + reply);
+        face.closeQuickReply();
+        notificationSelected = false;
+        audio.playSound(SOUND_CHIRP);
+        Serial.printf("[WA] Quick reply sent: %s\n", reply.c_str());
+      } else if (curY >= 194 && curY < 228) {
+        String reply = face.getQuickReplyPreset(4);
+        ble.sendLog("REPLY:WA:" + reply);
+        face.closeQuickReply();
+        notificationSelected = false;
+        audio.playSound(SOUND_CHIRP);
+        Serial.printf("[WA] Quick reply sent: %s\n", reply.c_str());
+      } else {
+        face.closeQuickReply();
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[WA] Quick reply closed");
+      }
+      btnEvt = BTN_NONE; // consume touch
+    } else if (isAlarmRinging || isReminderRinging || face.isAlarmRingingActive()) {
       dismissAlarmRinging();
       btnEvt = BTN_NONE; // consume touch so it only silences the alarm!
+    }
+  }
+
+  // Periodic ring sound when incoming call is ringing (if not muted)
+  static unsigned long lastCallRingBeep = 0;
+  if (face.isCallRingingActive()) {
+    if (!face.isCallMuted() && millis() - lastCallRingBeep >= 2000) {
+      lastCallRingBeep = millis();
+      audio.playSound(SOUND_CHIRP);
     }
   }
   switch (btnEvt) {
@@ -2709,17 +3130,11 @@ void loop() {
   if (now - lastDisplayDrawTime >= 18) {
     lastDisplayDrawTime = now;
     if (currentScreen == SCREEN_WALLPAPER) {
-      // Wallpaper screen: static JPEG already rendered — only redraw if in the middle of receiving
-      if (imgTransfer.state() == LunaImageTransfer::RECEIVING) {
-        // Show live progress bar
-        int pct = (int)(imgTransfer.progress() * 100.0f);
-        int barW = (int)(imgTransfer.progress() * (SCREEN_WIDTH - 20));
-        tft.fillRect(10, SCREEN_HEIGHT - 30 + 20, SCREEN_WIDTH - 20, 12, 0x39E7); // Dark grey background
-        tft.fillRect(10, SCREEN_HEIGHT - 30 + 20, barW, 12, 0x07FF); // Cyan progress bar
-        tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-        tft.setTextSize(1);
-        tft.setCursor(10, SCREEN_HEIGHT - 15 + 20);
-        tft.printf("%d%%", pct);
+      // Wallpaper screen: static JPEG already rendered — continuously animate HUD while receiving, verifying, or decoding
+      if (imgTransfer.state() == LunaImageTransfer::RECEIVING ||
+          imgTransfer.state() == LunaImageTransfer::VERIFYING ||
+          imgTransfer.state() == LunaImageTransfer::DECODING) {
+        drawWallpaperLoadingScreen();
       }
     } else {
       lastDrawnSecond = rtcSecond;

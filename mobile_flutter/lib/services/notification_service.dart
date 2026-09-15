@@ -125,9 +125,25 @@ class PhoneNotificationService {
         // Forward non-navigation notification to the robot in detailed NOTIF:Title|Body format!
         final String titleClean = title.replaceAll('|', ' ').trim();
         final String textClean = text.replaceAll('|', ' ').trim();
-        final String displayMessage = "NOTIF:$titleClean|$textClean";
+        final bool isWhatsApp = pkgLower == 'com.whatsapp' || pkgLower == 'com.whatsapp.w4b';
+        final String prefix = isWhatsApp ? "NOTIF:WA:" : "NOTIF:";
+        final String displayMessage = "$prefix$titleClean|$textClean";
         _bleService.addLog("Forwarding non-Maps notification to robot: $displayMessage", "NOTIF");
         await _forwardToRobot(displayMessage);
+        break;
+
+      case 'onIncomingCall':
+        final Map<dynamic, dynamic> data = call.arguments as Map<dynamic, dynamic>;
+        final String caller = (data['caller'] ?? 'Incoming Call').toString().replaceAll('|', ' ').trim();
+        _bleService.addLog("Incoming Call alert: $caller", "CALL");
+        if (!_dbService.notificationSyncEnabled) return;
+        await _forwardToRobot("CALL:RING:$caller");
+        break;
+
+      case 'onCallEnded':
+        _bleService.addLog("Call Ended alert", "CALL");
+        if (!_dbService.notificationSyncEnabled) return;
+        await _forwardToRobot("CALL:END");
         break;
 
       case 'onNotificationRemoved':
@@ -147,6 +163,37 @@ class PhoneNotificationService {
           _bleService.clearNavigation();
           await _bleService.transmitNavTelemetry("MAP:EXIT");
         }
+        break;
+    }
+  }
+
+  static Future<bool> rejectCall() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('rejectCall');
+      return res ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> muteCall() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('muteCall');
+      return res ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> sendQuickReply(String pkg, String text) async {
+    try {
+      final res = await _channel.invokeMethod<bool>('sendQuickReply', {
+        'package': pkg,
+        'text': text,
+      });
+      return res ?? false;
+    } catch (e) {
+      return false;
     }
   }
 

@@ -3,13 +3,81 @@ package com.mrmsluna.controller.mobile_flutter
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.content.Intent
+import android.content.Context
 import android.app.Notification
+import android.app.RemoteInput
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import java.util.concurrent.ConcurrentHashMap
 
 class MyNotificationListener : NotificationListenerService() {
     private val handler = Handler(Looper.getMainLooper())
+
+    companion object {
+        var instance: MyNotificationListener? = null
+        // Cache direct reply actions: package -> Pair<Notification.Action, RemoteInput>
+        val directReplyActions = ConcurrentHashMap<String, Pair<Notification.Action, RemoteInput>>()
+        // Cache active incoming call decline action and package
+        var activeCallDeclineAction: Notification.Action? = null
+        var activeCallPackage: String = ""
+
+        fun sendQuickReply(context: Context, targetPackage: String, replyText: String): Boolean {
+            val pair = directReplyActions[targetPackage] ?: run {
+                if (targetPackage.contains("whatsapp")) {
+                    directReplyActions["com.whatsapp"] ?: directReplyActions["com.whatsapp.w4b"]
+                } else null
+            } ?: run {
+                // Fallback to any available direct reply action
+                directReplyActions.values.firstOrNull()
+            } ?: return false
+
+            val action = pair.first
+            val remoteInput = pair.second
+            return try {
+                val intent = Intent()
+                val bundle = Bundle()
+                bundle.putCharSequence(remoteInput.resultKey, replyText)
+                RemoteInput.addResultsToIntent(arrayOf(remoteInput), intent, bundle)
+                action.actionIntent.send(context, 0, intent)
+                println("MyNotificationListener - Quick Reply sent: '$replyText' to ${action.title}")
+                true
+            } catch (e: Exception) {
+                println("MyNotificationListener - Error sending quick reply: ${e.message}")
+                false
+            }
+        }
+
+        fun declineActiveCall(): Boolean {
+            activeCallDeclineAction?.let { action ->
+                try {
+                    action.actionIntent.send()
+                    println("MyNotificationListener - Executed decline action: '${action.title}'")
+                    activeCallDeclineAction = null
+                    return true
+                } catch (e: Exception) {
+                    println("MyNotificationListener - Error declining call: ${e.message}")
+                }
+            }
+            return false
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        instance = this
+        println("MyNotificationListener - Connected")
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        instance = null
+    }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
@@ -67,6 +135,53 @@ class MyNotificationListener : NotificationListenerService() {
             }
         }
 
+        // Cache any available Direct Reply action (e.g. WhatsApp, WhatsApp Business, SMS)
+        val actions = sbn.notification.actions
+        if (actions != null) {
+            for (action in actions) {
+                val remoteInputs = action.remoteInputs
+                if (remoteInputs != null && remoteInputs.isNotEmpty()) {
+                    directReplyActions[packageName] = Pair(action, remoteInputs[0])
+                    println("MyNotificationListener - Cached direct reply action for $packageName ('${action.title}')")
+                    break
+                }
+            }
+        }
+
+        // Detect incoming phone call notifications (ODialer, system dialers, telecom)
+        val pkgLower = packageName.lowercase()
+        val isCallCategory = sbn.notification.category == Notification.CATEGORY_CALL
+        val isCallPkg = pkgLower.contains("dialer") || pkgLower.contains("telecom") || pkgLower.contains("phone") || pkgLower.contains("incallui")
+        val combinedNotifText = "$title $text $subText $bigText".lowercase()
+        val isIncomingCall = isCallCategory || (isCallPkg && (
+            combinedNotifText.contains("incoming") || combinedNotifText.contains("calling") || sbn.isOngoing
+        ))
+
+        if (isIncomingCall) {
+            activeCallPackage = packageName
+            if (actions != null) {
+                for (action in actions) {
+                    val actTitle = action.title?.toString()?.lowercase() ?: ""
+                    if (actTitle.contains("decline") || actTitle.contains("reject") || actTitle.contains("dismiss") || actTitle.contains("hang") || actTitle.contains("cut")) {
+                        activeCallDeclineAction = action
+                        println("MyNotificationListener - Cached call decline action: '${action.title}'")
+                        break
+                    }
+                }
+            }
+            val callerName = when {
+                title.isNotEmpty() && !title.lowercase().contains("call") -> title
+                text.isNotEmpty() && !text.lowercase().contains("call") -> text
+                else -> if (title.isNotEmpty()) title else "Incoming Call"
+            }
+            val callIntent = Intent("com.mrmsluna.INCOMING_CALL")
+            callIntent.setPackage(this.packageName)
+            callIntent.putExtra("caller", callerName)
+            callIntent.putExtra("package", packageName)
+            sendBroadcast(callIntent)
+            println("MyNotificationListener - Broadcasted INCOMING_CALL: caller='$callerName', pkg=$packageName")
+        }
+
         // Only process if there's actual content
         if (title.isNotEmpty() || text.isNotEmpty() || subText.isNotEmpty() || bigText.isNotEmpty() || smallIconName.isNotEmpty()) {
             val intent = Intent("com.mrmsluna.NOTIFICATION_RECEIVED")
@@ -87,6 +202,15 @@ class MyNotificationListener : NotificationListenerService() {
         if (sbn == null) return
         val packageName = sbn.packageName ?: ""
         println("MyNotificationListener - Removed: pkg=$packageName")
+
+        if (packageName == activeCallPackage || sbn.notification.category == Notification.CATEGORY_CALL) {
+            activeCallDeclineAction = null
+            activeCallPackage = ""
+            val callEndIntent = Intent("com.mrmsluna.CALL_ENDED")
+            callEndIntent.setPackage(this.packageName)
+            sendBroadcast(callEndIntent)
+            println("MyNotificationListener - Broadcasted CALL_ENDED")
+        }
 
         if (packageName == "com.google.android.apps.maps") {
             // Debounce exit check by 1.5 seconds to prevent race conditions during updates
