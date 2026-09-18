@@ -18,6 +18,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import android.app.AppOpsManager
+import android.app.usage.UsageStatsManager
+import android.app.usage.UsageEvents
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.mrmsluna/notifications"
@@ -106,6 +109,44 @@ class MainActivity: FlutterActivity() {
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                         requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
                     }
+                    result.success(true)
+                }
+                "isUsageAccessGranted" -> {
+                    result.success(isUsageAccessGranted())
+                }
+                "openUsageAccessSettings" -> {
+                    try {
+                        val intent = Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("ERROR", e.message, null)
+                    }
+                }
+                "isOverlayPermissionGranted" -> {
+                    result.success(isOverlayPermissionGranted())
+                }
+                "openOverlaySettings" -> {
+                    try {
+                        openOverlaySettings()
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("ERROR", e.message, null)
+                    }
+                }
+                "getForegroundApp" -> {
+                    result.success(getForegroundApp())
+                }
+                "updateFocusGuardSettings" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: true
+                    val rawLimits = call.argument<Map<*, *>>("limits") ?: emptyMap<String, Any>()
+                    val limits = rawLimits.mapNotNull { (k, v) ->
+                        val key = k?.toString() ?: return@mapNotNull null
+                        val num = (v as? Number)?.toInt() ?: v?.toString()?.toIntOrNull() ?: 5
+                        key to num
+                    }.toMap()
+                    LunaBackgroundService.updateFocusLimits(this, enabled, limits)
                     result.success(true)
                 }
                 "startBackgroundService" -> {
@@ -235,6 +276,8 @@ class MainActivity: FlutterActivity() {
                                 result.error("DECODE_ERROR", e.message, null)
                             }
                         }
+                    }.start()
+                }
                 "rejectCall" -> {
                     var handled = MyNotificationListener.declineActiveCall()
                     if (!handled) {
@@ -579,5 +622,72 @@ class MainActivity: FlutterActivity() {
         val resultBytes = ByteArray(resampled.size * 2)
         ByteBuffer.wrap(resultBytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(resampled)
         return resultBytes
+    }
+
+    private fun isUsageAccessGranted(): Boolean {
+        return try {
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
+            val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
+            } else {
+                appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
+            }
+            mode == AppOpsManager.MODE_ALLOWED
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun isOverlayPermissionGranted(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
+        }
+    }
+
+    private fun openOverlaySettings() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:$packageName")
+            )
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        }
+    }
+
+    private fun getForegroundApp(): String? {
+        if (!isUsageAccessGranted()) return null
+        return try {
+            val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
+            val now = System.currentTimeMillis()
+            val events = usageStatsManager.queryEvents(now - 180_000L, now)
+            val event = UsageEvents.Event()
+
+            val resumeTimes = HashMap<String, Long>()
+            val pauseTimes = HashMap<String, Long>()
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val pkg = event.packageName ?: continue
+                when (event.eventType) {
+                    UsageEvents.Event.ACTIVITY_RESUMED -> resumeTimes[pkg] = event.timeStamp
+                    UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED -> pauseTimes[pkg] = event.timeStamp
+                }
+            }
+
+            val activeCandidate = resumeTimes.entries
+                .filter { (pkg, resumeTime) -> resumeTime > (pauseTimes[pkg] ?: 0L) }
+                .maxByOrNull { it.value }
+                ?.key
+
+            if (activeCandidate != null) return activeCandidate
+
+            val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 180_000L, now)
+            stats.maxByOrNull { it.lastTimeUsed }?.packageName
+        } catch (e: Exception) {
+            null
+        }
     }
 }

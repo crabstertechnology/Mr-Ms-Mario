@@ -5,6 +5,7 @@ import '../models/gif_model.dart';
 import '../models/robot_profile.dart';
 import '../models/calendar_event.dart';
 import '../models/alarm_model.dart';
+import 'notification_service.dart';
 
 class DatabaseService with ChangeNotifier {
   List<GifModel> _gifs = [];
@@ -12,6 +13,11 @@ class DatabaseService with ChangeNotifier {
   List<CalendarEvent> _events = [];
   List<AlarmModel> _alarms = [];
   SharedPreferences? _prefs;
+
+  Future<SharedPreferences> get _safePrefs async {
+    _prefs ??= await SharedPreferences.getInstance();
+    return _prefs!;
+  }
 
   // Settings cached values
   bool _is12HourFormat = false;
@@ -51,6 +57,11 @@ class DatabaseService with ChangeNotifier {
     'phone',
     'other_apps'
   ];
+  bool _focusGuardEnabled = true;
+  Map<String, int> _focusAppLimits = {
+    'com.instagram.android': 5,
+    'com.google.android.youtube': 5,
+  };
 
   List<GifModel> get gifs => _gifs;
   List<RobotProfile> get robots => _robots;
@@ -59,6 +70,8 @@ class DatabaseService with ChangeNotifier {
   bool get is12HourFormat => _is12HourFormat;
   bool get notificationSyncEnabled => _notificationSyncEnabled;
   List<String> get allowedNotificationApps => _allowedNotificationApps;
+  bool get focusGuardEnabled => _focusGuardEnabled;
+  Map<String, int> get focusAppLimits => _focusAppLimits;
 
   RobotProfile? get primaryRobot {
     if (_robots.isEmpty) return null;
@@ -123,6 +136,11 @@ class DatabaseService with ChangeNotifier {
     _loadRobots();
     _loadEvents();
     _loadAlarms();
+    // Sync Focus Guard settings to native background service on startup
+    PhoneNotificationService.updateFocusGuardSettings(
+      enabled: _focusGuardEnabled,
+      limits: _focusAppLimits,
+    );
   }
 
   void _loadSettings() {
@@ -164,6 +182,27 @@ class DatabaseService with ChangeNotifier {
       'phone',
       'other_apps'
     ];
+    _focusGuardEnabled = _prefs!.getBool('focusGuardEnabled') ?? true;
+    final savedFocusLimits = _prefs!.getString('focusAppLimits');
+    if (savedFocusLimits != null && savedFocusLimits.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(savedFocusLimits);
+        if (decoded is Map) {
+          final Map<String, int> parsed = {};
+          decoded.forEach((k, v) {
+            if (k != null) {
+              final mins = int.tryParse(v.toString()) ?? 5;
+              parsed[k.toString()] = mins;
+            }
+          });
+          if (parsed.isNotEmpty) {
+            _focusAppLimits = parsed;
+          }
+        }
+      } catch (e) {
+        print("Failed to decode focusAppLimits: $e");
+      }
+    }
     notifyListeners();
   }
 
@@ -483,6 +522,11 @@ class DatabaseService with ChangeNotifier {
     _birthdayDuration = 15.0;
     _bleSleepTime = 45.0;
     _bleName = 'Mr. Luna Robot';
+    _focusGuardEnabled = true;
+    _focusAppLimits = {
+      'com.instagram.android': 5,
+      'com.google.android.youtube': 5,
+    };
 
     await _prefs?.clear();
     _seedDefaultGifs();
@@ -772,6 +816,34 @@ class DatabaseService with ChangeNotifier {
   Future<void> updateAllowedNotificationApps(List<String> apps) async {
     _allowedNotificationApps = apps;
     await _prefs?.setStringList('allowedNotificationApps', apps);
+    notifyListeners();
+  }
+
+  Future<void> updateFocusGuardEnabled(bool val) async {
+    _focusGuardEnabled = val;
+    final p = await _safePrefs;
+    await p.setBool('focusGuardEnabled', val);
+    notifyListeners();
+  }
+
+  Future<void> setFocusAppLimit(String packageName, int limitMinutes) async {
+    _focusAppLimits[packageName] = limitMinutes;
+    final p = await _safePrefs;
+    await p.setString('focusAppLimits', jsonEncode(_focusAppLimits));
+    notifyListeners();
+  }
+
+  Future<void> removeFocusApp(String packageName) async {
+    _focusAppLimits.remove(packageName);
+    final p = await _safePrefs;
+    await p.setString('focusAppLimits', jsonEncode(_focusAppLimits));
+    notifyListeners();
+  }
+
+  Future<void> updateAllFocusLimits(Map<String, int> limits) async {
+    _focusAppLimits = Map<String, int>.from(limits);
+    final p = await _safePrefs;
+    await p.setString('focusAppLimits', jsonEncode(_focusAppLimits));
     notifyListeners();
   }
 }

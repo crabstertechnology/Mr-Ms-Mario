@@ -498,7 +498,8 @@ public:
     popupBody = body;
     popupActive = true;
     popupStartTime = millis();
-    popupDuration = 5000; // 5 seconds
+    bool isWA = title.startsWith("WA:") || title.indexOf("WhatsApp") >= 0;
+    popupDuration = isWA ? 8000 : 5000; // 8 seconds for WhatsApp so user can tap reply!
     
     char timeBuf[16];
     snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
@@ -511,6 +512,14 @@ public:
 
   bool isPopupActive() const {
     return popupActive;
+  }
+
+  String getPopupTitle() const {
+    return popupTitle;
+  }
+
+  String getPopupBody() const {
+    return popupBody;
   }
 
   void triggerSilentOverlay(bool isSilent) {
@@ -825,7 +834,14 @@ public:
   }
 
   void drawPopup() {
-    const uint16_t accentCol = (robotVariant == "mr_luna") ? 0x07FF : 0xFD99; // Cyan or soft pink
+    bool isWA = popupTitle.startsWith("WA:") || popupTitle.indexOf("WhatsApp") >= 0;
+    String displayTitle = popupTitle;
+    if (displayTitle.startsWith("WA:")) {
+      displayTitle = displayTitle.substring(3);
+      displayTitle.trim();
+    }
+
+    const uint16_t accentCol = isWA ? 0x07E0 : ((robotVariant == "mr_luna") ? 0x07FF : 0xFD99);
     const uint16_t cardBg    = 0x0841; // Dark graphite
     const uint16_t textCol   = 0xFFFF; // White
     const uint16_t subCol    = 0x8410; // Silver
@@ -838,19 +854,21 @@ public:
     display.fillRoundRect(5,  5,  SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 11, cardBg);
 
     // ── Header strip ──────────────────────────────────────────────────────────
-    display.fillRoundRect(5, 5, SCREEN_WIDTH - 10, 36, 11, 0x18C3); // Darker header area
+    display.fillRoundRect(5, 5, SCREEN_WIDTH - 10, 36, 11, isWA ? 0x0280 : 0x18C3);
     // Notification bell icon (3 circles + base)
     int bx = 22, by = 23;
     display.fillCircle(bx, by - 3, 5, accentCol);
     display.fillRect(bx - 6, by + 2, 13, 4, accentCol);
     display.fillCircle(bx, by + 8, 2, accentCol);
-    display.fillRect(bx - 6, by + 2, 13, 2, 0x18C3); // Cut top of base
+    display.fillRect(bx - 6, by + 2, 13, 2, isWA ? 0x0280 : 0x18C3);
+
     // App / sender badge
-    display.fillRoundRect(38, 14, 90, 17, 8, 0x2945);
+    display.fillRoundRect(38, 14, isWA ? 96 : 90, 17, 8, isWA ? 0x0BE4 : 0x2945);
     display.setTextSize(1);
-    display.setTextColor(accentCol);
+    display.setTextColor(TFT_WHITE);
     display.setCursor(44, 19);
-    display.print("NEW MESSAGE");
+    display.print(isWA ? "WHATSAPP" : "NEW MESSAGE");
+
     // Time badge (right side)
     display.setTextColor(subCol);
     display.setCursor(SCREEN_WIDTH - 42, 19);
@@ -862,28 +880,57 @@ public:
     display.setTextSize(2);
     display.setTextColor(accentCol);
     display.setCursor(14, 50);
-    String title = popupTitle;
+    String title = displayTitle;
     if (title.length() > 15) title = title.substring(0, 13) + "..";
     display.print(title);
 
     display.drawFastHLine(8, 72, SCREEN_WIDTH - 16, 0x2124);
 
     // ── Message body — size 2 with smart word wrapping ─────────────────────
-    drawWordWrappedText(popupBody, 14, 82, SCREEN_WIDTH - 28, 6, 22, textCol, 2);
+    drawWordWrappedText(popupBody, 14, 80, SCREEN_WIDTH - 28, 5, 22, textCol, 2);
 
-    // ── Dismiss progress bar (counts down over popup duration) ────────────────
-    unsigned long elapsed  = millis() - popupStartTime;
-    int barW   = SCREEN_WIDTH - 28;
-    int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
-    if (barFill < 0) barFill = 0;
-    display.drawRoundRect(14, SCREEN_HEIGHT - 22, barW, 8, 3, 0x2124);
-    display.fillRoundRect(15, SCREEN_HEIGHT - 21, barFill, 6, 2, accentCol);
+    if (isWA) {
+      // ── Action Buttons for WhatsApp ──────────────────────────────────────────
+      int btnY = SCREEN_HEIGHT - 48;
+      int btnH = 34;
 
-    // ── Tap-to-dismiss hint ───────────────────────────────────────────────────
-    display.setTextSize(1);
-    display.setTextColor(subCol);
-    display.setCursor((SCREEN_WIDTH - 84) / 2, SCREEN_HEIGHT - 11);
-    display.print("TAP TO DISMISS");
+      // Left: [ 💬 QUICK REPLY ]
+      display.fillRoundRect(12, btnY, 108, btnH, 8, 0x0BE4); // WhatsApp green
+      display.drawRoundRect(12, btnY, 108, btnH, 8, 0x07E0);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(20, btnY + 13);
+      display.print("> QUICK REPLY");
+
+      // Right: [ ✕ DISMISS ]
+      display.fillRoundRect(126, btnY, 102, btnH, 8, 0x2124);
+      display.drawRoundRect(126, btnY, 102, btnH, 8, 0x4A49);
+      display.setTextColor(0xCE79);
+      display.setCursor(144, btnY + 13);
+      display.print("DISMISS");
+
+      // Progress bar (counts down over popup duration)
+      unsigned long elapsed  = millis() - popupStartTime;
+      int barW   = SCREEN_WIDTH - 28;
+      int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
+      if (barFill < 0) barFill = 0;
+      display.fillRoundRect(14, SCREEN_HEIGHT - 9, barFill, 3, 1, 0x07E0);
+
+    } else {
+      // ── Dismiss progress bar (counts down over popup duration) ────────────────
+      unsigned long elapsed  = millis() - popupStartTime;
+      int barW   = SCREEN_WIDTH - 28;
+      int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
+      if (barFill < 0) barFill = 0;
+      display.drawRoundRect(14, SCREEN_HEIGHT - 22, barW, 8, 3, 0x2124);
+      display.fillRoundRect(15, SCREEN_HEIGHT - 21, barFill, 6, 2, accentCol);
+
+      // ── Tap-to-dismiss hint ───────────────────────────────────────────────────
+      display.setTextSize(1);
+      display.setTextColor(subCol);
+      display.setCursor((SCREEN_WIDTH - 84) / 2, SCREEN_HEIGHT - 11);
+      display.print("TAP TO DISMISS");
+    }
   }
 
   void drawNotificationPanel() {

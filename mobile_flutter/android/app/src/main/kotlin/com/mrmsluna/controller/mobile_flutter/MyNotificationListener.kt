@@ -89,6 +89,7 @@ class MyNotificationListener : NotificationListenerService() {
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
         val packageName = sbn.packageName ?: ""
+        if (packageName == this.packageName) return
 
         var smallIconName = ""
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
@@ -180,6 +181,7 @@ class MyNotificationListener : NotificationListenerService() {
             callIntent.putExtra("package", packageName)
             sendBroadcast(callIntent)
             println("MyNotificationListener - Broadcasted INCOMING_CALL: caller='$callerName', pkg=$packageName")
+            return
         }
 
         // Only process if there's actual content

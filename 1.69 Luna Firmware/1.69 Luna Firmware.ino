@@ -959,7 +959,7 @@ void handleRobotCommand(String text) {
     ble.sendLog("ACK:" + ackId);
   }
 
-  if (mapsActive && !text.startsWith("MAP") && !text.startsWith("SCREEN:") && !text.startsWith("CALL:") && !text.startsWith("TIME:")) {
+  if (mapsActive && !text.startsWith("MAP") && !text.startsWith("SCREEN:") && !text.startsWith("CALL:") && !text.startsWith("TIME:") && !text.startsWith("FOCUS") && !text.startsWith("APPLIMIT")) {
     Serial.println("[BLE] Ignored command because MAPS is active");
     return;
   }
@@ -993,6 +993,64 @@ void handleRobotCommand(String text) {
     currentScreen = SCREEN_FACE;
     face.setExpression(EXPR_ANGRY);
     Serial.println("OK:AngryAnimationTriggered");
+  } else if (text.startsWith("FOCUS_ALERT:") || text.startsWith("APPLIMIT:")) {
+    // Format: FOCUS_ALERT:<appName>:<limitMinutes> (e.g. FOCUS_ALERT:Instagram:5m)
+    String payload = text.substring(text.indexOf(':') + 1);
+    String appName = "App";
+    String duration = "";
+    int colon = payload.indexOf(':');
+    if (colon > 0) {
+      appName = payload.substring(0, colon);
+      duration = payload.substring(colon + 1);
+    } else {
+      appName = payload;
+    }
+    appName.trim();
+    duration.trim();
+    if (appName.length() == 0) appName = "Phone";
+
+    // 1. Wake screen if asleep
+    isAsleep = false;
+    applyDisplayBrightness(oledBrightness);
+    lastInteractionTime = millis();
+    lastExpressionCycleTime = millis();
+
+    // 2. Dismiss any active notification popups so only the angry emoji/face shows
+    face.setPopupDismiss();
+
+    // 3. Switch to Robot Face screen
+    currentScreen = SCREEN_FACE;
+
+    // 4. Set Angry Face Robot Eye Animation (index 1 = Angry Face)
+    face.getRobotEyeAnim().setAnimationIndex(1);
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Angry Face");
+
+    // 5. Play urgent warning beep sound
+    audio.playSound(SOUND_ALERT_BEEP);
+
+    // 6. Sync status back to companion app
+    ble.sendLog("FOCUS_ALERT_TRIGGERED:" + appName);
+    notifyScreenAndExprSync();
+    Serial.printf("[FOCUS_ALERT] Triggered for app: %s (%s)\n", appName.c_str(), duration.c_str());
+  } else if (text == "FOCUS_TEST") {
+    isAsleep = false;
+    applyDisplayBrightness(oledBrightness);
+    lastInteractionTime = millis();
+    lastExpressionCycleTime = millis();
+    face.setPopupDismiss();
+    currentScreen = SCREEN_FACE;
+    face.getRobotEyeAnim().setAnimationIndex(1);
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Angry Face");
+    audio.playSound(SOUND_ALERT_BEEP);
+    ble.sendLog("FOCUS_ALERT_TRIGGERED:Test");
+    notifyScreenAndExprSync();
+    Serial.println("[FOCUS_ALERT] Test triggered via BLE");
   } else if (text.startsWith("ANIM:") || text.startsWith("SPRITE:")) {
     int colon = text.indexOf(':');
     int idx = text.substring(colon + 1).toInt();
@@ -2077,8 +2135,20 @@ void handleBtn1Single() {
   lastInteractionTime = millis();
   if (mapsActive) return;
 
-  // Dismiss popup toast on tap
+  // Dismiss popup toast on tap (or open Quick Reply if WhatsApp reply button tapped)
   if (face.isPopupActive()) {
+    int curX = interaction.getLastX();
+    int curY = interaction.getMappedY();
+    String pTitle = face.getPopupTitle();
+    bool isWA = pTitle.startsWith("WA:") || pTitle.indexOf("WhatsApp") >= 0;
+    if (isWA && curX < 124 && curY >= 210) {
+      face.setPopupDismiss();
+      face.openQuickReply();
+      audio.playSound(SOUND_POWERUP);
+      Serial.println("[BTN1] Opened WhatsApp Quick Reply from popup");
+      notifyScreenAndExprSync();
+      return;
+    }
     face.setPopupDismiss();
     audio.playSound(SOUND_POWERDOWN);
     Serial.println("[BTN1] Dismissed popup notification");
@@ -2813,6 +2883,23 @@ void loop() {
         face.closeQuickReply();
         audio.playSound(SOUND_POWERDOWN);
         Serial.println("[WA] Quick reply closed");
+      }
+      btnEvt = BTN_NONE; // consume touch
+    } else if (face.isPopupActive()) {
+      int curX = interaction.getLastX();
+      int curY = interaction.getMappedY();
+      String pTitle = face.getPopupTitle();
+      bool isWA = pTitle.startsWith("WA:") || pTitle.indexOf("WhatsApp") >= 0;
+      if (isWA && curX < 124 && curY >= 210) {
+        // Tapped [ > QUICK REPLY ] button on the popup!
+        face.setPopupDismiss();
+        face.openQuickReply();
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[POPUP] Opened WhatsApp Quick Reply from popup button");
+      } else {
+        face.setPopupDismiss();
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[POPUP] Dismissed popup");
       }
       btnEvt = BTN_NONE; // consume touch
     } else if (isAlarmRinging || isReminderRinging || face.isAlarmRingingActive()) {

@@ -181,6 +181,18 @@ class _MainDashboardState extends State<MainDashboard> {
         _isPostNotificationsPermissionGranted = postGranted;
       });
     }
+    final usageGranted = await PhoneNotificationService.isUsageAccessGranted();
+    if (mounted && _isUsageAccessGranted != usageGranted) {
+      setState(() {
+        _isUsageAccessGranted = usageGranted;
+      });
+    }
+    final overlayGranted = await PhoneNotificationService.isOverlayPermissionGranted();
+    if (mounted && _isOverlayPermissionGranted != overlayGranted) {
+      setState(() {
+        _isOverlayPermissionGranted = overlayGranted;
+      });
+    }
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -275,7 +287,10 @@ class _MainDashboardState extends State<MainDashboard> {
   StreamSubscription? _robotEventsSub;
   bool _isNotificationPermissionGranted = false;
   bool _isPostNotificationsPermissionGranted = false;
+  bool _isUsageAccessGranted = false;
+  bool _isOverlayPermissionGranted = false;
   final TextEditingController _appSearchController = TextEditingController();
+  final TextEditingController _focusAppSearchController = TextEditingController();
   List<Map<String, String>> _installedApps = [];
   bool _isLoadingApps = false;
 
@@ -6397,7 +6412,719 @@ class _MainDashboardState extends State<MainDashboard> {
             ],
           ),
         ),
+        const SizedBox(height: 24),
+        _buildFocusGuardCard(db, ble),
       ],
+    );
+  }
+
+  Widget _buildFocusGuardCard(DatabaseService db, BLEService ble) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionHeader("Focus Guard & App Screen-Time", Icons.timer_outlined, Colors.deepOrange.shade600),
+        const SizedBox(height: 12),
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header & Master Toggle
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              "Focus Guard",
+                              style: GoogleFonts.outfit(
+                                color: textColor,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: db.focusGuardEnabled ? Colors.green.withOpacity(0.15) : Colors.grey.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                db.focusGuardEnabled ? "ACTIVE" : "PAUSED",
+                                style: GoogleFonts.outfit(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: db.focusGuardEnabled ? Colors.green.shade700 : Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.deepOrange.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                "⚡ AUTO-CLOSES",
+                                style: GoogleFonts.outfit(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.deepOrange,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Alerts Luna with Angry Face & buzzer, then automatically closes the app on your phone when time is up.",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: db.focusGuardEnabled,
+                    activeColor: Colors.deepOrange,
+                    onChanged: (val) async {
+                      await db.updateFocusGuardEnabled(val);
+                      await PhoneNotificationService.updateFocusGuardSettings(
+                        enabled: val,
+                        limits: db.focusAppLimits,
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Permission Status Banner
+              Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _isUsageAccessGranted ? Icons.check_circle : Icons.warning_amber_rounded,
+                        color: _isUsageAccessGranted ? Colors.green : Colors.amber.shade800,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _isUsageAccessGranted
+                              ? "Usage Access: GRANTED"
+                              : "Usage Access: REQUIRED to track screen time",
+                          style: GoogleFonts.outfit(
+                            color: _isUsageAccessGranted ? Colors.green : Colors.amber.shade800,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (!_isUsageAccessGranted)
+                        TextButton(
+                          onPressed: () async {
+                            await PhoneNotificationService.openUsageAccessSettings();
+                          },
+                          child: Text(
+                            "GRANT",
+                            style: GoogleFonts.outfit(
+                              color: Colors.deepOrange,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        _isOverlayPermissionGranted ? Icons.check_circle : Icons.warning_amber_rounded,
+                        color: _isOverlayPermissionGranted ? Colors.green : Colors.amber.shade800,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _isOverlayPermissionGranted
+                              ? "Auto-Close Permission: GRANTED"
+                              : "Auto-Close Permission: REQUIRED to close app",
+                          style: GoogleFonts.outfit(
+                            color: _isOverlayPermissionGranted ? Colors.green : Colors.amber.shade800,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (!_isOverlayPermissionGranted)
+                        TextButton(
+                          onPressed: () async {
+                            await PhoneNotificationService.openOverlaySettings();
+                          },
+                          child: Text(
+                            "GRANT",
+                            style: GoogleFonts.outfit(
+                              color: Colors.deepOrange,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+              const Divider(color: Colors.white12, height: 24),
+
+              // Monitored Apps Header & + Add App Button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Monitored Applications (${db.focusAppLimits.length})",
+                        style: GoogleFonts.outfit(
+                          color: textColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Configure time limits per app (1m, 2m, 5m, etc.)",
+                        style: GoogleFonts.outfit(
+                          color: textColor60,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _showFocusAppSelectionDialog(db),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: Text(
+                      "Add App",
+                      style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepOrange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      elevation: 1,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Popular Presets Quick Add Bar (if not yet added)
+              if (!db.focusAppLimits.containsKey('com.instagram.android') || !db.focusAppLimits.containsKey('com.google.android.youtube'))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Text(
+                        "Quick Add: ",
+                        style: GoogleFonts.outfit(color: textColor60, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 6),
+                      if (!db.focusAppLimits.containsKey('com.instagram.android'))
+                        ActionChip(
+                          avatar: const Icon(Icons.camera_alt, size: 14, color: Colors.deepOrange),
+                          label: Text("+ Instagram", style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold)),
+                          backgroundColor: Colors.deepOrange.withOpacity(0.08),
+                          onPressed: () async {
+                            await db.setFocusAppLimit('com.instagram.android', 5);
+                            await PhoneNotificationService.updateFocusGuardSettings(
+                              enabled: db.focusGuardEnabled,
+                              limits: db.focusAppLimits,
+                            );
+                          },
+                        ),
+                      const SizedBox(width: 6),
+                      if (!db.focusAppLimits.containsKey('com.google.android.youtube'))
+                        ActionChip(
+                          avatar: const Icon(Icons.play_circle, size: 14, color: Colors.red),
+                          label: Text("+ YouTube", style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold)),
+                          backgroundColor: Colors.red.withOpacity(0.08),
+                          onPressed: () async {
+                            await db.setFocusAppLimit('com.google.android.youtube', 5);
+                            await PhoneNotificationService.updateFocusGuardSettings(
+                              enabled: db.focusGuardEnabled,
+                              limits: db.focusAppLimits,
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+
+              // Monitored Apps List
+              if (db.focusAppLimits.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.02),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black.withOpacity(0.06)),
+                  ),
+                  child: Center(
+                    child: Text(
+                      "No applications monitored yet. Tap 'Add App' or use Quick Add above.",
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(color: textColor54, fontSize: 12),
+                    ),
+                  ),
+                )
+              else
+                Column(
+                  children: db.focusAppLimits.entries.map((entry) {
+                    final pkg = entry.key;
+                    final limitMins = entry.value;
+                    final appName = _getAppNameFromPackage(pkg);
+                    final icon = _getAppIcon(pkg);
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.black.withOpacity(0.08)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: Colors.deepOrange.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(icon, color: Colors.deepOrange, size: 20),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      appName,
+                                      style: GoogleFonts.outfit(
+                                        color: textColor,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      pkg,
+                                      style: GoogleFonts.outfit(
+                                        color: textColor38,
+                                        fontSize: 10,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                tooltip: "Remove",
+                                onPressed: () async {
+                                  await db.removeFocusApp(pkg);
+                                  await PhoneNotificationService.updateFocusGuardSettings(
+                                    enabled: db.focusGuardEnabled,
+                                    limits: db.focusAppLimits,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Text(
+                                "Timer Limit:",
+                                style: GoogleFonts.outfit(
+                                  color: textColor60,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: [1, 2, 5, 10, 15, 30].map((mins) {
+                                    final isSelected = limitMins == mins;
+                                    return GestureDetector(
+                                      onTap: () async {
+                                        await db.setFocusAppLimit(pkg, mins);
+                                        await PhoneNotificationService.updateFocusGuardSettings(
+                                          enabled: db.focusGuardEnabled,
+                                          limits: db.focusAppLimits,
+                                        );
+                                      },
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 150),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: isSelected ? Colors.deepOrange : Colors.black.withOpacity(0.04),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isSelected ? Colors.deepOrange : Colors.black.withOpacity(0.08),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          "${mins}m",
+                                          style: GoogleFonts.outfit(
+                                            color: isSelected ? Colors.white : textColor70,
+                                            fontSize: 11,
+                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              const SizedBox(height: 12),
+
+              // Instant Test Button
+              OutlinedButton.icon(
+                onPressed: () async {
+                  HapticFeedback.heavyImpact();
+                  final service = Provider.of<PhoneNotificationService>(context, listen: false);
+                  final ble = Provider.of<BLEService>(context, listen: false);
+                  await service.testFocusAlert(appName: "Instagram", limitMinutes: 5);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Text("😡", style: TextStyle(fontSize: 20)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                ble.isConnected
+                                    ? "Angry Face & Beeps Sent to Luna via BLE!"
+                                    : "Angry Face Triggered! (Connect BLE to sync to Luna)",
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                        backgroundColor: Colors.deepOrange,
+                        duration: const Duration(seconds: 3),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.bolt, size: 16, color: Colors.deepOrange),
+                label: Text(
+                  "Test Angry Alert on Luna",
+                  style: GoogleFonts.outfit(
+                    color: Colors.deepOrange,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.deepOrange),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getAppNameFromPackage(String pkg) {
+    final lower = pkg.toLowerCase();
+    if (lower.contains("instagram")) return "Instagram";
+    if (lower.contains("youtube")) return "YouTube";
+    if (lower.contains("whatsapp.w4b")) return "WhatsApp Business";
+    if (lower.contains("whatsapp")) return "WhatsApp";
+    if (lower.contains("snapchat")) return "Snapchat";
+    if (lower.contains("telegram")) return "Telegram";
+    if (lower.contains("facebook")) return "Facebook";
+    if (lower.contains("tiktok")) return "TikTok";
+    if (lower.contains("twitter") || lower.contains(".x.")) return "X (Twitter)";
+    if (lower.contains("reddit")) return "Reddit";
+    if (lower.contains("chrome")) return "Chrome";
+
+    for (final app in _installedApps) {
+      if (app['packageName'] == pkg) {
+        return app['name'] ?? pkg;
+      }
+    }
+    final parts = pkg.split('.');
+    return parts.isNotEmpty ? parts.last : pkg;
+  }
+
+  void _showFocusAppSelectionDialog(DatabaseService db) {
+    if (_installedApps.isEmpty) {
+      _loadInstalledApps();
+    }
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Focus App Selection",
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, anim1, anim2) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final searchQuery = _focusAppSearchController.text.trim().toLowerCase();
+            final filteredApps = _installedApps.where((app) {
+              final name = app['name']?.toLowerCase() ?? '';
+              final pkg = app['packageName']?.toLowerCase() ?? '';
+              return name.contains(searchQuery) || pkg.contains(searchQuery);
+            }).toList();
+
+            filteredApps.sort((a, b) {
+              final aSelected = db.focusAppLimits.containsKey(a['packageName']);
+              final bSelected = db.focusAppLimits.containsKey(b['packageName']);
+              if (aSelected && !bSelected) return -1;
+              if (!aSelected && bSelected) return 1;
+              final aName = a['name']?.toLowerCase() ?? '';
+              final bName = b['name']?.toLowerCase() ?? '';
+              return aName.compareTo(bName);
+            });
+
+            return Align(
+              alignment: Alignment.center,
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.9,
+                height: MediaQuery.of(context).size.height * 0.8,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 20,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Scaffold(
+                  backgroundColor: Colors.transparent,
+                  body: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Select Apps to Monitor",
+                              style: GoogleFonts.outfit(
+                                color: textColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 20),
+                              color: textColor54,
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Tap an app to add or remove it from Focus Guard limit tracking.",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Search Bar
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _focusAppSearchController,
+                                style: GoogleFonts.outfit(color: textColor, fontSize: 13),
+                                decoration: InputDecoration(
+                                  hintText: "Search apps...",
+                                  hintStyle: GoogleFonts.outfit(color: textColor38, fontSize: 13),
+                                  prefixIcon: const Icon(Icons.search, color: textColor38, size: 18),
+                                  filled: true,
+                                  fillColor: Colors.black.withOpacity(0.04),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                onChanged: (_) => setModalState(() {}),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.refresh, size: 18),
+                              color: Colors.deepOrange,
+                              onPressed: () async {
+                                await _loadInstalledApps();
+                                setModalState(() {});
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Apps List
+                        Expanded(
+                          child: _isLoadingApps
+                              ? const Center(child: CircularProgressIndicator())
+                              : filteredApps.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                        "No applications found",
+                                        style: GoogleFonts.outfit(color: textColor54, fontSize: 13),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: filteredApps.length,
+                                      itemBuilder: (context, index) {
+                                        final app = filteredApps[index];
+                                        final pkg = app['packageName'] ?? '';
+                                        final name = app['name'] ?? pkg;
+                                        final isSelected = db.focusAppLimits.containsKey(pkg);
+
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(16),
+                                            border: Border.all(
+                                              color: isSelected ? Colors.deepOrange : Colors.black.withOpacity(0.06),
+                                              width: isSelected ? 1.5 : 1,
+                                            ),
+                                          ),
+                                          child: ListTile(
+                                            leading: Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                color: isSelected
+                                                    ? Colors.deepOrange.withOpacity(0.12)
+                                                    : Colors.black.withOpacity(0.04),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: Icon(
+                                                _getAppIcon(pkg),
+                                                color: isSelected ? Colors.deepOrange : textColor60,
+                                                size: 20,
+                                              ),
+                                            ),
+                                            title: Text(
+                                              name,
+                                              style: GoogleFonts.outfit(
+                                                color: textColor,
+                                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            subtitle: Text(
+                                              pkg,
+                                              style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            trailing: isSelected
+                                                ? Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.deepOrange,
+                                                      borderRadius: BorderRadius.circular(12),
+                                                    ),
+                                                    child: Text(
+                                                      "${db.focusAppLimits[pkg]}m",
+                                                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  )
+                                                : const Icon(Icons.add_circle_outline, color: Colors.grey, size: 22),
+                                            onTap: () async {
+                                              if (isSelected) {
+                                                await db.removeFocusApp(pkg);
+                                              } else {
+                                                await db.setFocusAppLimit(pkg, 5); // Default 5 mins
+                                              }
+                                              await PhoneNotificationService.updateFocusGuardSettings(
+                                                enabled: db.focusGuardEnabled,
+                                                limits: db.focusAppLimits,
+                                              );
+                                              setModalState(() {});
+                                              setState(() {});
+                                            },
+                                          ),
+                                        );
+                                      },
+                                    ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+          child: FadeTransition(
+            opacity: anim1,
+            child: child,
+          ),
+        );
+      },
     );
   }
 

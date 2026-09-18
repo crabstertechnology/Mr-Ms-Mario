@@ -164,6 +164,16 @@ class PhoneNotificationService {
           await _bleService.transmitNavTelemetry("MAP:EXIT");
         }
         break;
+
+      case 'onFocusLimitExceeded':
+        final Map<dynamic, dynamic> data = call.arguments as Map<dynamic, dynamic>;
+        final String pkg = data['package'] ?? '';
+        final String label = data['label'] ?? 'App';
+        final int limitMinutes = (data['limitMinutes'] as num?)?.toInt() ?? 5;
+        _bleService.addLog("Focus limit exceeded: $label ($pkg) - ${limitMinutes}m", "FOCUS");
+        if (!_dbService.focusGuardEnabled) return;
+        await triggerFocusAlert(label, limitMinutes);
+        break;
     }
   }
 
@@ -382,6 +392,67 @@ class PhoneNotificationService {
       await _channel.invokeMethod('startBackgroundService');
     } on PlatformException catch (e) {
       print("Failed to start background service: $e");
+    }
+  }
+
+  Future<void> triggerFocusAlert(String appName, int limitMinutes) async {
+    final cmd = "FOCUS_ALERT:$appName:${limitMinutes}m";
+    _bleService.addLog("Triggering Focus Guard Alert: $cmd", "FOCUS");
+    await _bleService.transmitExpression(1, "Angry Face");
+    await _forwardToRobot(cmd);
+  }
+
+  Future<void> testFocusAlert({String appName = "Instagram", int limitMinutes = 5}) async {
+    final cmd = "FOCUS_ALERT:$appName:${limitMinutes}m";
+    _bleService.addLog("Sending Test Focus Alert: $cmd", "FOCUS");
+    await _bleService.transmitExpression(1, "Angry Face");
+    await _forwardToRobot(cmd);
+  }
+
+  static Future<bool> isUsageAccessGranted() async {
+    try {
+      final bool? granted = await _channel.invokeMethod<bool>('isUsageAccessGranted');
+      return granted ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> openUsageAccessSettings() async {
+    try {
+      await _channel.invokeMethod('openUsageAccessSettings');
+    } catch (_) {}
+  }
+
+  static Future<bool> isOverlayPermissionGranted() async {
+    try {
+      final bool? granted = await _channel.invokeMethod<bool>('isOverlayPermissionGranted');
+      return granted ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> openOverlaySettings() async {
+    try {
+      await _channel.invokeMethod('openOverlaySettings');
+    } catch (_) {}
+  }
+
+  static Future<void> updateFocusGuardSettings({required bool enabled, required Map<String, int> limits}) async {
+    try {
+      await _channel.invokeMethod('updateFocusGuardSettings', {
+        'enabled': enabled,
+        'limits': limits,
+      });
+    } catch (_) {}
+  }
+
+  static Future<String?> getForegroundApp() async {
+    try {
+      return await _channel.invokeMethod<String>('getForegroundApp');
+    } catch (_) {
+      return null;
     }
   }
 }
