@@ -119,9 +119,4 @@ W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\core\esp32-hal-psram.
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\cores\esp32\esp32-hal-psram.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\cores\esp32\esp32-hal-rgb-led.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\cores\esp32\esp32-hal-cpu.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\cores\esp32\esp32-hal-hosted.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/include/soc/esp32s3/register/soc/efuse_reg.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/include/soc/esp32s3/include/soc/efuse_defs.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/include/esp_psram/include/esp_psram.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/include/esp_psram/include/esp_private/esp_psram_extram.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/include/esp_rom/esp32s3/include/esp32s3/rom/cache.h
+ C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\cores\esp32\esp32-hal-hosted.h

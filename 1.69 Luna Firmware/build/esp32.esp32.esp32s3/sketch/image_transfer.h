@@ -329,6 +329,8 @@ public:
   }
 
   float progress() const { return _progress; }
+  uint32_t receivedBytes() const { return _receivedBytes; }
+  uint32_t expectedSize()  const { return _expectedSize; }
   State state()   const { return _state; }
 
   void resetState() {

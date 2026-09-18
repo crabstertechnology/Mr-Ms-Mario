@@ -151,6 +151,15 @@ private:
   String ringingTitle;
   String ringingTime;
 
+  // Active incoming call ringing overlay state
+  bool callRingingActive;
+  String callerName;
+  bool callMuted;
+  unsigned long callRingStartTime;
+
+  // WhatsApp Quick Reply sheet state
+  bool quickReplyActive;
+
   // Temporary popup notification state
   bool popupActive;
   unsigned long popupStartTime;
@@ -217,6 +226,12 @@ public:
     ringingType = "";
     ringingTitle = "";
     ringingTime = "";
+
+    callRingingActive = false;
+    callerName = "";
+    callMuted = false;
+    callRingStartTime = 0;
+    quickReplyActive = false;
 
     for (int i = 0; i < 5; i++) {
       notificationHistory[i].active = false;
@@ -399,6 +414,81 @@ public:
     return alarmRingingActive;
   }
 
+  // ------------------ Incoming Call State ------------------
+  void setCallRinging(bool ringing, String caller = "Incoming Call") {
+    callRingingActive = ringing;
+    if (ringing) {
+      callerName = caller;
+      callMuted = false;
+      callRingStartTime = millis();
+    }
+  }
+
+  void muteIncomingCall() {
+    callMuted = true;
+  }
+
+  void dismissIncomingCall() {
+    callRingingActive = false;
+    callMuted = false;
+    callerName = "";
+  }
+
+  bool isCallRingingActive() const {
+    return callRingingActive;
+  }
+
+  bool isCallMuted() const {
+    return callMuted;
+  }
+
+  String getCallerName() const {
+    return callerName;
+  }
+
+  // ------------------ WhatsApp Quick Reply State ------------------
+  void openQuickReply() {
+    quickReplyActive = true;
+  }
+
+  void closeQuickReply() {
+    quickReplyActive = false;
+  }
+
+  bool isQuickReplyActive() const {
+    return quickReplyActive;
+  }
+
+  int getQuickReplyCount() const {
+    return 5;
+  }
+
+  const char* getQuickReplyPreset(int idx) const {
+    static const char* presets[5] = {
+      "OK",
+      "I'll call you later",
+      "In a meeting",
+      "Can't talk right now",
+      "On my way!"
+    };
+    if (idx >= 0 && idx < 5) return presets[idx];
+    return "OK";
+  }
+
+  String getNotificationTitle(int idx) const {
+    if (idx >= 0 && idx < notificationCount) {
+      return notificationHistory[idx].title;
+    }
+    return "";
+  }
+
+  String getNotificationBody(int idx) const {
+    if (idx >= 0 && idx < notificationCount) {
+      return notificationHistory[idx].body;
+    }
+    return "";
+  }
+
   // ------------------ Notifications Adaptors ------------------
   void setNotificationText(String text, int hour = 12, int minute = 0) {
     setDetailedNotification("Notification", text, hour, minute);
@@ -409,7 +499,8 @@ public:
     popupBody = body;
     popupActive = true;
     popupStartTime = millis();
-    popupDuration = 5000; // 5 seconds
+    bool isWA = title.startsWith("WA:") || title.indexOf("WhatsApp") >= 0;
+    popupDuration = isWA ? 8000 : 5000; // 8 seconds for WhatsApp so user can tap reply!
     
     char timeBuf[16];
     snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
@@ -422,6 +513,14 @@ public:
 
   bool isPopupActive() const {
     return popupActive;
+  }
+
+  String getPopupTitle() const {
+    return popupTitle;
+  }
+
+  String getPopupBody() const {
+    return popupBody;
   }
 
   void triggerSilentOverlay(bool isSilent) {
@@ -736,7 +835,14 @@ public:
   }
 
   void drawPopup() {
-    const uint16_t accentCol = (robotVariant == "mr_luna") ? 0x07FF : 0xFD99; // Cyan or soft pink
+    bool isWA = popupTitle.startsWith("WA:") || popupTitle.indexOf("WhatsApp") >= 0;
+    String displayTitle = popupTitle;
+    if (displayTitle.startsWith("WA:")) {
+      displayTitle = displayTitle.substring(3);
+      displayTitle.trim();
+    }
+
+    const uint16_t accentCol = isWA ? 0x07E0 : ((robotVariant == "mr_luna") ? 0x07FF : 0xFD99);
     const uint16_t cardBg    = 0x0841; // Dark graphite
     const uint16_t textCol   = 0xFFFF; // White
     const uint16_t subCol    = 0x8410; // Silver
@@ -749,19 +855,21 @@ public:
     display.fillRoundRect(5,  5,  SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 11, cardBg);
 
     // ── Header strip ──────────────────────────────────────────────────────────
-    display.fillRoundRect(5, 5, SCREEN_WIDTH - 10, 36, 11, 0x18C3); // Darker header area
+    display.fillRoundRect(5, 5, SCREEN_WIDTH - 10, 36, 11, isWA ? 0x0280 : 0x18C3);
     // Notification bell icon (3 circles + base)
     int bx = 22, by = 23;
     display.fillCircle(bx, by - 3, 5, accentCol);
     display.fillRect(bx - 6, by + 2, 13, 4, accentCol);
     display.fillCircle(bx, by + 8, 2, accentCol);
-    display.fillRect(bx - 6, by + 2, 13, 2, 0x18C3); // Cut top of base
+    display.fillRect(bx - 6, by + 2, 13, 2, isWA ? 0x0280 : 0x18C3);
+
     // App / sender badge
-    display.fillRoundRect(38, 14, 90, 17, 8, 0x2945);
+    display.fillRoundRect(38, 14, isWA ? 96 : 90, 17, 8, isWA ? 0x0BE4 : 0x2945);
     display.setTextSize(1);
-    display.setTextColor(accentCol);
+    display.setTextColor(TFT_WHITE);
     display.setCursor(44, 19);
-    display.print("NEW MESSAGE");
+    display.print(isWA ? "WHATSAPP" : "NEW MESSAGE");
+
     // Time badge (right side)
     display.setTextColor(subCol);
     display.setCursor(SCREEN_WIDTH - 42, 19);
@@ -773,28 +881,57 @@ public:
     display.setTextSize(2);
     display.setTextColor(accentCol);
     display.setCursor(14, 50);
-    String title = popupTitle;
+    String title = displayTitle;
     if (title.length() > 15) title = title.substring(0, 13) + "..";
     display.print(title);
 
     display.drawFastHLine(8, 72, SCREEN_WIDTH - 16, 0x2124);
 
     // ── Message body — size 2 with smart word wrapping ─────────────────────
-    drawWordWrappedText(popupBody, 14, 82, SCREEN_WIDTH - 28, 6, 22, textCol, 2);
+    drawWordWrappedText(popupBody, 14, 80, SCREEN_WIDTH - 28, 5, 22, textCol, 2);
 
-    // ── Dismiss progress bar (counts down over popup duration) ────────────────
-    unsigned long elapsed  = millis() - popupStartTime;
-    int barW   = SCREEN_WIDTH - 28;
-    int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
-    if (barFill < 0) barFill = 0;
-    display.drawRoundRect(14, SCREEN_HEIGHT - 22, barW, 8, 3, 0x2124);
-    display.fillRoundRect(15, SCREEN_HEIGHT - 21, barFill, 6, 2, accentCol);
+    if (isWA) {
+      // ── Action Buttons for WhatsApp ──────────────────────────────────────────
+      int btnY = SCREEN_HEIGHT - 48;
+      int btnH = 34;
 
-    // ── Tap-to-dismiss hint ───────────────────────────────────────────────────
-    display.setTextSize(1);
-    display.setTextColor(subCol);
-    display.setCursor((SCREEN_WIDTH - 84) / 2, SCREEN_HEIGHT - 11);
-    display.print("TAP TO DISMISS");
+      // Left: [ 💬 QUICK REPLY ]
+      display.fillRoundRect(12, btnY, 108, btnH, 8, 0x0BE4); // WhatsApp green
+      display.drawRoundRect(12, btnY, 108, btnH, 8, 0x07E0);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(20, btnY + 13);
+      display.print("> QUICK REPLY");
+
+      // Right: [ ✕ DISMISS ]
+      display.fillRoundRect(126, btnY, 102, btnH, 8, 0x2124);
+      display.drawRoundRect(126, btnY, 102, btnH, 8, 0x4A49);
+      display.setTextColor(0xCE79);
+      display.setCursor(144, btnY + 13);
+      display.print("DISMISS");
+
+      // Progress bar (counts down over popup duration)
+      unsigned long elapsed  = millis() - popupStartTime;
+      int barW   = SCREEN_WIDTH - 28;
+      int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
+      if (barFill < 0) barFill = 0;
+      display.fillRoundRect(14, SCREEN_HEIGHT - 9, barFill, 3, 1, 0x07E0);
+
+    } else {
+      // ── Dismiss progress bar (counts down over popup duration) ────────────────
+      unsigned long elapsed  = millis() - popupStartTime;
+      int barW   = SCREEN_WIDTH - 28;
+      int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
+      if (barFill < 0) barFill = 0;
+      display.drawRoundRect(14, SCREEN_HEIGHT - 22, barW, 8, 3, 0x2124);
+      display.fillRoundRect(15, SCREEN_HEIGHT - 21, barFill, 6, 2, accentCol);
+
+      // ── Tap-to-dismiss hint ───────────────────────────────────────────────────
+      display.setTextSize(1);
+      display.setTextColor(subCol);
+      display.setCursor((SCREEN_WIDTH - 84) / 2, SCREEN_HEIGHT - 11);
+      display.print("TAP TO DISMISS");
+    }
   }
 
   void drawNotificationPanel() {
@@ -856,14 +993,19 @@ public:
     // ── Detail View vs Timeline Stream ──────────────────────────────────────
     if (notificationSelected) {
       NotificationItem& notif = notificationHistory[currentNotifViewIdx];
+      bool isWA = notif.title.startsWith("WA:") || notif.title.indexOf("WhatsApp") >= 0;
+      String cleanTitle = notif.title;
+      if (cleanTitle.startsWith("WA:")) cleanTitle = cleanTitle.substring(3);
+      cleanTitle.trim();
 
       // ── Sender badge + timestamp row ──────────────────────────────────────
-      display.fillRoundRect(20, 52, 84, 18, 5, 0x18C3);
-      display.drawRoundRect(20, 52, 84, 18, 5, themeAccent);
+      uint16_t badgeCol = isWA ? 0x07E0 : themeAccent;
+      display.fillRoundRect(20, 52, isWA ? 96 : 84, 18, 5, isWA ? 0x0280 : 0x18C3);
+      display.drawRoundRect(20, 52, isWA ? 96 : 84, 18, 5, badgeCol);
       display.setTextSize(1);
-      display.setTextColor(themeAccent);
+      display.setTextColor(badgeCol);
       display.setCursor(26, 57);
-      display.print("MESSAGE");
+      display.print(isWA ? "WHATSAPP" : "MESSAGE");
 
       display.setTextColor(themeSubText);
       display.setCursor(SCREEN_WIDTH - 48, 57);
@@ -873,39 +1015,60 @@ public:
       display.setTextSize(2);
       display.setTextColor(themeText);
       display.setCursor(20, 76);
-      String shortTitle = notif.title;
+      String shortTitle = cleanTitle;
       if (shortTitle.length() > 15) shortTitle = shortTitle.substring(0, 13) + "..";
       display.print(shortTitle);
 
       display.drawFastHLine(14, 100, SCREEN_WIDTH - 28, themeAccent);
 
       // ── Body Card — enlarged to fit size-2 text ──────────────────────────
-      display.fillRoundRect(14, 106, SCREEN_WIDTH - 28, 134, 6, theme.cardBg);
-      display.drawRoundRect(14, 106, SCREEN_WIDTH - 28, 134, 6, themeBorder);
+      display.fillRoundRect(14, 106, SCREEN_WIDTH - 28, 130, 6, theme.cardBg);
+      display.drawRoundRect(14, 106, SCREEN_WIDTH - 28, 130, 6, themeBorder);
       // Accent left bar
-      display.fillRect(14, 114, 3, 118, themeAccent);
+      display.fillRect(14, 114, 3, 114, isWA ? 0x07E0 : themeAccent);
 
       // ── Full body text — SIZE 2 (12px) with word wrapping for comfortable reading ───
-      drawWordWrappedText(notif.body, 22, 116, SCREEN_WIDTH - 44, 5, 23, themeText, 2);
+      drawWordWrappedText(notif.body, 22, 116, SCREEN_WIDTH - 44, 5, 22, themeText, 2);
 
       // ── Bottom control row ───────────────────────────────────────────────
-      char footBuf[24];
-      snprintf(footBuf, sizeof(footBuf), "%d / %d", currentNotifViewIdx + 1, notificationCount);
-      display.setTextSize(1);
-      display.setTextColor(themeAccent);
-      display.setCursor(20, 248);
-      display.print(footBuf);
+      if (isWA) {
+        // Quick Reply action button (Left)
+        display.fillRoundRect(14, 240, 114, 22, 5, 0x0BE4); // WhatsApp green
+        display.drawRoundRect(14, 240, 114, 22, 5, 0x07E0);
+        display.setTextSize(1);
+        display.setTextColor(TFT_WHITE);
+        display.setCursor(22, 246);
+        display.print("> QUICK REPLY");
 
-      // Dismiss pill button
-      display.fillRoundRect(142, 242, 80, 18, 5, theme.cardBg);
-      display.drawRoundRect(142, 242, 80, 18, 5, themeAccent);
-      display.setCursor(152, 247);
-      display.setTextColor(themeAccent);
-      display.print("DISMISS >");
+        // Dismiss pill button (Right)
+        display.fillRoundRect(134, 240, 92, 22, 5, theme.cardBg);
+        display.drawRoundRect(134, 240, 92, 22, 5, themeAccent);
+        display.setCursor(144, 246);
+        display.setTextColor(themeAccent);
+        display.print("DISMISS >");
 
-      display.setTextColor(themeBorder);
-      display.setCursor(20, 266);
-      display.print("TAP: BACK  HOLD: CLEAR ALL");
+        display.setTextColor(themeBorder);
+        display.setCursor(20, 266);
+        display.print("TAP REPLY OR BACK");
+      } else {
+        char footBuf[24];
+        snprintf(footBuf, sizeof(footBuf), "%d / %d", currentNotifViewIdx + 1, notificationCount);
+        display.setTextSize(1);
+        display.setTextColor(themeAccent);
+        display.setCursor(20, 248);
+        display.print(footBuf);
+
+        // Dismiss pill button
+        display.fillRoundRect(142, 242, 80, 18, 5, theme.cardBg);
+        display.drawRoundRect(142, 242, 80, 18, 5, themeAccent);
+        display.setCursor(152, 247);
+        display.setTextColor(themeAccent);
+        display.print("DISMISS >");
+
+        display.setTextColor(themeBorder);
+        display.setCursor(20, 266);
+        display.print("TAP: BACK  HOLD: CLEAR ALL");
+      }
 
     } else {
       // ── Clean Notification Timeline Stream ────────────────────────────────
@@ -914,20 +1077,21 @@ public:
         int y = 56 + i * 62;
         NotificationItem& notif = notificationHistory[i];
         bool isSel = (notificationsActive && i == currentNotifViewIdx);
+        bool isWA = notif.title.startsWith("WA:") || notif.title.indexOf("WhatsApp") >= 0;
 
         // Card Container
         uint16_t cBg = isSel ? (negativeDisplay ? 0xE73C : 0x10A2) : theme.cardBg;
         display.fillRoundRect(16, y, SCREEN_WIDTH - 32, 54, 6, cBg);
-        display.drawRoundRect(16, y, SCREEN_WIDTH - 32, 54, 6, isSel ? themeAccent : themeBorder);
+        display.drawRoundRect(16, y, SCREEN_WIDTH - 32, 54, 6, isSel ? (isWA ? 0x07E0 : themeAccent) : themeBorder);
         if (isSel) {
-          display.fillRect(16, y + 8, 3, 38, themeAccent);
+          display.fillRect(16, y + 8, 3, 38, isWA ? 0x07E0 : themeAccent);
         }
 
         // App/Type Badge
         display.setTextSize(1);
-        display.setTextColor(isSel ? themeAccent : themeSubText);
+        display.setTextColor(isWA ? 0x07E0 : (isSel ? themeAccent : themeSubText));
         display.setCursor(26, y + 6);
-        display.print("[MSG]");
+        display.print(isWA ? "[WHATSAPP]" : "[MSG]");
 
         // Timestamp (right aligned)
         display.setTextColor(themeSubText);
@@ -939,6 +1103,8 @@ public:
         display.setTextColor(isSel ? themeText : 0xCE79);
         display.setCursor(26, y + 18);
         String tStr = notif.title;
+        if (tStr.startsWith("WA:")) tStr = tStr.substring(3);
+        tStr.trim();
         if (tStr.length() > 14) tStr = tStr.substring(0, 13) + "..";
         display.print(tStr);
 
@@ -2921,6 +3087,145 @@ public:
       int dtw = strlen(dTxt) * 6;
       display.setCursor(dbX + (dbW - dtw) / 2, dbY + 13);
       display.print(dTxt);
+    }
+
+    // ── Incoming Call Ringing Overlay ──
+    if (callRingingActive) {
+      int ox = 8;
+      int oy = 22;
+      int ow = SCREEN_WIDTH - 16;
+      int oh = SCREEN_HEIGHT - 32;
+
+      bool pulse = ((millis() / 400) % 2 == 0);
+      uint16_t borderCol = pulse ? 0x07E0 : 0x03E0;
+      if (callMuted) borderCol = 0xFD20;
+
+      display.fillRoundRect(ox, oy, ow, oh, 14, 0x0841);
+      display.drawRoundRect(ox, oy, ow, oh, 14, borderCol);
+      display.drawRoundRect(ox + 1, oy + 1, ow - 2, oh - 2, 13, borderCol);
+
+      // Top Status Pill
+      uint16_t pillBg = callMuted ? 0x8400 : (pulse ? 0x0520 : 0x03A0);
+      display.fillRoundRect(ox + (ow - 140) / 2, oy + 12, 140, 22, 6, pillBg);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(ox + (ow - 140) / 2 + 16, oy + 19);
+      display.print(callMuted ? "CALL MUTED [SILENT]" : "INCOMING CALL...");
+
+      // Animated Phone Icon
+      int iconCenterX = ox + ow / 2;
+      int iconCenterY = oy + 68;
+      int iconR = 24;
+      display.fillCircle(iconCenterX, iconCenterY, iconR, callMuted ? 0x4A69 : (pulse ? 0x07E0 : 0x05E0));
+      display.drawCircle(iconCenterX, iconCenterY, iconR, TFT_WHITE);
+      display.fillRoundRect(iconCenterX - 6, iconCenterY - 12, 12, 24, 4, TFT_WHITE);
+      display.fillRect(iconCenterX - 4, iconCenterY - 6, 8, 12, callMuted ? 0x4A69 : (pulse ? 0x07E0 : 0x05E0));
+
+      // Caller Name
+      display.setTextSize(2);
+      display.setTextColor(TFT_WHITE);
+      String dName = callerName;
+      if (dName.length() == 0) dName = "Unknown Caller";
+      if (dName.length() > 14) dName = dName.substring(0, 12) + "..";
+      int nameX = ox + (ow - (dName.length() * 12)) / 2;
+      display.setCursor(max(ox + 8, nameX), oy + 108);
+      display.print(dName);
+
+      // Subtitle
+      display.setTextSize(1);
+      display.setTextColor(0x9CD3);
+      const char* subTxt = "ODialer / Phone";
+      int subX = ox + (ow - strlen(subTxt) * 6) / 2;
+      display.setCursor(subX, oy + 134);
+      display.print(subTxt);
+
+      // Action Buttons
+      int btnW = 98;
+      int btnH = 50;
+      int btnY = oy + oh - 64;
+
+      // Left Button: MUTE (Canvas: X: 16..114, Y: 206..256)
+      int muteX = ox + 8;
+      uint16_t muteBg = callMuted ? 0x3186 : 0x7BC0;
+      display.fillRoundRect(muteX, btnY, btnW, btnH, 10, muteBg);
+      display.drawRoundRect(muteX, btnY, btnW, btnH, 10, callMuted ? 0x6B4D : 0xFD20);
+      display.setTextSize(2);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(muteX + (callMuted ? 18 : 24), btnY + 10);
+      display.print(callMuted ? "MUTED" : "MUTE");
+      display.setTextSize(1);
+      display.setTextColor(callMuted ? 0xCE79 : 0xFFE0);
+      display.setCursor(muteX + 16, btnY + 34);
+      display.print(callMuted ? "SILENCED" : "SILENCE RING");
+
+      // Right Button: CUT / REJECT (Canvas: X: 126..224, Y: 206..256)
+      int cutX = ox + ow - 8 - btnW;
+      display.fillRoundRect(cutX, btnY, btnW, btnH, 10, 0xC800);
+      display.drawRoundRect(cutX, btnY, btnW, btnH, 10, 0xF980);
+      display.setTextSize(2);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(cutX + 28, btnY + 10);
+      display.print("CUT");
+      display.setTextSize(1);
+      display.setTextColor(0xFDF7);
+      display.setCursor(cutX + 14, btnY + 34);
+      display.print("DECLINE CALL");
+    }
+
+    // ── WhatsApp Quick Reply Sheet Overlay ──
+    if (quickReplyActive) {
+      int ox = 8;
+      int oy = 14;
+      int ow = SCREEN_WIDTH - 16;
+      int oh = SCREEN_HEIGHT - 26;
+
+      display.fillRoundRect(ox, oy, ow, oh, 12, 0x0841);
+      display.drawRoundRect(ox, oy, ow, oh, 12, 0x07E0);
+      display.drawRoundRect(ox + 1, oy + 1, ow - 2, oh - 2, 11, 0x07E0);
+
+      // Header Badge
+      display.fillRoundRect(ox + 10, oy + 8, ow - 20, 22, 5, 0x0BE4);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(ox + 18, oy + 15);
+      display.print("WHATSAPP QUICK REPLY");
+
+      // Subtitle
+      display.setTextSize(1);
+      display.setTextColor(0x9CD3);
+      display.setCursor(ox + 14, oy + 36);
+      display.print("Tap preset to send:");
+
+      // 5 Preset Buttons
+      int startY = oy + 50;
+      int itemH = 28;
+      int itemGap = 5;
+      for (int i = 0; i < 5; i++) {
+        int itemY = startY + i * (itemH + itemGap);
+        display.fillRoundRect(ox + 10, itemY, ow - 20, itemH, 6, 0x18C3);
+        display.drawRoundRect(ox + 10, itemY, ow - 20, itemH, 6, 0x3A68);
+
+        display.setTextSize(1);
+        display.setTextColor(TFT_WHITE);
+        display.setCursor(ox + 18, itemY + 10);
+        display.print(getQuickReplyPreset(i));
+
+        display.setTextColor(0x07E0);
+        display.setCursor(ox + ow - 24, itemY + 10);
+        display.print(">");
+      }
+
+      // Cancel Button at bottom
+      int cancelY = startY + 5 * (itemH + itemGap) + 4;
+      int cancelH = 26;
+      display.fillRoundRect(ox + 10, cancelY, ow - 20, cancelH, 6, 0x3186);
+      display.drawRoundRect(ox + 10, cancelY, ow - 20, cancelH, 6, 0x6B4D);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      const char* cTxt = "[ CANCEL ]";
+      int cW = strlen(cTxt) * 6;
+      display.setCursor(ox + (ow - cW) / 2, cancelY + 9);
+      display.print(cTxt);
     }
     
     tft.drawRGBBitmap(0, 20, display.getBuffer(), SCREEN_WIDTH, SCREEN_HEIGHT);

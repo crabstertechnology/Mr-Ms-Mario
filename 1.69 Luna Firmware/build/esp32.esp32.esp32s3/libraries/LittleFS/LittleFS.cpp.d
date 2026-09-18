@@ -1,7 +1,7 @@
 W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\libraries\LittleFS\LittleFS.cpp.o: \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\LittleFS\src\LittleFS.cpp \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\LittleFS\src\LittleFS.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/qio_opi/include/sdkconfig.h \
+ C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/qio_qspi/include/sdkconfig.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\FS\src/FS.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\cores\esp32/Arduino.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\cores\esp32/esp_arduino_version.h \

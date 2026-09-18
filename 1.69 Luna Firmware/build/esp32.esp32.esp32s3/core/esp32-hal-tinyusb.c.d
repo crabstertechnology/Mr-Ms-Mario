@@ -1,7 +1,7 @@
 W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\core\esp32-hal-tinyusb.c.o: \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\cores\esp32\esp32-hal-tinyusb.c \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/include/soc/esp32s3/include/soc/soc_caps.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/qio_opi/include/sdkconfig.h \
+ C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/qio_qspi/include/sdkconfig.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/include/log/include/esp_log.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/include/esp_rom/include/esp_rom_sys.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\tools\esp32s3-libs\3.3.11/include/soc/esp32s3/include/soc/reset_reasons.h \

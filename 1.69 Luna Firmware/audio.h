@@ -208,6 +208,17 @@ public:
         enqueueNote(0, 10);
         enqueueNote(784, 80);
         break;
+
+      case SOUND_ALERT_BEEP:
+        // Insistent warning alert: rapid high-urgency pulsed beeps
+        enqueueNote(1760, 80);
+        enqueueNote(0, 40);
+        enqueueNote(1760, 80);
+        enqueueNote(0, 40);
+        enqueueNote(2349, 120);
+        enqueueNote(0, 50);
+        enqueueNote(2349, 200);
+        break;
         
       default:
         break;
