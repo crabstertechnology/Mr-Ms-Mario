@@ -177,6 +177,9 @@ private:
 public:
   String headerText;
   bool timeSynced = false; // true after first TIME: sync from companion app
+  bool hungryState = false;
+  void setHungry(bool h) { hungryState = h; }
+  bool isHungry() const { return hungryState; }
   RobotEyeAnimation& getRobotEyeAnim() { return robotEyeAnim; }
   LunaFace(Adafruit_ST7789& tftDisp, GFXcanvas16& disp) 
     : tft(tftDisp), display(disp), currentExpr(EXPR_ROBOT_EYE), targetExpr(EXPR_ROBOT_EYE), defaultExpr(EXPR_ROBOT_EYE), stateLabel("ROBOT_EYE"), frameDelayMs(100), expressionChanged(true) {
@@ -1917,6 +1920,15 @@ public:
       display.fillTriangle(silentX + 2, silentY - 4, silentX + 2, silentY + 4, silentX + 4, silentY, silentColor);
       display.drawLine(silentX + 6, silentY - 2, silentX + 8, silentY, silentColor);
       display.drawLine(silentX + 8, silentY - 2, silentX + 6, silentY, silentColor);
+    }
+
+    // Clean text "HUNGRY" directly on top of expression without any border or bg box
+    if (hungryState) {
+      display.setTextColor(TFT_WHITE);
+      display.setTextSize(2);
+      // Center 6 chars (6 * 12 = 72px) on 240px width: (240 - 72) / 2 = 84
+      display.setCursor(84, 4);
+      display.print("HUNGRY");
     }
   }
 

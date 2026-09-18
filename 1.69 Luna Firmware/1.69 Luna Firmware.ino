@@ -530,6 +530,29 @@ void parseAndSyncTime(String timeStr) {
 }
 
 
+// ── Luna Mood & Living Life Engine ──────────────────────────────────────────
+enum LunaMood {
+  MOOD_HAPPY = 0,
+  MOOD_PLAYFUL,
+  MOOD_CURIOUS,
+  MOOD_SLEEPY,
+  MOOD_HUNGRY,
+  MOOD_FED
+};
+
+LunaMood currentMood = MOOD_HAPPY;
+bool isHungry = false;
+unsigned long lastFedTime = 0;
+unsigned long nextHungerIntervalMs = 90000; // First hunger after 90 seconds from boot
+unsigned long moodStartTime = 0;
+unsigned long moodDurationMs = 8000;       // Organic animation duration (7-14s)
+unsigned long lastHungerWhimperTime = 0;
+unsigned long fedAnimationEndTime = 0;
+
+void feedLuna();
+void patLuna();
+void updateLunaLife();
+
 // Periodic expression cycling — all 7 available face expressions
 const Expression cycleExpressions[] = {
   EXPR_IDLE,
@@ -595,7 +618,7 @@ const char* getSpriteAiAnimationName(int idx) {
     case 7: return "Giggle";
     case 8: return "Excited";
     case 9: return "Heart Eye";
-    case 10: return "Surprised";
+    case 10: return "Crying";
     case 11: return "Cheery";
     default: return "ROBOT_EYE";
   }
@@ -993,6 +1016,22 @@ void handleRobotCommand(String text) {
     currentScreen = SCREEN_FACE;
     face.setExpression(EXPR_ANGRY);
     Serial.println("OK:AngryAnimationTriggered");
+  } else if (text == "FEED" || text == "EAT") {
+    currentScreen = SCREEN_FACE;
+    feedLuna();
+    Serial.println("OK:LunaFed");
+  } else if (text == "HUNGRY") {
+    currentScreen = SCREEN_FACE;
+    isHungry = true;
+    face.setHungry(true);
+    currentMood = MOOD_HUNGRY;
+    face.getRobotEyeAnim().setAnimationIndex(10); // Crying
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setStateLabel("Hungry");
+    audio.playSound(SOUND_ALERT_BEEP);
+    notifyScreenAndExprSync();
+    Serial.println("OK:LunaHungryTriggered");
   } else if (text.startsWith("FOCUS_ALERT:") || text.startsWith("APPLIMIT:")) {
     // Format: FOCUS_ALERT:<appName>:<limitMinutes> (e.g. FOCUS_ALERT:Instagram:5m)
     String payload = text.substring(text.indexOf(':') + 1);
@@ -1942,6 +1981,8 @@ void setup() {
   face.setFrameDelay(gifSpeed);
   face.setDefaultExpression(EXPR_ROBOT_EYE);
   face.setExpression(EXPR_ROBOT_EYE);
+  lastFedTime = millis();
+  moodStartTime = millis();
 
   // Perform Hardware Reset
   pinMode(TFT_DC, OUTPUT);
@@ -2027,11 +2068,141 @@ void setup() {
 // Global index for all-gifs cycling — advances through all 63 entries
 int allGifCycleIdx = 0;
 
+void feedLuna() {
+  isHungry = false;
+  face.setHungry(false);
+  lastFedTime = millis();
+  // Next hunger in 3 to 4 minutes (180 to 240 seconds)
+  nextHungerIntervalMs = random(180000, 240000);
+
+  currentMood = MOOD_FED;
+  fedAnimationEndTime = millis() + 12000; // 12 seconds in fed bliss
+  moodStartTime = millis();
+  moodDurationMs = 12000;
+
+  // When fed, change expression immediately to Heart Eye (index 9)
+  face.getRobotEyeAnim().setAnimationIndex(9);
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+  face.setStateLabel("Heart Eye");
+
+  audio.playSound(SOUND_POWERUP); // Happy feeding sound!
+  Serial.println(F("[LUNA] FED! Luna received food via Power Button! Full and happy <3"));
+  notifyScreenAndExprSync();
+}
+
+void patLuna() {
+  // Gentle pat / treat when pressed while not hungry
+  moodStartTime = millis();
+  moodDurationMs = 8000;
+  const int patReactions[] = {4, 7, 9, 11}; // Sparkle Eye, Giggle, Heart Eye, Cheery
+  int rx = patReactions[random(0, 4)];
+  face.getRobotEyeAnim().setAnimationIndex(rx);
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+  face.setStateLabel(getSpriteAiAnimationName(rx));
+  audio.playSound(SOUND_CHIRP);
+  Serial.println(F("[LUNA] Patted Luna via Power Button!"));
+  notifyScreenAndExprSync();
+}
+
+void updateLunaLife() {
+  unsigned long now = millis();
+
+  // Only run life/mood engine on SCREEN_FACE when awake and not in intro or maps/games
+  if (currentScreen != SCREEN_FACE || isAsleep || inIntroPhase || mapsActive || gamePlaying) return;
+
+  // 1. Check hunger timer
+  if (!isHungry) {
+    if (currentMood == MOOD_FED) {
+      if (now >= fedAnimationEndTime) {
+        currentMood = MOOD_HAPPY;
+        moodStartTime = now;
+        moodDurationMs = random(7000, 12000);
+      }
+    } else {
+      if (now - lastFedTime >= nextHungerIntervalMs) {
+        // Luna feels hungry!
+        isHungry = true;
+        face.setHungry(true);
+        currentMood = MOOD_HUNGRY;
+        face.getRobotEyeAnim().setAnimationIndex(10); // Crying ("suprised animation is crying")
+        face.getRobotEyeAnim().reset();
+        face.getRobotEyeAnim().play();
+        face.setStateLabel("Hungry");
+        lastHungerWhimperTime = now;
+        audio.playSound(SOUND_ALERT_BEEP);
+        Serial.println(F("[LUNA] Luna is HUNGRY! Crying for food (press PWR button to feed)."));
+        notifyScreenAndExprSync();
+      }
+    }
+  }
+
+  // 2. While hungry, stay crying and whimper periodically
+  if (isHungry) {
+    if (now - lastHungerWhimperTime >= 12000) {
+      lastHungerWhimperTime = now;
+      audio.playSound(SOUND_CHIRP);
+    }
+    return; // Do not cycle away to happy expressions while hungry!
+  }
+
+  // 3. Living mood engine: organic expression transitions based on mood
+  if (now - moodStartTime >= moodDurationMs) {
+    moodStartTime = now;
+    moodDurationMs = random(7000, 14000); // 7 to 14 seconds between shifts
+
+    int nextAnim = 0;
+    switch (currentMood) {
+      case MOOD_HAPPY: {
+        const int happyPool[] = {0, 4, 7, 11}; // Happy Smile, Sparkle Eye, Giggle, Cheery
+        nextAnim = happyPool[random(0, 4)];
+        int r = random(0, 100);
+        if (r < 30) currentMood = MOOD_PLAYFUL;
+        else if (r < 50) currentMood = MOOD_CURIOUS;
+        break;
+      }
+      case MOOD_PLAYFUL: {
+        const int playfulPool[] = {3, 7, 8, 0}; // Playful Wink, Giggle, Excited, Happy Smile
+        nextAnim = playfulPool[random(0, 4)];
+        int r = random(0, 100);
+        if (r < 35) currentMood = MOOD_HAPPY;
+        else if (r < 55) currentMood = MOOD_CURIOUS;
+        break;
+      }
+      case MOOD_CURIOUS: {
+        const int curiousPool[] = {6, 2, 4, 0}; // Curious, Confused, Sparkle Eye, Happy Smile
+        nextAnim = curiousPool[random(0, 4)];
+        int r = random(0, 100);
+        if (r < 40) currentMood = MOOD_HAPPY;
+        else if (r < 60) currentMood = MOOD_PLAYFUL;
+        break;
+      }
+      case MOOD_SLEEPY: {
+        const int sleepyPool[] = {5, 2, 0}; // Sleepy Zzz, Confused, Happy Smile
+        nextAnim = sleepyPool[random(0, 3)];
+        if (random(0, 100) < 50) currentMood = MOOD_HAPPY;
+        break;
+      }
+      case MOOD_FED: {
+        nextAnim = 9; // Heart Eye
+        break;
+      }
+      default:
+        nextAnim = 0;
+        break;
+    }
+
+    face.getRobotEyeAnim().setAnimationIndex(nextAnim);
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setStateLabel(getSpriteAiAnimationName(nextAnim));
+    notifyScreenAndExprSync();
+  }
+}
+
 void cycleExpression() {
-  face.setDefaultExpression(EXPR_ROBOT_EYE);
-  face.setExpression(EXPR_ROBOT_EYE);
-  face.setStateLabel("ROBOT_EYE");
-  Serial.println("PLAYING ROBOT_EYE ANIMATION (Sprite AI)");
+  updateLunaLife();
 }
 
 String getExpressionName(int expr) {
@@ -2252,13 +2423,25 @@ void handleBtn1Single() {
   }
 
   if (currentScreen == SCREEN_FACE) {
-    // Center tap on FACE screen -> cycle through all 12 Sprite AI animations
-    face.getRobotEyeAnim().nextAnimation();
-    int curIdx = face.getRobotEyeAnim().getAnimationIndex();
-    face.setStateLabel(getSpriteAiAnimationName(curIdx));
-    audio.playSound(SOUND_CHIRP);
-    Serial.printf("[BTN1] Cycled Sprite AI animation -> Anim #%d (%s)\n", curIdx, face.getStateLabel().c_str());
-    notifyScreenAndExprSync();
+    if (isHungry || face.isHungry()) {
+      // Luna whimpers when tapped while hungry
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[BTN1] Tapped while hungry: Luna cries for food!"));
+    } else {
+      // Interactive touch tickles Luna!
+      const int touchAnims[] = {3, 7, 8, 4, 0}; // Wink, Giggle, Excited, Sparkle, Smile
+      int chosenAnim = touchAnims[random(0, 5)];
+      currentMood = MOOD_PLAYFUL;
+      moodStartTime = millis();
+      moodDurationMs = 9000;
+      face.getRobotEyeAnim().setAnimationIndex(chosenAnim);
+      face.getRobotEyeAnim().reset();
+      face.getRobotEyeAnim().play();
+      face.setStateLabel(getSpriteAiAnimationName(chosenAnim));
+      audio.playSound(SOUND_CHIRP);
+      Serial.printf("[BTN1] Interactive touch -> Playful Anim #%d (%s)\n", chosenAnim, face.getStateLabel().c_str());
+      notifyScreenAndExprSync();
+    }
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
     // Tap on clock screen cycles the clock style between 0 and 1
@@ -2718,6 +2901,13 @@ void loop() {
           gamesActive = true;
           audio.playSound(SOUND_POWERDOWN);
           Serial.println("[Power Button] Short press in game -> Exited to arcade");
+        } else {
+          // Short press while awake: feed Luna when hungry, or give pat/snack when satisfied!
+          if (isHungry || face.isHungry()) {
+            feedLuna();
+          } else {
+            patLuna();
+          }
         }
       }
     }
@@ -3147,9 +3337,7 @@ void loop() {
     }
   } else {
     if (currentScreen == SCREEN_FACE && !isAsleep) {
-      if (face.getExpression() != EXPR_ROBOT_EYE) {
-        cycleExpression();
-      }
+      updateLunaLife();
     }
   }
 
