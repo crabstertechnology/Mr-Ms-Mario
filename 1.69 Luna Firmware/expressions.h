@@ -178,8 +178,17 @@ public:
   String headerText;
   bool timeSynced = false; // true after first TIME: sync from companion app
   bool hungryState = false;
+  bool isFeeding = false;
+  unsigned long feedingStartTime = 0;
+  String thoughtText = "";
   void setHungry(bool h) { hungryState = h; }
   bool isHungry() const { return hungryState; }
+  void startFeeding() { isFeeding = true; feedingStartTime = millis(); }
+  void stopFeeding() { isFeeding = false; }
+  bool isFeedingActive() const { return isFeeding; }
+  unsigned long getFeedingStartTime() const { return feedingStartTime; }
+  void setThoughtText(const String& txt) { thoughtText = txt; }
+  String getThoughtText() const { return thoughtText; }
   RobotEyeAnimation& getRobotEyeAnim() { return robotEyeAnim; }
   LunaFace(Adafruit_ST7789& tftDisp, GFXcanvas16& disp) 
     : tft(tftDisp), display(disp), currentExpr(EXPR_ROBOT_EYE), targetExpr(EXPR_ROBOT_EYE), defaultExpr(EXPR_ROBOT_EYE), stateLabel("ROBOT_EYE"), frameDelayMs(100), expressionChanged(true) {
@@ -1922,13 +1931,34 @@ public:
       display.drawLine(silentX + 8, silentY - 2, silentX + 6, silentY, silentColor);
     }
 
-    // Clean text "HUNGRY" directly on top of expression without any border or bg box
-    if (hungryState) {
+    // Clean text directly on top of expression without any border or bg box
+    String dispText = thoughtText;
+    if (dispText.length() == 0 && hungryState) {
+      dispText = "HUNGRY";
+    }
+    if (dispText.length() > 0) {
       display.setTextColor(TFT_WHITE);
       display.setTextSize(2);
-      // Center 6 chars (6 * 12 = 72px) on 240px width: (240 - 72) / 2 = 84
-      display.setCursor(84, 4);
-      display.print("HUNGRY");
+      int tWidth = dispText.length() * 12;
+      int tx = (SCREEN_WIDTH - tWidth) / 2;
+      if (tx < 4) tx = 4;
+      display.setCursor(tx, 4);
+      display.print(dispText);
+    }
+
+    // Feeding animation: cute glowing bubbles/food particles float up from bottom
+    if (isFeeding) {
+      unsigned long elapsed = millis() - feedingStartTime;
+      for (int i = 0; i < 7; i++) {
+        int t = (elapsed + i * 220) % 1200;
+        float progress = (float)t / 1200.0f;
+        int py = 255 - (int)(progress * 135); // rises from 255 to 120
+        int px = 75 + (i * 16) + (int)(sin(progress * 6.28f + i) * 6);
+        int r = (i % 2 == 0) ? 4 : 3;
+        uint16_t pCol = (i % 3 == 0) ? 0x07FF : ((i % 3 == 1) ? 0xFDE0 : 0xF81F);
+        display.fillCircle(px, py, r, pCol);
+        display.drawCircle(px, py, r + 1, TFT_WHITE);
+      }
     }
   }
 

@@ -288,8 +288,122 @@ private:
   String ringingTitle;
   String ringingTime;
 
+  // Incoming Call Ringing Overlay state
+  bool callRingingActive;
+  String callerName;
+  bool callMuted;
+  unsigned long callRingStartTime;
+
+  // WhatsApp Quick Reply Sheet state
+  bool quickReplyActive;
+  int quickReplySelectedIdx;
+
+  // Transient Silent Mode Overlay state
+  unsigned long silentOverlayStartTime;
+  bool showSilentOverlay;
+  bool silentOverlayState;
+
 public:
   String headerText;
+  bool timeSynced = false;
+  bool hungryState = false;
+  bool isFeeding = false;
+  unsigned long feedingStartTime = 0;
+  String thoughtText = "";
+  void setHungry(bool h) { hungryState = h; }
+  bool isHungry() const { return hungryState; }
+  void startFeeding() { isFeeding = true; feedingStartTime = millis(); }
+  void stopFeeding() { isFeeding = false; }
+  bool isFeedingActive() const { return isFeeding; }
+  unsigned long getFeedingStartTime() const { return feedingStartTime; }
+  void setThoughtText(const String& txt) { thoughtText = txt; }
+  String getThoughtText() const { return thoughtText; }
+
+  // Call Ringing Controls
+  void setCallRinging(bool ringing, String caller = "Incoming Call") {
+    callRingingActive = ringing;
+    if (ringing) {
+      callerName = caller;
+      callMuted = false;
+      callRingStartTime = millis();
+    }
+  }
+  void muteIncomingCall() { callMuted = true; }
+  void dismissIncomingCall() { callRingingActive = false; callMuted = false; callerName = ""; }
+  bool isCallRingingActive() const { return callRingingActive; }
+  bool isCallMuted() const { return callMuted; }
+  String getCallerName() const { return callerName; }
+
+  // WhatsApp Quick Reply Controls
+  void openQuickReply() { quickReplyActive = true; quickReplySelectedIdx = 0; }
+  void closeQuickReply() { quickReplyActive = false; }
+  bool isQuickReplyActive() const { return quickReplyActive; }
+  int getQuickReplyCount() const { return 5; }
+  const char* getQuickReplyPreset(int idx) const {
+    static const char* presets[5] = {
+      "OK",
+      "I'll call you later",
+      "In a meeting",
+      "Can't talk right now",
+      "On my way!"
+    };
+    if (idx >= 0 && idx < 5) return presets[idx];
+    return "OK";
+  }
+  void cycleQuickReplyPreset() { quickReplySelectedIdx = (quickReplySelectedIdx + 1) % 5; }
+  int getQuickReplySelectedIdx() const { return quickReplySelectedIdx; }
+
+  // Silent Mode Overlay
+  void triggerSilentOverlay(bool isSilent) {
+    silentOverlayStartTime = millis();
+    showSilentOverlay = true;
+    silentOverlayState = isSilent;
+  }
+
+  // Word-wrapped text helper
+  void drawWordWrappedText(const String& text, int x, int y, int maxWidth, int maxLines, int lineHeight, uint16_t color, uint8_t textSize) {
+    display.setTextSize(textSize);
+    display.setTextColor(color);
+    int charWidth = 6 * textSize;
+    int maxCharsPerLine = maxWidth / charWidth;
+    if (maxCharsPerLine <= 0) return;
+
+    int line = 0;
+    int startIdx = 0;
+    int len = text.length();
+
+    while (startIdx < len && line < maxLines) {
+      while (startIdx < len && text.charAt(startIdx) == ' ') startIdx++;
+      if (startIdx >= len) break;
+
+      int remaining = len - startIdx;
+      if (remaining <= maxCharsPerLine) {
+        display.setCursor(x, y + line * lineHeight);
+        display.print(text.substring(startIdx));
+        break;
+      }
+
+      int breakIdx = startIdx + maxCharsPerLine;
+      int spaceIdx = -1;
+      for (int i = breakIdx; i > startIdx; i--) {
+        if (text.charAt(i) == ' ' || text.charAt(i) == '\n') {
+          spaceIdx = i;
+          break;
+        }
+      }
+
+      if (spaceIdx > startIdx) {
+        display.setCursor(x, y + line * lineHeight);
+        display.print(text.substring(startIdx, spaceIdx));
+        startIdx = spaceIdx + 1;
+      } else {
+        display.setCursor(x, y + line * lineHeight);
+        display.print(text.substring(startIdx, breakIdx));
+        startIdx = breakIdx;
+      }
+      line++;
+    }
+  }
 
   LunaFace(Adafruit_ST7789& tftDisp, LunaCanvas16& disp) 
     : tft(tftDisp), display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
@@ -336,6 +450,18 @@ public:
     ringingType = "ALARM";
     ringingTitle = "";
     ringingTime = "";
+
+    callRingingActive = false;
+    callerName = "";
+    callMuted = false;
+    callRingStartTime = 0;
+
+    quickReplyActive = false;
+    quickReplySelectedIdx = 0;
+
+    showSilentOverlay = false;
+    silentOverlayStartTime = 0;
+    silentOverlayState = false;
 
     for (int i = 0; i < 5; i++) {
       notificationHistory[i].active = false;
@@ -526,7 +652,8 @@ public:
     popupBody = body;
     popupActive = true;
     popupStartTime = millis();
-    popupDuration = 5000;
+    bool isWA = title.startsWith("WA:") || title.indexOf("WhatsApp") >= 0;
+    popupDuration = isWA ? 8000 : 5000;
     
     char timeBuf[16];
     snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
@@ -539,6 +666,14 @@ public:
 
   bool isPopupActive() const {
     return popupActive;
+  }
+
+  String getPopupTitle() const {
+    return popupTitle;
+  }
+
+  String getPopupBody() const {
+    return popupBody;
   }
 
   // ------------------ Map Navigation State ------------------
@@ -752,6 +887,7 @@ public:
       case SCREEN_FACE:          nm = "LUNA";    break;
       case SCREEN_MAPS:          nm = "MAPS";    break;
       case SCREEN_CARD:          nm = "CARD";    break;
+      case SCREEN_POMODORO:      nm = "FOCUS";   break;
       case SCREEN_SETTINGS:      nm = "SETUP";   break;
       default:                   nm = "LUNA";    break;
     }
@@ -767,54 +903,83 @@ public:
   }
 
   void drawPopup() {
-    ThemeColors theme = getTheme();
-    uint16_t themeAccent = theme.accent;
-    uint16_t themeText   = theme.text;
-    uint16_t themeCardBg = theme.cardBg;
-    uint16_t themeBorder = theme.border;
-
-    display.drawRoundRect(4, 4, SCREEN_WIDTH - 8, SCREEN_HEIGHT - 8, 12, themeAccent);
-    display.fillRoundRect(6, 6, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 12, 10, themeCardBg);
-
-    // Title Capsule
-    display.fillRoundRect(16, 14, 110, 18, 5, themeAccent);
-    display.setTextColor(TFT_WHITE);
-    display.setTextSize(1);
-    display.setCursor(22, 19);
-    display.print("NEW ALERT");
-
-    display.drawFastHLine(12, 38, SCREEN_WIDTH - 24, themeBorder);
-    
-    // Title
-    display.setTextColor(themeText);
-    display.setTextSize(2);
-    display.setCursor(16, 46);
-    String title = popupTitle;
-    if (title.length() > 16) title = title.substring(0, 14) + "...";
-    display.print(title);
-    
-    // Body text
-    display.setTextSize(2);
-    int yStart = 72;
-    int charsPerLine = (SCREEN_WIDTH - 32) / 12;
-    int line = 0;
-    int maxLines = (SCREEN_HEIGHT - 110) / 20;
-    for (unsigned int i = 0; i < popupBody.length() && line < maxLines; i += charsPerLine) {
-      unsigned int endIdx = i + charsPerLine;
-      if (endIdx > popupBody.length()) endIdx = popupBody.length();
-      String lineStr = popupBody.substring(i, endIdx);
-      display.setCursor(16, yStart + line * 20);
-      display.print(lineStr);
-      line++;
+    bool isWA = popupTitle.startsWith("WA:") || popupTitle.indexOf("WhatsApp") >= 0;
+    String displayTitle = popupTitle;
+    if (displayTitle.startsWith("WA:")) {
+      displayTitle = displayTitle.substring(3);
+      displayTitle.trim();
     }
+
+    const uint16_t accentCol = isWA ? 0x07E0 : ((robotVariant == "mr_luna") ? 0x07FF : 0xF8B8);
+    const uint16_t cardBg    = 0x0841; // Dark slate
+    const uint16_t textCol   = 0xFFFF; // White
+    const uint16_t subCol    = 0x8410; // Silver
+    const uint16_t borderCol = accentCol;
+
+    // Outer glow borders
+    display.drawRoundRect(2, 2, SCREEN_WIDTH - 4, SCREEN_HEIGHT - 4, 12, borderCol);
+    display.drawRoundRect(3, 3, SCREEN_WIDTH - 6, SCREEN_HEIGHT - 6, 11, 0x4A49);
+    display.fillRoundRect(5, 5, SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 10, cardBg);
+
+    // Header strip
+    display.fillRoundRect(5, 5, SCREEN_WIDTH - 10, 32, 10, isWA ? 0x0280 : 0x18C3);
     
-    // Dismiss hint
-    display.setTextColor(themeAccent);
+    // Bell / Chat icon
+    int bx = 20, by = 20;
+    display.fillCircle(bx, by - 3, 5, accentCol);
+    display.fillRect(bx - 6, by + 2, 13, 3, accentCol);
+    display.fillCircle(bx, by + 7, 2, accentCol);
+
+    // App badge
+    display.fillRoundRect(36, 11, isWA ? 96 : 84, 18, 5, isWA ? 0x0BE4 : 0x2945);
     display.setTextSize(1);
-    const char* dTxt = "[CLICK BUTTON TO DISMISS]";
-    int dW = strlen(dTxt) * 6;
-    display.setCursor((SCREEN_WIDTH - dW) / 2, SCREEN_HEIGHT - 20);
-    display.print(dTxt);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(42, 16);
+    display.print(isWA ? "WHATSAPP" : "ALERT");
+
+    // Time badge
+    display.setTextColor(subCol);
+    display.setCursor(SCREEN_WIDTH - 38, 16);
+    display.print("NOW");
+
+    display.drawFastHLine(8, 38, SCREEN_WIDTH - 16, 0x2124);
+
+    // Sender / Title
+    display.setTextSize(2);
+    display.setTextColor(accentCol);
+    display.setCursor(14, 46);
+    String title = displayTitle;
+    if (title.length() > 14) title = title.substring(0, 12) + "..";
+    display.print(title);
+
+    display.drawFastHLine(8, 68, SCREEN_WIDTH - 16, 0x2124);
+
+    // Message body (word wrapped size 2)
+    drawWordWrappedText(popupBody, 14, 76, SCREEN_WIDTH - 28, 4, 20, textCol, 2);
+
+    // Progress bar (counts down over popup duration)
+    unsigned long elapsed = millis() - popupStartTime;
+    int barW = SCREEN_WIDTH - 28;
+    int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
+    if (barFill < 0) barFill = 0;
+    display.drawRoundRect(14, SCREEN_HEIGHT - 38, barW, 6, 2, 0x2124);
+    display.fillRoundRect(15, SCREEN_HEIGHT - 37, barFill, 4, 1, accentCol);
+
+    // Action buttons hints
+    display.setTextSize(1);
+    if (isWA) {
+      display.setTextColor(0x07E0);
+      const char* h = "BTN1: QUICK REPLY // BTN2: DISMISS";
+      int hw = strlen(h) * 6;
+      display.setCursor((SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 22);
+      display.print(h);
+    } else {
+      display.setTextColor(subCol);
+      const char* h = "CLICK BUTTON TO DISMISS";
+      int hw = strlen(h) * 6;
+      display.setCursor((SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 22);
+      display.print(h);
+    }
   }
 
   void drawNotificationPanel() {
@@ -829,23 +994,35 @@ public:
     display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
 
     if (notificationCount == 0) {
-      int centerX = SCREEN_WIDTH / 2;
-      display.fillCircle(centerX, 80, 28, themeCardBg);
-      display.drawCircle(centerX, 80, 28, themeAccent);
-      
-      display.setTextColor(themeText);
+      // Rotating radar sweep line empty state
+      int cx = SCREEN_WIDTH / 2;
+      int cy = 96;
+      int rad = 32;
+
+      display.drawCircle(cx, cy, rad, themeBorder);
+      display.drawCircle(cx, cy, rad - 10, themeBorder);
+      display.drawCircle(cx, cy, 5, themeBorder);
+      display.drawFastHLine(cx - rad - 4, cy, (rad + 4) * 2, themeBorder);
+      display.drawFastVLine(cx, cy - rad - 4, (rad + 4) * 2, themeBorder);
+
+      float sweepAngle = (millis() % 2400) * (2.0f * M_PI / 2400.0f);
+      int sx = cx + (int)(cos(sweepAngle) * (rad - 2));
+      int sy = cy + (int)(sin(sweepAngle) * (rad - 2));
+      display.drawLine(cx, cy, sx, sy, themeAccent);
+
       display.setTextSize(2);
-      const char* h1 = "NO NOTIFS";
+      display.setTextColor(themeText);
+      const char* h1 = "STREAM CLEAR";
       int w1 = strlen(h1) * 12;
-      display.setCursor((SCREEN_WIDTH - w1) / 2, 126);
+      display.setCursor((SCREEN_WIDTH - w1) / 2, 142);
       display.print(h1);
-      
-      display.setTextColor(themeSubText);
+
       display.setTextSize(1);
-      const char* h2 = "HISTORY IS EMPTY";
-      int w2 = strlen(h2) * 6;
-      display.setCursor((SCREEN_WIDTH - w2) / 2, 150);
-      display.print(h2);
+      display.setTextColor(themeSubText);
+      const char* sub = "All telemetry notifications processed";
+      int sW = strlen(sub) * 6;
+      display.setCursor((SCREEN_WIDTH - sW) / 2, 166);
+      display.print(sub);
 
       const char* nav = "BTN1: DISMISS // BTN2: NEXT";
       int nw = strlen(nav) * 6;
@@ -856,45 +1033,57 @@ public:
     
     if (notificationSelected) {
       NotificationItem& notif = notificationHistory[currentNotifViewIdx];
-      
-      display.drawRoundRect(6, 26, SCREEN_WIDTH - 12, SCREEN_HEIGHT - 32, 10, themeAccent);
-      display.fillRoundRect(8, 28, SCREEN_WIDTH - 16, SCREEN_HEIGHT - 36, 8, themeCardBg);
-      
-      display.setTextColor(themeText);
-      display.setTextSize(2);
-      display.setCursor(14, 34);
-      String title = notif.title;
-      if (title.length() > 10) title = title.substring(0, 8) + "...";
-      display.print(title);
-      
-      display.setTextColor(themeAccent);
-      display.setTextSize(2);
-      display.setCursor(SCREEN_WIDTH - 76, 34);
-      display.print(notif.timeStr);
-      
-      display.drawFastHLine(12, 54, SCREEN_WIDTH - 24, themeBorder);
-      
-      display.setTextColor(themeText);
-      display.setTextSize(2);
-      int yStart = 64;
-      int charsPerLine = (SCREEN_WIDTH - 28) / 12;
-      int line = 0;
-      int maxLines = (SCREEN_HEIGHT - 106) / 20;
-      for (unsigned int i = 0; i < notif.body.length() && line < maxLines; i += charsPerLine) {
-        unsigned int endIdx = i + charsPerLine;
-        if (endIdx > notif.body.length()) endIdx = notif.body.length();
-        display.setCursor(14, yStart + line * 20);
-        display.print(notif.body.substring(i, endIdx));
-        line++;
-      }
-      
-      display.setTextColor(themeAccent);
+      bool isWA = notif.title.startsWith("WA:") || notif.title.indexOf("WhatsApp") >= 0;
+      String cleanTitle = notif.title;
+      if (cleanTitle.startsWith("WA:")) cleanTitle = cleanTitle.substring(3);
+      cleanTitle.trim();
+
+      uint16_t badgeCol = isWA ? 0x07E0 : themeAccent;
+      display.fillRoundRect(14, 30, isWA ? 96 : 80, 18, 5, isWA ? 0x0280 : 0x18C3);
+      display.drawRoundRect(14, 30, isWA ? 96 : 80, 18, 5, badgeCol);
       display.setTextSize(1);
-      char footerBuf[32];
-      snprintf(footerBuf, sizeof(footerBuf), "[%d/%d] BTN1: BACK // BTN2: NEXT", currentNotifViewIdx + 1, notificationCount);
-      int footerW = strlen(footerBuf) * 6;
-      display.setCursor((SCREEN_WIDTH - footerW) / 2, SCREEN_HEIGHT - 18);
-      display.print(footerBuf);
+      display.setTextColor(badgeCol);
+      display.setCursor(20, 35);
+      display.print(isWA ? "WHATSAPP" : "MESSAGE");
+
+      display.setTextColor(themeSubText);
+      display.setCursor(SCREEN_WIDTH - 48, 35);
+      display.print(notif.timeStr);
+
+      // Sender Title (size 2)
+      display.setTextSize(2);
+      display.setTextColor(themeText);
+      display.setCursor(14, 54);
+      String shortTitle = cleanTitle;
+      if (shortTitle.length() > 14) shortTitle = shortTitle.substring(0, 12) + "..";
+      display.print(shortTitle);
+
+      display.drawFastHLine(14, 76, SCREEN_WIDTH - 28, themeAccent);
+
+      // Body Card
+      display.fillRoundRect(10, 82, SCREEN_WIDTH - 20, 114, 6, themeCardBg);
+      display.drawRoundRect(10, 82, SCREEN_WIDTH - 20, 114, 6, themeBorder);
+      display.fillRect(10, 88, 3, 102, isWA ? 0x07E0 : themeAccent);
+
+      // Body text in size 2 with word wrapping
+      drawWordWrappedText(notif.body, 18, 90, SCREEN_WIDTH - 36, 5, 20, themeText, 2);
+
+      // Bottom control hints
+      display.setTextSize(1);
+      if (isWA) {
+        display.setTextColor(0x07E0);
+        const char* h = "BTN1: > QUICK REPLY // BTN2: BACK";
+        int hw = strlen(h) * 6;
+        display.setCursor((SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 20);
+        display.print(h);
+      } else {
+        display.setTextColor(themeAccent);
+        char h[40];
+        snprintf(h, sizeof(h), "[%d/%d] BTN1: BACK // BTN2: NEXT", currentNotifViewIdx + 1, notificationCount);
+        int hw = strlen(h) * 6;
+        display.setCursor((SCREEN_WIDTH - hw) / 2, SCREEN_HEIGHT - 20);
+        display.print(h);
+      }
     } else {
       display.setTextColor(themeText);
       display.setTextSize(2);
@@ -906,10 +1095,12 @@ public:
       for (int i = 0; i < notificationCount && i < 4; i++) {
         int y = 54 + i * 40;
         NotificationItem& notif = notificationHistory[i];
+        bool isSel = (notificationsActive && i == currentNotifViewIdx);
+        bool isWA = notif.title.startsWith("WA:") || notif.title.indexOf("WhatsApp") >= 0;
         
-        if (notificationsActive && i == currentNotifViewIdx) {
+        if (isSel) {
           display.fillRoundRect(8, y, SCREEN_WIDTH - 16, 36, 4, themeBorder);
-          display.drawRoundRect(8, y, SCREEN_WIDTH - 16, 36, 4, themeAccent);
+          display.drawRoundRect(8, y, SCREEN_WIDTH - 16, 36, 4, isWA ? 0x07E0 : themeAccent);
         } else {
           display.drawRoundRect(8, y, SCREEN_WIDTH - 16, 36, 4, themeBorder);
         }
@@ -1179,6 +1370,36 @@ public:
       display.fillTriangle(silentX + 2, silentY - 4, silentX + 2, silentY + 4, silentX + 4, silentY, silentColor);
       display.drawLine(silentX + 6, silentY - 2, silentX + 8, silentY, silentColor);
       display.drawLine(silentX + 8, silentY - 2, silentX + 6, silentY, silentColor);
+    }
+
+    // Clean text directly on top of expression without any border or bg box
+    String dispText = thoughtText;
+    if (dispText.length() == 0 && hungryState) {
+      dispText = "HUNGRY";
+    }
+    if (dispText.length() > 0) {
+      display.setTextColor(TFT_WHITE);
+      display.setTextSize(2);
+      int tWidth = dispText.length() * 12;
+      int tx = (SCREEN_WIDTH - tWidth) / 2;
+      if (tx < 4) tx = 4;
+      display.setCursor(tx, 4);
+      display.print(dispText);
+    }
+
+    // Feeding animation: cute glowing bubbles/food particles float up from bottom
+    if (isFeeding) {
+      unsigned long elapsed = millis() - feedingStartTime;
+      for (int i = 0; i < 7; i++) {
+        int t = (elapsed + i * 220) % 1200;
+        float progress = (float)t / 1200.0f;
+        int py = 225 - (int)(progress * 125); // rises towards face center
+        int px = 75 + (i * 14) + (int)(sin(progress * 6.28f + i) * 6);
+        int r = (i % 2 == 0) ? 4 : 3;
+        uint16_t pCol = (i % 3 == 0) ? 0x07FF : ((i % 3 == 1) ? 0xFDE0 : 0xF81F);
+        display.fillCircle(px, py, r, pCol);
+        display.drawCircle(px, py, r + 1, TFT_WHITE);
+      }
     }
   }
 
@@ -1548,6 +1769,153 @@ public:
     display.print(nav);
   }
 
+  // ── Pomodoro Focus Timer Screen (240x240) ──────────────────────────────────
+  void drawPomodoroScreen(int remainingSec, int totalSec, int pomoState, int pomoMode, int completedSessions) {
+    ThemeColors theme = getTheme();
+    uint16_t themeAccent  = theme.accent;
+    uint16_t themeBg      = theme.bg;
+    uint16_t themeText    = theme.text;
+    uint16_t themeBorder  = theme.border;
+    uint16_t themeSubText = theme.subText;
+
+    // Clear display area below status bar
+    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
+
+    // ── Header context ──────────────────────────────────────────────────────
+    const char* modeLabel = "F O C U S";
+    if (pomoMode == 1) modeLabel = "S H O R T  B R E A K";
+    else if (pomoMode == 2) modeLabel = "L O N G  B R E A K";
+
+    display.setTextSize(1);
+    display.setTextColor(themeAccent);
+    int mlW = strlen(modeLabel) * 6;
+    display.setCursor((SCREEN_WIDTH - mlW) / 2, 26);
+    display.print(modeLabel);
+
+    // ── Mode selector micro capsules (25M / 5M / 15M) ───────────────────────
+    const char* mNames[] = { "25M", "5M", "15M" };
+    int mX = 36;
+    for (int m = 0; m < 3; m++) {
+      bool isSel = (pomoMode == m);
+      uint16_t cBorder = isSel ? themeAccent : themeBorder;
+      uint16_t cText   = isSel ? themeText   : themeSubText;
+      display.drawRoundRect(mX, 38, 48, 15, 3, cBorder);
+      if (isSel) {
+        display.fillRect(mX + 1, 39, 46, 13, 0x0842);
+      }
+      display.setTextColor(cText);
+      display.setTextSize(1);
+      int w = strlen(mNames[m]) * 6;
+      display.setCursor(mX + (48 - w) / 2, 42);
+      display.print(mNames[m]);
+      mX += 58;
+    }
+
+    // ── Dominant Hero Countdown Digits ──────────────────────────────────────
+    int mins = remainingSec / 60;
+    int secs = remainingSec % 60;
+    char timeBuf[8];
+    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", mins, secs);
+
+    display.setTextSize(4);
+    uint16_t timeColor = (pomoState == 1) ? themeAccent : ((pomoState == 3) ? 0x07E0 : themeText);
+    display.setTextColor(timeColor);
+    int timeW = 5 * 24;
+    display.setCursor((SCREEN_WIDTH - timeW) / 2, 58);
+    display.print(timeBuf);
+
+    // ── Geometric Concentric Calibrated Reticle Arc ─────────────────────────
+    int cx = SCREEN_WIDTH / 2;
+    int cy = 118;
+    int r  = 24;
+
+    // Static reticle track
+    display.drawCircle(cx, cy, r, themeBorder);
+    display.drawCircle(cx, cy, 7, themeBorder);
+
+    // Dynamic progress ticks
+    float progressPct = 0.0f;
+    if (totalSec > 0) {
+      progressPct = (float)(totalSec - remainingSec) / (float)totalSec;
+    }
+    progressPct = constrain(progressPct, 0.0f, 1.0f);
+
+    int arcDots = (int)(progressPct * 32.0f);
+    for (int s = 0; s < arcDots; s++) {
+      float angle = s * (2.0f * M_PI / 32.0f) - (M_PI / 2.0f);
+      int px = cx + (int)(cos(angle) * r);
+      int py = cy + (int)(sin(angle) * r);
+      display.fillCircle(px, py, 2, themeAccent);
+    }
+
+    // State readout inside the reticle
+    const char* stateLabel = "READY";
+    if (pomoState == 1)      stateLabel = "ACTIVE";
+    else if (pomoState == 2) stateLabel = "PAUSED";
+    else if (pomoState == 3) stateLabel = "DONE";
+
+    display.setTextSize(1);
+    display.setTextColor(themeText);
+    int slW = strlen(stateLabel) * 6;
+    display.setCursor(cx - slW / 2, cy - 3);
+    display.print(stateLabel);
+
+    // ── Precision Divider ───────────────────────────────────────────────────
+    display.drawFastHLine(30, 150, SCREEN_WIDTH - 60, themeBorder);
+
+    // ── Tactile Action Trigger Pill Button ─────────────────────────────────
+    int btnW = 144;
+    int btnH = 28;
+    int btnX = (SCREEN_WIDTH - btnW) / 2;
+    int btnY = 158;
+
+    uint16_t btnAccent = (pomoState == 1) ? 0xFDE0 : ((pomoState == 3) ? 0x07E0 : themeAccent);
+    display.drawRoundRect(btnX, btnY, btnW, btnH, 6, btnAccent);
+    display.fillRoundRect(btnX + 2, btnY + 2, btnW - 4, btnH - 4, 4, (pomoState == 1) ? 0x0842 : 0x0000);
+
+    display.setTextSize(2);
+    display.setTextColor(themeText);
+
+    if (pomoState == 0) { // Ready to Start
+      int tx = btnX + 32, ty = btnY + 14;
+      display.fillTriangle(tx, ty - 5, tx, ty + 5, tx + 8, ty, themeAccent);
+      display.setCursor(btnX + 48, btnY + 7);
+      display.print("START");
+    } else if (pomoState == 1) { // Active -> Show Pause
+      int px = btnX + 32, py = btnY + 8;
+      display.fillRect(px, py, 3, 11, 0xFDE0);
+      display.fillRect(px + 6, py, 3, 11, 0xFDE0);
+      display.setCursor(btnX + 48, btnY + 7);
+      display.print("PAUSE");
+    } else if (pomoState == 2) { // Paused -> Show Resume
+      int tx = btnX + 26, ty = btnY + 14;
+      display.fillTriangle(tx, ty - 5, tx, ty + 5, tx + 8, ty, themeAccent);
+      display.setCursor(btnX + 42, btnY + 7);
+      display.print("RESUME");
+    } else { // Completed -> Show Reset
+      int rx = btnX + 30, ry = btnY + 14;
+      display.drawCircle(rx, ry, 5, 0x07E0);
+      display.fillRect(rx - 1, ry - 6, 3, 3, 0x0000);
+      display.fillTriangle(rx, ry - 6, rx + 4, ry - 4, rx, ry - 2, 0x07E0);
+      display.setCursor(btnX + 44, btnY + 7);
+      display.print("RESET");
+    }
+
+    // ── Secondary Telemetry & Interaction Hints ─────────────────────────────
+    char sessBuf[32];
+    snprintf(sessBuf, sizeof(sessBuf), "CYCLES COMPLETED: %02d", completedSessions);
+    display.setTextSize(1);
+    display.setTextColor(themeSubText);
+    int sessW = strlen(sessBuf) * 6;
+    display.setCursor((SCREEN_WIDTH - sessW) / 2, 196);
+    display.print(sessBuf);
+
+    const char* tip = "BTN1: START/PAUSE // BTN2: NEXT";
+    int tipW = strlen(tip) * 6;
+    display.setCursor((SCREEN_WIDTH - tipW) / 2, 214);
+    display.print(tip);
+  }
+
   // ------------------ Primary Smartwatch Draw Adapter ------------------
   void draw(int hour, int minute, int second, String day, String date, int style = 0, bool is12Hour = false) {
     display.fillScreen(TFT_BLACK);
@@ -1663,6 +2031,11 @@ public:
         case SCREEN_CARD:
           qrCard.drawQRScreen(display);
           break;
+        case SCREEN_POMODORO: {
+          extern int pomoRemainingSec, pomoTotalSec, pomoState, pomoMode, pomoCompletedSessions;
+          drawPomodoroScreen(pomoRemainingSec, pomoTotalSec, pomoState, pomoMode, pomoCompletedSessions);
+          break;
+        }
         default:
           drawRobotFaceScreen();
           break;
@@ -1683,6 +2056,46 @@ public:
       display.setCursor(startX, 3);
       display.print(headerText);
       display.drawFastHLine(0, 22, SCREEN_WIDTH, headerFg);
+    }
+
+    // ── Silent Mode Transient Overlay ──────────────────────────────────────
+    if (showSilentOverlay) {
+      if (millis() - silentOverlayStartTime > 2000) {
+        showSilentOverlay = false;
+      } else {
+        int bx = 50;
+        int by = 6;
+        int bw = 140;
+        int bh = 28;
+        
+        display.fillRoundRect(bx, by, bw, bh, 8, 0x0000);
+        display.drawRoundRect(bx, by, bw, bh, 8, silentOverlayState ? 0xF800 : 0x07E0);
+        
+        display.setTextSize(2);
+        if (silentOverlayState) {
+          display.setTextColor(0xF800);
+          display.setCursor(bx + 12, by + 6);
+          display.print("SILENT ON");
+          
+          int sx = bx + 115, sy = by + 14;
+          display.fillRect(sx - 5, sy - 3, 4, 6, 0xF800);
+          display.fillTriangle(sx - 1, sy - 6, sx - 1, sy + 6, sx + 3, sy, 0xF800);
+          display.drawLine(sx + 6, sy - 3, sx + 10, sy + 1, 0xF800);
+          display.drawLine(sx + 10, sy - 3, sx + 6, sy + 1, 0xF800);
+        } else {
+          display.setTextColor(0x07E0);
+          display.setCursor(bx + 12, by + 6);
+          display.print("SOUND ON");
+          
+          int sx = bx + 112, sy = by + 14;
+          display.fillRect(sx - 5, sy - 3, 4, 6, 0x07E0);
+          display.fillTriangle(sx - 1, sy - 6, sx - 1, sy + 6, sx + 3, sy, 0x07E0);
+          display.drawPixel(sx + 6, sy - 2, 0x07E0);
+          display.drawPixel(sx + 7, sy - 1, 0x07E0);
+          display.drawPixel(sx + 7, sy + 1, 0x07E0);
+          display.drawPixel(sx + 6, sy + 2, 0x07E0);
+        }
+      }
     }
 
     // ── Alarm / Meeting / Reminder Ringing Overlay ──
@@ -1743,6 +2156,140 @@ public:
       int dtw = strlen(dTxt) * 6;
       display.setCursor(dbX + (dbW - dtw) / 2, dbY + 12);
       display.print(dTxt);
+    }
+
+    // ── Incoming Call Ringing Overlay ──
+    if (callRingingActive) {
+      int ox = 8;
+      int oy = 10;
+      int ow = SCREEN_WIDTH - 16;
+      int oh = SCREEN_HEIGHT - 20;
+
+      bool pulse = ((millis() / 400) % 2 == 0);
+      uint16_t borderCol = pulse ? 0x07E0 : 0x03E0;
+      if (callMuted) borderCol = 0xFD20;
+
+      display.fillRoundRect(ox, oy, ow, oh, 12, 0x0841);
+      display.drawRoundRect(ox, oy, ow, oh, 12, borderCol);
+      display.drawRoundRect(ox + 1, oy + 1, ow - 2, oh - 2, 11, borderCol);
+
+      // Top Status Pill
+      uint16_t pillBg = callMuted ? 0x8400 : (pulse ? 0x0520 : 0x03A0);
+      display.fillRoundRect(ox + (ow - 140) / 2, oy + 8, 140, 20, 6, pillBg);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(ox + (ow - 140) / 2 + 14, oy + 14);
+      display.print(callMuted ? "CALL MUTED [SILENT]" : "INCOMING CALL...");
+
+      // Animated Phone Icon
+      int iconCenterX = ox + ow / 2;
+      int iconCenterY = oy + 54;
+      int iconR = 20;
+      display.fillCircle(iconCenterX, iconCenterY, iconR, callMuted ? 0x4A69 : (pulse ? 0x07E0 : 0x05E0));
+      display.drawCircle(iconCenterX, iconCenterY, iconR, TFT_WHITE);
+      display.fillRoundRect(iconCenterX - 5, iconCenterY - 10, 10, 20, 3, TFT_WHITE);
+      display.fillRect(iconCenterX - 3, iconCenterY - 5, 6, 10, callMuted ? 0x4A69 : (pulse ? 0x07E0 : 0x05E0));
+
+      // Caller Name
+      display.setTextSize(2);
+      display.setTextColor(TFT_WHITE);
+      String dName = callerName;
+      if (dName.length() == 0) dName = "Unknown Caller";
+      if (dName.length() > 14) dName = dName.substring(0, 12) + "..";
+      int nameX = ox + (ow - (dName.length() * 12)) / 2;
+      display.setCursor(max(ox + 8, nameX), oy + 84);
+      display.print(dName);
+
+      // Subtitle
+      display.setTextSize(1);
+      display.setTextColor(0x9CD3);
+      const char* subTxt = "Phone / WhatsApp Call";
+      int subX = ox + (ow - strlen(subTxt) * 6) / 2;
+      display.setCursor(subX, oy + 106);
+      display.print(subTxt);
+
+      // Action Buttons (Optimized for 2 physical buttons BTN1 & BTN2)
+      int btnW = 98;
+      int btnH = 46;
+      int btnY = oy + oh - 54;
+
+      // Left Button: BTN1: MUTE
+      int muteX = ox + 8;
+      uint16_t muteBg = callMuted ? 0x3186 : 0x7BC0;
+      display.fillRoundRect(muteX, btnY, btnW, btnH, 8, muteBg);
+      display.drawRoundRect(muteX, btnY, btnW, btnH, 8, callMuted ? 0x6B4D : 0xFD20);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(muteX + 16, btnY + 8);
+      display.print("BTN1:");
+      display.setTextSize(2);
+      display.setCursor(muteX + 16, btnY + 22);
+      display.print(callMuted ? "MUTED" : "MUTE");
+
+      // Right Button: BTN2: CUT
+      int cutX = ox + ow - 8 - btnW;
+      display.fillRoundRect(cutX, btnY, btnW, btnH, 8, 0xC800);
+      display.drawRoundRect(cutX, btnY, btnW, btnH, 8, 0xF980);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(cutX + 16, btnY + 8);
+      display.print("BTN2:");
+      display.setTextSize(2);
+      display.setCursor(cutX + 16, btnY + 22);
+      display.print("CUT");
+    }
+
+    // ── WhatsApp Quick Reply Sheet Overlay ──
+    if (quickReplyActive) {
+      int ox = 8;
+      int oy = 8;
+      int ow = SCREEN_WIDTH - 16;
+      int oh = SCREEN_HEIGHT - 16;
+
+      display.fillRoundRect(ox, oy, ow, oh, 10, 0x0841);
+      display.drawRoundRect(ox, oy, ow, oh, 10, 0x07E0);
+      display.drawRoundRect(ox + 1, oy + 1, ow - 2, oh - 2, 9, 0x07E0);
+
+      // Header Badge
+      display.fillRoundRect(ox + 8, oy + 6, ow - 16, 20, 5, 0x0BE4);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(ox + 14, oy + 12);
+      display.print("WHATSAPP QUICK REPLY");
+
+      // Subtitle / Button hint
+      display.setTextSize(1);
+      display.setTextColor(0x9CD3);
+      display.setCursor(ox + 10, oy + 30);
+      display.print("BTN1: Next   BTN2: Send");
+
+      // 5 Preset Buttons
+      int startY = oy + 44;
+      int itemH = 26;
+      int itemGap = 4;
+      for (int i = 0; i < 5; i++) {
+        int itemY = startY + i * (itemH + itemGap);
+        bool isSel = (i == quickReplySelectedIdx);
+        display.fillRoundRect(ox + 8, itemY, ow - 16, itemH, 5, isSel ? 0x0BE4 : 0x18C3);
+        display.drawRoundRect(ox + 8, itemY, ow - 16, itemH, 5, isSel ? TFT_WHITE : 0x3A68);
+
+        display.setTextSize(1);
+        display.setTextColor(isSel ? TFT_WHITE : 0xCE79);
+        display.setCursor(ox + 14, itemY + 8);
+        display.print(getQuickReplyPreset(i));
+
+        display.setTextColor(isSel ? TFT_YELLOW : 0x07E0);
+        display.setCursor(ox + ow - 22, itemY + 8);
+        display.print(isSel ? ">" : " ");
+      }
+
+      // Bottom Cancel hint
+      display.setTextSize(1);
+      display.setTextColor(0x7BEF);
+      const char* cTxt = "HOLD BTN: CANCEL";
+      int cW = strlen(cTxt) * 6;
+      display.setCursor(ox + (ow - cW) / 2, oy + oh - 14);
+      display.print(cTxt);
     }
     
     // Draw directly at (0, 0) for 1.3" display (no Y offset!)

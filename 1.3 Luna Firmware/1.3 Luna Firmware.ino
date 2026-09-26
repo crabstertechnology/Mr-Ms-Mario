@@ -21,6 +21,12 @@
 
 // Forward declaration for network callbacks
 void handleRobotCommand(String cmd);
+void handleBtn1Single();
+void handleBtn1Double();
+void handleBtn1Long();
+void handleBtn2Single();
+void handleBtn2Double();
+void handleBtn2Long();
 
 #include "luna_network.h"
 
@@ -34,6 +40,58 @@ volatile int micAmplitude = 0;
 LunaBLE ble;
 LunaInteraction interaction;   // dual-button handler (BTN_EXPR_PIN + BTN_SETTINGS_PIN)
 LunaNetwork network;
+
+bool virtualBtn1 = false;
+bool virtualBtn2 = false;
+
+// Software Real-Time Clock variables
+int rtcHour = 12;
+int rtcMinute = 0;
+int rtcSecond = 0;
+String rtcDay = "Mon";
+String rtcDate = "12 Sep";
+unsigned long lastRtcMillis = 0;
+bool is12HourFormat = false;
+
+// Pomodoro Timer State Variables
+int pomoMode = 0;             // 0: 25m Focus Work, 1: 5m Short Break, 2: 15m Long Break
+int pomoState = 0;            // 0: Stopped, 1: Running, 2: Paused, 3: Completed
+int pomoRemainingSec = 1500;  // Default 25 minutes = 1500s
+int pomoTotalSec = 1500;
+int pomoCompletedSessions = 0;
+unsigned long pomoLastTickMillis = 0;
+
+void resetPomodoroTimer() {
+  pomoState = 0;
+  if (pomoMode == 0) pomoTotalSec = 1500;      // 25 mins
+  else if (pomoMode == 1) pomoTotalSec = 300;  // 5 mins
+  else if (pomoMode == 2) pomoTotalSec = 900;  // 15 mins
+  pomoRemainingSec = pomoTotalSec;
+}
+
+void updatePomodoroTimer() {
+  if (pomoState == 1) { // Running
+    unsigned long now = millis();
+    if (now - pomoLastTickMillis >= 1000) {
+      pomoLastTickMillis = now;
+      if (pomoRemainingSec > 0) {
+        pomoRemainingSec--;
+      }
+      if (pomoRemainingSec == 0) {
+        pomoState = 3; // Completed
+        if (pomoMode == 0) {
+          pomoCompletedSessions++;
+        }
+        audio.playSound(SOUND_POWERUP);
+        if (pomoMode == 0) {
+          face.setDetailedNotification("POMODORO", "Focus session complete! Take a break.", rtcHour, rtcMinute);
+        } else {
+          face.setDetailedNotification("POMODORO", "Break is over! Ready to focus?", rtcHour, rtcMinute);
+        }
+      }
+    }
+  }
+}
 
 // NVS Settings Persistence
 Preferences preferences;
@@ -298,14 +356,7 @@ void dismissAlarmRinging() {
   }
 }
 
-// Software Real-Time Clock variables
-int rtcHour = 12;
-int rtcMinute = 0;
-int rtcSecond = 0;
-String rtcDay = "Mon";
-String rtcDate = "12 Sep";
-unsigned long lastRtcMillis = 0;
-bool is12HourFormat = false;
+
 
 void checkHardwareScheduledAlarms() {
   if (rtcSecond == 0 && rtcMinute != lastTriggeredAlarmMinute) {
@@ -407,9 +458,138 @@ void parseAndSyncTime(String timeStr) {
     } else {
       rtcSecond = timeStr.substring(secondColon + 1).toInt();
     }
+    face.timeSynced = true;
     lastRtcMillis = millis(); // Align RTC base to right now
   }
 }
+
+// ── Luna Mood & Living Life Engine ──────────────────────────────────────────
+enum LunaMood {
+  MOOD_HAPPY = 0,
+  MOOD_PLAYFUL,
+  MOOD_CURIOUS,
+  MOOD_SLEEPY,
+  MOOD_HUNGRY,
+  MOOD_FED
+};
+
+// ── Luna Meal-time Schedule ─────────────────────────────────────────────────
+enum MealSlot {
+  MEAL_NONE = 0,
+  MEAL_BREAKFAST = 1, // 08:00 - 10:00
+  MEAL_LUNCH = 2,     // 12:30 - 14:30
+  MEAL_DINNER = 3     // 19:30 - 21:30
+};
+
+MealSlot lastMealFed = MEAL_NONE;
+String lastFedDate = "";
+
+// ── Luna Pet XP, Level, Feeding & Age Persistence ───────────────────────────
+uint32_t lunaXP = 0;
+int      lunaLevel = 1;
+uint32_t lunaFeedCount = 0;
+uint32_t lunaAgeDays = 1;
+uint32_t lunaBirthDayOfYear = 0;
+uint32_t lunaBirthYear = 0;
+
+// Owner Personalization & Greeting
+String ownerName = "Sasi";
+String ownerDOB = "";
+bool isGreeting = false;
+unsigned long greetingEndTime = 0;
+
+String getLunaEvolutionStage(int lvl) {
+  if (lvl < 5) return "Baby Luna";
+  if (lvl < 10) return "Mochi Child";
+  if (lvl < 20) return "Cyber Teen";
+  return "Omega Luna";
+}
+
+int calculateLunaLevel(uint32_t xp) {
+  int lvl = 1 + (int)(xp / 100);
+  if (lvl < 1) lvl = 1;
+  return lvl;
+}
+
+void loadLunaPetStats() {
+  preferences.begin("luna", false);
+  lunaXP = preferences.getUInt("pet_xp", 0);
+  lunaFeedCount = preferences.getUInt("pet_feeds", 0);
+  lunaLevel = calculateLunaLevel(lunaXP);
+  lunaBirthDayOfYear = preferences.getUInt("pet_bday", 0);
+  lunaBirthYear = preferences.getUInt("pet_byear", 0);
+  lunaAgeDays = preferences.getUInt("pet_age", 1);
+  if (lunaAgeDays == 0) lunaAgeDays = 1;
+  ownerName = preferences.getString("ownerName", "Sasi");
+  ownerDOB = preferences.getString("ownerDOB", "");
+  preferences.end();
+  Serial.printf("[PET] Loaded: XP=%u, Level=%d, Feeds=%u, Age=%u days, Stage=%s\n",
+                lunaXP, lunaLevel, lunaFeedCount, lunaAgeDays, getLunaEvolutionStage(lunaLevel).c_str());
+}
+
+void saveLunaPetStats() {
+  preferences.begin("luna", false);
+  preferences.putUInt("pet_xp", lunaXP);
+  preferences.putUInt("pet_feeds", lunaFeedCount);
+  preferences.putUInt("pet_age", lunaAgeDays);
+  if (lunaBirthYear > 0) preferences.putUInt("pet_byear", lunaBirthYear);
+  if (lunaBirthDayOfYear > 0) preferences.putUInt("pet_bday", lunaBirthDayOfYear);
+  preferences.end();
+}
+
+void sendLunaStatsToBLE() {
+  if (!ble.isConnected()) return;
+  String stage = getLunaEvolutionStage(lunaLevel);
+  String statsMsg = "LUNA_STATS:" + String(lunaXP) + ":" + String(lunaLevel) + ":" +
+                    String(lunaFeedCount) + ":" + String(lunaAgeDays) + ":" + stage;
+  ble.sendLog(statsMsg);
+}
+
+void playAnimationSound(int animIndex) {
+  switch (animIndex) {
+    case 0:  audio.playSound(SOUND_CHIRP); break;         // Happy Smile
+    case 1:  audio.playSound(SOUND_POWERDOWN); break;     // Angry Face
+    case 2:  audio.playSound(SOUND_JUMP); break;          // Confused
+    case 3:  audio.playSound(SOUND_COIN); break;          // Playful Wink
+    case 4:  audio.playSound(SOUND_THEMECHANGE); break;    // Sparkle Eye
+    case 5:  audio.playSound(SOUND_POWERDOWN); break;     // Sleepy Zzz
+    case 6:  audio.playSound(SOUND_CHIRP); break;         // Curious
+    case 7:  audio.playSound(SOUND_COIN); break;          // Giggle
+    case 8:  audio.playSound(SOUND_JUMP); break;          // Excited
+    case 9:  audio.playSound(SOUND_POWERDOWN); break;     // Extreme Angry
+    case 10: audio.playSound(SOUND_ALERT_BEEP); break;     // Crying
+    case 11: audio.playSound(SOUND_POWERUP); break;       // Cheery
+    default: audio.playSound(SOUND_CHIRP); break;
+  }
+}
+
+const char* getAnimationThought(int idx) {
+  switch (idx) {
+    case 0: return "Feeling Happy!";
+    case 1: return "Hmph!";
+    case 2: return "Thinking...";
+    case 3: return "Wanna play?";
+    case 4: return "So shiny!";
+    case 5: return "Zzz... sleepy";
+    case 6: return "What's that?";
+    case 7: return "Hehehe!";
+    case 8: return "Yay let's go!";
+    case 9: return "Grrrrr!!";
+    case 10: return "Sob sob...";
+    case 11: return "Feeling great!";
+    default: return "";
+  }
+}
+
+LunaMood currentMood = MOOD_HAPPY;
+bool isHungry = false;
+unsigned long lastFedTime = 0;
+unsigned long moodStartTime = 0;
+unsigned long moodDurationMs = 8000;
+unsigned long lastHungerWhimperTime = 0;
+
+void feedLuna();
+void updateLunaLife();
 
 // Periodic expression cycling — all 7 available face expressions
 const Expression cycleExpressions[] = {
@@ -520,6 +700,7 @@ void notifyScreenAndExprSync() {
     case SCREEN_GAMES: screenName = "GAMES"; break;
     case SCREEN_SETTINGS: screenName = "SETTINGS"; break;
     case SCREEN_MAPS: screenName = "MAPS"; break;
+    case SCREEN_POMODORO: screenName = "POMODORO"; break;
     default: screenName = "FACE"; break;
   }
   
@@ -532,11 +713,195 @@ void notifyScreenAndExprSync() {
   ble.updateStatus(uptimeSec, touchCount, batteryVolts, (Expression)animIndex, label);
 }
 
+void feedLuna() {
+  if (!isHungry && !face.isHungry()) return; // Only feed if hungry!
+
+  // Add +50 XP and increment feed count
+  lunaFeedCount++;
+  lunaXP += 50;
+  lunaLevel = calculateLunaLevel(lunaXP);
+  saveLunaPetStats();
+  sendLunaStatsToBLE();
+
+  // Start feeding animation: bubbles float up towards crying face
+  face.startFeeding();
+  face.setThoughtText("+50 XP! Eating...");
+  audio.playSound(SOUND_CHIRP);
+  Serial.printf("[LUNA] FEEDING: XP now %u (Lv %d). Food bubbles floating up...\n", lunaXP, lunaLevel);
+}
+
+void updateLunaLife() {
+  unsigned long now = millis();
+
+  // Only run life/mood engine on SCREEN_FACE when awake and not in intro or maps/games
+  if (currentScreen != SCREEN_FACE || isAsleep || inIntroPhase || mapsActive || gamePlaying) return;
+
+  // 0. Active feeding in progress: bubbles floating up
+  if (face.isFeedingActive()) {
+    if (now - face.getFeedingStartTime() >= 2500) {
+      // Finished feeding!
+      face.stopFeeding();
+      isHungry = false;
+      face.setHungry(false);
+      lastFedTime = now;
+
+      // Mark current meal slot as fed
+      int minuteOfDay = rtcHour * 60 + rtcMinute;
+      if (minuteOfDay >= 8 * 60 && minuteOfDay < 10 * 60) {
+        lastMealFed = MEAL_BREAKFAST;
+      } else if (minuteOfDay >= 12 * 60 + 30 && minuteOfDay < 14 * 60 + 30) {
+        lastMealFed = MEAL_LUNCH;
+      } else if (minuteOfDay >= 19 * 60 + 30 && minuteOfDay < 21 * 60 + 30) {
+        lastMealFed = MEAL_DINNER;
+      }
+
+      currentMood = MOOD_HAPPY;
+      moodStartTime = now;
+      moodDurationMs = 15000;
+
+      // Switch to Happy Smile (index 0) after feeding!
+      face.setExpression((Expression)0);
+      face.setGifIndex(0);
+      face.setStateLabel(String(getSpriteAi13AnimName(0)));
+      face.setThoughtText("Full & Happy!");
+      audio.playSound(SOUND_POWERUP);
+      Serial.println(F("[LUNA] FED! Finished eating, Luna is now Happy!"));
+      notifyScreenAndExprSync();
+      sendLunaStatsToBLE();
+    }
+    return;
+  }
+
+  // 1. Personalized Greeting check ("Hi <User Name>!")
+  if (isGreeting) {
+    if (now < greetingEndTime) {
+      face.setThoughtText("Hi " + ownerName + "!");
+    } else {
+      isGreeting = false;
+      int curIdx = face.getGifIndex();
+      face.setThoughtText(getAnimationThought(curIdx));
+    }
+  }
+
+  // 2. Check hunger timer (Morning, Afternoon, Night meal windows)
+  if (!isHungry) {
+    // Reset daily meal tracker when calendar date changes
+    if (lastFedDate.length() > 0 && rtcDate.length() > 0 && rtcDate != lastFedDate) {
+      lastFedDate = rtcDate;
+      lastMealFed = MEAL_NONE;
+      lunaAgeDays++;
+      saveLunaPetStats();
+    }
+    if (lastFedDate.length() == 0 && rtcDate.length() > 0) {
+      lastFedDate = rtcDate;
+    }
+
+    MealSlot currentMealSlot = MEAL_NONE;
+    int minuteOfDay = rtcHour * 60 + rtcMinute;
+
+    // Breakfast: 08:00 - 10:00 (480 - 600 mins)
+    if (minuteOfDay >= 8 * 60 && minuteOfDay < 10 * 60) {
+      currentMealSlot = MEAL_BREAKFAST;
+    // Lunch: 12:30 - 14:30 (750 - 870 mins)
+    } else if (minuteOfDay >= 12 * 60 + 30 && minuteOfDay < 14 * 60 + 30) {
+      currentMealSlot = MEAL_LUNCH;
+    // Dinner: 19:30 - 21:30 (1170 - 1290 mins)
+    } else if (minuteOfDay >= 19 * 60 + 30 && minuteOfDay < 21 * 60 + 30) {
+      currentMealSlot = MEAL_DINNER;
+    }
+
+    bool shouldTriggerHunger = false;
+    if (currentMealSlot != MEAL_NONE && lastMealFed != currentMealSlot) {
+      shouldTriggerHunger = true;
+    } else if (currentMealSlot == MEAL_NONE && (now - lastFedTime >= 14400000UL)) {
+      // Fallback: 4 hours without food if outside meal slots or clock not set
+      shouldTriggerHunger = true;
+    }
+
+    if (shouldTriggerHunger) {
+      // Luna feels hungry!
+      isHungry = true;
+      face.setHungry(true);
+      currentMood = MOOD_HUNGRY;
+      face.setExpression((Expression)10); // 10 is Crying
+      face.setGifIndex(10);
+      face.setStateLabel(String(getSpriteAi13AnimName(10)));
+      face.setThoughtText("HUNGRY");
+      lastHungerWhimperTime = now;
+      audio.playSound(SOUND_ALERT_BEEP);
+      Serial.println(F("[LUNA] Meal time hunger triggered! Crying for food (press BTN to feed)."));
+      notifyScreenAndExprSync();
+    }
+  }
+
+  // 3. While hungry, stay crying and whimper periodically
+  if (isHungry) {
+    face.setThoughtText("HUNGRY");
+    if (now - lastHungerWhimperTime >= 12000) {
+      lastHungerWhimperTime = now;
+      audio.playSound(SOUND_CHIRP);
+    }
+    return; // Do not cycle away to happy expressions while hungry!
+  }
+
+  // 4. Living mood engine: organic expression transitions based on mood
+  if (now - moodStartTime >= moodDurationMs) {
+    moodStartTime = now;
+    moodDurationMs = random(12000, 22000); // 12 to 22 seconds between shifts
+
+    int nextAnim = 0;
+    switch (currentMood) {
+      case MOOD_HAPPY: {
+        const int happyPool[] = {0, 4, 7, 11}; // Happy Smile, Sparkle Eye, Giggle, Cheery
+        nextAnim = happyPool[random(0, 4)];
+        int r = random(0, 100);
+        if (r < 30) currentMood = MOOD_PLAYFUL;
+        else if (r < 50) currentMood = MOOD_CURIOUS;
+        break;
+      }
+      case MOOD_PLAYFUL: {
+        const int playfulPool[] = {3, 7, 8, 0}; // Playful Wink, Giggle, Excited, Happy Smile
+        nextAnim = playfulPool[random(0, 4)];
+        int r = random(0, 100);
+        if (r < 35) currentMood = MOOD_HAPPY;
+        else if (r < 55) currentMood = MOOD_CURIOUS;
+        break;
+      }
+      case MOOD_CURIOUS: {
+        const int curiousPool[] = {6, 2, 4, 0}; // Curious, Confused, Sparkle Eye, Happy Smile
+        nextAnim = curiousPool[random(0, 4)];
+        int r = random(0, 100);
+        if (r < 40) currentMood = MOOD_HAPPY;
+        else if (r < 60) currentMood = MOOD_PLAYFUL;
+        break;
+      }
+      case MOOD_SLEEPY: {
+        const int sleepyPool[] = {5, 2, 0}; // Sleepy Zzz, Confused, Happy Smile
+        nextAnim = sleepyPool[random(0, 3)];
+        if (random(0, 100) < 50) currentMood = MOOD_HAPPY;
+        break;
+      }
+      default:
+        nextAnim = 0;
+        break;
+    }
+
+    face.setExpression((Expression)nextAnim);
+    face.setGifIndex(nextAnim);
+    face.setStateLabel(String(getSpriteAi13AnimName(nextAnim)));
+    if (!isGreeting) {
+      face.setThoughtText(getAnimationThought(nextAnim));
+    }
+    playAnimationSound(nextAnim);
+    notifyScreenAndExprSync();
+  }
+}
+
 void handleRobotCommand(String text) {
   lastInteractionTime = millis();
   lastExpressionCycleTime = millis(); // Reset cycle timer on interaction
   
-  if (mapsActive && !text.startsWith("MAP") && !text.startsWith("SCREEN:") && !text.startsWith("CALL:") && !text.startsWith("TIME:")) {
+  if (mapsActive && !text.startsWith("MAP") && !text.startsWith("SCREEN:") && !text.startsWith("CALL:") && !text.startsWith("TIME:") && !text.startsWith("FOCUS") && !text.startsWith("APPLIMIT")) {
     Serial.println("[BLE] Ignored command because MAPS is active");
     return;
   }
@@ -564,6 +929,122 @@ void handleRobotCommand(String text) {
     face.setExpression(EXPR_SLEEPING);
     audio.playSound(SOUND_POWERDOWN);
     Serial.println("Robot went to sleep from remote command!");
+  } else if (text == "TOUCH_SIM:TAP") {
+    handleBtn1Single();
+    notifyScreenAndExprSync();
+  } else if (text == "TOUCH_SIM:DOUBLE") {
+    handleBtn1Double();
+    notifyScreenAndExprSync();
+  } else if (text == "TOUCH_SIM:LONG") {
+    handleBtn1Long();
+    notifyScreenAndExprSync();
+  } else if (text == "TOUCH_SIM:NEXT") {
+    handleBtn2Single();
+    notifyScreenAndExprSync();
+  } else if (text == "TOUCH_SIM:PREV") {
+    handleBtn2Double();
+    notifyScreenAndExprSync();
+  } else if (text == "ANGRY" || text == "ANIM:ANGRY" || text == "EXPR_ANGRY") {
+    currentScreen = SCREEN_FACE;
+    face.setGifIndex(1);
+    face.setExpression((Expression)1);
+    face.setStateLabel(String(getSpriteAi13AnimName(1)));
+    face.setThoughtText("Hmph!");
+    audio.playSound(SOUND_POWERDOWN);
+    notifyScreenAndExprSync();
+    Serial.println("OK:AngryAnimationTriggered");
+  } else if (text == "FEED" || text == "EAT") {
+    currentScreen = SCREEN_FACE;
+    feedLuna();
+    Serial.println("OK:LunaFed");
+  } else if (text == "GET_STATS" || text == "STATS") {
+    sendLunaStatsToBLE();
+    Serial.println("OK:StatsSent");
+  } else if (text == "HUNGRY") {
+    currentScreen = SCREEN_FACE;
+    isHungry = true;
+    face.setHungry(true);
+    currentMood = MOOD_HUNGRY;
+    face.setGifIndex(10); // Crying
+    face.setExpression((Expression)10);
+    face.setStateLabel("Hungry");
+    face.setThoughtText("HUNGRY");
+    audio.playSound(SOUND_ALERT_BEEP);
+    notifyScreenAndExprSync();
+    Serial.println("OK:LunaHungryTriggered");
+  } else if (text.startsWith("SET_NAME:") || text.startsWith("USER:")) {
+    ownerName = text.substring(text.indexOf(':') + 1);
+    ownerName.trim();
+    if (ownerName.length() == 0) ownerName = "Sasi";
+    preferences.begin("luna", false);
+    preferences.putString("ownerName", ownerName);
+    preferences.end();
+    isGreeting = true;
+    greetingEndTime = millis() + 4000;
+    face.setThoughtText("Hi " + ownerName + "!");
+    Serial.printf("[USER] Updated owner name: %s\n", ownerName.c_str());
+  } else if (text.startsWith("SET_DOB:") || text.startsWith("DOB:")) {
+    ownerDOB = text.substring(text.indexOf(':') + 1);
+    ownerDOB.trim();
+    preferences.begin("luna", false);
+    preferences.putString("ownerDOB", ownerDOB);
+    preferences.end();
+    Serial.printf("[USER] Updated owner DOB: %s\n", ownerDOB.c_str());
+  } else if (text.startsWith("FOCUS_ALERT:") || text.startsWith("APPLIMIT:")) {
+    String payload = text.substring(text.indexOf(':') + 1);
+    String appName = "App";
+    String duration = "";
+    int colon = payload.indexOf(':');
+    if (colon > 0) {
+      appName = payload.substring(0, colon);
+      duration = payload.substring(colon + 1);
+    } else {
+      appName = payload;
+    }
+    appName.trim();
+    duration.trim();
+    if (appName.length() == 0) appName = "Phone";
+
+    isAsleep = false;
+    lastInteractionTime = millis();
+    lastExpressionCycleTime = millis();
+    face.setPopupDismiss();
+    currentScreen = SCREEN_FACE;
+    face.setGifIndex(1); // Angry Face
+    face.setExpression((Expression)1);
+    face.setStateLabel(String(getSpriteAi13AnimName(1)));
+    face.setThoughtText("Focus on work!");
+    audio.playSound(SOUND_ALERT_BEEP);
+    ble.sendLog("FOCUS_ALERT_TRIGGERED:" + appName);
+    notifyScreenAndExprSync();
+    Serial.printf("[FOCUS_ALERT] Triggered for app: %s (%s)\n", appName.c_str(), duration.c_str());
+  } else if (text == "FOCUS_TEST") {
+    isAsleep = false;
+    lastInteractionTime = millis();
+    lastExpressionCycleTime = millis();
+    face.setPopupDismiss();
+    currentScreen = SCREEN_FACE;
+    face.setGifIndex(1);
+    face.setExpression((Expression)1);
+    face.setStateLabel(String(getSpriteAi13AnimName(1)));
+    face.setThoughtText("Focus on work!");
+    audio.playSound(SOUND_ALERT_BEEP);
+    ble.sendLog("FOCUS_ALERT_TRIGGERED:Test");
+    notifyScreenAndExprSync();
+    Serial.println("[FOCUS_ALERT] Test triggered via BLE");
+  } else if (text.startsWith("ANIM:") || text.startsWith("SPRITE:")) {
+    int colon = text.indexOf(':');
+    int idx = text.substring(colon + 1).toInt();
+    if (idx >= 0 && idx < SPRITE_AI13_ANIMATION_COUNT) {
+      currentScreen = SCREEN_FACE;
+      face.setGifIndex(idx);
+      face.setExpression((Expression)idx);
+      face.setStateLabel(String(getSpriteAi13AnimName(idx)));
+      face.setThoughtText(getAnimationThought(idx));
+      playAnimationSound(idx);
+      notifyScreenAndExprSync();
+      Serial.printf("OK:AnimIndexSet:%d\n", idx);
+    }
   } else if (text == "RESET") {
     // Factory reset: clear NVS and reboot
     audio.playSound(SOUND_GAMEOVER);
@@ -766,6 +1247,7 @@ void handleRobotCommand(String text) {
     else if (arg == "FACE" || arg == "EYES") sVal = SCREEN_FACE;
     else if (arg == "CARD") sVal = SCREEN_CARD;
     else if (arg == "SETTINGS") sVal = SCREEN_SETTINGS;
+    else if (arg == "POMODORO" || arg == "POMO") sVal = SCREEN_POMODORO;
     else sVal = arg.toInt();
 
     if (sVal >= 0 && sVal < SCREEN_MAX) {
@@ -960,6 +1442,21 @@ void handleRobotCommand(String text) {
         audio.playSound(SOUND_CHIRP);
       }
     }
+  } else if (text.startsWith("CALL:RING:") || text.startsWith("CALL:RING")) {
+    String caller = "Incoming Call";
+    if (text.startsWith("CALL:RING:")) {
+      caller = text.substring(10);
+      caller.trim();
+      if (caller.length() == 0) caller = "Incoming Call";
+    }
+    isAsleep = false;
+    lastInteractionTime = millis();
+    face.setCallRinging(true, caller);
+    audio.playSound(SOUND_CHIRP);
+    Serial.printf("[CALL] Ringing alert for: %s\n", caller.c_str());
+  } else if (text == "CALL:END" || text.startsWith("CALL:END")) {
+    face.dismissIncomingCall();
+    Serial.println("[CALL] Ended");
   } else if (text.startsWith("NOTIF:")) {
     // Command format: NOTIF:Title|Body
     String payload = text.substring(6);
@@ -1344,6 +1841,8 @@ void setup() {
   games.begin();
   qrCard.begin();  // Load persisted business card URL from NVS
   network.init();
+  loadLunaPetStats();
+  resetPomodoroTimer();
 }
 
 // Global index for sprite-ai cycling — advances through all 12 animations
@@ -1553,10 +2052,29 @@ void handleBtn1Single() {
 
   // Button 1 single click on other screens:
   if (currentScreen == SCREEN_FACE) {
+    if (isHungry || face.isHungry()) {
+      feedLuna();
+      return;
+    }
     // Next expression/animation
     cycleExpression();
     audio.playSound(SOUND_COIN);
     Serial.println("[BTN1] Next expression");
+  } else if (currentScreen == SCREEN_POMODORO) {
+    if (pomoState == 0 || pomoState == 2) {
+      pomoState = 1; // Start / Resume
+      pomoLastTickMillis = millis();
+      audio.playSound(SOUND_COIN);
+      Serial.println("[BTN1] Pomodoro timer started/resumed");
+    } else if (pomoState == 1) {
+      pomoState = 2; // Pause
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("[BTN1] Pomodoro timer paused");
+    } else if (pomoState == 3) {
+      resetPomodoroTimer();
+      audio.playSound(SOUND_POWERUP);
+      Serial.println("[BTN1] Pomodoro timer reset after completion");
+    }
   } else if (currentScreen == SCREEN_CLOCK) {
     // Cycles clock styles
     clockStyle = (clockStyle + 1) % 3;
@@ -1604,6 +2122,14 @@ void handleBtn1Double() {
     return;
   }
 
+  if (currentScreen == SCREEN_POMODORO) {
+    pomoMode = (pomoMode + 1) % 3;
+    resetPomodoroTimer();
+    audio.playSound(SOUND_CHIRP);
+    Serial.println("[BTN1 DBL] Cycled Pomodoro mode");
+    return;
+  }
+
   // Clear any settings menu activation states
   settingsActive = false;
   optionSelected = false;
@@ -1621,6 +2147,13 @@ void handleBtn1Long() {
 
   if (currentScreen == SCREEN_GAMES) {
     // Long press to go back is removed as requested by the user
+    return;
+  }
+
+  if (currentScreen == SCREEN_POMODORO) {
+    resetPomodoroTimer();
+    audio.playSound(SOUND_POWERDOWN);
+    Serial.println("[BTN1 LONG] Reset Pomodoro timer");
     return;
   }
 
@@ -1717,25 +2250,22 @@ void handleBtn2Single() {
     return;
   }
 
-  // Cycles screens: Face -> QR Card -> Clock -> Notifications -> Calendar -> Games -> Settings -> Face
-  SmartwatchScreen nextScreen;
-  if (currentScreen == SCREEN_FACE) {
-    nextScreen = SCREEN_CARD;
-  } else if (currentScreen == SCREEN_CARD) {
-    nextScreen = SCREEN_CLOCK;
-  } else if (currentScreen == SCREEN_CLOCK) {
-    nextScreen = SCREEN_NOTIFICATIONS;
-  } else if (currentScreen == SCREEN_NOTIFICATIONS) {
-    nextScreen = SCREEN_CALENDAR;
-  } else if (currentScreen == SCREEN_CALENDAR) {
-    nextScreen = SCREEN_GAMES;
-  } else if (currentScreen == SCREEN_GAMES) {
-    nextScreen = SCREEN_SETTINGS;
-  } else {
-    nextScreen = SCREEN_FACE;
-  }
+  // Screen cycle: Clock (Home) -> Notifications -> Calendar -> Maps -> Focus (Pomodoro) -> Games -> Settings -> Card -> Face
+  static const SmartwatchScreen CYCLE[] = {
+    SCREEN_CLOCK, SCREEN_NOTIFICATIONS, SCREEN_CALENDAR, SCREEN_MAPS, SCREEN_POMODORO,
+    SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD, SCREEN_FACE
+  };
+  static const int CYCLE_LEN = 9;
 
-  currentScreen = nextScreen;
+  int idx = 0;
+  for (int i = 0; i < CYCLE_LEN; i++) {
+    if (CYCLE[i] == currentScreen) { idx = i; break; }
+  }
+  do {
+    idx = (idx + 1) % CYCLE_LEN;
+  } while (!mapsActive && CYCLE[idx] == SCREEN_MAPS);
+  currentScreen = CYCLE[idx];
+
   settingsActive = false; 
   optionSelected = false;
   notificationsActive = false;
@@ -1749,6 +2279,42 @@ void handleBtn2Single() {
   audio.playSound(SOUND_COIN);
   notifyScreenAndExprSync();
   Serial.printf("[BTN2] Cycled screen to %d\n", currentScreen);
+}
+
+void handleBtn2Double() {
+  lastInteractionTime = millis();
+  if (currentScreen == SCREEN_MAPS || mapsActive) {
+    mapsActive = false;
+  }
+
+  static const SmartwatchScreen CYCLE[] = {
+    SCREEN_CLOCK, SCREEN_NOTIFICATIONS, SCREEN_CALENDAR, SCREEN_MAPS, SCREEN_POMODORO,
+    SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD, SCREEN_FACE
+  };
+  static const int CYCLE_LEN = 9;
+
+  int idx = 0;
+  for (int i = 0; i < CYCLE_LEN; i++) {
+    if (CYCLE[i] == currentScreen) { idx = i; break; }
+  }
+  do {
+    idx = (idx - 1 + CYCLE_LEN) % CYCLE_LEN;
+  } while (!mapsActive && CYCLE[idx] == SCREEN_MAPS);
+  currentScreen = CYCLE[idx];
+
+  settingsActive = false; 
+  optionSelected = false;
+  notificationsActive = false;
+  notificationSelected = false;
+
+  hardwareLoopbackActive = false;
+  audio.micStreaming = false;
+  audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+  audio.prebuffering = true;
+  face.setStateLabel("IDLE");
+  audio.playSound(SOUND_COIN);
+  notifyScreenAndExprSync();
+  Serial.printf("[BTN2 DBL] Cycled screen BACKWARDS to %d\n", currentScreen);
 }
 
 void handleBtn2Long() {
@@ -1818,6 +2384,8 @@ void updateStateLabel() {
     face.setStateLabel("QR CARD");
   } else if (currentScreen == SCREEN_SETTINGS) {
     face.setStateLabel("SETTINGS");
+  } else if (currentScreen == SCREEN_POMODORO) {
+    face.setStateLabel("FOCUS");
   } else {
     face.setStateLabel("IDLE");
   }
@@ -1829,7 +2397,52 @@ void loop() {
   // ── 0. Poll unified button handler (immediate click on release, zero gesture delay) ──
   ButtonEvent btnEvt = interaction.update();
   if (btnEvt != BTN_NONE) {
-    if (isAlarmRinging || isReminderRinging || face.isAlarmRingingActive()) {
+    if (face.isCallRingingActive()) {
+      if (btnEvt == BTN1_SINGLE) {
+        face.muteIncomingCall();
+        ble.sendLog("CALL_ACT:MUTE");
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[CALL] User pressed BTN1 (MUTE)");
+      } else if (btnEvt == BTN2_SINGLE) {
+        face.dismissIncomingCall();
+        ble.sendLog("CALL_ACT:REJECT");
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[CALL] User pressed BTN2 (CUT)");
+      }
+    } else if (face.isQuickReplyActive()) {
+      if (btnEvt == BTN1_SINGLE) {
+        face.cycleQuickReplyPreset();
+        audio.playSound(SOUND_CHIRP);
+      } else if (btnEvt == BTN2_SINGLE) {
+        int qIdx = face.getQuickReplySelectedIdx();
+        String reply = face.getQuickReplyPreset(qIdx);
+        ble.sendLog("REPLY:WA:" + reply);
+        face.closeQuickReply();
+        notificationSelected = false;
+        audio.playSound(SOUND_CHIRP);
+        Serial.printf("[WA] Quick reply sent: %s\n", reply.c_str());
+      } else if (btnEvt == BTN1_LONG || btnEvt == BTN2_LONG) {
+        face.closeQuickReply();
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[WA] Quick reply cancelled");
+      }
+    } else if (face.isPopupActive()) {
+      // If WhatsApp popup is showing, BTN1 opens Quick Reply, BTN2 dismisses popup
+      if (face.getPopupTitle().indexOf("WhatsApp") >= 0 || face.getPopupTitle().startsWith("WA:") ||
+          face.getPopupBody().indexOf("WhatsApp") >= 0) {
+        if (btnEvt == BTN1_SINGLE) {
+          face.openQuickReply();
+          face.setPopupDismiss();
+          audio.playSound(SOUND_CHIRP);
+        } else {
+          face.setPopupDismiss();
+          audio.playSound(SOUND_CHIRP);
+        }
+      } else {
+        face.setPopupDismiss();
+        audio.playSound(SOUND_CHIRP);
+      }
+    } else if (isAlarmRinging || isReminderRinging || face.isAlarmRingingActive()) {
       dismissAlarmRinging();
     } else {
       switch (btnEvt) {
@@ -1837,17 +2450,35 @@ void loop() {
         case BTN1_DOUBLE: handleBtn1Double(); break;
         case BTN1_LONG:   handleBtn1Long();   break;
         case BTN2_SINGLE: handleBtn2Single(); break;
+        case BTN2_DOUBLE: handleBtn2Double(); break;
         case BTN2_LONG:   handleBtn2Long();   break;
         default: break;
       }
     }
   }
 
+  // Periodic ring sound when incoming call is ringing (if not muted)
+  static unsigned long lastCallRingBeep = 0;
+  if (face.isCallRingingActive()) {
+    if (!face.isCallMuted() && millis() - lastCallRingBeep >= 2000) {
+      lastCallRingBeep = millis();
+      audio.playSound(SOUND_CHIRP);
+    }
+  }
+
   // 1. Maintain BLE stack status and connection advertisement
   ble.handleConnectionState();
 
-  // 1.5. Check offline hardware scheduled alarms & calendar events
-  checkHardwareScheduledAlarms();
+  // 1.5. Check offline hardware scheduled alarms & calendar events + Pomodoro timer
+  static unsigned long lastAlarmCheckMs = 0;
+  if (now - lastAlarmCheckMs >= 1000) {
+    lastAlarmCheckMs = now;
+    checkHardwareScheduledAlarms();
+    updatePomodoroTimer();
+  }
+
+  // Update Luna living mood engine and feeding animation
+  updateLunaLife();
 
   // 2. Refresh non-blocking audio synthesizer
   audio.update();

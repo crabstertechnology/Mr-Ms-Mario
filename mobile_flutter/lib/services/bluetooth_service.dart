@@ -59,6 +59,27 @@ class BLEService with ChangeNotifier {
   String _activeExpressionLabel = "IDLE";
   String _activeScreenMode = "FACE";
 
+  // Luna Pet Tamagotchi & Evolution System
+  int _lunaXP = 0;
+  int _lunaLevel = 1;
+  int _lunaFeeds = 0;
+  int _lunaAge = 1;
+  String _lunaStage = "Baby Luna";
+
+  int get lunaXP => _lunaXP;
+  int get lunaLevel => _lunaLevel;
+  int get lunaFeeds => _lunaFeeds;
+  int get lunaAge => _lunaAge;
+  String get lunaStage => _lunaStage;
+
+  int get lunaNextLevelXP => _lunaLevel * 100;
+  int get lunaCurrentLevelBaseXP => (_lunaLevel - 1) * 100;
+  double get lunaLevelProgress {
+    final cur = _lunaXP - lunaCurrentLevelBaseXP;
+    if (cur <= 0) return 0.0;
+    return (cur / 100.0).clamp(0.0, 1.0);
+  }
+
   // Hardware Stored Events & Reminders
   List<CalendarEvent> _hardwareEvents = [];
   bool _isHardwareEventsSynced = false;
@@ -289,6 +310,7 @@ class BLEService with ChangeNotifier {
 
   BLEService() {
     _initBLE();
+    _loadPetStats();
     _loadPairedDevice().then((_) {
       triggerReconnection();
     });
@@ -299,6 +321,18 @@ class BLEService with ChangeNotifier {
     Timer.periodic(const Duration(seconds: 5), (timer) {
       const MethodChannel('com.mrmsluna/notifications').invokeMethod('updateConnectionStatus', {'connected': _isConnected});
     });
+  }
+
+  Future<void> _loadPetStats() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _lunaXP = prefs.getInt('luna_xp') ?? 0;
+      _lunaLevel = prefs.getInt('luna_level') ?? 1;
+      _lunaFeeds = prefs.getInt('luna_feeds') ?? 0;
+      _lunaAge = prefs.getInt('luna_age') ?? 1;
+      _lunaStage = prefs.getString('luna_stage') ?? "Baby Luna";
+      notifyListeners();
+    } catch (_) {}
   }
 
   void _initBLE() {
@@ -843,6 +877,25 @@ class BLEService with ChangeNotifier {
             }
             notifyListeners();
           }
+        } else if (logMsg.startsWith("LUNA_STATS:") || dataStr.startsWith("LUNA_STATS:")) {
+          final statsStr = logMsg.startsWith("LUNA_STATS:") ? logMsg.substring(11) : dataStr.substring(11);
+          final parts = statsStr.split(':');
+          if (parts.length >= 5) {
+            _lunaXP = int.tryParse(parts[0]) ?? _lunaXP;
+            _lunaLevel = int.tryParse(parts[1]) ?? _lunaLevel;
+            _lunaFeeds = int.tryParse(parts[2]) ?? _lunaFeeds;
+            _lunaAge = int.tryParse(parts[3]) ?? _lunaAge;
+            _lunaStage = parts[4].trim();
+
+            SharedPreferences.getInstance().then((prefs) {
+              prefs.setInt('luna_xp', _lunaXP);
+              prefs.setInt('luna_level', _lunaLevel);
+              prefs.setInt('luna_feeds', _lunaFeeds);
+              prefs.setInt('luna_age', _lunaAge);
+              prefs.setString('luna_stage', _lunaStage);
+            });
+            notifyListeners();
+          }
         } else if (logMsg.startsWith("SCREEN_SYNC:")) {
           final screenName = logMsg.substring(12).trim();
           _activeScreenMode = screenName;
@@ -1062,6 +1115,10 @@ class BLEService with ChangeNotifier {
     await _writeTextWithAck(text, "Text Command");
   }
 
+  Future<void> sendCommand(String text) async {
+    await transmitText(text);
+  }
+
   Future<void> transmitNavTelemetry(String payload) async {
     if (!_isConnected || _textChar == null) {
       await _transmitWifiCommand(payload);
@@ -1188,6 +1245,18 @@ class BLEService with ChangeNotifier {
 
   Future<void> dismissHardwareAlarm() async {
     await _writeTextWithAck('EVT_DISMISS', "Dismiss Hardware Alarm");
+  }
+
+  Future<void> feedLuna() async {
+    await _writeTextWithAck("FEED", "Feed Luna (+50 XP)");
+  }
+
+  Future<void> triggerHunger() async {
+    await _writeTextWithAck("HUNGRY", "Trigger Hunger");
+  }
+
+  Future<void> queryPetStats() async {
+    await _writeTextWithAck("GET_STATS", "Query Pet Stats");
   }
 
   Future<void> transmitSaveSettings({

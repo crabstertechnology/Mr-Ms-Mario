@@ -27,6 +27,11 @@ class LunaQR {
 public:
   bool configured = false;
   char storedUrl[256] = {0};
+  
+  // QR generation cache to optimize framerate
+  bool qrGenerated = false;
+  QRCode qrcode;
+  uint8_t qrcodeData[QR_MAX_BUF];
 
   // ── NVS: Load stored card URL on boot ──────────────────────────────────────
   void begin() {
@@ -39,9 +44,14 @@ public:
     if (configured && url.length() > 0) {
       strncpy(storedUrl, url.c_str(), 255);
       storedUrl[255] = '\0';
+      qrGenerated = false;
       Serial.println("[QR] Loaded stored URL: " + url);
     } else {
-      configured = false;
+      strncpy(storedUrl, "https://shop.crabstertech.in", 255);
+      storedUrl[255] = '\0';
+      configured = true;
+      qrGenerated = false;
+      Serial.println("[QR] Default URL active: https://shop.crabstertech.in");
     }
   }
 
@@ -56,6 +66,7 @@ public:
     strncpy(storedUrl, url.c_str(), 255);
     storedUrl[255] = '\0';
     configured = true;
+    qrGenerated = false; // Invalidate cache
     Serial.println("[QR] Saved URL: " + url);
     return true;
   }
@@ -68,6 +79,7 @@ public:
     prefs.putBool(QR_NVS_CFG, false);
     prefs.end();
     configured = false;
+    qrGenerated = false; // Invalidate cache
     memset(storedUrl, 0, sizeof(storedUrl));
     Serial.println("[QR] Card cleared from NVS.");
   }
@@ -82,37 +94,34 @@ public:
       return;
     }
 
-    // ── Pick minimum QR version for the URL length (ECC_MEDIUM) ──────────────
-    // ECC_MEDIUM byte capacities per version (ISO 18004):
-    // V2=20, V3=32, V4=50, V5=64, V6=84, V7=93, V8=122, V9=154, V10=180
-    int urlLen = strlen(storedUrl);
-    uint8_t ver;
-    if      (urlLen <= 20)  ver = 2;
-    else if (urlLen <= 32)  ver = 3;
-    else if (urlLen <= 50)  ver = 4;
-    else if (urlLen <= 64)  ver = 5;
-    else if (urlLen <= 84)  ver = 6;
-    else if (urlLen <= 93)  ver = 7;
-    else if (urlLen <= 122) ver = 8;
-    else if (urlLen <= 154) ver = 9;
-    else                    ver = 10;
+    if (!qrGenerated) {
+      // ── Pick minimum QR version for the URL length (ECC_MEDIUM) ──────────────
+      int urlLen = strlen(storedUrl);
+      uint8_t ver;
+      if      (urlLen <= 20)  ver = 2;
+      else if (urlLen <= 32)  ver = 3;
+      else if (urlLen <= 50)  ver = 4;
+      else if (urlLen <= 64)  ver = 5;
+      else if (urlLen <= 84)  ver = 6;
+      else if (urlLen <= 93)  ver = 7;
+      else if (urlLen <= 122) ver = 8;
+      else if (urlLen <= 154) ver = 9;
+      else                    ver = 10;
 
-    // ── Generate QR matrix using the QRCode library ───────────────────────────
-    static uint8_t qrcodeData[QR_MAX_BUF];
-    QRCode qrcode;
-
-    int8_t result = qrcode_initText(&qrcode, qrcodeData, ver, ECC_MEDIUM, storedUrl);
-    if (result != 0) {
-      // Try one version higher with LOW ECC as fallback
-      result = qrcode_initText(&qrcode, qrcodeData, ver + 1 > 10 ? 10 : ver + 1, ECC_LOW, storedUrl);
+      // ── Generate QR matrix using the QRCode library ───────────────────────────
+      int8_t result = qrcode_initText(&qrcode, qrcodeData, ver, ECC_MEDIUM, storedUrl);
+      if (result != 0) {
+        // Try one version higher with LOW ECC as fallback
+        result = qrcode_initText(&qrcode, qrcodeData, ver + 1 > 10 ? 10 : ver + 1, ECC_LOW, storedUrl);
+      }
+      if (result != 0) {
+        Serial.println("[QR] ERROR: Could not generate QR code for URL.");
+        _drawErrorScreen(display);
+        return;
+      }
+      qrGenerated = true;
+      Serial.printf("[QR] Generated V%d QR (%dx%d) for: %s\n", ver, qrcode.size, qrcode.size, storedUrl);
     }
-    if (result != 0) {
-      Serial.println("[QR] ERROR: Could not generate QR code for URL.");
-      _drawErrorScreen(display);
-      return;
-    }
-
-    Serial.printf("[QR] Generated V%d QR (%dx%d) for: %s\n", ver, qrcode.size, qrcode.size, storedUrl);
 
     // ── Calculate rendering dimensions ───────────────────────────────────────
     // Available vertical space: SCREEN_HEIGHT minus bottom label minus top margin

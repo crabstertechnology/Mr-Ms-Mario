@@ -120,8 +120,8 @@ class DatabaseService with ChangeNotifier {
     "sprite_ai_6": { "expr": 6, "sound": 2, "label": "Curious", "cat": "Sprite AI" },
     "sprite_ai_7": { "expr": 7, "sound": 2, "label": "Giggle", "cat": "Sprite AI" },
     "sprite_ai_8": { "expr": 8, "sound": 2, "label": "Excited", "cat": "Sprite AI" },
-    "sprite_ai_9": { "expr": 9, "sound": 2, "label": "Heart Eye", "cat": "Sprite AI" },
-    "sprite_ai_10": { "expr": 10, "sound": 2, "label": "Surprised", "cat": "Sprite AI" },
+    "sprite_ai_9": { "expr": 9, "sound": 2, "label": "Extreme Angry", "cat": "Sprite AI" },
+    "sprite_ai_10": { "expr": 10, "sound": 2, "label": "Crying", "cat": "Sprite AI" },
     "sprite_ai_11": { "expr": 11, "sound": 2, "label": "Cheery", "cat": "Sprite AI" },
   };
 

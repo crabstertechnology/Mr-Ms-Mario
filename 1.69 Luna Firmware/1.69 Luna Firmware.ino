@@ -540,17 +540,104 @@ enum LunaMood {
   MOOD_FED
 };
 
+// ── Luna Meal-time Schedule ─────────────────────────────────────────────────
+enum MealSlot {
+  MEAL_NONE = 0,
+  MEAL_BREAKFAST = 1, // 08:00 - 10:00
+  MEAL_LUNCH = 2,     // 12:30 - 14:30
+  MEAL_DINNER = 3     // 19:30 - 21:30
+};
+
+MealSlot lastMealFed = MEAL_NONE;
+String lastFedDate = "";
+
+// ── Luna Pet XP, Level, Feeding & Age Persistence ───────────────────────────
+uint32_t lunaXP = 0;
+int      lunaLevel = 1;
+uint32_t lunaFeedCount = 0;
+uint32_t lunaAgeDays = 1;
+uint32_t lunaBirthDayOfYear = 0;
+uint32_t lunaBirthYear = 0;
+
+String getLunaEvolutionStage(int lvl) {
+  if (lvl < 5) return "Baby Luna";
+  if (lvl < 10) return "Mochi Child";
+  if (lvl < 20) return "Cyber Teen";
+  return "Omega Luna";
+}
+
+int calculateLunaLevel(uint32_t xp) {
+  int lvl = 1 + (int)(xp / 100);
+  if (lvl < 1) lvl = 1;
+  return lvl;
+}
+
+void loadLunaPetStats() {
+  preferences.begin("luna", false);
+  lunaXP = preferences.getUInt("pet_xp", 0);
+  lunaFeedCount = preferences.getUInt("pet_feeds", 0);
+  lunaLevel = calculateLunaLevel(lunaXP);
+  lunaBirthDayOfYear = preferences.getUInt("pet_bday", 0);
+  lunaBirthYear = preferences.getUInt("pet_byear", 0);
+  lunaAgeDays = preferences.getUInt("pet_age", 1);
+  if (lunaAgeDays == 0) lunaAgeDays = 1;
+  preferences.end();
+  Serial.printf("[PET] Loaded: XP=%u, Level=%d, Feeds=%u, Age=%u days, Stage=%s\n",
+                lunaXP, lunaLevel, lunaFeedCount, lunaAgeDays, getLunaEvolutionStage(lunaLevel).c_str());
+}
+
+void saveLunaPetStats() {
+  preferences.begin("luna", false);
+  preferences.putUInt("pet_xp", lunaXP);
+  preferences.putUInt("pet_feeds", lunaFeedCount);
+  preferences.putUInt("pet_age", lunaAgeDays);
+  if (lunaBirthYear > 0) preferences.putUInt("pet_byear", lunaBirthYear);
+  if (lunaBirthDayOfYear > 0) preferences.putUInt("pet_bday", lunaBirthDayOfYear);
+  preferences.end();
+}
+
+void sendLunaStatsToBLE() {
+  if (!ble.isConnected()) return;
+  String stage = getLunaEvolutionStage(lunaLevel);
+  String statsMsg = "LUNA_STATS:" + String(lunaXP) + ":" + String(lunaLevel) + ":" +
+                    String(lunaFeedCount) + ":" + String(lunaAgeDays) + ":" + stage;
+  ble.sendLog(statsMsg);
+}
+
+void playAnimationSound(int animIndex) {
+  switch (animIndex) {
+    case 0:  audio.playSound(SOUND_CHIRP); break;         // Happy Smile
+    case 1:  audio.playSound(SOUND_POWERDOWN); break;     // Angry Face
+    case 2:  audio.playSound(SOUND_JUMP); break;          // Confused
+    case 3:  audio.playSound(SOUND_COIN); break;          // Playful Wink
+    case 4:  audio.playSound(SOUND_THEMECHANGE); break;    // Sparkle Eye
+    case 5:  audio.playSound(SOUND_POWERDOWN); break;     // Sleepy Zzz
+    case 6:  audio.playSound(SOUND_CHIRP); break;         // Curious
+    case 7:  audio.playSound(SOUND_COIN); break;          // Giggle
+    case 8:  audio.playSound(SOUND_JUMP); break;          // Excited
+    case 9:  audio.playSound(SOUND_POWERDOWN); break;     // Extreme Angry
+    case 10: audio.playSound(SOUND_ALERT_BEEP); break;     // Crying
+    case 11: audio.playSound(SOUND_POWERUP); break;       // Cheery
+    default: audio.playSound(SOUND_CHIRP); break;
+  }
+}
+
 LunaMood currentMood = MOOD_HAPPY;
 bool isHungry = false;
 unsigned long lastFedTime = 0;
-unsigned long nextHungerIntervalMs = 90000; // First hunger after 90 seconds from boot
+unsigned long nextHungerIntervalMs = 90000;
 unsigned long moodStartTime = 0;
-unsigned long moodDurationMs = 8000;       // Organic animation duration (7-14s)
+unsigned long moodDurationMs = 8000;
 unsigned long lastHungerWhimperTime = 0;
 unsigned long fedAnimationEndTime = 0;
 
+// Owner Personalization & Greeting
+String ownerName = "Sasi";
+String ownerDOB = "";
+bool isGreeting = false;
+unsigned long greetingEndTime = 0;
+
 void feedLuna();
-void patLuna();
 void updateLunaLife();
 
 // Periodic expression cycling — all 7 available face expressions
@@ -617,10 +704,28 @@ const char* getSpriteAiAnimationName(int idx) {
     case 6: return "Curious";
     case 7: return "Giggle";
     case 8: return "Excited";
-    case 9: return "Heart Eye";
+    case 9: return "Extreme Angry";
     case 10: return "Crying";
     case 11: return "Cheery";
     default: return "ROBOT_EYE";
+  }
+}
+
+const char* getAnimationThought(int idx) {
+  switch (idx) {
+    case 0: return "Feeling Happy!";
+    case 1: return "Hmph!";
+    case 2: return "Thinking...";
+    case 3: return "Wanna play?";
+    case 4: return "So shiny!";
+    case 5: return "Zzz... sleepy";
+    case 6: return "What's that?";
+    case 7: return "Hehehe!";
+    case 8: return "Yay let's go!";
+    case 9: return "Grrrrr!!";
+    case 10: return "Sob sob...";
+    case 11: return "Feeling great!";
+    default: return "";
   }
 }
 
@@ -1020,6 +1125,9 @@ void handleRobotCommand(String text) {
     currentScreen = SCREEN_FACE;
     feedLuna();
     Serial.println("OK:LunaFed");
+  } else if (text == "GET_STATS" || text == "STATS") {
+    sendLunaStatsToBLE();
+    Serial.println("OK:StatsSent");
   } else if (text == "HUNGRY") {
     currentScreen = SCREEN_FACE;
     isHungry = true;
@@ -1029,9 +1137,28 @@ void handleRobotCommand(String text) {
     face.getRobotEyeAnim().reset();
     face.getRobotEyeAnim().play();
     face.setStateLabel("Hungry");
+    face.setThoughtText("HUNGRY");
     audio.playSound(SOUND_ALERT_BEEP);
     notifyScreenAndExprSync();
     Serial.println("OK:LunaHungryTriggered");
+  } else if (text.startsWith("SET_NAME:") || text.startsWith("USER:")) {
+    ownerName = text.substring(text.indexOf(':') + 1);
+    ownerName.trim();
+    if (ownerName.length() == 0) ownerName = "Sasi";
+    preferences.begin("luna", false);
+    preferences.putString("ownerName", ownerName);
+    preferences.end();
+    isGreeting = true;
+    greetingEndTime = millis() + 4000;
+    face.setThoughtText("Hi " + ownerName + "!");
+    Serial.printf("[USER] Updated owner name: %s\n", ownerName.c_str());
+  } else if (text.startsWith("SET_DOB:") || text.startsWith("DOB:")) {
+    ownerDOB = text.substring(text.indexOf(':') + 1);
+    ownerDOB.trim();
+    preferences.begin("luna", false);
+    preferences.putString("ownerDOB", ownerDOB);
+    preferences.end();
+    Serial.printf("[USER] Updated owner DOB: %s\n", ownerDOB.c_str());
   } else if (text.startsWith("FOCUS_ALERT:") || text.startsWith("APPLIMIT:")) {
     // Format: FOCUS_ALERT:<appName>:<limitMinutes> (e.g. FOCUS_ALERT:Instagram:5m)
     String payload = text.substring(text.indexOf(':') + 1);
@@ -1981,8 +2108,23 @@ void setup() {
   face.setFrameDelay(gifSpeed);
   face.setDefaultExpression(EXPR_ROBOT_EYE);
   face.setExpression(EXPR_ROBOT_EYE);
+  face.getRobotEyeAnim().setAnimationIndex(0); // Happy Smile
   lastFedTime = millis();
   moodStartTime = millis();
+
+  // Load Owner Personalization from NVS
+  {
+    preferences.begin("luna", true);
+    ownerName = preferences.getString("ownerName", "Sasi");
+    ownerDOB  = preferences.getString("ownerDOB", "");
+    preferences.end();
+    isGreeting = true;
+    greetingEndTime = millis() + 6000;
+    face.setThoughtText("Hi " + ownerName + "!");
+  }
+
+  // Load Luna Pet XP & Evolution Stats from NVS
+  loadLunaPetStats();
 
   // Perform Hardware Reset
   pinMode(TFT_DC, OUTPUT);
@@ -2069,41 +2211,20 @@ void setup() {
 int allGifCycleIdx = 0;
 
 void feedLuna() {
-  isHungry = false;
-  face.setHungry(false);
-  lastFedTime = millis();
-  // Next hunger in 3 to 4 minutes (180 to 240 seconds)
-  nextHungerIntervalMs = random(180000, 240000);
+  if (!isHungry && !face.isHungry()) return; // Only feed if hungry!
 
-  currentMood = MOOD_FED;
-  fedAnimationEndTime = millis() + 12000; // 12 seconds in fed bliss
-  moodStartTime = millis();
-  moodDurationMs = 12000;
+  // Add +50 XP and increment feed count
+  lunaFeedCount++;
+  lunaXP += 50;
+  lunaLevel = calculateLunaLevel(lunaXP);
+  saveLunaPetStats();
+  sendLunaStatsToBLE();
 
-  // When fed, change expression immediately to Heart Eye (index 9)
-  face.getRobotEyeAnim().setAnimationIndex(9);
-  face.getRobotEyeAnim().reset();
-  face.getRobotEyeAnim().play();
-  face.setStateLabel("Heart Eye");
-
-  audio.playSound(SOUND_POWERUP); // Happy feeding sound!
-  Serial.println(F("[LUNA] FED! Luna received food via Power Button! Full and happy <3"));
-  notifyScreenAndExprSync();
-}
-
-void patLuna() {
-  // Gentle pat / treat when pressed while not hungry
-  moodStartTime = millis();
-  moodDurationMs = 8000;
-  const int patReactions[] = {4, 7, 9, 11}; // Sparkle Eye, Giggle, Heart Eye, Cheery
-  int rx = patReactions[random(0, 4)];
-  face.getRobotEyeAnim().setAnimationIndex(rx);
-  face.getRobotEyeAnim().reset();
-  face.getRobotEyeAnim().play();
-  face.setStateLabel(getSpriteAiAnimationName(rx));
+  // Start feeding animation: bubbles float up towards crying face
+  face.startFeeding();
+  face.setThoughtText("+50 XP! Eating...");
   audio.playSound(SOUND_CHIRP);
-  Serial.println(F("[LUNA] Patted Luna via Power Button!"));
-  notifyScreenAndExprSync();
+  Serial.printf("[LUNA] FEEDING: XP now %u (Lv %d). Food bubbles floating up...\n", lunaXP, lunaLevel);
 }
 
 void updateLunaLife() {
@@ -2112,34 +2233,109 @@ void updateLunaLife() {
   // Only run life/mood engine on SCREEN_FACE when awake and not in intro or maps/games
   if (currentScreen != SCREEN_FACE || isAsleep || inIntroPhase || mapsActive || gamePlaying) return;
 
-  // 1. Check hunger timer
-  if (!isHungry) {
-    if (currentMood == MOOD_FED) {
-      if (now >= fedAnimationEndTime) {
-        currentMood = MOOD_HAPPY;
-        moodStartTime = now;
-        moodDurationMs = random(7000, 12000);
+  // 0. Active feeding in progress: bubbles floating up
+  if (face.isFeedingActive()) {
+    if (now - face.getFeedingStartTime() >= 2500) {
+      // Finished feeding!
+      face.stopFeeding();
+      isHungry = false;
+      face.setHungry(false);
+      lastFedTime = now;
+
+      // Mark current meal slot as fed
+      int minuteOfDay = rtcHour * 60 + rtcMinute;
+      if (minuteOfDay >= 8 * 60 && minuteOfDay < 10 * 60) {
+        lastMealFed = MEAL_BREAKFAST;
+      } else if (minuteOfDay >= 12 * 60 + 30 && minuteOfDay < 14 * 60 + 30) {
+        lastMealFed = MEAL_LUNCH;
+      } else if (minuteOfDay >= 19 * 60 + 30 && minuteOfDay < 21 * 60 + 30) {
+        lastMealFed = MEAL_DINNER;
       }
+
+      currentMood = MOOD_HAPPY;
+      moodStartTime = now;
+      moodDurationMs = 15000;
+
+      // Switch to Happy Smile (index 0) after feeding!
+      face.getRobotEyeAnim().setAnimationIndex(0);
+      face.getRobotEyeAnim().reset();
+      face.getRobotEyeAnim().play();
+      face.setStateLabel("Happy Smile");
+      face.setThoughtText("Full & Happy!");
+      audio.playSound(SOUND_POWERUP);
+      Serial.println(F("[LUNA] FED! Finished eating, Luna is now Happy!"));
+      notifyScreenAndExprSync();
+      sendLunaStatsToBLE();
+    }
+    return;
+  }
+
+  // 1. Personalized Greeting check ("Hi <User Name>!")
+  if (isGreeting) {
+    if (now < greetingEndTime) {
+      face.setThoughtText("Hi " + ownerName + "!");
     } else {
-      if (now - lastFedTime >= nextHungerIntervalMs) {
-        // Luna feels hungry!
-        isHungry = true;
-        face.setHungry(true);
-        currentMood = MOOD_HUNGRY;
-        face.getRobotEyeAnim().setAnimationIndex(10); // Crying ("suprised animation is crying")
-        face.getRobotEyeAnim().reset();
-        face.getRobotEyeAnim().play();
-        face.setStateLabel("Hungry");
-        lastHungerWhimperTime = now;
-        audio.playSound(SOUND_ALERT_BEEP);
-        Serial.println(F("[LUNA] Luna is HUNGRY! Crying for food (press PWR button to feed)."));
-        notifyScreenAndExprSync();
-      }
+      isGreeting = false;
+      int curIdx = face.getRobotEyeAnim().getAnimationIndex();
+      face.setThoughtText(getAnimationThought(curIdx));
     }
   }
 
-  // 2. While hungry, stay crying and whimper periodically
+  // 2. Check hunger timer (Morning, Afternoon, Night meal windows)
+  if (!isHungry) {
+    // Reset daily meal tracker when calendar date changes
+    if (lastFedDate.length() > 0 && rtcDate.length() > 0 && rtcDate != lastFedDate) {
+      lastFedDate = rtcDate;
+      lastMealFed = MEAL_NONE;
+      lunaAgeDays++;
+      saveLunaPetStats();
+    }
+    if (lastFedDate.length() == 0 && rtcDate.length() > 0) {
+      lastFedDate = rtcDate;
+    }
+
+    MealSlot currentMealSlot = MEAL_NONE;
+    int minuteOfDay = rtcHour * 60 + rtcMinute;
+
+    // Breakfast: 08:00 - 10:00 (480 - 600 mins)
+    if (minuteOfDay >= 8 * 60 && minuteOfDay < 10 * 60) {
+      currentMealSlot = MEAL_BREAKFAST;
+    // Lunch: 12:30 - 14:30 (750 - 870 mins)
+    } else if (minuteOfDay >= 12 * 60 + 30 && minuteOfDay < 14 * 60 + 30) {
+      currentMealSlot = MEAL_LUNCH;
+    // Dinner: 19:30 - 21:30 (1170 - 1290 mins)
+    } else if (minuteOfDay >= 19 * 60 + 30 && minuteOfDay < 21 * 60 + 30) {
+      currentMealSlot = MEAL_DINNER;
+    }
+
+    bool shouldTriggerHunger = false;
+    if (currentMealSlot != MEAL_NONE && lastMealFed != currentMealSlot) {
+      shouldTriggerHunger = true;
+    } else if (currentMealSlot == MEAL_NONE && (now - lastFedTime >= 14400000UL)) {
+      // Fallback: 4 hours without food if outside meal slots or clock not set
+      shouldTriggerHunger = true;
+    }
+
+    if (shouldTriggerHunger) {
+      // Luna feels hungry!
+      isHungry = true;
+      face.setHungry(true);
+      currentMood = MOOD_HUNGRY;
+      face.getRobotEyeAnim().setAnimationIndex(10); // Crying
+      face.getRobotEyeAnim().reset();
+      face.getRobotEyeAnim().play();
+      face.setStateLabel("Hungry");
+      face.setThoughtText("HUNGRY");
+      lastHungerWhimperTime = now;
+      audio.playSound(SOUND_ALERT_BEEP);
+      Serial.println(F("[LUNA] Meal time hunger triggered! Crying for food (press PWR button to feed)."));
+      notifyScreenAndExprSync();
+    }
+  }
+
+  // 3. While hungry, stay crying and whimper periodically
   if (isHungry) {
+    face.setThoughtText("HUNGRY");
     if (now - lastHungerWhimperTime >= 12000) {
       lastHungerWhimperTime = now;
       audio.playSound(SOUND_CHIRP);
@@ -2147,10 +2343,10 @@ void updateLunaLife() {
     return; // Do not cycle away to happy expressions while hungry!
   }
 
-  // 3. Living mood engine: organic expression transitions based on mood
+  // 4. Living mood engine: organic expression transitions based on mood
   if (now - moodStartTime >= moodDurationMs) {
     moodStartTime = now;
-    moodDurationMs = random(7000, 14000); // 7 to 14 seconds between shifts
+    moodDurationMs = random(12000, 22000); // 12 to 22 seconds between shifts (calmer, not too frequent!)
 
     int nextAnim = 0;
     switch (currentMood) {
@@ -2184,10 +2380,6 @@ void updateLunaLife() {
         if (random(0, 100) < 50) currentMood = MOOD_HAPPY;
         break;
       }
-      case MOOD_FED: {
-        nextAnim = 9; // Heart Eye
-        break;
-      }
       default:
         nextAnim = 0;
         break;
@@ -2197,6 +2389,10 @@ void updateLunaLife() {
     face.getRobotEyeAnim().reset();
     face.getRobotEyeAnim().play();
     face.setStateLabel(getSpriteAiAnimationName(nextAnim));
+    if (!isGreeting) {
+      face.setThoughtText(getAnimationThought(nextAnim));
+    }
+    playAnimationSound(nextAnim); // Distinct cute audio chirp/sound on transition!
     notifyScreenAndExprSync();
   }
 }
@@ -2902,11 +3098,9 @@ void loop() {
           audio.playSound(SOUND_POWERDOWN);
           Serial.println("[Power Button] Short press in game -> Exited to arcade");
         } else {
-          // Short press while awake: feed Luna when hungry, or give pat/snack when satisfied!
+          // Short press while awake: feed Luna ONLY when hungry!
           if (isHungry || face.isHungry()) {
             feedLuna();
-          } else {
-            patLuna();
           }
         }
       }
@@ -3392,6 +3586,7 @@ void loop() {
     updateStateLabel();
     int reportExpr = (currentScreen == SCREEN_FACE) ? face.getRobotEyeAnim().getAnimationIndex() : (int)face.getExpression();
     ble.updateStatus(uptimeSec, touchCount, batteryVolts, (Expression)reportExpr, face.getStateLabel());
+    sendLunaStatsToBLE();
   }
 
   // Update GIF frame states on every loop iteration (skip when wallpaper is shown)

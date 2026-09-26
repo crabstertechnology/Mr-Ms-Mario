@@ -1822,6 +1822,7 @@ class _MainDashboardState extends State<MainDashboard> {
     if (user == null) return;
 
     final displayNameController = TextEditingController(text: user['displayName'] ?? '');
+    final dobController = TextEditingController(text: user['dob'] ?? '');
     final robotNameController = TextEditingController(text: user['robotName'] ?? '');
     String selectedVariant = user['robotVariant'] ?? 'ms_luna';
 
@@ -1875,13 +1876,38 @@ class _MainDashboardState extends State<MainDashboard> {
                     TextField(
                       controller: displayNameController,
                       decoration: InputDecoration(
-                        labelText: "My Display Name",
+                        labelText: "My Name / Personalize Greeting",
                         labelStyle: GoogleFonts.outfit(fontSize: 12),
                         prefixIcon: const Icon(Icons.person_outline, size: 18),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: dobController,
+                      readOnly: true,
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: DateTime.now().subtract(const Duration(days: 365 * 20)),
+                          firstDate: DateTime(1950),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setModalState(() {
+                            dobController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                          });
+                        }
+                      },
+                      decoration: InputDecoration(
+                        labelText: "Date of Birth",
+                        labelStyle: GoogleFonts.outfit(fontSize: 12),
+                        prefixIcon: const Icon(Icons.cake_outlined, size: 18),
+                        hintText: "YYYY-MM-DD",
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     TextField(
                       controller: robotNameController,
                       decoration: InputDecoration(
@@ -1946,8 +1972,16 @@ class _MainDashboardState extends State<MainDashboard> {
                             onPressed: () async {
                               final dName = displayNameController.text.trim();
                               final rName = robotNameController.text.trim();
+                              final dob = dobController.text.trim();
                               if (dName.isNotEmpty && rName.isNotEmpty) {
                                 await firebase.updateUserProfile(dName, rName, selectedVariant);
+                                final ble = Provider.of<BLEService>(context, listen: false);
+                                if (ble.isConnected) {
+                                  ble.sendCommand("SET_NAME:$dName");
+                                  if (dob.isNotEmpty) {
+                                    ble.sendCommand("SET_DOB:$dob");
+                                  }
+                                }
                                 if (context.mounted) {
                                   Navigator.pop(ctx);
                                   setState(() {});
@@ -3754,6 +3788,10 @@ class _MainDashboardState extends State<MainDashboard> {
 
         // Robot Status Details Grid
         _buildRobotStatusGrid(primary, ble),
+        const SizedBox(height: 16),
+
+        // Luna Pet XP, Tamagotchi & Evolution Card
+        _buildPetEvolutionCard(ble),
         const SizedBox(height: 20),
 
         // Relationship Status Banner
@@ -4404,6 +4442,236 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
 
       ],
+    );
+  }
+
+  Widget _buildPetEvolutionCard(BLEService ble) {
+    final int xp = ble.lunaXP;
+    final int level = ble.lunaLevel;
+    final int feeds = ble.lunaFeeds;
+    final int age = ble.lunaAge;
+    final String stage = ble.lunaStage;
+    final double progress = ble.lunaLevelProgress;
+    final int nextXp = ble.lunaNextLevelXP;
+
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Top Row: Title & Badges
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "LUNA PET & EVOLUTION",
+                        style: GoogleFonts.outfit(
+                          color: textColor60,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      Text(
+                        stage,
+                        style: GoogleFonts.outfit(
+                          color: textColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF8B5CF6).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  "Lv. $level",
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Google Play Games style XP Progress Bar
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "XP PROGRESS",
+                style: GoogleFonts.outfit(color: textColor54, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                "$xp / $nextXp XP",
+                style: GoogleFonts.outfit(color: const Color(0xFF0284C7), fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 10,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.08),
+              ),
+              child: Stack(
+                children: [
+                  FractionallySizedBox(
+                    widthFactor: progress,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF00C9FF), Color(0xFF0284C7)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Stats Grid: Meals Fed & Age in Days
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.restaurant_rounded, color: Color(0xFFF59E0B), size: 20),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Meals Fed", style: GoogleFonts.outfit(color: textColor54, fontSize: 10)),
+                          Text(
+                            "$feeds Meals",
+                            style: GoogleFonts.outfit(color: textColor, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cake_rounded, color: Color(0xFFEC4899), size: 20),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Luna Age", style: GoogleFonts.outfit(color: textColor54, fontSize: 10)),
+                          Text(
+                            "$age Days",
+                            style: GoogleFonts.outfit(color: textColor, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Action Buttons: Feed Luna (+50 XP) & Trigger Hunger
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    ble.feedLuna();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Feeding Luna! +50 XP granted."),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.fastfood_rounded, size: 16),
+                  label: const Text("FEED LUNA (+50 XP)"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () {
+                  ble.triggerHunger();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Triggered meal hunger! Luna is crying for food."),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.notifications_active_outlined, size: 16),
+                label: const Text("HUNGER"),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

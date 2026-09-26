@@ -68,7 +68,8 @@ enum SoundEffect {
   SOUND_STARTUP,
   SOUND_CASTLE,
   SOUND_UNDERWORLD,
-  SOUND_THEMECHANGE
+  SOUND_THEMECHANGE,
+  SOUND_ALERT_BEEP
 };
 
 // Smartwatch UI Screen Modes
@@ -80,6 +81,7 @@ enum SmartwatchScreen {
   SCREEN_FACE,
   SCREEN_MAPS,
   SCREEN_CARD,   // Digital Business Card / QR Code screen
+  SCREEN_POMODORO,// Pomodoro Focus Timer
   SCREEN_SETTINGS,
   SCREEN_MAX
 };

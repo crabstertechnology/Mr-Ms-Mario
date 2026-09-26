@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main_dashboard.dart';
 import 'login_screen.dart';
+import 'onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -40,23 +42,34 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _animationController.forward();
 
-    // Check login state and navigate after 4 seconds
-    Timer(const Duration(seconds: 4), () {
+    // Check onboarding and login state and navigate after 3.5 seconds
+    Timer(const Duration(milliseconds: 3500), () async {
       if (mounted) {
-        final bool isAlreadyLoggedIn = FirebaseAuth.instance.currentUser != null;
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                isAlreadyLoggedIn ? const MainDashboard() : const LoginScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 800),
-          ),
-        );
+        final prefs = await SharedPreferences.getInstance();
+        final bool onboardingDone = prefs.getBool('onboarding_completed') ?? false;
+
+        Widget targetScreen;
+        if (!onboardingDone) {
+          targetScreen = const OnboardingScreen();
+        } else {
+          final bool isAlreadyLoggedIn = FirebaseAuth.instance.currentUser != null;
+          targetScreen = isAlreadyLoggedIn ? const MainDashboard() : const LoginScreen();
+        }
+
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: child,
+                );
+              },
+              transitionDuration: const Duration(milliseconds: 800),
+            ),
+          );
+        }
       }
     });
   }

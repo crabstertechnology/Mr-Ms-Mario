@@ -13,6 +13,8 @@ extern bool gamesActive;
 extern bool gamePlaying;
 extern int gameMenuOption;
 extern int gameSelected;
+extern bool virtualBtn1;
+extern bool virtualBtn2;
 
 class LunaGames {
 private:
@@ -419,8 +421,8 @@ public:
     uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xCE79;
 
-    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW) || virtualBtn1;
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW) || virtualBtn2;
 
     int carW = SCREEN_WIDTH == 240 ? 16 : 8;
     int carH = SCREEN_WIDTH == 240 ? 28 : 14;
@@ -544,8 +546,8 @@ public:
     uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xCE79;
 
-    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW) || virtualBtn1;
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW) || virtualBtn2;
 
     int pw = SCREEN_WIDTH == 240 ? 12 : 6;
     int ph = SCREEN_WIDTH == 240 ? 16 : 8;
@@ -900,8 +902,8 @@ public:
     uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xCE79;
 
-    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW) || virtualBtn1;
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW) || virtualBtn2;
 
     int mSize = SCREEN_WIDTH == 240 ? 8 : 4;
     int pW = SCREEN_WIDTH == 240 ? 24 : 16;
@@ -999,8 +1001,8 @@ public:
     uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xCE79;
 
-    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW) || virtualBtn1;
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW) || virtualBtn2;
 
     int basketW = SCREEN_WIDTH == 240 ? 24 : 16;
     int coinR = SCREEN_WIDTH == 240 ? 5 : 3;
@@ -1112,8 +1114,8 @@ public:
     uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xCE79;
 
-    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW) || virtualBtn1;
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW) || virtualBtn2;
 
     int platW = SCREEN_WIDTH == 240 ? 36 : 24;
     int pW = SCREEN_WIDTH == 240 ? 12 : 8;
@@ -1215,8 +1217,8 @@ public:
     uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xCE79;
 
-    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW) || virtualBtn1;
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW) || virtualBtn2;
 
     int blockH = SCREEN_WIDTH == 240 ? 12 : 8;
 
@@ -1322,8 +1324,8 @@ public:
     uint16_t themeText   = 0x2104;
     uint16_t themeBorder = 0xCE79;
 
-    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW);
-    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW);
+    bool btn1 = (digitalRead(BTN_EXPR_PIN) == LOW) || virtualBtn1;
+    bool btn2 = (digitalRead(BTN_SETTINGS_PIN) == LOW) || virtualBtn2;
 
     int gridSpacing = SCREEN_WIDTH == 240 ? 42 : 28;
     int gridStartX = G_X + (G_W - 3 * gridSpacing) / 2;
