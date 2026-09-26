@@ -3,7 +3,11 @@
 
 #include <Arduino.h>
 #include <pgmspace.h>
-#include "sprite_ai_data.h"
+#include <Adafruit_GFX.h>
+#include <TJpg_Decoder.h>
+#include "video_frames_data.h"
+
+#define SPRITE_AI_ANIMATION_COUNT 1
 
 enum RobotEyeState {
   ROBOT_EYE_IDLE = 0,
@@ -14,6 +18,28 @@ enum RobotEyeState {
   ROBOT_EYE_SURPRISED,
   ROBOT_EYE_SLEEPY
 };
+
+// Global target canvas pointer for high-performance direct blitting into PSRAM
+static GFXcanvas16* _videoDecTargetCanvas = nullptr;
+
+static bool _videoTftOutput(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
+  if (!_videoDecTargetCanvas) return false;
+  uint16_t* dest = _videoDecTargetCanvas->getBuffer();
+  if (!dest) return false;
+
+  for (int16_t r = 0; r < h; r++) {
+    int16_t cy = y + r;
+    if (cy >= VIDEO_FRAME_HEIGHT) break;
+    if (cy < 0) continue;
+    int16_t cx = (x < 0) ? 0 : x;
+    int16_t cw = w;
+    if (cx + cw > VIDEO_FRAME_WIDTH) cw = VIDEO_FRAME_WIDTH - cx;
+    if (cw > 0) {
+      memcpy(&dest[cy * VIDEO_FRAME_WIDTH + cx], &bitmap[r * w], cw * sizeof(uint16_t));
+    }
+  }
+  return true;
+}
 
 class RobotEyeAnimation {
 private:
@@ -30,8 +56,9 @@ private:
 
 public:
   RobotEyeAnimation() 
-    : state(ROBOT_EYE_IDLE), animIndex(0), currentFrame(0), frameCount(SPRITE_AI_FRAME_COUNT), 
-      frameDelayMs(125), lastFrameTime(0), playing(true), fps(8.0f), loopCount(0), cycleCompleted(false) {}
+    : state(ROBOT_EYE_IDLE), animIndex(0), currentFrame(0), frameCount(TOTAL_VIDEO_FRAMES), 
+      frameDelayMs(30), lastFrameTime(0), playing(true), 
+      fps(33.3f), loopCount(0), cycleCompleted(false) {}
 
   void play() {
     playing = true;
@@ -50,7 +77,7 @@ public:
   }
 
   void nextAnimation() {
-    animIndex = (animIndex + 1) % SPRITE_AI_ANIMATION_COUNT;
+    animIndex = 0;
     currentFrame = 0;
     loopCount = 0;
     cycleCompleted = false;
@@ -58,14 +85,13 @@ public:
   }
 
   void setAnimationIndex(int idx) {
-    if (idx >= 0 && idx < SPRITE_AI_ANIMATION_COUNT) {
-      animIndex = idx;
-      currentFrame = 0;
-      loopCount = 0;
-      cycleCompleted = false;
-      lastFrameTime = millis();
-      playing = true;
-    }
+    (void)idx;
+    animIndex = 0;
+    currentFrame = 0;
+    loopCount = 0;
+    cycleCompleted = false;
+    lastFrameTime = millis();
+    playing = true;
   }
 
   int getAnimationIndex() const {
@@ -98,13 +124,7 @@ public:
   }
 
   void setState(RobotEyeState newState) {
-    if (state != newState) {
-      state = newState;
-      currentFrame = 0;
-      loopCount = 0;
-      cycleCompleted = false;
-      lastFrameTime = millis();
-    }
+    state = newState;
   }
 
   RobotEyeState getState() const {
@@ -116,10 +136,12 @@ public:
 
     unsigned long now = millis();
     if (now - lastFrameTime >= (unsigned long)frameDelayMs) {
-      lastFrameTime = now;
-      currentFrame++;
+      int framesToAdvance = (now - lastFrameTime) / frameDelayMs;
+      if (framesToAdvance < 1) framesToAdvance = 1;
+      lastFrameTime += (unsigned long)(framesToAdvance * frameDelayMs);
+      currentFrame += framesToAdvance;
       if (currentFrame >= frameCount) {
-        currentFrame = 0;
+        currentFrame = currentFrame % frameCount;
         loopCount++;
         cycleCompleted = true;
       }
@@ -132,16 +154,31 @@ public:
   void clearCycleCompleted() { cycleCompleted = false; }
   int getLoopCount() const { return loopCount; }
 
+  // Hardware-optimized direct JPEG blit into display PSRAM canvas
+  void draw(GFXcanvas16& canvas) {
+    if (TOTAL_VIDEO_FRAMES == 0) return;
+    _videoDecTargetCanvas = &canvas;
+    TJpgDec.setJpgScale(1);
+    TJpgDec.setSwapBytes(false);
+    TJpgDec.setCallback(_videoTftOutput);
+
+    const uint8_t* fData = video_frames[currentFrame];
+    uint32_t fSize = video_frame_sizes[currentFrame];
+    if (fData != nullptr && fSize > 0) {
+      TJpgDec.drawJpg(0, 0, fData, fSize);
+    }
+  }
+
   const uint16_t* getCurrentFrameData() const {
-    return getSpriteAiFrame(animIndex, currentFrame);
+    return nullptr;
   }
 
   int getCurrentFrame() const { return currentFrame; }
   int getFrameCount() const { return frameCount; }
-  int getWidth() const { return SPRITE_AI_FRAME_WIDTH; }
-  int getHeight() const { return SPRITE_AI_FRAME_HEIGHT; }
+  int getWidth() const { return VIDEO_FRAME_WIDTH; }
+  int getHeight() const { return VIDEO_FRAME_HEIGHT; }
   int getXOffset() const { return 0; }
-  int getYOffset() const { return 20; } // Center 240x240 inside 240x280 display (top: 20px, bottom: 20px)
+  int getYOffset() const { return 0; }
 };
 
 #endif // ROBOT_EYE_ANIMATION_H

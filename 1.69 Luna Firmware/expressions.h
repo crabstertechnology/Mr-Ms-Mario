@@ -1915,12 +1915,7 @@ public:
   }
 
   void drawRobotFaceScreen() {
-    display.fillScreen(TFT_BLACK);
-    
-    const uint16_t* frameData = robotEyeAnim.getCurrentFrameData();
-    if (frameData != nullptr) {
-      display.drawRGBBitmap(robotEyeAnim.getXOffset(), robotEyeAnim.getYOffset(), frameData, robotEyeAnim.getWidth(), robotEyeAnim.getHeight());
-    }
+    robotEyeAnim.draw(display);
     if (silentMode) {
       uint16_t silentColor = TFT_WHITE;
       int silentX = SCREEN_WIDTH - 20;
@@ -1929,36 +1924,6 @@ public:
       display.fillTriangle(silentX + 2, silentY - 4, silentX + 2, silentY + 4, silentX + 4, silentY, silentColor);
       display.drawLine(silentX + 6, silentY - 2, silentX + 8, silentY, silentColor);
       display.drawLine(silentX + 8, silentY - 2, silentX + 6, silentY, silentColor);
-    }
-
-    // Clean text directly on top of expression without any border or bg box
-    String dispText = thoughtText;
-    if (dispText.length() == 0 && hungryState) {
-      dispText = "HUNGRY";
-    }
-    if (dispText.length() > 0) {
-      display.setTextColor(TFT_WHITE);
-      display.setTextSize(2);
-      int tWidth = dispText.length() * 12;
-      int tx = (SCREEN_WIDTH - tWidth) / 2;
-      if (tx < 4) tx = 4;
-      display.setCursor(tx, 4);
-      display.print(dispText);
-    }
-
-    // Feeding animation: cute glowing bubbles/food particles float up from bottom
-    if (isFeeding) {
-      unsigned long elapsed = millis() - feedingStartTime;
-      for (int i = 0; i < 7; i++) {
-        int t = (elapsed + i * 220) % 1200;
-        float progress = (float)t / 1200.0f;
-        int py = 255 - (int)(progress * 135); // rises from 255 to 120
-        int px = 75 + (i * 16) + (int)(sin(progress * 6.28f + i) * 6);
-        int r = (i % 2 == 0) ? 4 : 3;
-        uint16_t pCol = (i % 3 == 0) ? 0x07FF : ((i % 3 == 1) ? 0xFDE0 : 0xF81F);
-        display.fillCircle(px, py, r, pCol);
-        display.drawCircle(px, py, r + 1, TFT_WHITE);
-      }
     }
   }
 

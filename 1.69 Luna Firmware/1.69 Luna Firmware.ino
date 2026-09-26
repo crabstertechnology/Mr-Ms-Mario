@@ -694,39 +694,13 @@ void notifyScreenAndExprSync() {
 }
 
 const char* getSpriteAiAnimationName(int idx) {
-  switch (idx) {
-    case 0: return "Happy Smile";
-    case 1: return "Angry Face";
-    case 2: return "Confused";
-    case 3: return "Playful Wink";
-    case 4: return "Sparkle Eye";
-    case 5: return "Sleepy Zzz";
-    case 6: return "Curious";
-    case 7: return "Giggle";
-    case 8: return "Excited";
-    case 9: return "Extreme Angry";
-    case 10: return "Crying";
-    case 11: return "Cheery";
-    default: return "ROBOT_EYE";
-  }
+  (void)idx;
+  return "Luna Anime";
 }
 
 const char* getAnimationThought(int idx) {
-  switch (idx) {
-    case 0: return "Feeling Happy!";
-    case 1: return "Hmph!";
-    case 2: return "Thinking...";
-    case 3: return "Wanna play?";
-    case 4: return "So shiny!";
-    case 5: return "Zzz... sleepy";
-    case 6: return "What's that?";
-    case 7: return "Hehehe!";
-    case 8: return "Yay let's go!";
-    case 9: return "Grrrrr!!";
-    case 10: return "Sob sob...";
-    case 11: return "Feeling great!";
-    default: return "";
-  }
+  (void)idx;
+  return "";
 }
 
 // Global BLE Write Event Handlers (declared extern in bluetooth.h)
@@ -2228,172 +2202,10 @@ void feedLuna() {
 }
 
 void updateLunaLife() {
-  unsigned long now = millis();
-
-  // Only run life/mood engine on SCREEN_FACE when awake and not in intro or maps/games
   if (currentScreen != SCREEN_FACE || isAsleep || inIntroPhase || mapsActive || gamePlaying) return;
-
-  // 0. Active feeding in progress: bubbles floating up
-  if (face.isFeedingActive()) {
-    if (now - face.getFeedingStartTime() >= 2500) {
-      // Finished feeding!
-      face.stopFeeding();
-      isHungry = false;
-      face.setHungry(false);
-      lastFedTime = now;
-
-      // Mark current meal slot as fed
-      int minuteOfDay = rtcHour * 60 + rtcMinute;
-      if (minuteOfDay >= 8 * 60 && minuteOfDay < 10 * 60) {
-        lastMealFed = MEAL_BREAKFAST;
-      } else if (minuteOfDay >= 12 * 60 + 30 && minuteOfDay < 14 * 60 + 30) {
-        lastMealFed = MEAL_LUNCH;
-      } else if (minuteOfDay >= 19 * 60 + 30 && minuteOfDay < 21 * 60 + 30) {
-        lastMealFed = MEAL_DINNER;
-      }
-
-      currentMood = MOOD_HAPPY;
-      moodStartTime = now;
-      moodDurationMs = 15000;
-
-      // Switch to Happy Smile (index 0) after feeding!
-      face.getRobotEyeAnim().setAnimationIndex(0);
-      face.getRobotEyeAnim().reset();
-      face.getRobotEyeAnim().play();
-      face.setStateLabel("Happy Smile");
-      face.setThoughtText("Full & Happy!");
-      audio.playSound(SOUND_POWERUP);
-      Serial.println(F("[LUNA] FED! Finished eating, Luna is now Happy!"));
-      notifyScreenAndExprSync();
-      sendLunaStatsToBLE();
-    }
-    return;
-  }
-
-  // 1. Personalized Greeting check ("Hi <User Name>!")
-  if (isGreeting) {
-    if (now < greetingEndTime) {
-      face.setThoughtText("Hi " + ownerName + "!");
-    } else {
-      isGreeting = false;
-      int curIdx = face.getRobotEyeAnim().getAnimationIndex();
-      face.setThoughtText(getAnimationThought(curIdx));
-    }
-  }
-
-  // 2. Check hunger timer (Morning, Afternoon, Night meal windows)
-  if (!isHungry) {
-    // Reset daily meal tracker when calendar date changes
-    if (lastFedDate.length() > 0 && rtcDate.length() > 0 && rtcDate != lastFedDate) {
-      lastFedDate = rtcDate;
-      lastMealFed = MEAL_NONE;
-      lunaAgeDays++;
-      saveLunaPetStats();
-    }
-    if (lastFedDate.length() == 0 && rtcDate.length() > 0) {
-      lastFedDate = rtcDate;
-    }
-
-    MealSlot currentMealSlot = MEAL_NONE;
-    int minuteOfDay = rtcHour * 60 + rtcMinute;
-
-    // Breakfast: 08:00 - 10:00 (480 - 600 mins)
-    if (minuteOfDay >= 8 * 60 && minuteOfDay < 10 * 60) {
-      currentMealSlot = MEAL_BREAKFAST;
-    // Lunch: 12:30 - 14:30 (750 - 870 mins)
-    } else if (minuteOfDay >= 12 * 60 + 30 && minuteOfDay < 14 * 60 + 30) {
-      currentMealSlot = MEAL_LUNCH;
-    // Dinner: 19:30 - 21:30 (1170 - 1290 mins)
-    } else if (minuteOfDay >= 19 * 60 + 30 && minuteOfDay < 21 * 60 + 30) {
-      currentMealSlot = MEAL_DINNER;
-    }
-
-    bool shouldTriggerHunger = false;
-    if (currentMealSlot != MEAL_NONE && lastMealFed != currentMealSlot) {
-      shouldTriggerHunger = true;
-    } else if (currentMealSlot == MEAL_NONE && (now - lastFedTime >= 14400000UL)) {
-      // Fallback: 4 hours without food if outside meal slots or clock not set
-      shouldTriggerHunger = true;
-    }
-
-    if (shouldTriggerHunger) {
-      // Luna feels hungry!
-      isHungry = true;
-      face.setHungry(true);
-      currentMood = MOOD_HUNGRY;
-      face.getRobotEyeAnim().setAnimationIndex(10); // Crying
-      face.getRobotEyeAnim().reset();
-      face.getRobotEyeAnim().play();
-      face.setStateLabel("Hungry");
-      face.setThoughtText("HUNGRY");
-      lastHungerWhimperTime = now;
-      audio.playSound(SOUND_ALERT_BEEP);
-      Serial.println(F("[LUNA] Meal time hunger triggered! Crying for food (press PWR button to feed)."));
-      notifyScreenAndExprSync();
-    }
-  }
-
-  // 3. While hungry, stay crying and whimper periodically
-  if (isHungry) {
-    face.setThoughtText("HUNGRY");
-    if (now - lastHungerWhimperTime >= 12000) {
-      lastHungerWhimperTime = now;
-      audio.playSound(SOUND_CHIRP);
-    }
-    return; // Do not cycle away to happy expressions while hungry!
-  }
-
-  // 4. Living mood engine: organic expression transitions based on mood
-  if (now - moodStartTime >= moodDurationMs) {
-    moodStartTime = now;
-    moodDurationMs = random(12000, 22000); // 12 to 22 seconds between shifts (calmer, not too frequent!)
-
-    int nextAnim = 0;
-    switch (currentMood) {
-      case MOOD_HAPPY: {
-        const int happyPool[] = {0, 4, 7, 11}; // Happy Smile, Sparkle Eye, Giggle, Cheery
-        nextAnim = happyPool[random(0, 4)];
-        int r = random(0, 100);
-        if (r < 30) currentMood = MOOD_PLAYFUL;
-        else if (r < 50) currentMood = MOOD_CURIOUS;
-        break;
-      }
-      case MOOD_PLAYFUL: {
-        const int playfulPool[] = {3, 7, 8, 0}; // Playful Wink, Giggle, Excited, Happy Smile
-        nextAnim = playfulPool[random(0, 4)];
-        int r = random(0, 100);
-        if (r < 35) currentMood = MOOD_HAPPY;
-        else if (r < 55) currentMood = MOOD_CURIOUS;
-        break;
-      }
-      case MOOD_CURIOUS: {
-        const int curiousPool[] = {6, 2, 4, 0}; // Curious, Confused, Sparkle Eye, Happy Smile
-        nextAnim = curiousPool[random(0, 4)];
-        int r = random(0, 100);
-        if (r < 40) currentMood = MOOD_HAPPY;
-        else if (r < 60) currentMood = MOOD_PLAYFUL;
-        break;
-      }
-      case MOOD_SLEEPY: {
-        const int sleepyPool[] = {5, 2, 0}; // Sleepy Zzz, Confused, Happy Smile
-        nextAnim = sleepyPool[random(0, 3)];
-        if (random(0, 100) < 50) currentMood = MOOD_HAPPY;
-        break;
-      }
-      default:
-        nextAnim = 0;
-        break;
-    }
-
-    face.getRobotEyeAnim().setAnimationIndex(nextAnim);
-    face.getRobotEyeAnim().reset();
+  // Silent animation maintainer: zero sounds, zero hunger alerts, zero thought text
+  if (!face.getRobotEyeAnim().isPlaying()) {
     face.getRobotEyeAnim().play();
-    face.setStateLabel(getSpriteAiAnimationName(nextAnim));
-    if (!isGreeting) {
-      face.setThoughtText(getAnimationThought(nextAnim));
-    }
-    playAnimationSound(nextAnim); // Distinct cute audio chirp/sound on transition!
-    notifyScreenAndExprSync();
   }
 }
 
@@ -2619,25 +2431,10 @@ void handleBtn1Single() {
   }
 
   if (currentScreen == SCREEN_FACE) {
-    if (isHungry || face.isHungry()) {
-      // Luna whimpers when tapped while hungry
-      audio.playSound(SOUND_CHIRP);
-      Serial.println(F("[BTN1] Tapped while hungry: Luna cries for food!"));
-    } else {
-      // Interactive touch tickles Luna!
-      const int touchAnims[] = {3, 7, 8, 4, 0}; // Wink, Giggle, Excited, Sparkle, Smile
-      int chosenAnim = touchAnims[random(0, 5)];
-      currentMood = MOOD_PLAYFUL;
-      moodStartTime = millis();
-      moodDurationMs = 9000;
-      face.getRobotEyeAnim().setAnimationIndex(chosenAnim);
-      face.getRobotEyeAnim().reset();
-      face.getRobotEyeAnim().play();
-      face.setStateLabel(getSpriteAiAnimationName(chosenAnim));
-      audio.playSound(SOUND_CHIRP);
-      Serial.printf("[BTN1] Interactive touch -> Playful Anim #%d (%s)\n", chosenAnim, face.getStateLabel().c_str());
-      notifyScreenAndExprSync();
-    }
+    // Interactive touch: replay/reset animation smoothly without any sound
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    notifyScreenAndExprSync();
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
     // Tap on clock screen cycles the clock style between 0 and 1
@@ -3511,22 +3308,20 @@ void loop() {
       if (now - introAnimationStartTime >= 2000) {
         inIntroPhase = false;
         face.setFrameDelay(gifSpeed);
-        currentScreen = SCREEN_CLOCK; // Boot into Monolith Watchface Home!
+        currentScreen = SCREEN_FACE; // Stay on animation screen!
         lastInteractionTime = now;
         lastScreenTransitionTime = now;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println(F("[Boot] Intro completed -> Booted to SCREEN_CLOCK (Home Watchface)"));
+        Serial.println(F("[Boot] Intro completed -> Playing animation on SCREEN_FACE"));
         notifyScreenAndExprSync();
       }
     } else if (now - introAnimationStartTime >= 3000) {
       // Failsafe timeout
       inIntroPhase = false;
       face.setFrameDelay(gifSpeed);
-      currentScreen = SCREEN_CLOCK;
+      currentScreen = SCREEN_FACE;
       lastInteractionTime = now;
       lastScreenTransitionTime = now;
-      audio.playSound(SOUND_POWERUP);
-      Serial.println(F("[Boot] Intro timeout -> Booted to SCREEN_CLOCK (Home Watchface)"));
+      Serial.println(F("[Boot] Intro timeout -> Playing animation on SCREEN_FACE"));
       notifyScreenAndExprSync();
     }
   } else {
@@ -3594,10 +3389,11 @@ void loop() {
     face.update();
   }
 
-  // Draw the display at ~55-60fps rate
+  // Draw the display: 12ms on SCREEN_FACE (~80Hz cap) for smooth video, ~18ms elsewhere
   static int lastDrawnSecond = -1;
   static unsigned long lastDisplayDrawTime = 0;
-  if (now - lastDisplayDrawTime >= 18) {
+  unsigned long displayDrawInterval = (currentScreen == SCREEN_FACE) ? 12 : 18;
+  if (now - lastDisplayDrawTime >= displayDrawInterval) {
     lastDisplayDrawTime = now;
     if (currentScreen == SCREEN_WALLPAPER) {
       // Wallpaper screen: static JPEG already rendered — continuously animate HUD while receiving, verifying, or decoding
