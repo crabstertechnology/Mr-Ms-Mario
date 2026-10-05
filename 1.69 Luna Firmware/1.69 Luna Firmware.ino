@@ -2261,10 +2261,7 @@ void setup() {
     Serial.println("[IMG] Saved wallpaper found — will display on SCREEN_WALLPAPER.");
   }
 
-  // Pre-populate starter notifications if empty
-  if (face.getNotificationCount() == 0) {
-    face.seedDefaultNotifications();
-  }
+  // Notifications start empty until real-time alerts arrive from phone
 }
 
 // Global index for all-gifs cycling — advances through all 63 entries
@@ -2769,17 +2766,7 @@ void handleBtn1Single() {
     int canvasY = interaction.getMappedY();
 
     if (notificationSelected) {
-      int notifIdx = face.getCurrentNotifViewIdx();
-      String notifTitle = face.getNotificationTitle(notifIdx);
-      if ((notifTitle.startsWith("WA:") || notifTitle.indexOf("WhatsApp") >= 0) &&
-          lastX >= 14 && lastX <= 128 && canvasY >= 235 && canvasY <= 265) {
-        face.openQuickReply();
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[NOTIF] Opened WhatsApp Quick Reply sheet");
-        notifyScreenAndExprSync();
-        return;
-      }
-      // Detail View: tap anywhere else or dismiss button exits back to list
+      // Detail View: tap anywhere exits back to list cleanly (no quick reply)
       notificationSelected = false;
       audio.playSound(SOUND_POWERDOWN);
       Serial.println("[BTN1] Exited Notification Detail View");
@@ -2787,24 +2774,24 @@ void handleBtn1Single() {
       return;
     }
 
-    // 1. Check tap on Filter Tabs (Y in 22..46)
-    if (canvasY >= 22 && canvasY <= 46) {
-      if (lastX >= 10 && lastX <= 62) {
+    // 1. Check tap on Filter Tabs (Y in 24..52)
+    if (canvasY >= 24 && canvasY <= 52) {
+      if (lastX >= 10 && lastX <= 64) {
         notifFilterTab = 0; // All
         notifScrollPx = 0.0f;
         audio.playSound(SOUND_CHIRP);
         Serial.println("[NOTIF] Tab: All");
-      } else if (lastX >= 64 && lastX <= 124) {
+      } else if (lastX >= 66 && lastX <= 136) {
         notifFilterTab = 1; // Unread
         notifScrollPx = 0.0f;
         audio.playSound(SOUND_CHIRP);
         Serial.println("[NOTIF] Tab: Unread");
-      } else if (lastX >= 126 && lastX <= 176) {
+      } else if (lastX >= 138 && lastX <= 196) {
         notifFilterTab = 2; // Apps
         notifScrollPx = 0.0f;
         audio.playSound(SOUND_CHIRP);
         Serial.println("[NOTIF] Tab: Apps");
-      } else if (lastX >= 186 && lastX <= 228) {
+      } else if (lastX >= 198 && lastX <= 228) {
         // Settings Gear Button
         currentScreen = SCREEN_SETTINGS;
         settingsActive = true;
@@ -2825,8 +2812,8 @@ void handleBtn1Single() {
       return;
     }
 
-    // 3. Check tap on Notification Cards (Y in 48..238)
-    if (canvasY >= 48 && canvasY < 240) {
+    // 3. Check tap on Notification Cards (Y in 54..240)
+    if (canvasY >= 54 && canvasY < 240) {
       int visibleIndices[10];
       int visibleCount = 0;
       int notifCount = face.getNotificationCount();
@@ -2834,11 +2821,11 @@ void handleBtn1Single() {
         if (notifFilterTab == 1 && !face.isNotificationUnread(i)) continue;
         visibleIndices[visibleCount++] = i;
       }
-      int cardH = 36;
-      int cardStep = 39;
+      int cardH = 52;
+      int cardStep = 58;
       int tappedIdx = -1;
       for (int v = 0; v < visibleCount; v++) {
-        int cy = 48 + v * cardStep - (int)notifScrollPx;
+        int cy = 56 + v * cardStep - (int)notifScrollPx;
         if (canvasY >= cy && canvasY <= cy + cardH) {
           tappedIdx = visibleIndices[v];
           break;
@@ -3660,7 +3647,7 @@ void loop() {
     // — Notifications scroll —
     if (currentScreen == SCREEN_NOTIFICATIONS && !notificationSelected) {
       int notifCount = face.getNotificationCount();
-      const float NOTIF_MAX = max(0.0f, (float)(notifCount * 39 - 190));
+      const float NOTIF_MAX = max(0.0f, (float)(notifCount * 58 - 182));
       if (inScroll) {
         if (notifWasScroll) {
           float dy = (float)(curY - notifPrevY);
