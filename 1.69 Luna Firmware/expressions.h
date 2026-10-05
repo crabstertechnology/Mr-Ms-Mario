@@ -62,6 +62,8 @@ extern bool silentMode;
 // Smooth inertial scroll state (defined in main sketch)
 extern float settingsScrollPx;
 extern float gamesScrollPx;
+extern float notifScrollPx;
+extern int notifFilterTab;
 
 inline int getBatteryPercentage(float volts) {
   int pct = 0;
@@ -127,8 +129,10 @@ private:
     String body;
     String timeStr;
     bool active;
+    bool unread;
+    String appType;
   };
-  NotificationItem notificationHistory[5];
+  NotificationItem notificationHistory[10];
   int notificationCount;
   int currentNotifViewIdx;
 
@@ -305,27 +309,82 @@ public:
   }
 
   // ------------------ Smartwatch Notification History ------------------
-  void addNotification(String title, String body, String timeStr) {
+  void addNotification(String title, String body, String timeStr, bool unread = true, String appType = "") {
+    if (appType.length() == 0) {
+      String low = title;
+      low.toLowerCase();
+      if (low.indexOf("wa:") >= 0 || low.indexOf("whatsapp") >= 0) appType = "whatsapp";
+      else if (low.indexOf("insta") >= 0) appType = "instagram";
+      else if (low.indexOf("gmail") >= 0 || low.indexOf("mail") >= 0) appType = "gmail";
+      else if (low.indexOf("cal") >= 0) appType = "calendar";
+      else if (low.indexOf("sys") >= 0) appType = "system";
+      else appType = "system";
+    }
     // Shift elements
-    for (int i = 4; i > 0; i--) {
+    for (int i = 9; i > 0; i--) {
       notificationHistory[i] = notificationHistory[i - 1];
     }
     notificationHistory[0].title = title;
     notificationHistory[0].body = body;
     notificationHistory[0].timeStr = timeStr;
     notificationHistory[0].active = true;
+    notificationHistory[0].unread = unread;
+    notificationHistory[0].appType = appType;
     
-    if (notificationCount < 5) {
+    if (notificationCount < 10) {
       notificationCount++;
     }
     currentNotifViewIdx = 0; // Reset index to show the latest
   }
 
+  void seedDefaultNotifications() {
+    clearNotifications();
+    notificationCount = 5;
+    
+    notificationHistory[0].title = "WhatsApp";
+    notificationHistory[0].body = "Jaanu: Hey! Are you coming today?";
+    notificationHistory[0].timeStr = "10:25 AM";
+    notificationHistory[0].active = true;
+    notificationHistory[0].unread = true;
+    notificationHistory[0].appType = "whatsapp";
+
+    notificationHistory[1].title = "Instagram";
+    notificationHistory[1].body = "New message";
+    notificationHistory[1].timeStr = "10:20 AM";
+    notificationHistory[1].active = true;
+    notificationHistory[1].unread = true;
+    notificationHistory[1].appType = "instagram";
+
+    notificationHistory[2].title = "Gmail";
+    notificationHistory[2].body = "Meeting at 3 PM";
+    notificationHistory[2].timeStr = "10:15 AM";
+    notificationHistory[2].active = true;
+    notificationHistory[2].unread = false;
+    notificationHistory[2].appType = "gmail";
+
+    notificationHistory[3].title = "Calendar";
+    notificationHistory[3].body = "Team Meeting";
+    notificationHistory[3].timeStr = "09:40 AM";
+    notificationHistory[3].active = true;
+    notificationHistory[3].unread = false;
+    notificationHistory[3].appType = "calendar";
+
+    notificationHistory[4].title = "System";
+    notificationHistory[4].body = "Battery low (20%)";
+    notificationHistory[4].timeStr = "09:10 AM";
+    notificationHistory[4].active = true;
+    notificationHistory[4].unread = false;
+    notificationHistory[4].appType = "system";
+
+    currentNotifViewIdx = 0;
+  }
+
   void clearNotifications() {
     notificationCount = 0;
     currentNotifViewIdx = 0;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 10; i++) {
       notificationHistory[i].active = false;
+      notificationHistory[i].unread = false;
     }
   }
 
@@ -338,6 +397,13 @@ public:
   int getNotificationCount() const { return notificationCount; }
   int getCurrentNotifViewIdx() const { return currentNotifViewIdx; }
   void setCurrentNotifViewIdx(int idx) { currentNotifViewIdx = idx; }
+  bool isNotificationUnread(int idx) const {
+    if (idx >= 0 && idx < 10) return notificationHistory[idx].unread;
+    return false;
+  }
+  void markNotificationRead(int idx) {
+    if (idx >= 0 && idx < 10) notificationHistory[idx].unread = false;
+  }
 
   // ------------------ Smartwatch Calendar Events ------------------
   void clearCalendarEvents() {
@@ -947,195 +1013,391 @@ public:
     }
   }
 
-  void drawNotificationPanel() {
-    ThemeColors theme = getTheme();
-    uint16_t themeAccent  = theme.accent;
-    uint16_t themeBg      = theme.bg;
-    uint16_t themeText    = theme.text;
-    uint16_t themeBorder  = theme.border;
-    uint16_t themeSubText = theme.subText;
+  void drawMiniHeart(int x, int y) {
+    display.fillCircle(x + 2, y + 2, 2, 0xF800);
+    display.fillCircle(x + 5, y + 2, 2, 0xF800);
+    display.fillTriangle(x, y + 3, x + 7, y + 3, x + 3, y + 7, 0xF800);
+  }
 
-    // Clear display below the status bar
-    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
+  void drawNotificationAppIcon(int x, int y, const String& appType) {
+    int w = 26;
+    int h = 26;
+    int r = 6;
+    if (appType == "whatsapp") {
+      display.fillRoundRect(x, y, w, h, r, 0x2589); // WhatsApp vibrant green
+      // White speech bubble & handset
+      display.fillCircle(x + 13, y + 13, 8, TFT_WHITE);
+      display.fillTriangle(x + 7, y + 16, x + 4, y + 21, x + 12, y + 18, TFT_WHITE);
+      display.fillCircle(x + 13, y + 13, 6, 0x2589);
+      display.drawLine(x + 9, y + 14, x + 11, y + 11, TFT_WHITE);
+      display.drawLine(x + 11, y + 11, x + 14, y + 11, TFT_WHITE);
+      display.drawLine(x + 14, y + 11, x + 16, y + 14, TFT_WHITE);
+      display.drawPixel(x + 10, y + 15, TFT_WHITE);
+      display.drawPixel(x + 15, y + 15, TFT_WHITE);
+    } else if (appType == "instagram") {
+      // Instagram gradient: top magenta/purple to bottom amber
+      for (int i = 0; i < h; i++) {
+        uint8_t redVal = 180 + (i * 70) / h;
+        uint8_t grnVal = 30 + (i * 90) / h;
+        uint8_t bluVal = 190 - (i * 150) / h;
+        uint16_t c565 = ((redVal >> 3) << 11) | ((grnVal >> 2) << 5) | (bluVal >> 3);
+        display.drawFastHLine(x + 2, y + i, w - 4, c565);
+      }
+      display.drawRoundRect(x, y, w, h, r, 0xD814);
+      // Camera logo
+      display.drawRoundRect(x + 5, y + 5, 16, 16, 4, TFT_WHITE);
+      display.drawCircle(x + 13, y + 13, 4, TFT_WHITE);
+      display.drawPixel(x + 17, y + 8, TFT_WHITE);
+      display.drawPixel(x + 18, y + 8, TFT_WHITE);
+    } else if (appType == "gmail") {
+      display.fillRoundRect(x, y, w, h, r, TFT_WHITE);
+      display.drawRoundRect(x, y, w, h, r, 0xCE79);
+      // Gmail multi-color M
+      display.fillRect(x + 5, y + 7, 3, 12, 0xEA24); // Red left
+      display.fillRect(x + 18, y + 7, 3, 12, 0x3CA6); // Green right
+      display.drawLine(x + 5, y + 7, x + 13, y + 14, 0xEA24); // Red diagonal
+      display.drawLine(x + 6, y + 7, x + 13, y + 13, 0xEA24);
+      display.drawLine(x + 20, y + 7, x + 13, y + 14, 0x4B3F); // Blue/yellow diagonal
+      display.drawLine(x + 19, y + 7, x + 13, y + 13, 0x4B3F);
+      display.fillRect(x + 5, y + 17, 16, 2, 0x4A69); // Bottom base
+    } else if (appType == "calendar") {
+      display.fillRoundRect(x, y, w, h, r, TFT_WHITE);
+      display.drawRoundRect(x, y, w, h, r, 0xCE79);
+      display.fillRoundRect(x, y, w, 8, 3, 0x2A9F); // Blue top
+      display.fillRect(x + 6, y + 1, 2, 4, TFT_WHITE); // Rings
+      display.fillRect(x + 18, y + 1, 2, 4, TFT_WHITE);
+      // "31" in blue
+      display.setTextSize(1);
+      display.setTextColor(0x2A9F);
+      display.setCursor(x + 8, y + 12);
+      display.print("31");
+    } else { // System / Settings
+      display.fillRoundRect(x, y, w, h, r, 0x422B);
+      // Gear
+      display.fillCircle(x + 13, y + 13, 6, TFT_WHITE);
+      display.fillCircle(x + 13, y + 13, 3, 0x422B);
+      display.fillRect(x + 11, y + 4, 4, 3, TFT_WHITE);
+      display.fillRect(x + 11, y + 19, 4, 3, TFT_WHITE);
+      display.fillRect(x + 4, y + 11, 3, 4, TFT_WHITE);
+      display.fillRect(x + 19, y + 11, 3, 4, TFT_WHITE);
+      display.drawPixel(x + 6, y + 6, TFT_WHITE);
+      display.drawPixel(x + 20, y + 6, TFT_WHITE);
+      display.drawPixel(x + 6, y + 20, TFT_WHITE);
+      display.drawPixel(x + 20, y + 20, TFT_WHITE);
+    }
+  }
 
-    // ── Header ──────────────────────────────────────────────────────────────
-    display.setTextSize(2);
-    display.setTextColor(themeText);
-    display.setCursor(20, 28);
+  void drawNotificationTopStatusBar(int hour, int minute) {
+    // 1. Time (White, bold, left)
+    char timeBuf[12];
+    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(14, 6);
+    display.print(timeBuf);
+    display.setCursor(15, 6);
+    display.print(timeBuf); // bold
+
+    // 2. Centered Pill: [ 🔔 NOTIFICATIONS ]
+    display.fillRoundRect(70, 3, 90, 16, 8, 0x08A6);
+    display.drawRoundRect(70, 3, 90, 16, 8, 0x243F);
+    
+    // Bell icon:
+    display.fillCircle(78, 9, 3, 0x3CD9);
+    display.fillRect(75, 9, 7, 4, 0x3CD9);
+    display.drawFastHLine(74, 13, 9, 0x3CD9);
+    display.drawPixel(78, 14, 0x3CD9);
+
+    // Text: NOTIFICATIONS
+    display.setTextSize(1);
+    display.setTextColor(0x5CD9);
+    display.setCursor(87, 7);
     display.print("NOTIFICATIONS");
 
-    display.drawFastHLine(20, 48, SCREEN_WIDTH - 40, themeBorder);
+    // 3. Bluetooth Icon
+    display.drawLine(170, 6, 170, 16, TFT_WHITE);
+    display.drawLine(170, 6, 174, 9, TFT_WHITE);
+    display.drawLine(174, 9, 168, 13, TFT_WHITE);
+    display.drawLine(168, 9, 174, 13, TFT_WHITE);
+    display.drawLine(174, 13, 170, 16, TFT_WHITE);
+
+    // 4. Battery Icon + percentage
+    int batPct = getBatteryPercentage(batteryVolts);
+    if (batPct <= 0 || batPct > 100) batPct = 85;
+    display.drawRoundRect(182, 6, 18, 10, 2, TFT_WHITE);
+    int barW = map(batPct, 0, 100, 0, 14);
+    if (barW < 2) barW = 2;
+    uint16_t batCol = (batPct > 20) ? 0x2E68 : 0xF900;
+    display.fillRect(184, 8, barW, 6, batCol);
+    display.fillRect(200, 9, 2, 4, TFT_WHITE);
+
+    char batStr[8];
+    snprintf(batStr, sizeof(batStr), "%d%%", batPct);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(205, 7);
+    display.print(batStr);
+  }
+
+  void drawNotificationFilterTabs() {
+    int y = 24;
+    int h = 20;
+
+    // Tab 0: "All"
+    if (notifFilterTab == 0) {
+      display.fillRoundRect(12, y, 48, h, 10, 0x243F); // Active royal blue
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(28, y + 6);
+      display.print("All");
+      display.setCursor(29, y + 6);
+      display.print("All");
+    } else {
+      display.fillRoundRect(12, y, 48, h, 10, 0x10A2);
+      display.drawRoundRect(12, y, 48, h, 10, 0x2124);
+      display.setTextSize(1);
+      display.setTextColor(0x8410);
+      display.setCursor(28, y + 6);
+      display.print("All");
+    }
+
+    // Tab 1: "Unread"
+    if (notifFilterTab == 1) {
+      display.fillRoundRect(64, y, 58, h, 10, 0x243F);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(74, y + 6);
+      display.print("Unread");
+      display.setCursor(75, y + 6);
+      display.print("Unread");
+    } else {
+      display.fillRoundRect(64, y, 58, h, 10, 0x10A2);
+      display.drawRoundRect(64, y, 58, h, 10, 0x2124);
+      display.setTextSize(1);
+      display.setTextColor(0x8410);
+      display.setCursor(74, y + 6);
+      display.print("Unread");
+    }
+
+    // Tab 2: "Apps"
+    if (notifFilterTab == 2) {
+      display.fillRoundRect(126, y, 48, h, 10, 0x243F);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(136, y + 6);
+      display.print("Apps");
+      display.setCursor(137, y + 6);
+      display.print("Apps");
+    } else {
+      display.fillRoundRect(126, y, 48, h, 10, 0x10A2);
+      display.drawRoundRect(126, y, 48, h, 10, 0x2124);
+      display.setTextSize(1);
+      display.setTextColor(0x8410);
+      display.setCursor(136, y + 6);
+      display.print("Apps");
+    }
+
+    // Settings Circle Button (X=198, Y=24, D=20)
+    display.fillCircle(208, y + 10, 10, 0x18C3);
+    display.drawCircle(208, y + 10, 10, 0x2945);
+    display.drawCircle(208, y + 10, 4, 0xCE79);
+    display.drawPixel(208, y + 4, 0xCE79);
+    display.drawPixel(208, y + 16, 0xCE79);
+    display.drawPixel(202, y + 10, 0xCE79);
+    display.drawPixel(214, y + 10, 0xCE79);
+  }
+
+  void drawClearAllButton() {
+    int bx = 16;
+    int by = 242;
+    int bw = 208;
+    int bh = 30;
+    int br = 15;
+
+    display.fillRoundRect(bx, by, bw, bh, br, 0x0927);
+    display.drawRoundRect(bx, by, bw, bh, br, 0x19CB);
+
+    int tx = bx + 64;
+    int ty = by + 9;
+    display.drawFastHLine(tx - 2, ty, 12, TFT_WHITE);
+    display.drawFastHLine(tx + 2, ty - 2, 4, TFT_WHITE);
+    display.drawRect(tx, ty + 2, 8, 9, TFT_WHITE);
+    display.drawFastVLine(tx + 2, ty + 4, 5, TFT_WHITE);
+    display.drawFastVLine(tx + 5, ty + 4, 5, TFT_WHITE);
+
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(tx + 18, by + 11);
+    display.print("Clear All");
+    display.setCursor(tx + 19, by + 11);
+    display.print("Clear All");
+  }
+
+  void drawNotificationDetail() {
+    NotificationItem& notif = notificationHistory[currentNotifViewIdx];
+    bool isWA = (notif.appType == "whatsapp");
+
+    display.fillRect(0, 0, SCREEN_WIDTH, 26, 0x0842);
+    display.setTextSize(1);
+    display.setTextColor(0x2CD9);
+    display.setCursor(12, 8);
+    display.print("< Back");
+
+    display.setTextColor(0x8410);
+    display.setCursor(SCREEN_WIDTH - 64, 8);
+    display.print(notif.timeStr);
+
+    int y = 32;
+    drawNotificationAppIcon(16, y, notif.appType);
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(50, y + 5);
+    display.print(notif.title);
+
+    display.drawFastHLine(14, y + 34, SCREEN_WIDTH - 28, 0x2124);
+
+    display.fillRoundRect(12, y + 42, SCREEN_WIDTH - 24, 140, 8, 0x10A2);
+    display.drawRoundRect(12, y + 42, SCREEN_WIDTH - 24, 140, 8, 0x19CB);
+    drawWordWrappedText(notif.body, 20, y + 52, SCREEN_WIDTH - 40, 6, 20, TFT_WHITE, 2);
+
+    if (isWA) {
+      display.fillRoundRect(14, 238, 114, 26, 6, 0x2589);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(22, 246);
+      display.print("> QUICK REPLY");
+
+      display.fillRoundRect(134, 238, 92, 26, 6, 0x18C3);
+      display.drawRoundRect(134, 238, 92, 26, 6, 0x2945);
+      display.setCursor(154, 246);
+      display.setTextColor(0xCE79);
+      display.print("DISMISS");
+    } else {
+      display.fillRoundRect(20, 238, SCREEN_WIDTH - 40, 26, 6, 0x18C3);
+      display.drawRoundRect(20, 238, SCREEN_WIDTH - 40, 26, 6, 0x2945);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(86, 246);
+      display.print("TAP TO CLOSE");
+    }
+  }
+
+  void drawNotificationPanel(int hour = 10, int minute = 28) {
+    display.fillScreen(0x0842); // Deep dark background matching screenshot
+
+    drawNotificationTopStatusBar(hour, minute);
+    drawNotificationFilterTabs();
 
     if (notificationCount == 0) {
-      // Futuristic radar sweep idle state
       int cx = SCREEN_WIDTH / 2;
-      int cy = 116;
-      int rad = 36;
-
-      display.drawCircle(cx, cy, rad, themeBorder);
-      display.drawCircle(cx, cy, rad - 12, themeBorder);
-      display.drawCircle(cx, cy, 6, themeBorder);
-      display.drawFastHLine(cx - rad - 4, cy, (rad + 4) * 2, themeBorder);
-      display.drawFastVLine(cx, cy - rad - 4, (rad + 4) * 2, themeBorder);
-
-      // Rotating radar sweep line
-      float sweepAngle = (millis() % 2400) * (2.0f * M_PI / 2400.0f);
-      int sx = cx + (int)(cos(sweepAngle) * (rad - 2));
-      int sy = cy + (int)(sin(sweepAngle) * (rad - 2));
-      display.drawLine(cx, cy, sx, sy, themeAccent);
-
-      display.setTextSize(2);
-      display.setTextColor(themeText);
-      int tW = 12 * 12;
-      display.setCursor((SCREEN_WIDTH - tW) / 2, 172);
-      display.print("STREAM CLEAR");
+      int cy = 135;
+      display.fillCircle(cx, cy, 28, 0x10A2);
+      display.drawCircle(cx, cy, 28, 0x243F);
+      display.fillCircle(cx, cy - 4, 8, 0x3CD9);
+      display.fillRect(cx - 8, cy - 4, 16, 10, 0x3CD9);
+      display.drawFastHLine(cx - 10, cy + 6, 20, 0x3CD9);
+      display.fillCircle(cx, cy + 8, 2, 0x3CD9);
 
       display.setTextSize(1);
-      display.setTextColor(themeSubText);
-      const char* sub = "All telemetry notifications processed";
-      int sW = strlen(sub) * 6;
-      display.setCursor((SCREEN_WIDTH - sW) / 2, 196);
-      display.print(sub);
+      display.setTextColor(TFT_WHITE);
+      const char* t1 = "No Notifications";
+      display.setCursor((SCREEN_WIDTH - strlen(t1) * 6) / 2, cy + 36);
+      display.print(t1);
 
-      display.setTextColor(themeBorder);
-      display.setCursor(50, 256);
-      display.print("LUNA TIMELINE ACTIVE");
+      display.setTextColor(0x8410);
+      const char* t2 = "You're all caught up!";
+      display.setCursor((SCREEN_WIDTH - strlen(t2) * 6) / 2, cy + 50);
+      display.print(t2);
       return;
     }
 
-    // ── Detail View vs Timeline Stream ──────────────────────────────────────
     if (notificationSelected) {
-      NotificationItem& notif = notificationHistory[currentNotifViewIdx];
-      bool isWA = notif.title.startsWith("WA:") || notif.title.indexOf("WhatsApp") >= 0;
-      String cleanTitle = notif.title;
-      if (cleanTitle.startsWith("WA:")) cleanTitle = cleanTitle.substring(3);
-      cleanTitle.trim();
+      drawNotificationDetail();
+      return;
+    }
 
-      // ── Sender badge + timestamp row ──────────────────────────────────────
-      uint16_t badgeCol = isWA ? 0x07E0 : themeAccent;
-      display.fillRoundRect(20, 52, isWA ? 96 : 84, 18, 5, isWA ? 0x0280 : 0x18C3);
-      display.drawRoundRect(20, 52, isWA ? 96 : 84, 18, 5, badgeCol);
+    int visibleIndices[10];
+    int visibleCount = 0;
+    for (int i = 0; i < notificationCount && i < 10; i++) {
+      if (notifFilterTab == 1 && !notificationHistory[i].unread) continue;
+      visibleIndices[visibleCount++] = i;
+    }
+
+    int cardH = 36;
+    int cardGap = 3;
+    int cardStep = cardH + cardGap; // 39px
+    float maxScroll = max(0.0f, (float)(visibleCount * cardStep - 190));
+    notifScrollPx = constrain(notifScrollPx, 0.0f, maxScroll);
+
+    int startY = 48;
+
+    for (int v = 0; v < visibleCount; v++) {
+      int idx = visibleIndices[v];
+      NotificationItem& notif = notificationHistory[idx];
+      int cy = startY + v * cardStep - (int)notifScrollPx;
+
+      if (cy + cardH < 44 || cy > 240) continue;
+
+      // Card Background
+      display.fillRoundRect(10, cy, 216, cardH, 8, 0x10A2);
+      display.drawRoundRect(10, cy, 216, cardH, 8, 0x1928);
+
+      // Unread Indicator (cyan glowing dot)
+      if (notif.unread) {
+        display.fillCircle(5, cy + (cardH / 2), 2, 0x05FF);
+      }
+
+      // App Icon
+      drawNotificationAppIcon(14, cy + 5, notif.appType);
+
+      // App Title
       display.setTextSize(1);
-      display.setTextColor(badgeCol);
-      display.setCursor(26, 57);
-      display.print(isWA ? "WHATSAPP" : "MESSAGE");
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(46, cy + 6);
+      display.print(notif.title);
+      display.setCursor(47, cy + 6);
+      display.print(notif.title);
 
-      display.setTextColor(themeSubText);
-      display.setCursor(SCREEN_WIDTH - 48, 57);
+      // Timestamp
+      display.setTextColor(0x8410);
+      int timeX = 206 - (notif.timeStr.length() * 6);
+      display.setCursor(timeX, cy + 6);
       display.print(notif.timeStr);
 
-      // ── Sender / Title (size 2 = 12px tall, bold) ────────────────────────
-      display.setTextSize(2);
-      display.setTextColor(themeText);
-      display.setCursor(20, 76);
-      String shortTitle = cleanTitle;
-      if (shortTitle.length() > 15) shortTitle = shortTitle.substring(0, 13) + "..";
-      display.print(shortTitle);
+      // Chevron >
+      display.setTextColor(0x52AA);
+      display.setCursor(214, cy + 14);
+      display.print(">");
 
-      display.drawFastHLine(14, 100, SCREEN_WIDTH - 28, themeAccent);
-
-      // ── Body Card — enlarged to fit size-2 text ──────────────────────────
-      display.fillRoundRect(14, 106, SCREEN_WIDTH - 28, 130, 6, theme.cardBg);
-      display.drawRoundRect(14, 106, SCREEN_WIDTH - 28, 130, 6, themeBorder);
-      // Accent left bar
-      display.fillRect(14, 114, 3, 114, isWA ? 0x07E0 : themeAccent);
-
-      // ── Full body text — SIZE 2 (12px) with word wrapping for comfortable reading ───
-      drawWordWrappedText(notif.body, 22, 116, SCREEN_WIDTH - 44, 5, 22, themeText, 2);
-
-      // ── Bottom control row ───────────────────────────────────────────────
-      if (isWA) {
-        // Quick Reply action button (Left)
-        display.fillRoundRect(14, 240, 114, 22, 5, 0x0BE4); // WhatsApp green
-        display.drawRoundRect(14, 240, 114, 22, 5, 0x07E0);
-        display.setTextSize(1);
-        display.setTextColor(TFT_WHITE);
-        display.setCursor(22, 246);
-        display.print("> QUICK REPLY");
-
-        // Dismiss pill button (Right)
-        display.fillRoundRect(134, 240, 92, 22, 5, theme.cardBg);
-        display.drawRoundRect(134, 240, 92, 22, 5, themeAccent);
-        display.setCursor(144, 246);
-        display.setTextColor(themeAccent);
-        display.print("DISMISS >");
-
-        display.setTextColor(themeBorder);
-        display.setCursor(20, 266);
-        display.print("TAP REPLY OR BACK");
-      } else {
-        char footBuf[24];
-        snprintf(footBuf, sizeof(footBuf), "%d / %d", currentNotifViewIdx + 1, notificationCount);
-        display.setTextSize(1);
-        display.setTextColor(themeAccent);
-        display.setCursor(20, 248);
-        display.print(footBuf);
-
-        // Dismiss pill button
-        display.fillRoundRect(142, 242, 80, 18, 5, theme.cardBg);
-        display.drawRoundRect(142, 242, 80, 18, 5, themeAccent);
-        display.setCursor(152, 247);
-        display.setTextColor(themeAccent);
-        display.print("DISMISS >");
-
-        display.setTextColor(themeBorder);
-        display.setCursor(20, 266);
-        display.print("TAP: BACK  HOLD: CLEAR ALL");
+      // Preview snippet
+      display.setTextColor(0x9CD3);
+      display.setCursor(46, cy + 20);
+      String bodySnippet = notif.body;
+      bool hasHeart = (bodySnippet.indexOf("<3") >= 0 || bodySnippet.indexOf("today?") >= 0);
+      if (bodySnippet.length() > 24) {
+        bodySnippet = bodySnippet.substring(0, 22) + "..";
       }
+      display.print(bodySnippet);
 
-    } else {
-      // ── Clean Notification Timeline Stream ────────────────────────────────
-      int maxDisplay = min(notificationCount, 3);
-      for (int i = 0; i < maxDisplay; i++) {
-        int y = 56 + i * 62;
-        NotificationItem& notif = notificationHistory[i];
-        bool isSel = (notificationsActive && i == currentNotifViewIdx);
-        bool isWA = notif.title.startsWith("WA:") || notif.title.indexOf("WhatsApp") >= 0;
-
-        // Card Container
-        uint16_t cBg = isSel ? (negativeDisplay ? 0xE73C : 0x10A2) : theme.cardBg;
-        display.fillRoundRect(16, y, SCREEN_WIDTH - 32, 54, 6, cBg);
-        display.drawRoundRect(16, y, SCREEN_WIDTH - 32, 54, 6, isSel ? (isWA ? 0x07E0 : themeAccent) : themeBorder);
-        if (isSel) {
-          display.fillRect(16, y + 8, 3, 38, isWA ? 0x07E0 : themeAccent);
+      if (hasHeart && notif.appType == "whatsapp") {
+        int heartX = 46 + (bodySnippet.length() * 6) + 3;
+        if (heartX < 205) {
+          drawMiniHeart(heartX, cy + 20);
         }
-
-        // App/Type Badge
-        display.setTextSize(1);
-        display.setTextColor(isWA ? 0x07E0 : (isSel ? themeAccent : themeSubText));
-        display.setCursor(26, y + 6);
-        display.print(isWA ? "[WHATSAPP]" : "[MSG]");
-
-        // Timestamp (right aligned)
-        display.setTextColor(themeSubText);
-        display.setCursor(160, y + 6);
-        display.print(notif.timeStr);
-
-        // Title
-        display.setTextSize(2);
-        display.setTextColor(isSel ? themeText : 0xCE79);
-        display.setCursor(26, y + 18);
-        String tStr = notif.title;
-        if (tStr.startsWith("WA:")) tStr = tStr.substring(3);
-        tStr.trim();
-        if (tStr.length() > 14) tStr = tStr.substring(0, 13) + "..";
-        display.print(tStr);
-
-        // Preview snippet
-        display.setTextSize(1);
-        display.setTextColor(themeSubText);
-        display.setCursor(26, y + 38);
-        String bStr = notif.body;
-        if (bStr.length() > 28) bStr = bStr.substring(0, 26) + "...";
-        display.print(bStr);
       }
-
-      // Bottom tip
-      display.setTextSize(1);
-      display.setTextColor(themeBorder);
-      display.setCursor(20, 256);
-      display.print("TAP: OPEN // SWIPE: NAVIGATE");
     }
+
+    // Scrollbar
+    if (visibleCount * cardStep > 190) {
+      int trackY = 50;
+      int trackH = 186;
+      display.drawFastVLine(234, trackY, trackH, 0x10A2);
+      int thumbH = max(20, (trackH * 190) / (visibleCount * cardStep));
+      int thumbY = trackY + (int)((notifScrollPx / maxScroll) * (trackH - thumbH));
+      display.fillRoundRect(233, thumbY, 3, thumbH, 1, 0x632C);
+    }
+
+    // Pinned Bottom Button: [ 🗑️ Clear All ]
+    drawClearAllButton();
   }
 
   void drawCalendarEvents() {
@@ -2830,7 +3092,7 @@ public:
     if (popupActive) {
       drawPopup();
     } else {
-      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_CLOCK) {
+      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_CLOCK && currentScreen != SCREEN_NOTIFICATIONS) {
         drawStatusBar(hour, minute);
       }
       
@@ -2842,7 +3104,7 @@ public:
           drawSettingsMenuLandscape(menuOption, optionSelected, bleActive, gifSpeed, clockStyle, negativeDisplay, oledBrightness);
           break;
         case SCREEN_NOTIFICATIONS:
-          drawNotificationPanel();
+          drawNotificationPanel(hour, minute);
           break;
         case SCREEN_CALENDAR:
           if (showCalendarGrid) {

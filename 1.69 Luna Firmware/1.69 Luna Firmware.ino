@@ -80,6 +80,12 @@ float gamesVelPx     = 0.0f;
 int   gamesPrevY     = 0;
 bool  gamesWasScroll = false;
 
+float notifScrollPx  = 0.0f;
+float notifVelPx     = 0.0f;
+int   notifPrevY     = 0;
+bool  notifWasScroll = false;
+int   notifFilterTab = 0; // 0: All, 1: Unread, 2: Apps
+
 bool gamesActive = false;
 bool gamePlaying = false;
 int gameMenuOption = 0;
@@ -2257,8 +2263,7 @@ void setup() {
 
   // Pre-populate starter notifications if empty
   if (face.getNotificationCount() == 0) {
-    face.addNotification("Luna OS", "Welcome to Luna 1.69! Tap any card to view full message details.", "10:00");
-    face.addNotification("Mochy AI", "System running smooth at 60 FPS. Touch screen to interact.", "09:45");
+    face.seedDefaultNotifications();
   }
 }
 
@@ -2760,9 +2765,10 @@ void handleBtn1Single() {
     audio.playSound(SOUND_CHIRP);
     Serial.printf("[BTN1] Cycled clock style -> %d\n", clockStyle);
   } else if (currentScreen == SCREEN_NOTIFICATIONS) {
+    int lastX = interaction.getLastX();
+    int canvasY = interaction.getMappedY();
+
     if (notificationSelected) {
-      int lastX = interaction.getLastX();
-      int canvasY = interaction.getMappedY();
       int notifIdx = face.getCurrentNotifViewIdx();
       String notifTitle = face.getNotificationTitle(notifIdx);
       if ((notifTitle.startsWith("WA:") || notifTitle.indexOf("WhatsApp") >= 0) &&
@@ -2777,31 +2783,74 @@ void handleBtn1Single() {
       notificationSelected = false;
       audio.playSound(SOUND_POWERDOWN);
       Serial.println("[BTN1] Exited Notification Detail View");
-    } else {
-      int lastY = interaction.getLastY();
-      int canvasY = lastY - 20; // 20px hardware panel offset
+      notifyScreenAndExprSync();
+      return;
+    }
+
+    // 1. Check tap on Filter Tabs (Y in 22..46)
+    if (canvasY >= 22 && canvasY <= 46) {
+      if (lastX >= 10 && lastX <= 62) {
+        notifFilterTab = 0; // All
+        notifScrollPx = 0.0f;
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[NOTIF] Tab: All");
+      } else if (lastX >= 64 && lastX <= 124) {
+        notifFilterTab = 1; // Unread
+        notifScrollPx = 0.0f;
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[NOTIF] Tab: Unread");
+      } else if (lastX >= 126 && lastX <= 176) {
+        notifFilterTab = 2; // Apps
+        notifScrollPx = 0.0f;
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[NOTIF] Tab: Apps");
+      } else if (lastX >= 186 && lastX <= 228) {
+        // Settings Gear Button
+        currentScreen = SCREEN_SETTINGS;
+        settingsActive = true;
+        audio.playSound(SOUND_COIN);
+        Serial.println("[NOTIF] Opened Settings from Notification Gear");
+      }
+      notifyScreenAndExprSync();
+      return;
+    }
+
+    // 2. Check tap on Clear All button (Y in 240..276)
+    if (canvasY >= 240 && canvasY <= 276 && lastX >= 16 && lastX <= 224) {
+      face.clearNotifications();
+      notificationsActive = false;
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println("[NOTIF] Cleared all notifications via button");
+      notifyScreenAndExprSync();
+      return;
+    }
+
+    // 3. Check tap on Notification Cards (Y in 48..238)
+    if (canvasY >= 48 && canvasY < 240) {
+      int visibleIndices[10];
+      int visibleCount = 0;
       int notifCount = face.getNotificationCount();
-      int maxDisplay = min(notifCount, 3);
+      for (int i = 0; i < notifCount && i < 10; i++) {
+        if (notifFilterTab == 1 && !face.isNotificationUnread(i)) continue;
+        visibleIndices[visibleCount++] = i;
+      }
+      int cardH = 36;
+      int cardStep = 39;
       int tappedIdx = -1;
-      for (int i = 0; i < maxDisplay; i++) {
-        int cardY = 56 + i * 62;
-        if (canvasY >= cardY && canvasY <= cardY + 54) {
-          tappedIdx = i;
+      for (int v = 0; v < visibleCount; v++) {
+        int cy = 48 + v * cardStep - (int)notifScrollPx;
+        if (canvasY >= cy && canvasY <= cy + cardH) {
+          tappedIdx = visibleIndices[v];
           break;
         }
       }
       if (tappedIdx >= 0) {
         notificationsActive = true;
         face.setCurrentNotifViewIdx(tappedIdx);
+        face.markNotificationRead(tappedIdx);
         notificationSelected = true;
         audio.playSound(SOUND_POWERUP);
-        Serial.printf("[BTN1] Opened Notification Card %d\n", tappedIdx);
-      } else if (notifCount > 0) {
-        // Fallback: tap opens currently focused notification
-        notificationsActive = true;
-        notificationSelected = true;
-        audio.playSound(SOUND_POWERUP);
-        Serial.printf("[BTN1] Opened Notification %d (focus)\n", face.getCurrentNotifViewIdx());
+        Serial.printf("[NOTIF] Opened Card %d\n", tappedIdx);
       }
     }
     notifyScreenAndExprSync();
@@ -2991,6 +3040,7 @@ void handleBtn2Single() {
   // Reset smooth-scroll positions so each screen entry starts at the top
   settingsScrollPx = 0.0f; settingsVelPx = 0.0f; settingsWasScroll = false;
   gamesScrollPx    = 0.0f; gamesVelPx    = 0.0f; gamesWasScroll    = false;
+  notifScrollPx    = 0.0f; notifVelPx    = 0.0f; notifWasScroll    = false;
 
   const char* names[] = {"CLOCK","NOTIF","CAL","MAPS","POMO","GAMES","SETTINGS","CARD","FACE"};
   Serial.printf("[BTN2] >>> %s (screen %d)\n", names[idx], currentScreen);
@@ -3045,6 +3095,7 @@ void handleBtn2Double() {
   // Reset smooth-scroll positions so each screen entry starts at the top
   settingsScrollPx = 0.0f; settingsVelPx = 0.0f; settingsWasScroll = false;
   gamesScrollPx    = 0.0f; gamesVelPx    = 0.0f; gamesWasScroll    = false;
+  notifScrollPx    = 0.0f; notifVelPx    = 0.0f; notifWasScroll    = false;
 
   const char* names[] = {"CLOCK","HOME","NOTIF","CAL","MAPS","POMO","LEVEL","GAMES","SETTINGS","CARD","FACE"};
   Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
@@ -3055,15 +3106,9 @@ void handleSwipeUp() {
   lastInteractionTime = millis();
   if (mapsActive || gamePlaying) return;
 
-  // Settings uses continuous inertial drag — ignore discrete swipe-up to avoid accidental value adjustments
-  if (currentScreen == SCREEN_SETTINGS) {
+  // Settings & Notifications use continuous inertial drag
+  if (currentScreen == SCREEN_SETTINGS || currentScreen == SCREEN_NOTIFICATIONS) {
     return;
-  }
-  // Notifications: swipe up → next notification card
-  else if (currentScreen == SCREEN_NOTIFICATIONS && notificationsActive && !notificationSelected) {
-    face.cycleNotificationView();
-    audio.playSound(SOUND_CHIRP);
-    Serial.println("[Swipe Up] Next notification");
   }
   // Calendar: swipe up → cycle calendar events
   else if (currentScreen == SCREEN_CALENDAR) {
@@ -3082,19 +3127,9 @@ void handleSwipeDown() {
   lastInteractionTime = millis();
   if (mapsActive || gamePlaying) return;
 
-  // Settings uses continuous inertial drag — ignore discrete swipe-down to avoid accidental value adjustments
-  if (currentScreen == SCREEN_SETTINGS) {
+  // Settings & Notifications use continuous inertial drag
+  if (currentScreen == SCREEN_SETTINGS || currentScreen == SCREEN_NOTIFICATIONS) {
     return;
-  }
-  // Notifications: swipe down → previous notification
-  else if (currentScreen == SCREEN_NOTIFICATIONS && notificationsActive && !notificationSelected) {
-    int cnt = face.getNotificationCount();
-    if (cnt > 0) {
-      int prev = (face.getCurrentNotifViewIdx() - 1 + cnt) % cnt;
-      face.setCurrentNotifViewIdx(prev);
-      audio.playSound(SOUND_CHIRP);
-      Serial.println("[Swipe Down] Previous notification");
-    }
   }
   // Calendar: swipe down → toggle grid/events view
   else if (currentScreen == SCREEN_CALENDAR) {
@@ -3620,6 +3655,45 @@ void loop() {
         }
       }
       gamesScrollPx = constrain(gamesScrollPx, -30.0f, GAMES_MAX + 30.0f);
+    }
+
+    // — Notifications scroll —
+    if (currentScreen == SCREEN_NOTIFICATIONS && !notificationSelected) {
+      int notifCount = face.getNotificationCount();
+      const float NOTIF_MAX = max(0.0f, (float)(notifCount * 39 - 190));
+      if (inScroll) {
+        if (notifWasScroll) {
+          float dy = (float)(curY - notifPrevY);
+          if ((notifScrollPx < 0.0f && dy > 0) || (notifScrollPx > NOTIF_MAX && dy < 0)) {
+            dy *= 0.35f;
+          }
+          notifScrollPx -= dy;
+          notifVelPx = -dy * 0.75f;
+        }
+        notifPrevY     = curY;
+        notifWasScroll = true;
+      } else {
+        notifWasScroll = false;
+        notifPrevY = curY;
+      }
+
+      if (!inScroll) {
+        if (notifScrollPx < 0.0f) {
+          notifScrollPx += (0.0f - notifScrollPx) * 0.25f;
+          if (notifScrollPx > -0.5f) notifScrollPx = 0.0f;
+          notifVelPx = 0.0f;
+        } else if (notifScrollPx > NOTIF_MAX) {
+          notifScrollPx += (NOTIF_MAX - notifScrollPx) * 0.25f;
+          if (notifScrollPx < NOTIF_MAX + 0.5f) notifScrollPx = NOTIF_MAX;
+          notifVelPx = 0.0f;
+        } else if (fabsf(notifVelPx) > 0.2f) {
+          notifScrollPx += notifVelPx;
+          notifVelPx    *= 0.88f;
+        } else {
+          notifVelPx = 0.0f;
+        }
+      }
+      notifScrollPx = constrain(notifScrollPx, -30.0f, NOTIF_MAX + 30.0f);
     }
   }
 
