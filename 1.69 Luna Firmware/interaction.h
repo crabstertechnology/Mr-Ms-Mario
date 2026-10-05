@@ -308,23 +308,25 @@ public:
                 ev = BTN_NONE;
               }
             } else if (currentScreen == SCREEN_CLOCK) {
-              if (lastX < 40) {
-                ev = BTN2_DOUBLE;
-                Serial.printf("[Touch] Clock LEFT tap (X=%d) -> prev screen\n", lastX);
-              } else if (lastX >= 190) {
+              if (lastX >= 150) {
                 ev = BTN2_SINGLE;
-                Serial.printf("[Touch] Clock RIGHT tap (X=%d) -> next screen\n", lastX);
+                Serial.printf("[Touch] Clock RIGHT tap (X=%d) -> Open Menu\n", lastX);
               } else {
                 ev = BTN1_SINGLE;
-                Serial.printf("[Touch] Clock CENTER tap (X=%d) -> toggle style\n", lastX);
+                Serial.printf("[Touch] Clock tap (X=%d) -> toggle style\n", lastX);
+              }
+            } else if (currentScreen == SCREEN_MENU) {
+              if (lastX < 20) {
+                ev = BTN2_DOUBLE;
+                Serial.printf("[Touch] Menu LEFT tap (X=%d) -> Return to Clock\n", lastX);
+              } else {
+                ev = BTN1_SINGLE;
+                Serial.printf("[Touch] Menu tile tap (X=%d, Y=%d)\n", lastX, lastY);
               }
             } else {
-              if (lastX < 15) {
+              if (lastX < 16) {
                 ev = BTN2_DOUBLE;
-                Serial.printf("[Touch] Edge LEFT tap (X=%d) -> prev screen\n", lastX);
-              } else if (lastX >= 225) {
-                ev = BTN2_SINGLE;
-                Serial.printf("[Touch] Edge RIGHT tap (X=%d) -> next screen\n", lastX);
+                Serial.printf("[Touch] Edge LEFT tap (X=%d) -> Return to Menu\n", lastX);
               } else {
                 ev = BTN1_SINGLE;
                 Serial.printf("[Touch] Content tap (X=%d, Y=%d) -> select\n", lastX, lastY);

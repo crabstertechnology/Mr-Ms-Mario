@@ -67,7 +67,7 @@ bool notificationSelected = false;
 int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
 volatile bool hardwareLoopbackActive = false;
 bool optionSelected = false;
-SmartwatchScreen currentScreen = SCREEN_FACE;
+SmartwatchScreen currentScreen = SCREEN_CLOCK;
 
 // ── Smooth inertial scroll state (Settings & Arcade) ─────────────────────────
 float settingsScrollPx  = 0.0f;  // pixel offset into settings list
@@ -681,9 +681,10 @@ void notifyScreenAndExprSync() {
     case SCREEN_GAMES: screenName = "GAMES"; break;
     case SCREEN_SETTINGS: screenName = "SETTINGS"; break;
     case SCREEN_POMODORO: screenName = "POMODORO"; break;
+    case SCREEN_MENU: screenName = "MENU"; break;
     case SCREEN_MAPS: screenName = "MAPS"; break;
     case SCREEN_WALLPAPER: screenName = "WALLPAPER"; break;
-    default: screenName = "FACE"; break;
+    default: screenName = "CLOCK"; break;
   }
   
   int animIndex = 0;
@@ -1409,6 +1410,7 @@ void handleRobotCommand(String text) {
     else if (arg == "CARD") sVal = SCREEN_CARD;
     else if (arg == "SETTINGS") sVal = SCREEN_SETTINGS;
     else if (arg == "POMODORO" || arg == "POMO") sVal = SCREEN_POMODORO;
+    else if (arg == "MENU") sVal = SCREEN_MENU;
     else sVal = arg.toInt();
 
     if (sVal >= 0 && sVal < SCREEN_MAX) {
@@ -2244,7 +2246,7 @@ void setup() {
   face.getRobotEyeAnim().reset();
   face.getRobotEyeAnim().play();
 
-  currentScreen = SCREEN_FACE;
+  currentScreen = SCREEN_CLOCK;
   inIntroPhase = false;
   introAnimationStartTime = 0;
   lastInteractionTime = millis();
@@ -2667,11 +2669,66 @@ void handleBtn1Single() {
     currentScreen = SCREEN_FACE;
   }
 
-  // Tapping on QR Card returns to Clock Home
+  // Tapping on App Launcher Grid Menu (SCREEN_MENU)
+  if (currentScreen == SCREEN_MENU) {
+    int curX = interaction.getLastX();
+    int curY = interaction.getMappedY();
+    Serial.printf("[MENU TAP] X=%d, Y=%d\n", curX, curY);
+
+    if (curY >= 30 && curY <= 120) {
+      if (curX < 76) {
+        // App 0: Notifications
+        currentScreen = SCREEN_NOTIFICATIONS;
+        notificationsActive = false;
+        notificationSelected = false;
+        notifScrollPx = 0.0f;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[MENU] -> NOTIFICATIONS");
+      } else if (curX >= 76 && curX < 155) {
+        // App 1: Calendar
+        currentScreen = SCREEN_CALENDAR;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[MENU] -> CALENDAR");
+      } else {
+        // App 2: Focus / Pomodoro
+        currentScreen = SCREEN_POMODORO;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[MENU] -> POMODORO");
+      }
+    } else if (curY > 120 && curY <= 225) {
+      if (curX < 76) {
+        // App 3: Games
+        currentScreen = SCREEN_GAMES;
+        gamesActive = false;
+        gamePlaying = false;
+        gamesScrollPx = 0.0f;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[MENU] -> GAMES");
+      } else if (curX >= 76 && curX < 155) {
+        // App 4: QR / My Card
+        currentScreen = SCREEN_CARD;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[MENU] -> QR CARD");
+      } else {
+        // App 5: Settings
+        currentScreen = SCREEN_SETTINGS;
+        settingsActive = false;
+        optionSelected = false;
+        settingsScrollPx = 0.0f;
+        audio.playSound(SOUND_POWERUP);
+        Serial.println("[MENU] -> SETTINGS");
+      }
+    }
+    notifyScreenAndExprSync();
+    return;
+  }
+
+  // Tapping on QR Card returns to Menu
   if (currentScreen == SCREEN_CARD) {
-    currentScreen = SCREEN_CLOCK;
+    currentScreen = SCREEN_MENU;
     audio.playSound(SOUND_CHIRP);
-    Serial.println("[BTN1] Exited QR Card -> SCREEN_CLOCK");
+    Serial.println("[BTN1] Exited QR Card -> SCREEN_MENU");
+    notifyScreenAndExprSync();
     return;
   }
 
@@ -2843,34 +2900,71 @@ void handleBtn1Single() {
     notifyScreenAndExprSync();
     return;
   } else if (currentScreen == SCREEN_CALENDAR) {
-    // Cycles calendar events/view
-    face.cycleCalendarView();
-    audio.playSound(SOUND_CHIRP);
-    Serial.println("[BTN1] Cycled calendar");
-  } else if (currentScreen == SCREEN_POMODORO) {
-    int lastY = interaction.getLastY();
-    int canvasY = lastY - 20;
-    if (canvasY < 60) {
-      // Tap top mode pill -> cycle mode
-      pomoMode = (pomoMode + 1) % 3;
-      resetPomodoroTimer();
-      audio.playSound(SOUND_CHIRP);
-      Serial.printf("[BTN1] Pomodoro mode changed to -> %d\n", pomoMode);
+    int curX = interaction.getLastX();
+    int curY = interaction.getMappedY();
+    if (curX >= 180 && curY >= 230) {
+      audio.playSound(SOUND_COIN);
+      Serial.println("[CALENDAR] FAB (+) button tapped");
     } else {
-      if (pomoState == 0 || pomoState == 2) {
-        pomoState = 1; // Start / Resume
-        pomoLastTickMillis = millis();
-        audio.playSound(SOUND_COIN);
-        Serial.println("[BTN1] Pomodoro timer started/resumed");
-      } else if (pomoState == 1) {
-        pomoState = 2; // Pause
-        audio.playSound(SOUND_CHIRP);
-        Serial.println("[BTN1] Pomodoro timer paused");
-      } else if (pomoState == 3) {
+      face.cycleCalendarView();
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("[BTN1] Cycled calendar");
+    }
+  } else if (currentScreen == SCREEN_POMODORO) {
+    int curX = interaction.getLastX();
+    int curY = interaction.getMappedY();
+    // Mode Buttons: Short Break (left) or Long Break (right)
+    if (curY >= 95 && curY <= 150) {
+      if (curX <= 70) {
+        pomoMode = 1; // Short Break 5m
         resetPomodoroTimer();
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN1] Pomodoro timer reset after completion");
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[POMO] Short Break (5 min)");
+        notifyScreenAndExprSync();
+        return;
+      } else if (curX >= 170) {
+        pomoMode = 2; // Long Break 15m
+        resetPomodoroTimer();
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[POMO] Long Break (15 min)");
+        notifyScreenAndExprSync();
+        return;
       }
+    }
+    // Transport Controls (Y in 170..220)
+    if (curY >= 170 && curY <= 220) {
+      if (curX <= 90) {
+        // |<< Reset
+        resetPomodoroTimer();
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[POMO] Reset timer");
+        notifyScreenAndExprSync();
+        return;
+      } else if (curX >= 150) {
+        // >>| Next cycle
+        pomoCompletedSessions++;
+        pomoMode = (pomoMode == 0) ? 1 : 0;
+        resetPomodoroTimer();
+        audio.playSound(SOUND_COIN);
+        Serial.println("[POMO] Advanced Pomodoro cycle");
+        notifyScreenAndExprSync();
+        return;
+      }
+    }
+    // Center Play/Pause or Ring tap
+    if (pomoState == 0 || pomoState == 2) {
+      pomoState = 1; // Start / Resume
+      pomoLastTickMillis = millis();
+      audio.playSound(SOUND_COIN);
+      Serial.println("[BTN1] Pomodoro timer started/resumed");
+    } else if (pomoState == 1) {
+      pomoState = 2; // Pause
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("[BTN1] Pomodoro timer paused");
+    } else if (pomoState == 3) {
+      resetPomodoroTimer();
+      audio.playSound(SOUND_POWERUP);
+      Serial.println("[BTN1] Pomodoro timer reset after completion");
     }
   }
   notifyScreenAndExprSync();
@@ -2970,7 +3064,6 @@ void handleBtn1Long() {
 void handleBtn2Single() {
   lastInteractionTime = millis();
   if (currentScreen == SCREEN_FACE) {
-    // Navigation gestures and right-side taps are disabled while in animation player!
     Serial.println(F("[BTN2] Ignored on SCREEN_FACE (animation locked until Clock)"));
     return;
   }
@@ -2980,7 +3073,6 @@ void handleBtn2Single() {
 
   if (currentScreen == SCREEN_GAMES && gamesActive) {
     if (gamePlaying) {
-      // Game is playing: check if we can exit
       if (games.canExitActiveGame()) {
         gamePlaying = false;
         audio.playSound(SOUND_POWERDOWN);
@@ -2991,54 +3083,29 @@ void handleBtn2Single() {
   }
 
   unsigned long transitionNow = millis();
-  if (transitionNow - lastScreenTransitionTime < 350) {
-    Serial.println("[BTN2] Ignored rapid single tap screen transition to prevent bounce");
+  if (transitionNow - lastScreenTransitionTime < 250) {
     return;
   }
   lastScreenTransitionTime = transitionNow;
   if (inIntroPhase) inIntroPhase = false;
 
-  // Screen cycle: Clock (Home) -> Notifications -> Calendar -> Maps -> Focus -> Games -> Settings -> Card -> Face
-  static const SmartwatchScreen CYCLE[] = {
-    SCREEN_CLOCK, SCREEN_NOTIFICATIONS, SCREEN_CALENDAR, SCREEN_MAPS, SCREEN_POMODORO,
-    SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD, SCREEN_FACE
-  };
-  static const int CYCLE_LEN = 9;
-
-  int idx = 0;
-  for (int i = 0; i < CYCLE_LEN; i++) {
-    if (CYCLE[i] == currentScreen) { idx = i; break; }
+  // On Clock: Right tap or Swipe Left opens the App Launcher Menu
+  if (currentScreen == SCREEN_CLOCK) {
+    currentScreen = SCREEN_MENU;
+    settingsScrollPx = 0.0f; settingsVelPx = 0.0f;
+    gamesScrollPx    = 0.0f; gamesVelPx    = 0.0f;
+    notifScrollPx    = 0.0f; notifVelPx    = 0.0f;
+    audio.playSound(SOUND_CHIRP);
+    Serial.println("[BTN2] CLOCK -> SCREEN_MENU");
+    notifyScreenAndExprSync();
+    return;
   }
-  do {
-    idx = (idx + 1) % CYCLE_LEN;
-  } while (!mapsActive && CYCLE[idx] == SCREEN_MAPS);
-  currentScreen = CYCLE[idx];
-
-  settingsActive = false;
-  optionSelected = false;
-  notificationsActive = false;
-  notificationSelected = false;
-  hardwareLoopbackActive = false;
-  audio.micStreaming = false;
-  audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
-  audio.prebuffering = true;
-  face.setStateLabel("IDLE");
-  audio.playSound(SOUND_COIN);
-  // Reset smooth-scroll positions so each screen entry starts at the top
-  settingsScrollPx = 0.0f; settingsVelPx = 0.0f; settingsWasScroll = false;
-  gamesScrollPx    = 0.0f; gamesVelPx    = 0.0f; gamesWasScroll    = false;
-  notifScrollPx    = 0.0f; notifVelPx    = 0.0f; notifWasScroll    = false;
-
-  const char* names[] = {"CLOCK","NOTIF","CAL","MAPS","POMO","GAMES","SETTINGS","CARD","FACE"};
-  Serial.printf("[BTN2] >>> %s (screen %d)\n", names[idx], currentScreen);
-  notifyScreenAndExprSync();
 }
 
 
 void handleBtn2Double() {
   lastInteractionTime = millis();
   if (currentScreen == SCREEN_FACE) {
-    // Navigation gestures and left-side taps are disabled while in animation player!
     Serial.println(F("[BTN2 DBL] Ignored on SCREEN_FACE (animation locked until Clock)"));
     return;
   }
@@ -3047,46 +3114,36 @@ void handleBtn2Double() {
   }
 
   unsigned long transitionNow = millis();
-  if (transitionNow - lastScreenTransitionTime < 350) {
-    Serial.println("[BTN2 DBL] Ignored rapid double tap screen transition to prevent bounce");
+  if (transitionNow - lastScreenTransitionTime < 250) {
     return;
   }
   lastScreenTransitionTime = transitionNow;
   if (inIntroPhase) inIntroPhase = false;
 
-  static const SmartwatchScreen CYCLE[] = {
-    SCREEN_CLOCK, SCREEN_NOTIFICATIONS, SCREEN_CALENDAR, SCREEN_MAPS, SCREEN_POMODORO,
-    SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD, SCREEN_FACE
-  };
-  static const int CYCLE_LEN = 9;
-
-  int idx = 0;
-  for (int i = 0; i < CYCLE_LEN; i++) {
-    if (CYCLE[i] == currentScreen) { idx = i; break; }
+  // Back action:
+  // From Menu -> Go back to Clock Home
+  if (currentScreen == SCREEN_MENU) {
+    currentScreen = SCREEN_CLOCK;
+    audio.playSound(SOUND_CHIRP);
+    Serial.println("[BTN2 DBL] SCREEN_MENU -> SCREEN_CLOCK");
+    notifyScreenAndExprSync();
+    return;
   }
-  do {
-    idx = (idx - 1 + CYCLE_LEN) % CYCLE_LEN;
-  } while (!mapsActive && CYCLE[idx] == SCREEN_MAPS);
-  currentScreen = CYCLE[idx];
 
-  settingsActive = false;
-  optionSelected = false;
-  notificationsActive = false;
-  notificationSelected = false;
-  hardwareLoopbackActive = false;
-  audio.micStreaming = false;
-  audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
-  audio.prebuffering = true;
-  face.setStateLabel("IDLE");
-  audio.playSound(SOUND_COIN);
-  // Reset smooth-scroll positions so each screen entry starts at the top
-  settingsScrollPx = 0.0f; settingsVelPx = 0.0f; settingsWasScroll = false;
-  gamesScrollPx    = 0.0f; gamesVelPx    = 0.0f; gamesWasScroll    = false;
-  notifScrollPx    = 0.0f; notifVelPx    = 0.0f; notifWasScroll    = false;
-
-  const char* names[] = {"CLOCK","HOME","NOTIF","CAL","MAPS","POMO","LEVEL","GAMES","SETTINGS","CARD","FACE"};
-  Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
-  notifyScreenAndExprSync();
+  // From any other screen -> Return to App Launcher Grid Menu
+  if (currentScreen != SCREEN_CLOCK) {
+    settingsActive = false;
+    optionSelected = false;
+    gamesActive = false;
+    gamePlaying = false;
+    notificationsActive = false;
+    notificationSelected = false;
+    currentScreen = SCREEN_MENU;
+    audio.playSound(SOUND_CHIRP);
+    Serial.printf("[BTN2 DBL] Exited screen %d -> SCREEN_MENU\n", currentScreen);
+    notifyScreenAndExprSync();
+    return;
+  }
 }
 
 void handleSwipeUp() {

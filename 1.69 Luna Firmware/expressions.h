@@ -58,6 +58,8 @@ extern LunaGames games;
 extern LunaAudio audio;
 extern float batteryVolts;
 extern bool silentMode;
+extern int rtcHour;
+extern int rtcMinute;
 
 // Smooth inertial scroll state (defined in main sketch)
 extern float settingsScrollPx;
@@ -813,6 +815,7 @@ public:
       case SCREEN_CARD:          nm = "C A R D";      break;
       case SCREEN_SETTINGS:      nm = "S E T U P";    break;
       case SCREEN_POMODORO:      nm = "F O C U S";    break;
+      case SCREEN_MENU:          nm = "M E N U";      break;
       default:                   nm = "L U N A";      break;
     }
     int nmLen = strlen(nm) * 6;
@@ -1333,133 +1336,239 @@ public:
     drawClearAllButton();
   }
 
+  void drawTopCapsuleStatusBar(int hour, int minute, const char* title, int iconType) {
+    // 1. Time (White, bold, left)
+    char timeBuf[12];
+    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(14, 6);
+    display.print(timeBuf);
+    display.setCursor(15, 6);
+    display.print(timeBuf);
+
+    // 2. Centered Pill: [ <icon> TITLE ]
+    int pillW = (title != NULL) ? (strlen(title) * 6 + 28) : 80;
+    int pillX = (SCREEN_WIDTH - pillW) / 2;
+    display.fillRoundRect(pillX, 3, pillW, 16, 8, 0x08A6);
+    display.drawRoundRect(pillX, 3, pillW, 16, 8, 0x243F);
+
+    if (iconType == 0) {
+      // Calendar icon (tiny pad with red top)
+      int icX = pillX + 6;
+      display.fillRect(icX, 6, 8, 2, 0xF968); // red bar
+      display.fillRect(icX, 8, 8, 7, TFT_WHITE);
+      display.drawRect(icX, 6, 8, 9, 0x1B3E);
+      display.drawPixel(icX + 2, 10, 0x0000);
+      display.drawPixel(icX + 5, 10, 0x0000);
+      display.drawPixel(icX + 2, 12, 0x0000);
+      display.drawPixel(icX + 5, 12, 0x0000);
+    } else if (iconType == 1) {
+      // Stopwatch / Focus icon
+      int icX = pillX + 6;
+      display.drawCircle(icX + 4, 11, 4, 0x3CD9);
+      display.drawFastHLine(icX + 3, 6, 3, 0x3CD9);
+      display.drawFastVLine(icX + 4, 7, 2, 0x3CD9);
+      display.drawLine(icX + 4, 11, icX + 6, 9, 0x3CD9);
+    } else {
+      // Bell icon
+      int icX = pillX + 6;
+      display.fillCircle(icX + 4, 9, 3, 0x3CD9);
+      display.fillRect(icX + 1, 9, 7, 4, 0x3CD9);
+      display.drawFastHLine(icX, 13, 9, 0x3CD9);
+      display.drawPixel(icX + 4, 14, 0x3CD9);
+    }
+
+    display.setTextSize(1);
+    display.setTextColor(0x5CD9);
+    display.setCursor(pillX + 18, 7);
+    display.print(title);
+
+    // 3. Bluetooth Icon
+    display.drawLine(170, 6, 170, 16, TFT_WHITE);
+    display.drawLine(170, 6, 174, 9, TFT_WHITE);
+    display.drawLine(174, 9, 168, 13, TFT_WHITE);
+    display.drawLine(168, 9, 174, 13, TFT_WHITE);
+    display.drawLine(174, 13, 170, 16, TFT_WHITE);
+
+    // 4. Battery Icon + percentage
+    int batPct = getBatteryPercentage(batteryVolts);
+    if (batPct <= 0 || batPct > 100) batPct = 85;
+    display.drawRoundRect(182, 6, 18, 10, 2, TFT_WHITE);
+    int barW = map(batPct, 0, 100, 0, 14);
+    if (barW < 2) barW = 2;
+    uint16_t batCol = (batPct > 20) ? 0x2E68 : 0xF900;
+    display.fillRect(184, 8, barW, 6, batCol);
+    display.fillRect(200, 9, 2, 4, TFT_WHITE);
+
+    char batStr[8];
+    snprintf(batStr, sizeof(batStr), "%d%%", batPct);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(205, 7);
+    display.print(batStr);
+  }
+
+  void drawCalendarScreen(int hour, int minute, String dateStr, String dayStr) {
+    display.fillScreen(0x0000);
+
+    // 1. Top status bar: 10:28 | [ 📅 CALENDAR ] | BLE + Battery 85%
+    drawTopCapsuleStatusBar(hour, minute, "CALENDAR", 0);
+
+    // 2. Month Selector Header: < October 2026 >
+    display.setTextSize(1);
+    display.setTextColor(0x2DBF);
+    display.setCursor(44, 31);
+    display.print("<");
+    display.setCursor(192, 31);
+    display.print(">");
+
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(56, 28);
+    display.print("October 2026");
+
+    // 3. 7-Day Strip Ribbon: Sun Mon Tue Wed Thu Fri Sat
+    const char* dNames[7] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+    const char* dNums[7]  = { "27",  "28",  "29",  "30",  "1",   "2",   "3"   };
+    int colCenters[7] = { 20, 53, 86, 119, 152, 185, 218 };
+
+    for (int i = 0; i < 7; i++) {
+      int cx = colCenters[i];
+      display.setTextSize(1);
+      display.setTextColor(0x8CD6);
+      int dw = strlen(dNames[i]) * 6;
+      display.setCursor(cx - dw / 2, 49);
+      display.print(dNames[i]);
+
+      if (i == 4) { // Thu 1 is selected
+        display.fillRoundRect(cx - 12, 60, 24, 28, 7, 0x05BF); // Vivid blue pill
+        display.drawRoundRect(cx - 12, 60, 24, 28, 7, 0x3DDF);
+        display.setTextSize(2);
+        display.setTextColor(TFT_WHITE);
+        display.setCursor(cx - 6, 64);
+        display.print("1");
+        display.fillCircle(cx, 83, 2, TFT_WHITE); // active white indicator dot
+      } else {
+        display.setTextSize(1);
+        display.setTextColor(0xC618);
+        int nw = strlen(dNums[i]) * 6;
+        display.setCursor(cx - nw / 2, 67);
+        display.print(dNums[i]);
+
+        if (i == 2 || i == 3 || i == 5) {
+          display.fillCircle(cx, 83, 2, 0x2D7F); // event dots
+        }
+      }
+    }
+
+    // 4. Section subheader: Today | Thu, Oct 1
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(14, 94);
+    display.print("Today");
+    display.setCursor(15, 94);
+    display.print("Today");
+
+    display.setTextColor(0x8CD6);
+    display.setCursor(158, 94);
+    display.print("Thu, Oct 1");
+
+    // 5. 4 Event Cards List
+    struct CalItem {
+      const char* time;
+      const char* title;
+      const char* place;
+      uint16_t barCol;
+      uint16_t timeCol;
+      int type; // 0: meeting + join, 1: lunch, 2: project, 3: gym
+    };
+    CalItem items[4] = {
+      { "10:00 AM", "Team Meeting",      "Online (Google Meet)", 0x04FF, 0x3DDF, 0 },
+      { "12:30 PM", "Lunch with Friends", "Cafe Coffee Day",      0xFDC0, 0xFE20, 1 },
+      { "4:00 PM",  "Project Review",    "Lab Block, KGISL",     0xFAAA, 0xFAAA, 2 },
+      { "7:00 PM",  "Gym",               "Personal",             0x266A, 0x266A, 3 }
+    };
+
+    for (int c = 0; c < 4; c++) {
+      int cy = 108 + c * 41;
+      int ch = 38;
+      display.fillRoundRect(12, cy, 216, ch, 8, 0x0842);
+      display.drawRoundRect(12, cy, 216, ch, 8, 0x10A4);
+
+      // Left vertical accent bar
+      display.fillRoundRect(16, cy + 4, 4, ch - 8, 2, items[c].barCol);
+
+      // Time
+      display.setTextSize(1);
+      display.setTextColor(items[c].timeCol);
+      display.setCursor(26, cy + 5);
+      display.print(items[c].time);
+
+      // Title
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(26, cy + 15);
+      display.print(items[c].title);
+      display.setCursor(27, cy + 15);
+      display.print(items[c].title);
+
+      // Subtitle / location
+      display.setTextColor(0x8CD6);
+      int subX = 26;
+      if (items[c].type == 0) {
+        // Video icon
+        display.fillRect(subX, cy + 26, 5, 4, 0x3DDF);
+        display.fillTriangle(subX + 5, cy + 28, subX + 7, cy + 25, subX + 7, cy + 31, 0x3DDF);
+        subX += 10;
+      } else if (items[c].type == 1) {
+        // Fork & knife
+        display.drawLine(subX, cy + 25, subX, cy + 30, 0x8CD6);
+        display.drawLine(subX + 3, cy + 25, subX + 3, cy + 30, 0x8CD6);
+        subX += 7;
+      } else if (items[c].type == 2) {
+        // Location pin
+        display.fillCircle(subX + 2, cy + 26, 2, 0x8CD6);
+        display.drawPixel(subX + 2, cy + 29, 0x8CD6);
+        subX += 7;
+      } else {
+        // Dumbbell
+        display.drawFastHLine(subX, cy + 27, 6, 0x8CD6);
+        display.drawFastVLine(subX, cy + 26, 3, 0x8CD6);
+        display.drawFastVLine(subX + 5, cy + 26, 3, 0x8CD6);
+        subX += 9;
+      }
+      display.setCursor(subX, cy + 25);
+      display.print(items[c].place);
+
+      // Right action / chevron
+      if (items[c].type == 0) {
+        // [ 📹 Join ] Pill Button
+        display.fillRoundRect(162, cy + 8, 60, 22, 11, 0x0A8E);
+        display.drawRoundRect(162, cy + 8, 60, 22, 11, 0x23BF);
+        display.fillRect(170, cy + 16, 5, 5, TFT_WHITE);
+        display.fillTriangle(175, cy + 18, 178, cy + 15, 178, cy + 21, TFT_WHITE);
+        display.setTextSize(1);
+        display.setTextColor(TFT_WHITE);
+        display.setCursor(182, cy + 15);
+        display.print("Join");
+      } else if (c < 3) {
+        // Right Chevron >
+        display.drawLine(210, cy + 16, 214, cy + 20, 0x8CD6);
+        display.drawLine(214, cy + 20, 210, cy + 24, 0x8CD6);
+      }
+    }
+
+    // Floating Action Button (FAB) (+) at bottom right
+    int fabX = 196, fabY = 246;
+    display.fillCircle(fabX, fabY, 15, 0x04FF);
+    display.drawCircle(fabX, fabY, 16, 0x02BF);
+    display.drawFastHLine(fabX - 5, fabY, 11, TFT_WHITE);
+    display.drawFastHLine(fabX - 5, fabY + 1, 11, TFT_WHITE);
+    display.drawFastVLine(fabX, fabY - 5, 11, TFT_WHITE);
+    display.drawFastVLine(fabX + 1, fabY - 5, 11, TFT_WHITE);
+  }
+
   void drawCalendarEvents() {
-    ThemeColors theme = getTheme();
-    uint16_t themeAccent  = theme.accent;
-    uint16_t themeBg      = theme.bg;
-    uint16_t themeText    = theme.text;
-    uint16_t themeBorder  = theme.border;
-    uint16_t themeSubText = theme.subText;
-
-    // Clear display below the status bar
-    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
-
-    // Section marker
-    display.setTextSize(1);
-    display.setTextColor(themeAccent);
-    display.setCursor(20, 28);
-    display.print("AGENDA // EVENT DETAILS");
-
-    display.drawFastHLine(20, 42, SCREEN_WIDTH - 40, themeBorder);
-
-    if (calendarEventCount == 0) {
-      // Empty state card
-      display.fillRoundRect(16, 56, SCREEN_WIDTH - 32, 136, 8, theme.cardBg);
-      display.drawRoundRect(16, 56, SCREEN_WIDTH - 32, 136, 8, themeBorder);
-      display.fillRect(16, 68, 3, 112, themeAccent);
-
-      // Category / Status pill
-      display.drawRoundRect(28, 68, 76, 16, 4, themeAccent);
-      display.setTextSize(1);
-      display.setTextColor(themeAccent);
-      display.setCursor(34, 72);
-      display.print("ALL CLEAR");
-
-      // Balanced Title (Size 2 = 12x16 font, crisp and perfectly sized)
-      display.setTextSize(2);
-      display.setTextColor(themeText);
-      display.setCursor(28, 96);
-      display.print("NO EVENTS");
-
-      // Clean message — comfortably inside box margins
-      display.setTextSize(1);
-      display.setTextColor(themeSubText);
-      display.setCursor(28, 126);
-      display.print("No meetings scheduled today.");
-      display.setCursor(28, 142);
-      display.print("Your schedule is free.");
-
-      // Sync status tag
-      display.setTextColor(themeAccent);
-      display.setCursor(28, 166);
-      display.print("CALENDAR SYNC // ACTIVE");
-
-      display.setTextColor(themeBorder);
-      display.setCursor(34, 256);
-      display.print("TAP: RETURN // SWIPE: CALENDAR");
-      return;
-    }
-
-    CalendarEventItem& ev = calendarEvents[currentCalViewIdx];
-
-    // Category / Status micro pill
-    display.drawRoundRect(20, 52, 74, 16, 4, themeAccent);
-    display.setTextSize(1);
-    display.setTextColor(themeAccent);
-    display.setCursor(24, 56);
-    if (ev.type.indexOf("bday") >= 0 || ev.type.indexOf("birthday") >= 0) {
-      display.print("ANNIVERSARY");
-    } else if (ev.type.indexOf("meet") >= 0) {
-      display.print("MEETING");
-    } else if (ev.type.indexOf("alarm") >= 0) {
-      display.print("ALARM");
-    } else if (ev.type.indexOf("remind") >= 0) {
-      display.print("REMINDER");
-    } else {
-      display.print("EVENT");
-    }
-
-    // Time readout
-    display.setTextColor(themeSubText);
-    display.setCursor(102, 56);
-    display.print(ev.timeStr);
-
-    // Large Bold Event Title
-    display.setTextSize(3);
-    display.setTextColor(themeText);
-    display.setCursor(20, 80);
-
-    // Multi-line word wrap for large title
-    int yT = 80;
-    int charsPerLine = (SCREEN_WIDTH - 40) / 18;
-    int line = 0;
-    for (unsigned int i = 0; i < ev.title.length() && line < 3; i += charsPerLine) {
-      unsigned int endIdx = i + charsPerLine;
-      if (endIdx > ev.title.length()) endIdx = ev.title.length();
-      display.setCursor(20, yT + line * 26);
-      display.print(ev.title.substring(i, endIdx));
-      line++;
-    }
-
-    // Precision divider
-    display.drawFastHLine(20, 170, SCREEN_WIDTH - 40, themeBorder);
-
-    // Event metadata tags
-    display.setTextSize(1);
-    display.setTextColor(themeSubText);
-    display.setCursor(20, 184);
-    if (ev.dateStr.length() > 0 && ev.dateStr != "*") {
-      display.printf("DATE     // %s", ev.dateStr.c_str());
-    } else {
-      display.print("SCHEDULE // DAILY RECURRING");
-    }
-    display.setCursor(20, 200);
-    String typeUpper = ev.type;
-    typeUpper.toUpperCase();
-    display.printf("TYPE     // %s", typeUpper.c_str());
-    display.setCursor(20, 216);
-    display.print("STATUS   // ACTIVE IN HARDWARE");
-
-    // Pagination
-    char pageBuf[16];
-    snprintf(pageBuf, sizeof(pageBuf), "INDEX %02d / %02d", currentCalViewIdx + 1, calendarEventCount);
-    display.setTextColor(themeAccent);
-    display.setCursor(20, 238);
-    display.print(pageBuf);
-
-    display.setTextColor(themeBorder);
-    display.setCursor(44, 256);
-    display.print("TAP TO RETURN // SWIPE NEXT");
+    drawCalendarScreen(rtcHour, rtcMinute, "", "");
   }
 
   void parseDateInfo(String dateStr, String dayStr, int& dayOut, int& monthOut, int& yearOut, int& startWeekdayOut, int& daysInMonthOut) {
@@ -1512,182 +1621,7 @@ public:
   }
 
   void drawCalendarGrid(String dateStr, String dayStr) {
-    ThemeColors theme = getTheme();
-    uint16_t themeAccent  = theme.accent;
-    uint16_t themeBg      = theme.bg;
-    uint16_t themeText    = theme.text;
-    uint16_t themeBorder  = theme.border;
-    uint16_t themeSubText = theme.subText;
-
-    int curDay, curMonth, curYear, startWeekday, daysInMonth;
-    parseDateInfo(dateStr, dayStr, curDay, curMonth, curYear, startWeekday, daysInMonth);
-    
-    // Clear display below status bar
-    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
-
-    // ── Editorial Month Header ──────────────────────────────────────────────
-    const char* monthNames[] = { "", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER" };
-    const char* mName = (curMonth >= 1 && curMonth <= 12) ? monthNames[curMonth] : "SEPTEMBER";
-
-    display.setTextSize(2);
-    display.setTextColor(themeText);
-    display.setCursor(20, 28);
-    display.print(mName);
-    display.setTextColor(themeSubText);
-    display.setCursor(144, 28);
-    display.print(curYear);
-
-    display.drawFastHLine(20, 48, SCREEN_WIDTH - 40, themeBorder);
-
-    // ── Giant Date Hero Block ───────────────────────────────────────────────
-    char dayNumStr[4];
-    snprintf(dayNumStr, sizeof(dayNumStr), "%02d", curDay);
-
-    display.setTextSize(5);
-    display.setTextColor(themeText);
-    display.setCursor(20, 54);
-    display.print(dayNumStr);
-
-    // Asymmetric day name + TODAY badge
-    display.setTextSize(2);
-    display.setTextColor(themeAccent);
-    display.setCursor(92, 56);
-    String dUpper = dayStr;
-    dUpper.toUpperCase();
-    display.print(dUpper);
-
-    // TODAY badge
-    display.drawRoundRect(92, 80, 50, 16, 4, themeAccent);
-    display.fillRoundRect(93, 81, 48, 14, 3, theme.cardBg);
-    display.setTextSize(1);
-    display.setTextColor(themeText);
-    display.setCursor(99, 84);
-    display.print("TODAY");
-
-    // ── Horizontal Day Strip Ribbon ─────────────────────────────────────────
-    display.drawFastHLine(20, 108, SCREEN_WIDTH - 40, themeBorder);
-
-    // Show 5 days centered on today
-    int startD = curDay - 2;
-    int endD   = curDay + 2;
-    int rx = 22;
-    for (int d = startD; d <= endD; d++) {
-      int showD = d;
-      if (showD < 1) showD += daysInMonth;
-      if (showD > daysInMonth) showD -= daysInMonth;
-
-      bool isToday = (d == curDay);
-      if (isToday) {
-        display.drawRoundRect(rx, 114, 34, 30, 6, themeAccent);
-        display.fillRoundRect(rx + 1, 115, 32, 28, 5, theme.cardBg);
-        display.setTextColor(themeText);
-      } else {
-        display.setTextColor(themeSubText);
-      }
-
-      display.setTextSize(2);
-      display.setCursor(showD < 10 ? rx + 11 : rx + 5, 120);
-      display.print(showD);
-
-      rx += 40;
-    }
-
-    display.drawFastHLine(20, 150, SCREEN_WIDTH - 40, themeBorder);
-
-    // ── Daily Agenda / Schedule Section ─────────────────────────────────────
-    display.setTextSize(1);
-    display.setTextColor(themeText);
-    display.setCursor(20, 156);
-    display.print("TODAY'S SCHEDULE");
-
-    if (calendarEventCount > 0) {
-      // Show count tag
-      display.setTextColor(themeAccent);
-      display.setCursor(164, 156);
-      char cntBuf[16];
-      snprintf(cntBuf, sizeof(cntBuf), "%d EVENT%s", calendarEventCount, calendarEventCount > 1 ? "S" : "");
-      display.print(cntBuf);
-
-      // Render scrollable/paginated event list
-      int startIdx = currentCalViewIdx % calendarEventCount;
-      int maxShow = min(calendarEventCount, 2);
-      for (int i = 0; i < maxShow; i++) {
-        int eIdx = (startIdx + i) % calendarEventCount;
-        int ey = 170 + i * 40;
-        CalendarEventItem& ev = calendarEvents[eIdx];
-
-        // Card container
-        display.fillRoundRect(18, ey, SCREEN_WIDTH - 36, 36, 5, theme.cardBg);
-        display.drawRoundRect(18, ey, SCREEN_WIDTH - 36, 36, 5, themeBorder);
-        display.fillRect(18, ey, 3, 36, themeAccent);
-
-        // Time pill
-        display.setTextSize(1);
-        display.setTextColor(themeAccent);
-        display.setCursor(26, ey + 6);
-        display.print(ev.timeStr.length() > 0 ? ev.timeStr : "09:30");
-
-        // Event type badge
-        display.setTextColor(themeSubText);
-        display.setCursor(80, ey + 6);
-        String typeTag = ev.type.length() > 0 ? ("// " + ev.type) : "// MEETING";
-        typeTag.toUpperCase();
-        display.print(typeTag);
-
-        // Title
-        display.setTextSize(2);
-        display.setTextColor(themeText);
-        display.setCursor(26, ey + 18);
-        String evTitle = ev.title;
-        if (evTitle.length() > 14) evTitle = evTitle.substring(0, 13) + "..";
-        display.print(evTitle);
-      }
-
-      display.setTextSize(1);
-      display.setTextColor(themeBorder);
-      display.setCursor(34, 256);
-      display.print("TAP: NEXT EVENT // SWIPE: CALENDAR");
-
-    } else {
-      // ── Zero Blank Space: Rich Daily Overview Telemetry ───────────────────
-      display.setTextColor(0x07E0);
-      display.setCursor(154, 156);
-      display.print("[ ALL CLEAR ]");
-
-      // Card container filling Y in [170, 248]
-      display.fillRoundRect(18, 170, SCREEN_WIDTH - 36, 78, 6, theme.cardBg);
-      display.drawRoundRect(18, 170, SCREEN_WIDTH - 36, 78, 6, themeBorder);
-      display.fillRect(18, 178, 3, 62, themeAccent);
-
-      // Status indicator
-      display.fillCircle(28, 184, 3, 0x07E0);
-      display.setTextSize(1);
-      display.setTextColor(themeText);
-      display.setCursor(36, 180);
-      display.print("NO MEETINGS SCHEDULED TODAY");
-
-      display.setTextSize(2);
-      display.setTextColor(themeAccent);
-      display.setCursor(28, 196);
-      display.print("FOCUS WINDOW");
-
-
-
-      // Productivity / Day progress bar
-      display.drawFastHLine(28, 220, SCREEN_WIDTH - 56, themeBorder);
-      int dayProgressW = constrain(((curDay % 10) + 1) * 18, 20, SCREEN_WIDTH - 56);
-      display.drawFastHLine(28, 220, dayProgressW, themeAccent);
-
-      // Clean status line — NO OVERFLOWING TEXT
-      display.setTextSize(1);
-      display.setTextColor(themeSubText);
-      display.setCursor(28, 228);
-      display.print("STATUS // ALL CLEAR");
-
-      display.setTextColor(themeBorder);
-      display.setCursor(30, 256);
-      display.print("CALENDAR SYNCED // READY");
-    }
+    drawCalendarScreen(rtcHour, rtcMinute, dateStr, dayStr);
   }
 
   void drawSettingsMenuLandscape(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
@@ -1868,150 +1802,332 @@ public:
     }
   }
 
-  void drawPomodoroScreen(int remainingSec, int totalSec, int pomoState, int pomoMode, int completedSessions) {
-    ThemeColors theme = getTheme();
-    uint16_t themeAccent  = theme.accent;
-    uint16_t themeBg      = theme.bg;
-    uint16_t themeText    = theme.text;
-    uint16_t themeBorder  = theme.border;
-    uint16_t themeSubText = theme.subText;
+  void drawPomodoroScreen(int remainingSec, int totalSec, int pomoState, int pomoMode, int completedSessions, int hour, int minute) {
+    display.fillScreen(0x0000);
 
-    // Clear display area below status bar
-    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
+    // 1. Top status bar: 10:28 | [ ⏱ FOCUS ] | BLE + Battery 85%
+    drawTopCapsuleStatusBar(hour, minute, "FOCUS", 1);
 
-    // ── Header context ──────────────────────────────────────────────────────
-    const char* modeLabel = "F O C U S";
-    if (pomoMode == 1) modeLabel = "S H O R T  B R E A K";
-    else if (pomoMode == 2) modeLabel = "L O N G  B R E A K";
+    // 2. Central circular progress ring
+    int cx = 120;
+    int cy = 110;
+    int rOuter = 56;
+    int rInner = 48;
 
-    display.setTextSize(1);
-    display.setTextColor(themeAccent);
-    int mlW = strlen(modeLabel) * 6;
-    display.setCursor((SCREEN_WIDTH - mlW) / 2, 30);
-    display.print(modeLabel);
+    // Dark track
+    display.drawCircle(cx, cy, rOuter, 0x0A28);
+    display.drawCircle(cx, cy, rOuter - 1, 0x0A28);
+    display.drawCircle(cx, cy, rInner, 0x0A28);
 
-    // ── Mode selector micro capsules (25M / 5M / 15M) ───────────────────────
-    const char* mNames[] = { "25M", "5M", "15M" };
-    int mX = 36;
-    for (int m = 0; m < 3; m++) {
-      bool isSel = (pomoMode == m);
-      uint16_t cBorder = isSel ? themeAccent : themeBorder;
-      uint16_t cText   = isSel ? themeText   : themeSubText;
-      display.drawRoundRect(mX, 42, 48, 16, 4, cBorder);
-      if (isSel) {
-        display.fillRect(mX + 1, 43, 46, 14, 0x0842);
+    // Swept progress arc
+    float progress = (totalSec > 0) ? (float)(totalSec - remainingSec) / (float)totalSec : 0.0f;
+    progress = constrain(progress, 0.0f, 1.0f);
+    int arcSteps = (int)(progress * 60.0f);
+    for (int s = 0; s <= arcSteps; s++) {
+      float a = -M_PI_2 + s * (2.0f * M_PI / 60.0f);
+      float ca = cos(a);
+      float sa = sin(a);
+      for (int r = rInner + 1; r < rOuter; r++) {
+        display.drawPixel(cx + (int)(ca * r), cy + (int)(sa * r), 0x04FF);
       }
-      display.setTextColor(cText);
-      display.setTextSize(1);
-      int w = strlen(mNames[m]) * 6;
-      display.setCursor(mX + (48 - w) / 2, 46);
-      display.print(mNames[m]);
-      mX += 58;
     }
 
-    // ── Dominant Hero Countdown Digits ──────────────────────────────────────
+    // Tomato Icon inside top of ring
+    display.fillCircle(120, 64, 7, 0xF9A4);
+    display.fillRect(118, 55, 4, 3, 0x2E68);
+    display.drawPixel(116, 56, 0x2E68);
+    display.drawPixel(123, 56, 0x2E68);
+
+    // "FOCUS TIME" subheader
+    display.setTextSize(1);
+    display.setTextColor(0x8CD6);
+    display.setCursor(90, 78);
+    display.print("FOCUS TIME");
+
+    // Huge 25:00 Digital Countdown Timer
     int mins = remainingSec / 60;
     int secs = remainingSec % 60;
-    char timeBuf[8];
-    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", mins, secs);
+    char tBuf[8];
+    snprintf(tBuf, sizeof(tBuf), "%02d:%02d", mins, secs);
+    display.setTextSize(4);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(62, 92);
+    display.print(tBuf);
 
-    display.setTextSize(5);
-    uint16_t timeColor = (pomoState == 1) ? themeAccent : ((pomoState == 3) ? 0x07E0 : themeText);
-    display.setTextColor(timeColor);
-    int timeW = 5 * 30;
-    display.setCursor((SCREEN_WIDTH - timeW) / 2, 70);
+    // "Pomodoro"
+    display.setTextSize(1);
+    display.setTextColor(0x8CD6);
+    display.setCursor(96, 128);
+    display.print("Pomodoro");
+
+    // Session: "1 / 4"
+    char sessStr[12];
+    snprintf(sessStr, sizeof(sessStr), "%d / 4", (completedSessions % 4) + 1);
+    display.setTextColor(TFT_WHITE);
+    int sw = strlen(sessStr) * 6;
+    display.setCursor(cx - sw / 2, 139);
+    display.print(sessStr);
+
+    // 3. Left Mode Button (Short Break 5 min)
+    int lcx = 38, lcy = 112;
+    display.fillCircle(lcx, lcy, 16, 0x08A6);
+    display.drawCircle(lcx, lcy, 16, (pomoMode == 1) ? 0x04FF : 0x1B3F);
+    display.fillTriangle(lcx, lcy - 8, lcx - 5, lcy - 2, lcx + 5, lcy - 2, 0x3CD9);
+    display.fillTriangle(lcx, lcy - 4, lcx - 7, lcy + 3, lcx + 7, lcy + 3, 0x3CD9);
+    display.fillRect(lcx - 1, lcy + 3, 3, 4, 0x8CD6);
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(5, 134);
+    display.print("Short Break");
+    display.setTextColor(0x8CD6);
+    display.setCursor(22, 144);
+    display.print("5 min");
+
+    // 4. Right Mode Button (Long Break 15 min)
+    int rcx = 202, rcy = 112;
+    display.fillCircle(rcx, rcy, 16, 0x08A6);
+    display.drawCircle(rcx, rcy, 16, (pomoMode == 2) ? 0x04FF : 0x1B3F);
+    display.fillRect(rcx - 5, rcy - 2, 9, 7, 0x3CD9);
+    display.drawRect(rcx + 3, rcy, 3, 4, 0x3CD9);
+    display.drawFastHLine(rcx - 6, rcy + 6, 11, 0x3CD9);
+    display.drawLine(rcx - 3, rcy - 5, rcx - 2, rcy - 7, 0x8CD6);
+    display.drawLine(rcx, rcy - 5, rcx + 1, rcy - 7, 0x8CD6);
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(170, 134);
+    display.print("Long Break");
+    display.setTextColor(0x8CD6);
+    display.setCursor(182, 144);
+    display.print("15 min");
+
+    // 5. Transport Controls: [ |<< ]  [ ▶ / ❚❚ ]  [ >>| ]
+    display.fillCircle(68, 194, 15, 0x08A6);
+    display.drawCircle(68, 194, 15, 0x1B3F);
+    display.drawFastVLine(63, 189, 10, TFT_WHITE);
+    display.fillTriangle(73, 189, 73, 199, 64, 194, TFT_WHITE);
+
+    display.drawCircle(120, 194, 26, 0x094E);
+    display.drawCircle(120, 194, 25, 0x0A8E);
+    display.fillCircle(120, 194, 24, 0x04FF);
+    if (pomoState == 1) {
+      display.fillRect(115, 186, 4, 16, TFT_WHITE);
+      display.fillRect(122, 186, 4, 16, TFT_WHITE);
+    } else {
+      display.fillTriangle(116, 185, 116, 203, 131, 194, TFT_WHITE);
+    }
+
+    display.fillCircle(172, 194, 15, 0x08A6);
+    display.drawCircle(172, 194, 15, 0x1B3F);
+    display.fillTriangle(167, 189, 167, 199, 176, 194, TFT_WHITE);
+    display.drawFastVLine(177, 189, 10, TFT_WHITE);
+
+    // 6. Bottom Stats Card (3 rounded columns)
+    display.fillRoundRect(12, 228, 216, 48, 10, 0x0862);
+    display.drawRoundRect(12, 228, 216, 48, 10, 0x10A4);
+    display.drawFastVLine(84, 234, 36, 0x10A4);
+    display.drawFastVLine(156, 234, 36, 0x10A4);
+
+    // Col 1: Completed
+    display.fillCircle(48, 235, 4, 0xF9A4);
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    char compBuf[8];
+    snprintf(compBuf, sizeof(compBuf), "%d", completedSessions > 0 ? completedSessions : 3);
+    int cw = strlen(compBuf) * 12;
+    display.setCursor(48 - cw / 2, 243);
+    display.print(compBuf);
+    display.setTextSize(1);
+    display.setTextColor(0x8CD6);
+    display.setCursor(21, 262);
+    display.print("Completed");
+
+    // Col 2: Focus Today
+    display.drawCircle(120, 235, 4, 0x266A);
+    display.fillCircle(120, 235, 1, 0x266A);
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(96, 243);
+    display.print("1h 15m");
+    display.setTextSize(1);
+    display.setTextColor(0x8CD6);
+    display.setCursor(87, 262);
+    display.print("Focus Today");
+
+    // Col 3: Day Streak
+    display.fillRect(188, 236, 2, 4, 0xFDC0);
+    display.fillRect(191, 234, 2, 6, 0xFDC0);
+    display.fillRect(194, 232, 2, 8, 0xFDC0);
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(187, 243);
+    display.print("6");
+    display.setTextSize(1);
+    display.setTextColor(0x8CD6);
+    display.setCursor(162, 262);
+    display.print("Day Streak");
+  }
+
+  void drawPomodoroScreen(int remainingSec, int totalSec, int pomoState, int pomoMode, int completedSessions) {
+    drawPomodoroScreen(remainingSec, totalSec, pomoState, pomoMode, completedSessions, rtcHour, rtcMinute);
+  }
+
+  void drawAppLauncherMenu(int hour, int minute, String dayStr, String dateStr) {
+    display.fillScreen(0x0000);
+
+    // 1. Subtle mountain wallpaper silhouette at bottom
+    display.fillTriangle(0, 250, 80, 215, 170, 265, 0x0826);
+    display.fillTriangle(80, 265, 160, 225, 240, 255, 0x0948);
+    display.fillTriangle(0, 265, 120, 238, 240, 280, 0x11AB);
+    display.fillRect(0, 272, 240, 8, 0x0926);
+
+    // 2. Top Left: Time & Date
+    char timeBuf[12];
+    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(16, 5);
     display.print(timeBuf);
 
-    // ── Geometric Concentric Calibrated Reticle Arc ─────────────────────────
-    int cx = SCREEN_WIDTH / 2;
-    int cy = 142;
-    int r  = 30;
-
-    // Static reticle track
-    display.drawCircle(cx, cy, r, themeBorder);
-    display.drawCircle(cx, cy, 8, themeBorder);
-
-    // Dynamic progress ticks
-    float progressPct = 0.0f;
-    if (totalSec > 0) {
-      progressPct = (float)(totalSec - remainingSec) / (float)totalSec;
-    }
-    progressPct = constrain(progressPct, 0.0f, 1.0f);
-
-    int arcDots = (int)(progressPct * 32.0f);
-    for (int s = 0; s < arcDots; s++) {
-      float angle = s * (2.0f * M_PI / 32.0f) - (M_PI / 2.0f);
-      int px = cx + (int)(cos(angle) * r);
-      int py = cy + (int)(sin(angle) * r);
-      display.fillCircle(px, py, 2, themeAccent);
-    }
-
-    // State readout inside the reticle
-    const char* stateLabel = "READY";
-    if (pomoState == 1)      stateLabel = "ACTIVE";
-    else if (pomoState == 2) stateLabel = "PAUSED";
-    else if (pomoState == 3) stateLabel = "DONE";
-
     display.setTextSize(1);
-    display.setTextColor(themeText);
-    int slW = strlen(stateLabel) * 6;
-    display.setCursor(cx - slW / 2, cy - 3);
-    display.print(stateLabel);
-
-    // ── Precision Divider ───────────────────────────────────────────────────
-    display.drawFastHLine(30, 184, SCREEN_WIDTH - 60, themeBorder);
-
-    // ── Floating Tactile Action Trigger ─────────────────────────────────────
-    int btnW = 144;
-    int btnH = 34;
-    int btnX = (SCREEN_WIDTH - btnW) / 2;
-    int btnY = 196;
-
-    uint16_t btnAccent = (pomoState == 1) ? 0xFDE0 : ((pomoState == 3) ? 0x07E0 : themeAccent);
-    display.drawRoundRect(btnX, btnY, btnW, btnH, 8, btnAccent);
-    display.fillRoundRect(btnX + 2, btnY + 2, btnW - 4, btnH - 4, 6, (pomoState == 1) ? 0x0842 : 0x0000);
-
-    display.setTextSize(2);
-    display.setTextColor(themeText);
-
-    if (pomoState == 0) { // Ready to Start
-      int tx = btnX + 32, ty = btnY + 17;
-      display.fillTriangle(tx, ty - 6, tx, ty + 6, tx + 9, ty, themeAccent);
-      display.setCursor(btnX + 48, btnY + 9);
-      display.print("START");
-    } else if (pomoState == 1) { // Active -> Show Pause
-      int px = btnX + 32, py = btnY + 11;
-      display.fillRect(px, py, 3, 12, 0xFDE0);
-      display.fillRect(px + 6, py, 3, 12, 0xFDE0);
-      display.setCursor(btnX + 48, btnY + 9);
-      display.print("PAUSE");
-    } else if (pomoState == 2) { // Paused -> Show Resume
-      int tx = btnX + 26, ty = btnY + 17;
-      display.fillTriangle(tx, ty - 6, tx, ty + 6, tx + 9, ty, themeAccent);
-      display.setCursor(btnX + 42, btnY + 9);
-      display.print("RESUME");
-    } else { // Completed -> Show Reset
-      int rx = btnX + 30, ry = btnY + 17;
-      display.drawCircle(rx, ry, 5, 0x07E0);
-      display.fillRect(rx - 1, ry - 7, 3, 3, 0x0000);
-      display.fillTriangle(rx, ry - 7, rx + 4, ry - 5, rx, ry - 3, 0x07E0);
-      display.setCursor(btnX + 44, btnY + 9);
-      display.print("RESET");
+    display.setTextColor(0x8CD6);
+    display.setCursor(16, 23);
+    if (dayStr.length() > 0 && dateStr.length() > 0) {
+      display.print(dayStr + ", " + dateStr);
+    } else {
+      display.print("Tue, Oct 1");
     }
 
-    // ── Secondary Telemetry & Interaction Hints ─────────────────────────────
-    char sessBuf[32];
-    snprintf(sessBuf, sizeof(sessBuf), "CYCLE COMPLETED: %02d", completedSessions);
-    display.setTextSize(1);
-    display.setTextColor(themeSubText);
-    int sessW = strlen(sessBuf) * 6;
-    display.setCursor((SCREEN_WIDTH - sessW) / 2, 240);
-    display.print(sessBuf);
+    // 3. Top Right: Bluetooth + Battery + 85%
+    display.drawLine(166, 8, 166, 18, TFT_WHITE);
+    display.drawLine(166, 8, 170, 11, TFT_WHITE);
+    display.drawLine(170, 11, 164, 15, TFT_WHITE);
+    display.drawLine(164, 11, 170, 15, TFT_WHITE);
+    display.drawLine(170, 15, 166, 18, TFT_WHITE);
 
-    const char* tip = "TAP TRIGGER // HOLD TO RESET";
-    int tipW = strlen(tip) * 6;
-    display.setCursor((SCREEN_WIDTH - tipW) / 2, 256);
-    display.print(tip);
+    int batPct = getBatteryPercentage(batteryVolts);
+    if (batPct <= 0 || batPct > 100) batPct = 85;
+    display.drawRoundRect(178, 8, 18, 10, 2, TFT_WHITE);
+    int barW = map(batPct, 0, 100, 0, 14);
+    if (barW < 2) barW = 2;
+    uint16_t batCol = (batPct > 20) ? 0x2E68 : 0xF900;
+    display.fillRect(180, 10, barW, 6, batCol);
+    display.fillRect(196, 11, 2, 4, TFT_WHITE);
+
+    char batStr[8];
+    snprintf(batStr, sizeof(batStr), "%d%%", batPct);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(201, 9);
+    display.print(batStr);
+
+    // 4. 6 App Launcher Tiles (2 Rows x 3 Columns)
+    // Row 0: Y = 36, H = 58, r = 16
+    // Col 0: Notifications (X = 14, W = 62)
+    display.fillRoundRect(14, 36, 62, 58, 16, 0x1A5D);
+    display.drawRoundRect(14, 36, 62, 58, 16, 0x3D7F);
+    int bcx = 45, bcy = 62;
+    display.fillCircle(bcx, bcy - 5, 6, TFT_WHITE);
+    display.fillRect(bcx - 8, bcy - 5, 17, 9, TFT_WHITE);
+    display.drawFastHLine(bcx - 10, bcy + 4, 21, TFT_WHITE);
+    display.drawFastHLine(bcx - 10, bcy + 5, 21, TFT_WHITE);
+    display.fillCircle(bcx, bcy + 7, 2, TFT_WHITE);
+    display.fillCircle(65, 42, 8, 0xF8E3);
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(63, 39);
+    display.print("3");
+    display.setCursor(10, 98);
+    display.print("Notifications");
+
+    // Col 1: Calendar (X = 89, W = 62)
+    display.fillRoundRect(89, 36, 62, 58, 16, 0x0A28);
+    display.drawRoundRect(89, 36, 62, 58, 16, 0x1B3E);
+    int ccx = 120, ccy = 62;
+    display.fillRoundRect(ccx - 13, ccy - 12, 26, 24, 4, TFT_WHITE);
+    display.fillRoundRect(ccx - 13, ccy - 12, 26, 8, 4, 0xF968);
+    display.fillRect(ccx - 13, ccy - 7, 26, 3, 0xF968);
+    display.fillRect(ccx - 7, ccy - 14, 2, 4, 0x39E7);
+    display.fillRect(ccx + 5, ccy - 14, 2, 4, 0x39E7);
+    display.setTextSize(1);
+    display.setTextColor(0x0000);
+    display.setCursor(ccx - 6, ccy - 1);
+    display.print("31");
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(98, 98);
+    display.print("Calendar");
+
+    // Col 2: Focus (X = 164, W = 62)
+    display.fillRoundRect(164, 36, 62, 58, 16, 0x3866);
+    display.drawRoundRect(164, 36, 62, 58, 16, 0x68AA);
+    int fcx = 195, fcy = 62;
+    display.fillCircle(fcx - 2, fcy, 11, 0xF9A4);
+    display.fillRect(fcx - 4, fcy - 14, 5, 4, 0x2E68);
+    display.drawPixel(fcx - 7, fcy - 12, 0x2E68);
+    display.drawPixel(fcx + 3, fcy - 12, 0x2E68);
+    display.fillCircle(fcx + 6, fcy + 5, 6, 0xFBA0);
+    display.drawCircle(fcx + 6, fcy + 5, 6, TFT_WHITE);
+    display.drawLine(fcx + 6, fcy + 5, fcx + 6, fcy + 2, 0x0000);
+    display.drawLine(fcx + 6, fcy + 5, fcx + 8, fcy + 5, 0x0000);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(179, 98);
+    display.print("Focus");
+    display.setTextColor(0x7CDF);
+    display.setCursor(171, 108);
+    display.print("Pomodoro");
+
+    // Row 1: Y = 126, H = 58, r = 16
+    // Col 0: Games (X = 14, W = 62)
+    display.fillRoundRect(14, 126, 62, 58, 16, 0x288C);
+    display.drawRoundRect(14, 126, 62, 58, 16, 0x6197);
+    int gcx = 45, gcy = 152;
+    display.fillRoundRect(gcx - 14, gcy - 8, 28, 17, 6, 0xDF7E);
+    display.fillRect(gcx - 11, gcy - 3, 7, 3, 0x288C);
+    display.fillRect(gcx - 9, gcy - 5, 3, 7, 0x288C);
+    display.fillCircle(gcx + 5, gcy - 2, 1, 0x288C);
+    display.fillCircle(gcx + 9, gcy - 2, 1, 0x288C);
+    display.fillCircle(gcx + 7, gcy - 4, 1, 0x288C);
+    display.fillCircle(gcx + 7, gcy, 1, 0x288C);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(30, 188);
+    display.print("Games");
+
+    // Col 1: QR (X = 89, W = 62)
+    display.fillRoundRect(89, 126, 62, 58, 16, 0x0287);
+    display.drawRoundRect(89, 126, 62, 58, 16, 0x0DAA);
+    int qcx = 120, qcy = 152;
+    display.drawFastHLine(qcx - 12, qcy - 12, 7, 0x07F3);
+    display.drawFastVLine(qcx - 12, qcy - 12, 7, 0x07F3);
+    display.drawFastHLine(qcx + 5, qcy - 12, 7, 0x07F3);
+    display.drawFastVLine(qcx + 12, qcy - 12, 7, 0x07F3);
+    display.drawFastHLine(qcx - 12, qcy + 12, 7, 0x07F3);
+    display.drawFastVLine(qcx - 12, qcy + 5, 7, 0x07F3);
+    display.drawFastHLine(qcx + 5, qcy + 12, 7, 0x07F3);
+    display.drawFastVLine(qcx + 12, qcy + 5, 7, 0x07F3);
+    display.drawRect(qcx - 7, qcy - 7, 5, 5, TFT_WHITE);
+    display.drawRect(qcx + 2, qcy - 7, 5, 5, TFT_WHITE);
+    display.drawRect(qcx - 7, qcy + 2, 5, 5, TFT_WHITE);
+    display.fillRect(qcx + 3, qcy + 3, 3, 3, TFT_WHITE);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(114, 188);
+    display.print("QR");
+    display.setTextColor(0x7CDF);
+    display.setCursor(99, 198);
+    display.print("My Card");
+
+    // Col 2: Settings (X = 164, W = 62)
+    display.fillRoundRect(164, 126, 62, 58, 16, 0x11AB);
+    display.drawRoundRect(164, 126, 62, 58, 16, 0x2A94);
+    int scx = 195, scy = 152;
+    display.fillCircle(scx, scy, 9, 0xDF7E);
+    display.fillRect(scx - 3, scy - 12, 6, 24, 0xDF7E);
+    display.fillRect(scx - 12, scy - 3, 24, 6, 0xDF7E);
+    display.fillCircle(scx, scy, 4, 0x11AB);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(171, 188);
+    display.print("Settings");
+
+    // 5. Page Indicator Dots (Y = 262)
+    display.fillCircle(114, 262, 3, 0x04FF);
+    display.fillCircle(126, 262, 3, 0x39E7);
   }
 
 
@@ -3025,11 +3141,14 @@ public:
     if (popupActive) {
       drawPopup();
     } else {
-      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_CLOCK && currentScreen != SCREEN_NOTIFICATIONS) {
+      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_CLOCK && currentScreen != SCREEN_NOTIFICATIONS && currentScreen != SCREEN_CALENDAR && currentScreen != SCREEN_POMODORO && currentScreen != SCREEN_MENU) {
         drawStatusBar(hour, minute);
       }
       
       switch (currentScreen) {
+        case SCREEN_MENU:
+          drawAppLauncherMenu(hour, minute, day, date);
+          break;
         case SCREEN_CLOCK:
           drawClockScreen(hour, minute, second, day, date, style, is12Hour, touchCount);
           break;
@@ -3040,11 +3159,7 @@ public:
           drawNotificationPanel(hour, minute);
           break;
         case SCREEN_CALENDAR:
-          if (showCalendarGrid) {
-            drawCalendarGrid(date, day);
-          } else {
-            drawCalendarEvents();
-          }
+          drawCalendarScreen(hour, minute, date, day);
           break;
         case SCREEN_GAMES:
           if (!gamesActive) {
