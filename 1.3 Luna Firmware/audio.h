@@ -219,6 +219,133 @@ public:
         enqueueNote(0, 50);
         enqueueNote(2349, 200);
         break;
+
+      case SOUND_BOOT_CHIME: {
+        auto eq = [this, speedPercent](uint16_t freq, uint16_t dur) {
+          enqueueNote(freq, (dur * 100) / speedPercent);
+        };
+        // Low warm pad — two soft base tones
+        eq(330, 60); eq(0, 15);
+        eq(415, 60); eq(0, 15);
+        // Mid rise — smooth step up
+        eq(523, 70); eq(0, 15);
+        eq(622, 70); eq(0, 20);
+        // High sparkle — bright finishing arpeggio
+        eq(784, 55); eq(0, 10);
+        eq(988, 55); eq(0, 10);
+        eq(1175, 160);           // Long sustain on top note
+        eq(0, 30);
+        eq(988, 90);             // Gentle decay echo
+        break;
+      }
+
+      case SOUND_ANIM_IDLE: {
+        // 0: Luna Idle — soft neutral chime (calm, looping feel)
+        enqueueNote(523, 50); enqueueNote(0, 15); enqueueNote(659, 70);
+        break;
+      }
+
+      case SOUND_ANIM_ANGRY: {
+        // 1: Angry Face — tense low growl descending
+        enqueueNote(494, 40); enqueueNote(0, 8);
+        enqueueNote(440, 40); enqueueNote(0, 8);
+        enqueueNote(370, 60);
+        break;
+      }
+
+      case SOUND_ANIM_HUNGRY_MENU: {
+        // 2: Hungry Menu — two rising alert pings
+        enqueueNote(784, 40); enqueueNote(0, 10);
+        enqueueNote(988, 60);
+        break;
+      }
+
+      case SOUND_ANIM_GETTING_HUNGRY: {
+        // 3: Getting Hungry — gentle rumble descend
+        enqueueNote(440, 45); enqueueNote(0, 10);
+        enqueueNote(392, 45); enqueueNote(0, 10);
+        enqueueNote(330, 65);
+        break;
+      }
+
+      case SOUND_ANIM_EAT_FISH: {
+        // 4: Eat Fish — happy little burble up
+        enqueueNote(659, 40); enqueueNote(0, 8);
+        enqueueNote(784, 40); enqueueNote(0, 8);
+        enqueueNote(988, 70);
+        break;
+      }
+
+      case SOUND_ANIM_DRINK_MILK: {
+        // 5: Drink Milk — soft smooth glide up
+        enqueueNote(523, 35); enqueueNote(0, 8);
+        enqueueNote(659, 35); enqueueNote(0, 8);
+        enqueueNote(784, 80);
+        break;
+      }
+
+      case SOUND_ANIM_EAT_SALAD: {
+        // 6: Eat Salad — crisp bright ascending pair
+        enqueueNote(880, 35); enqueueNote(0, 8);
+        enqueueNote(1047, 70);
+        break;
+      }
+
+      case SOUND_ANIM_GETTING_SICK: {
+        // 7: Getting Sick — warbling descend (uneasy feel)
+        enqueueNote(523, 45); enqueueNote(0, 8);
+        enqueueNote(466, 45); enqueueNote(0, 8);
+        enqueueNote(415, 45); enqueueNote(0, 8);
+        enqueueNote(370, 80);
+        break;
+      }
+
+      case SOUND_ANIM_SICK: {
+        // 8: Luna Sick — slow low moan
+        enqueueNote(294, 60); enqueueNote(0, 15);
+        enqueueNote(262, 90);
+        break;
+      }
+
+      case SOUND_ANIM_RECOVERED: {
+        // 9: Recovered — bright recovery fanfare up
+        enqueueNote(523, 45); enqueueNote(0, 8);
+        enqueueNote(659, 45); enqueueNote(0, 8);
+        enqueueNote(784, 45); enqueueNote(0, 8);
+        enqueueNote(1047, 90);
+        break;
+      }
+
+      case SOUND_ANIM_SLEEP: {
+        // 10: Going to Sleep — soft descending lullaby
+        enqueueNote(659, 50); enqueueNote(0, 12);
+        enqueueNote(587, 50); enqueueNote(0, 12);
+        enqueueNote(523, 80);
+        break;
+      }
+
+      case SOUND_ANIM_SLEEPING: {
+        // 11: Sleeping — very gentle single low hum (barely audible intent)
+        enqueueNote(330, 100);
+        break;
+      }
+
+      case SOUND_ANIM_WAKEUP: {
+        // 12: Waking Up — bright ascending wake chime
+        enqueueNote(523, 40); enqueueNote(0, 8);
+        enqueueNote(659, 40); enqueueNote(0, 8);
+        enqueueNote(784, 40); enqueueNote(0, 8);
+        enqueueNote(1047, 80); enqueueNote(0, 10);
+        enqueueNote(1319, 100);
+        break;
+      }
+
+      case SOUND_ANIM_THINKING: {
+        // 13: Luna Thinking — soft ambient two-note question
+        enqueueNote(784, 50); enqueueNote(0, 15);
+        enqueueNote(880, 80);
+        break;
+      }
         
       default:
         break;

@@ -123,19 +123,17 @@ arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoo
 arduino-cli upload -p COM6 --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc luna_firmware
 ```
 
-### 2. Flash Version 2 (ESP32-S3)
-Compile and upload to the ESP32-S3 smartwatch board:
+### 3. Flash Version 3 (Waveshare 1.69" ESP32-S3 Touch LCD)
+For the full documentation covering the 1.69-inch hardware specifications, UI component system, 9 screen modes, and gesture navigation, refer to the dedicated firmware guide:
+👉 **[Waveshare 1.69" Luna Smartwatch Firmware Guide](file:///w:/Mr.mario/1.69%20Luna%20Firmware/README.md)**
 
 ```powershell
 # Compile sketch
-arduino-cli compile --fqbn esp32:esp32:lolin_s3_mini:PartitionScheme=huge_app,CDCOnBoot=cdc luna_firmware_v2
+arduino-cli compile --fqbn esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=custom,PSRAM=opi,CDCOnBoot=cdc "1.69 Luna Firmware.ino"
 
-# Upload/Flash to COM port
-arduino-cli upload -p COM9 --fqbn esp32:esp32:lolin_s3_mini:PartitionScheme=huge_app,CDCOnBoot=cdc luna_firmware_v2
+# Upload to Waveshare 1.69" device
+arduino-cli upload -p COM3 --fqbn esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=custom,PSRAM=opi,CDCOnBoot=cdc "1.69 Luna Firmware.ino"
 ```
-
-> [!IMPORTANT]
-> Both firmware versions utilize `PartitionScheme=huge_app` configuration. Standard partition mapping will fail compilation due to binary sizes.
 
 ---
 

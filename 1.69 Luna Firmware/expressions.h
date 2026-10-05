@@ -8,6 +8,8 @@
 #include "image_logo.h"
 #include "qr_card.h"
 #include "wallpaper_image.h"
+#include "clock_wallpaper.h"
+#include "clock_font.h"
 #include "imu.h"
 #include "robot_eye_animation.h"
 #include "image_transfer.h"
@@ -190,6 +192,7 @@ public:
   void setThoughtText(const String& txt) { thoughtText = txt; }
   String getThoughtText() const { return thoughtText; }
   RobotEyeAnimation& getRobotEyeAnim() { return robotEyeAnim; }
+  void requestRedraw() { robotEyeAnim.requestRedraw(); }
   LunaFace(Adafruit_ST7789& tftDisp, GFXcanvas16& disp) 
     : tft(tftDisp), display(disp), currentExpr(EXPR_ROBOT_EYE), targetExpr(EXPR_ROBOT_EYE), defaultExpr(EXPR_ROBOT_EYE), stateLabel("ROBOT_EYE"), frameDelayMs(100), expressionChanged(true) {
     currentFrame = 0;
@@ -781,7 +784,6 @@ public:
       case SCREEN_MAPS:          nm = "M A P S";      break;
       case SCREEN_CARD:          nm = "C A R D";      break;
       case SCREEN_SETTINGS:      nm = "S E T U P";    break;
-      case SCREEN_LEVEL:         nm = "L E V E L";    break;
       case SCREEN_POMODORO:      nm = "F O C U S";    break;
       default:                   nm = "L U N A";      break;
     }
@@ -2153,17 +2155,257 @@ public:
     display.setCursor(x, y); display.print(text);
   }
 
+  // Draw a 4-bit alpha blended digit glyph
+  void drawAlphaGlyph(int x, int y, uint8_t digit, uint16_t color, bool drawShadow = true) {
+    if (digit > 9) return;
+    const DigitGlyph& g = CLOCK_DIGITS[digit];
+    uint8_t w = g.w;
+    uint8_t h = g.h;
+    const uint8_t* p = g.data;
+    uint16_t* buf = display.getBuffer();
+
+    // 1. Draw soft drop shadow first (offset +1, +2 in black)
+    if (drawShadow) {
+      const uint8_t* sp = p;
+      int sy = y + 2;
+      int sx = x + 1;
+      for (int r = 0; r < h; r++) {
+        int py = sy + r;
+        if (py >= 0 && py < SCREEN_HEIGHT) {
+          for (int c = 0; c < w; c += 2) {
+            uint8_t b = pgm_read_byte(sp++);
+            uint8_t a1 = (b >> 4) & 0x0F;
+            uint8_t a2 = b & 0x0F;
+            int px1 = sx + c;
+            if (px1 >= 0 && px1 < SCREEN_WIDTH && a1 > 2) {
+              int idx = py * SCREEN_WIDTH + px1;
+              buf[idx] = blendRGB565(buf[idx], 0x0000, a1 >> 1); // 50% shadow
+            }
+            int px2 = px1 + 1;
+            if (px2 < sx + w && px2 >= 0 && px2 < SCREEN_WIDTH && a2 > 2) {
+              int idx = py * SCREEN_WIDTH + px2;
+              buf[idx] = blendRGB565(buf[idx], 0x0000, a2 >> 1);
+            }
+          }
+        } else {
+          sp += (w + 1) / 2;
+        }
+      }
+    }
+
+    // 2. Draw main anti-aliased glyph
+    for (int r = 0; r < h; r++) {
+      int py = y + r;
+      if (py >= 0 && py < SCREEN_HEIGHT) {
+        for (int c = 0; c < w; c += 2) {
+          uint8_t b = pgm_read_byte(p++);
+          uint8_t a1 = (b >> 4) & 0x0F;
+          uint8_t a2 = b & 0x0F;
+          int px1 = x + c;
+          if (px1 >= 0 && px1 < SCREEN_WIDTH && a1 > 0) {
+            int idx = py * SCREEN_WIDTH + px1;
+            buf[idx] = blendRGB565(buf[idx], color, a1);
+          }
+          int px2 = px1 + 1;
+          if (px2 < x + w && px2 >= 0 && px2 < SCREEN_WIDTH && a2 > 0) {
+            int idx = py * SCREEN_WIDTH + px2;
+            buf[idx] = blendRGB565(buf[idx], color, a2);
+          }
+        }
+      } else {
+        p += (w + 1) / 2;
+      }
+    }
+  }
+
+  // Draw two-digit number (e.g. "10", "08", "28")
+  int drawTwoDigits(int startX, int startY, int val, uint16_t color) {
+    int d1 = (val / 10) % 10;
+    int d2 = val % 10;
+    drawAlphaGlyph(startX, startY, d1, color, true);
+    int w1 = CLOCK_DIGITS[d1].w;
+    int d2_x = startX + w1 + 3; // 3px digit kerning
+    drawAlphaGlyph(d2_x, startY, d2, color, true);
+    int w2 = CLOCK_DIGITS[d2].w;
+    return (d2_x + w2) - startX;
+  }
+
+  String formatWatchDate(const String& dStr, const String& dtStr) {
+    String shortDay = dStr.substring(0, 3);
+    if (shortDay.length() > 0) {
+      shortDay.setCharAt(0, toupper(shortDay.charAt(0)));
+      for (int i = 1; i < (int)shortDay.length(); i++) shortDay.setCharAt(i, tolower(shortDay.charAt(i)));
+    }
+    String dayNum = "";
+    String monName = "Oct";
+    int space = dtStr.indexOf(' ');
+    if (space > 0) {
+      String p1 = dtStr.substring(0, space);
+      String p2 = dtStr.substring(space + 1);
+      p1.trim(); p2.trim();
+      if (isDigit(p1.charAt(0))) {
+        dayNum = String(p1.toInt());
+        monName = p2;
+      } else {
+        monName = p1;
+        dayNum = String(p2.toInt());
+      }
+    } else {
+      dayNum = dtStr;
+    }
+    if (monName.length() >= 3) {
+      monName = monName.substring(0, 3);
+      monName.setCharAt(0, toupper(monName.charAt(0)));
+      monName.setCharAt(1, tolower(monName.charAt(1)));
+      monName.setCharAt(2, tolower(monName.charAt(2)));
+    }
+    return shortDay + ", " + monName + " " + dayNum;
+  }
+
+  void drawHeartIcon(int cx, int cy, uint16_t col) {
+    display.fillCircle(cx - 3, cy - 2, 4, col);
+    display.fillCircle(cx + 3, cy - 2, 4, col);
+    display.fillTriangle(cx - 7, cy - 1, cx + 7, cy - 1, cx, cy + 7, col);
+  }
+
+  void drawShoeIcon(int cx, int cy, uint16_t col) {
+    display.fillRoundRect(cx - 7, cy + 1, 14, 5, 2, col);
+    display.fillRoundRect(cx - 4, cy - 4, 8, 7, 2, col);
+    display.fillTriangle(cx + 4, cy + 3, cx + 7, cy + 3, cx + 5, cy - 1, col);
+    display.drawFastHLine(cx - 7, cy + 6, 14, 0xFFFF);
+  }
+
+  void drawFlameIcon(int cx, int cy, uint16_t col) {
+    display.fillCircle(cx, cy + 2, 5, col);
+    display.fillTriangle(cx - 5, cy + 2, cx + 5, cy + 2, cx, cy - 6, col);
+    display.fillTriangle(cx - 3, cy + 1, cx + 1, cy + 1, cx - 1, cy - 4, 0xFFE0);
+  }
+
+  void drawPinIcon(int cx, int cy, uint16_t col) {
+    display.fillCircle(cx, cy - 2, 5, col);
+    display.fillTriangle(cx - 4, cy - 1, cx + 4, cy - 1, cx, cy + 6, col);
+    display.fillCircle(cx, cy - 2, 2, 0x0862);
+  }
+
+  void drawClockTopStatusBar(int hour, int minute, bool is12Hour) {
+    char tBuf[8];
+    int dispH = hour;
+    if (is12Hour) {
+      dispH = hour % 12;
+      if (dispH == 0) dispH = 12;
+    }
+    snprintf(tBuf, sizeof(tBuf), "%02d:%02d", dispH, minute);
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(12, 7);
+    display.print(tBuf);
+
+    int pillX = 76, pillY = 4, pillW = 64, pillH = 16;
+    display.fillRoundRect(pillX, pillY, pillW, pillH, 8, 0x1275);
+    int icx = pillX + 9, icy = pillY + 8;
+    display.drawCircle(icx, icy, 5, TFT_WHITE);
+    display.drawLine(icx, icy, icx, icy - 3, TFT_WHITE);
+    display.drawLine(icx, icy, icx + 2, icy, TFT_WHITE);
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(pillX + 18, pillY + 5);
+    display.print("CLOCK");
+
+    int bx = 152, by = 6;
+    uint16_t bleColor = bleConnectedStatus ? 0x05BF : 0x4296;
+    display.drawLine(bx + 2, by, bx + 2, by + 10, bleColor);
+    display.drawLine(bx + 2, by + 1, bx + 5, by + 3, bleColor);
+    display.drawLine(bx + 5, by + 3, bx, by + 7, bleColor);
+    display.drawLine(bx, by + 3, bx + 5, by + 7, bleColor);
+    display.drawLine(bx + 5, by + 7, bx + 2, by + 9, bleColor);
+
+    int batX = 166, batY = 7;
+    int batW = 18, batH = 9;
+    display.drawRoundRect(batX, batY, batW, batH, 2, TFT_WHITE);
+    display.fillRect(batX + batW, batY + 2, 2, 5, TFT_WHITE);
+    
+    int pct = getBatteryPercentage(batteryVolts);
+    int fillW = constrain((pct * (batW - 4)) / 100, 1, batW - 4);
+    uint16_t batColor = (pct <= 20) ? 0xF800 : ((pct <= 50) ? 0xFD20 : 0x2688);
+    display.fillRect(batX + 2, batY + 2, fillW, batH - 4, batColor);
+
+    display.setTextSize(1);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(batX + batW + 5, batY + 1);
+    display.printf("%d%%", pct);
+
+    if (silentMode) {
+      int mx = 222, my = 6;
+      display.fillRect(mx, my + 3, 2, 4, TFT_WHITE);
+      display.fillTriangle(mx + 2, my + 1, mx + 2, my + 9, mx + 5, my + 5, TFT_WHITE);
+      display.drawLine(mx - 1, my + 1, mx + 7, my + 9, 0xF800);
+    }
+  }
+
+  void drawBottomCards(int steps) {
+    int cardY = 192;
+    int cardW = 48;
+    int cardH = 58;
+    int gap   = 6;
+    int startX = 15;
+
+    int bpm = 72 + (millis() / 1500) % 3;
+    int dispSteps = (steps > 0) ? steps : 3456;
+    int kcal = (dispSteps * 4) / 100;
+    if (kcal < 10) kcal = 320;
+    float km = (dispSteps * 0.00075f);
+    if (km < 0.1f) km = 2.4f;
+
+    for (int i = 0; i < 4; i++) {
+      int cx = startX + i * (cardW + gap);
+      display.fillRoundRect(cx, cardY, cardW, cardH, 10, 0x08A4);
+      display.drawRoundRect(cx, cardY, cardW, cardH, 10, 0x218A);
+
+      int icx = cx + cardW / 2;
+      int icy = cardY + 12;
+
+      char valBuf[16];
+      const char* subTxt = "";
+
+      if (i == 0) {
+        drawHeartIcon(icx, icy, 0xF986);
+        snprintf(valBuf, sizeof(valBuf), "%d", bpm);
+        subTxt = "bpm";
+      } else if (i == 1) {
+        drawShoeIcon(icx, icy, 0x34BF);
+        if (dispSteps >= 1000) {
+          snprintf(valBuf, sizeof(valBuf), "%d,%03d", dispSteps / 1000, dispSteps % 1000);
+        } else {
+          snprintf(valBuf, sizeof(valBuf), "%d", dispSteps);
+        }
+        subTxt = "steps";
+      } else if (i == 2) {
+        drawFlameIcon(icx, icy, 0xFD00);
+        snprintf(valBuf, sizeof(valBuf), "%d", kcal);
+        subTxt = "kcal";
+      } else {
+        drawPinIcon(icx, icy, 0x268C);
+        snprintf(valBuf, sizeof(valBuf), "%.1f", km);
+        subTxt = "km";
+      }
+
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      int vW = strlen(valBuf) * 6;
+      display.setCursor(cx + (cardW - vW) / 2, cardY + 27);
+      display.print(valBuf);
+
+      display.setTextColor(0x8C71);
+      int sW = strlen(subTxt) * 6;
+      display.setCursor(cx + (cardW - sW) / 2, cardY + 44);
+      display.print(subTxt);
+    }
+
+    display.fillRoundRect(107, 264, 15, 3, 1, TFT_WHITE);
+    display.fillRoundRect(126, 264, 8, 3, 1, 0x218A);
+  }
+
   void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour, int steps) {
-    ThemeColors theme = getTheme();
-    uint16_t themeAccent  = theme.accent;
-    uint16_t themeBg      = theme.bg;
-    uint16_t themeText    = theme.text;
-    uint16_t themeBorder  = theme.border;
-    uint16_t themeSubText = theme.subText;
-
-    // Clear display below status bar
-    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
-
     int dispHour = hour;
     if (is12Hour) {
       dispHour = hour % 12;
@@ -2171,111 +2413,39 @@ public:
     }
 
     if ((style % 2) == 0) {
-      // ── STYLE 0: MONOLITH MINIMAL PRECISION WATCHFACE (LUNA OS) ──────────
-      // Giant dominant floating digital time
-      char timeStr[6];
-      if (!timeSynced) {
-        snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
-      } else {
-        snprintf(timeStr, sizeof(timeStr), "%02d:%02d", dispHour, minute);
-      }
+      // ── STYLE 0: MODERN NIGHT MOUNTAIN LAKE WATCHFACE ─────────────────────
+      // 1. Copy 240x280 wallpaper from PROGMEM directly to PSRAM canvas
+      memcpy_P(display.getBuffer(), clock_night_bg, 240 * 280 * sizeof(uint16_t));
 
-      display.setTextSize(5);
-      display.setTextColor(themeText);
-      display.setCursor(20, 58);
-      display.print(timeStr);
+      // 2. Custom integrated top status bar
+      drawClockTopStatusBar(hour, minute, is12Hour);
 
-      // Floating live seconds or AM/PM
+      // 3. Two-line big stacked digits (White hours, Sky-Blue minutes)
+      drawTwoDigits(32, 50, dispHour, TFT_WHITE);
+      drawTwoDigits(32, 98, minute, 0x44DF);
+
+      // 4. Clean date text (e.g. "Tue, Oct 1")
+      String formattedDate = formatWatchDate(day, date);
+      int dX = 34, dY = 152;
       display.setTextSize(2);
-      display.setTextColor(themeAccent);
-      display.setCursor(182, 60);
-      if (is12Hour) {
-        display.print((hour >= 12) ? "PM" : "AM");
-      } else {
-        display.print(":");
-        if (second < 10) display.print("0");
-        display.print(second);
-      }
+      display.setTextColor(0x0000);
+      display.setCursor(dX + 1, dY + 1);
+      display.print(formattedDate);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(dX, dY);
+      display.print(formattedDate);
 
-      // Thin precision horizontal divider
-      display.drawFastHLine(20, 114, SCREEN_WIDTH - 40, themeBorder);
-
-      // Asymmetric date anchor (vertical cyan indicator rule)
-      display.fillRect(20, 126, 2, 46, themeAccent);
-
-      // Weekday in bold uppercase
-      display.setTextSize(3);
-      display.setTextColor(themeText);
-      display.setCursor(30, 128);
-      String dayUpper = day;
-      dayUpper.toUpperCase();
-      display.print(dayUpper);
-
-      // Date string
-      display.setTextSize(2);
-      display.setTextColor(themeSubText);
-      display.setCursor(30, 156);
-      String dateUpper = date;
-      dateUpper.toUpperCase();
-      display.print(dateUpper);
-
-      // Right-aligned secondary telemetry tags
-      display.setTextSize(1);
-      display.setTextColor(themeSubText);
-      display.setCursor(144, 130); display.print("SYS // NOMINAL");
-      display.setCursor(144, 145); display.print("RTC // SYNCED");
-      display.setCursor(144, 160); display.print("PWR // OPTIMAL");
-
-      // Thin precision divider
-      display.drawFastHLine(20, 188, SCREEN_WIDTH - 40, themeBorder);
-
-      // ── Lower Telemetry Rails ──
-      // Steps telemetry rail
-      display.setTextSize(1);
-      display.setTextColor(themeSubText);
-      display.setCursor(20, 198);
-      display.print("ACTIVITY");
-
-      display.setTextSize(2);
-      display.setTextColor(themeText);
-      display.setCursor(20, 210);
-      display.print(steps);
-      display.setTextSize(1);
-      display.setTextColor(themeSubText);
-      display.print(" STEPS");
-
-      display.drawFastHLine(20, 230, 90, themeBorder);
-      int stepW = (steps > 0) ? min(90, (steps * 90) / 10000) : 10;
-      display.drawFastHLine(20, 230, stepW, themeAccent);
-
-      // Power telemetry rail
-      int batteryPct = getBatteryPercentage(batteryVolts);
-      display.setTextSize(1);
-      display.setTextColor(themeSubText);
-      display.setCursor(130, 198);
-      display.print("TELEMETRY");
-
-      display.setTextSize(2);
-      display.setTextColor(themeText);
-      display.setCursor(130, 210);
-      display.print(batteryPct);
-      display.setTextSize(1);
-      display.setTextColor(themeSubText);
-      display.print("% PWR");
-
-      display.drawFastHLine(130, 230, 90, themeBorder);
-      int battW = min(90, (batteryPct * 90) / 100);
-      uint16_t battCol = (batteryPct < 25) ? 0xF800 : ((batteryPct < 55) ? 0xFFE0 : 0x07E0);
-      display.drawFastHLine(130, 230, battW, battCol);
-
-      // Sub-footer signature
-      display.setTextSize(1);
-      display.setTextColor(themeBorder);
-      display.setCursor(54, 256);
-      display.print("LUNA OS // INSTRUMENT");
-
+      // 5. 4 Bottom telemetry cards (Heart, Steps, Calories, Distance) & page indicator
+      drawBottomCards(steps);
     } else {
       // ── STYLE 1: AEROSPACE CHRONO TELEMETRY ──────────────────────────────
+      drawStatusBar(hour, minute);
+      ThemeColors theme = getTheme();
+      uint16_t themeAccent  = theme.accent;
+      uint16_t themeText    = theme.text;
+      uint16_t themeBorder  = theme.border;
+      uint16_t themeSubText = theme.subText;
+
       char hStr[4], mStr[4];
       snprintf(hStr, sizeof(hStr), "%02d", dispHour);
       snprintf(mStr, sizeof(mStr), "%02d", minute);
@@ -2413,185 +2583,6 @@ public:
       }
     }
     display.setTextSize(1);
-  }
-
-  void drawLevelScreen() {
-    ThemeColors theme = getTheme();
-    uint16_t themeAccent  = theme.accent;
-    uint16_t themeBg      = theme.bg;
-    uint16_t themeText    = theme.text;
-    uint16_t themeBorder  = theme.border;
-    uint16_t themeSubText = theme.subText;
-
-    // Clear display below the status bar
-    display.fillRect(0, 22, SCREEN_WIDTH, SCREEN_HEIGHT - 22, themeBg);
-
-    // Header context
-    display.setTextSize(1);
-    display.setTextColor(themeAccent);
-    display.setCursor(20, 28);
-    display.print("AEROSPACE ATTITUDE // QMI8658");
-
-    // Read IMU data
-    float ax = 0.0f, ay = 0.0f, az = 1.0f;
-    float gx = 0.0f, gy = 0.0f, gz = 0.0f;
-    bool hasData = false;
-
-    static float offsetX = 0.0f;
-    static float offsetY = 0.0f;
-    static float offsetZ = 0.0f;
-
-    if (imu.isInitialized()) {
-      hasData = imu.readMotion(ax, ay, az, gx, gy, gz);
-    }
-
-    if (!hasData) {
-      // Simulation mode
-      float t = millis() / 1000.0f;
-      ax = sin(t * 1.5f) * 0.4f;
-      ay = cos(t * 1.2f) * 0.3f;
-      az = sqrt(max(0.0f, 1.0f - ax*ax - ay*ay));
-      gx = cos(t * 2.0f) * 80.0f;
-      gy = sin(t * 2.5f) * 60.0f;
-      gz = sin(t * 1.0f) * 40.0f;
-    }
-
-    // Apply calibration request
-    if (calibrateRequest) {
-      offsetX = ax;
-      offsetY = ay;
-      offsetZ = az - 1.0f;
-      calibrateRequest = false;
-      audio.playSound(SOUND_POWERUP);
-    }
-
-    ax -= offsetX;
-    ay -= offsetY;
-    az -= offsetZ;
-
-    // Compute Pitch & Roll in degrees
-    float pitch = atan2(-ax, sqrt(ay * ay + az * az)) * 57.29578f;
-    float roll = atan2(ay, az) * 57.29578f;
-
-    // Center coordinates for large central visualization
-    int cx = 120;
-    int cy = 104;
-    int maxRadius = 44;
-
-    // Precision aerospace reticle rings
-    display.drawCircle(cx, cy, maxRadius, themeBorder);
-    display.drawCircle(cx, cy, 24, themeBorder);
-    display.drawCircle(cx, cy, 8, themeBorder);
-
-    // Calibrated crosshairs with precision ticks
-    display.drawFastHLine(cx - maxRadius - 6, cy, (maxRadius + 6) * 2, themeBorder);
-    display.drawFastVLine(cx, cy - maxRadius - 6, (maxRadius + 6) * 2, themeBorder);
-    // 45-degree tick marks
-    display.drawLine(cx - 16, cy - 16, cx - 22, cy - 22, themeBorder);
-    display.drawLine(cx + 16, cy - 16, cx + 22, cy - 22, themeBorder);
-    display.drawLine(cx - 16, cy + 16, cx - 22, cy + 22, themeBorder);
-    display.drawLine(cx + 16, cy + 16, cx + 22, cy + 22, themeBorder);
-
-    // Target positions
-    float targetBx = (float)cx - (ay * 38.0f);
-    float targetBy = (float)cy - (ax * 38.0f);
-
-    float dist = sqrt((targetBx - cx) * (targetBx - cx) + (targetBy - cy) * (targetBy - cy));
-    if (dist > (float)(maxRadius - 6)) {
-      float ang = atan2(targetBy - cy, targetBx - cx);
-      targetBx = cx + cos(ang) * (float)(maxRadius - 6);
-      targetBy = cy + sin(ang) * (float)(maxRadius - 6);
-    }
-
-    // Physical gliding interpolation (low-pass filter for smooth flight dynamics)
-    static float smoothBx    = 120.0f;
-    static float smoothBy    = 104.0f;
-    static float smoothPitch = 0.0f;
-    static float smoothRoll  = 0.0f;
-
-    smoothBx    += (targetBx - smoothBx)    * 0.28f;
-    smoothBy    += (targetBy - smoothBy)    * 0.28f;
-    smoothPitch += (pitch - smoothPitch)    * 0.25f;
-    smoothRoll  += (roll - smoothRoll)      * 0.25f;
-
-    bool isLevel = (fabsf(smoothPitch) < 1.0f && fabsf(smoothRoll) < 1.0f);
-
-    // Draw gliding reticle indicator
-    if (isLevel) {
-      display.fillCircle((int)smoothBx, (int)smoothBy, 5, 0x07E0);
-      display.drawCircle((int)smoothBx, (int)smoothBy, 8, 0x07E0);
-      display.setTextSize(1);
-      display.setTextColor(0x07E0);
-      const char* lvlTxt = "LEVELED";
-      display.setCursor(cx - (strlen(lvlTxt) * 6) / 2, 154);
-      display.print(lvlTxt);
-    } else {
-      display.fillCircle((int)smoothBx, (int)smoothBy, 4, themeAccent);
-      display.drawCircle((int)smoothBx, (int)smoothBy, 7, themeText);
-      display.setTextSize(1);
-      display.setTextColor(themeAccent);
-      char tiltBuf[16];
-      snprintf(tiltBuf, sizeof(tiltBuf), "TILT: %.1f deg", sqrt(ax * ax + ay * ay) * 57.3f);
-      display.setCursor(cx - (strlen(tiltBuf) * 6) / 2, 154);
-      display.print(tiltBuf);
-    }
-
-    // ── Asymmetric Unboxed Pitch & Roll Typography ──────────────────────────
-    display.drawFastHLine(20, 168, SCREEN_WIDTH - 40, themeBorder);
-
-    // Left column: Pitch
-    display.setTextSize(1);
-    display.setTextColor(themeSubText);
-    display.setCursor(20, 174);
-    display.print("PITCH");
-
-    display.setTextSize(3);
-    display.setTextColor(themeText);
-    char pitchStr[12];
-    snprintf(pitchStr, sizeof(pitchStr), "%+.1f", smoothPitch);
-    display.setCursor(20, 188);
-    display.print(pitchStr);
-    display.setTextSize(2);
-    display.print((char)247);
-
-    // Right column: Roll
-    display.setTextSize(1);
-    display.setTextColor(themeSubText);
-    display.setCursor(130, 174);
-    display.print("ROLL");
-
-    display.setTextSize(3);
-    display.setTextColor(themeText);
-    char rollStr[12];
-    snprintf(rollStr, sizeof(rollStr), "%+.1f", smoothRoll);
-    display.setCursor(130, 188);
-    display.print(rollStr);
-    display.setTextSize(2);
-    display.print((char)247);
-
-    // ── Zero-Center Balance / Gyro Attitude Deflection Bar ──────────────────
-    int barY = 222;
-    int barW = SCREEN_WIDTH - 40;
-    display.drawFastHLine(20, barY, barW, themeBorder);
-    display.drawFastVLine(120, barY - 4, 9, themeSubText); // Zero mark
-
-    // Deflection marker
-    int rollMarkerX = 120 + (int)(smoothRoll * 1.2f);
-    rollMarkerX = constrain(rollMarkerX, 22, SCREEN_WIDTH - 22);
-    display.fillTriangle(rollMarkerX, barY - 3, rollMarkerX - 3, barY - 8, rollMarkerX + 3, barY - 8, themeAccent);
-
-    // Telemetry readout
-    display.setTextSize(1);
-    display.setTextColor(themeSubText);
-    display.setCursor(20, 236);
-    char gyroBuf[36];
-    snprintf(gyroBuf, sizeof(gyroBuf), "RATE // X:%d Y:%d Z:%d", (int)gx, (int)gy, (int)gz);
-    display.print(gyroBuf);
-
-    // Bottom Calibration Trigger
-    display.setTextColor(themeBorder);
-    display.setCursor(44, 256);
-    display.print("TAP SCREEN TO ZERO CAL");
   }
 
   // ------------------ Primary Smartwatch Draw Adapter ------------------
@@ -2839,7 +2830,7 @@ public:
     if (popupActive) {
       drawPopup();
     } else {
-      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && currentScreen != SCREEN_MAPS) {
+      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_CLOCK) {
         drawStatusBar(hour, minute);
       }
       
@@ -2961,9 +2952,6 @@ public:
           break;
         case SCREEN_CARD:
           qrCard.drawQRScreen(display);
-          break;
-        case SCREEN_LEVEL:
-          drawLevelScreen();
           break;
         case SCREEN_POMODORO:
           extern int pomoRemainingSec, pomoTotalSec, pomoState, pomoMode, pomoCompletedSessions;

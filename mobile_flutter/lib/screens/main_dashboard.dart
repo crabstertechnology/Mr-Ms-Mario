@@ -78,6 +78,52 @@ class _MainDashboardState extends State<MainDashboard> {
   String _selectedEventType = 'meeting';
   DateTime _selectedEventDateTime = DateTime.now();
   DateTime _calendarViewDate = DateTime.now();
+  String _selectedSquadCharacter = 'panda';
+
+  static final List<Map<String, dynamic>> _squadMembers = [
+    {
+      'id': 'panda',
+      'name': 'Panda',
+      'role': 'Leader',
+      'asset': 'assets/characters/panda.png',
+      'color': Color(0xFF6366F1),
+    },
+    {
+      'id': 'bunny',
+      'name': 'Bunny',
+      'role': 'Synth Master',
+      'asset': 'assets/characters/bunny.png',
+      'color': Color(0xFF00E5FF),
+    },
+    {
+      'id': 'fox',
+      'name': 'Fox',
+      'role': 'BLE Scout',
+      'asset': 'assets/characters/fox.png',
+      'color': Color(0xFFFF7A00),
+    },
+    {
+      'id': 'turtle',
+      'name': 'Turtle',
+      'role': 'Logic & Time',
+      'asset': 'assets/characters/turtle.png',
+      'color': Color(0xFF10B981),
+    },
+    {
+      'id': 'cat',
+      'name': 'Cat',
+      'role': 'Arcade Gamer',
+      'asset': 'assets/characters/cat.png',
+      'color': Color(0xFF9333EA),
+    },
+    {
+      'id': 'bird',
+      'name': 'Bird',
+      'role': 'Messenger',
+      'asset': 'assets/characters/bird.png',
+      'color': Color(0xFF38BDF8),
+    },
+  ];
   bool _isSettingsSaving = false;
   bool _isCompiling = false;
   String _localActiveGifId = 'sprite_ai_0';
@@ -1258,7 +1304,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           alignment: Alignment.center,
                           child: Text(
                             bleState.isScanning
-                                ? "Searching for Mr.&Ms Luna companion robot..."
+                                ? "Searching for SYNAPS companion robot..."
                                 : "No devices found.",
                             style: GoogleFonts.outfit(color: textColor60),
                           ),
@@ -1297,7 +1343,7 @@ class _MainDashboardState extends State<MainDashboard> {
                                       final id = result.device.remoteId.str;
                                       final name = result.device.platformName.isNotEmpty
                                           ? result.device.platformName
-                                          : "Mr. Luna Robot";
+                                          : "SYNAPS Robot";
                                       final isMiss = name.toLowerCase().contains("ms") || name.toLowerCase().contains("miss");
                                       final newRobot = RobotProfile(
                                         id: id,
@@ -1385,7 +1431,7 @@ class _MainDashboardState extends State<MainDashboard> {
         activeLabel = 'Calendar';
       } else if (screenMode == 'GAMES' || screenMode == 'ARCADE') {
         activeGifId = 'games';
-        activeLabel = 'Luna Arcade';
+        activeLabel = 'SYNAPS Arcade';
       } else if (screenMode == 'SETTINGS' || screenMode == 'SETTING') {
         activeGifId = 'settings';
         activeLabel = 'Settings';
@@ -1461,96 +1507,127 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  // Floating capsule Bottom Navigation Bar
+  // ================= 5-HUB FLOATING CYBER-DOCK NAVIGATION =================
   Widget _buildBottomNavigationBar() {
+    final db = Provider.of<DatabaseService>(context, listen: false);
+    final ble = Provider.of<BLEService>(context, listen: false);
+
+    // 5 primary hubs: Hub, Faces, Synth, Synapse, Apps/Menu
     final List<Map<String, dynamic>> items = [
-      {'icon': Icons.home_rounded, 'label': 'Home'},
-      {'icon': Icons.face_rounded, 'label': 'Expressions'},
-      {'icon': Icons.audiotrack_rounded, 'label': 'Sounds'},
-      {'icon': Icons.cloud_sync_rounded, 'label': 'Luna Link'},
-      {'icon': Icons.calendar_month_rounded, 'label': 'Calendar'},
-      {'icon': Icons.contact_mail_rounded, 'label': 'Card'},
-      {'icon': Icons.person_rounded, 'label': 'Profile'},
+      {'idx': 0, 'icon': Icons.space_dashboard_rounded, 'label': 'Hub'},
+      {'idx': 1, 'icon': Icons.face_retouching_natural_rounded, 'label': 'Faces'},
+      {'idx': 2, 'icon': Icons.graphic_eq_rounded, 'label': 'Synth'},
+      {'idx': 3, 'icon': Icons.hub_rounded, 'label': 'Synapse'},
+      {'idx': -1, 'icon': Icons.apps_rounded, 'label': 'Apps'},
     ];
 
+    // Determine if secondary tab (Calendar=4, Card=5, System=6) is active
+    final bool isSecondaryActive = _activeTabIdx >= 4;
+
     return Container(
-      margin: const EdgeInsets.only(left: 8, right: 8, bottom: 12),
-      height: 66,
+      margin: const EdgeInsets.only(left: 14, right: 14, bottom: 12),
+      height: 70,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _accentColor.withOpacity(0.15), width: 1.2),
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: _accentColor.withOpacity(0.25), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: _accentColor.withOpacity(0.10),
-            blurRadius: 16,
-            spreadRadius: 1,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF0F172A).withOpacity(0.08),
+            blurRadius: 24,
+            spreadRadius: 0,
+            offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: _accentColor.withOpacity(0.18),
+            blurRadius: 16,
+            spreadRadius: 0,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Row(
-          children: List.generate(items.length, (idx) {
-            final isSelected = _activeTabIdx == idx;
-            return Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  setState(() {
-                    _activeTabIdx = idx;
-                    if (idx == 6) {
-                      _currentSettingsSection = 'categories';
-                    }
-                  });
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                  margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isSelected ? _accentColor : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        items[idx]['icon'] as IconData,
-                        color: isSelected ? Colors.white : const Color(0xFF94A3B8),
-                        size: 20,
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            child: Row(
+              children: items.map((item) {
+                final int targetIdx = item['idx'] as int;
+                final bool isMenu = targetIdx == -1;
+                final bool isSelected = isMenu ? isSecondaryActive : _activeTabIdx == targetIdx;
+
+                return Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (isMenu) {
+                        _showQuickCommandMenu(context, db, ble);
+                      } else {
+                        setState(() {
+                          _activeTabIdx = targetIdx;
+                        });
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      decoration: BoxDecoration(
+                        gradient: isSelected
+                            ? LinearGradient(
+                                colors: [_accentColor, const Color(0xFF8B5CF6)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : null,
+                        color: isSelected ? null : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: _accentColor.withOpacity(0.35),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ]
+                            : null,
                       ),
-                      const SizedBox(height: 3),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          items[idx]['label'] as String,
-                          maxLines: 1,
-                          style: GoogleFonts.outfit(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            item['icon'] as IconData,
                             color: isSelected ? Colors.white : const Color(0xFF64748B),
-                            fontSize: 9.0,
-                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                            size: isSelected ? 22 : 20,
                           ),
-                        ),
+                          const SizedBox(height: 3),
+                          Text(
+                            isMenu && isSecondaryActive
+                                ? (_activeTabIdx == 4 ? 'Events' : (_activeTabIdx == 5 ? 'ID Card' : 'System'))
+                                : item['label'] as String,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.outfit(
+                              color: isSelected ? Colors.white : const Color(0xFF64748B),
+                              fontSize: 10,
+                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            );
-          }),
+                );
+              }).toList(),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  // Status indicator and version badges helper methods
   Widget _buildStatusDot(bool connected) {
     return Container(
       width: 6,
@@ -1584,42 +1661,42 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  // Top header navbar
+  // ================= 1. REVOLUTIONARY CYBER-CAPSULE TOP BAR =================
   Widget _buildTopNavigation(BLEService ble) {
     final db = Provider.of<DatabaseService>(context, listen: false);
     _isMsLuna = db.primaryRobot?.variant == 'ms_luna';
     final primaryRobot = db.primaryRobot;
     final hasRelationship = primaryRobot != null && primaryRobot.companionDeviceId != null;
-    String primaryName = primaryRobot?.name ?? (_isMsLuna ? "Ms. Luna Robot" : "Mr. Luna Robot");
-    if (_isMsLuna && (primaryName == "Mr. Luna Robot" || primaryName == "Mr. Luna")) {
-      primaryName = "Ms. Luna Robot";
-    } else if (!_isMsLuna && (primaryName == "Ms. Luna Robot" || primaryName == "Ms. Luna")) {
-      primaryName = "Mr. Luna Robot";
-    }
-    
-    String? companionName;
-    bool isCompanionMsLuna = false;
-    if (hasRelationship) {
-      final companion = db.robots.firstWhere(
-        (r) => r.id == db.primaryRobot!.companionDeviceId, 
-        orElse: () => RobotProfile(id: '', name: 'Companion', variant: 'mr_luna', remoteId: '', lastConnected: DateTime.now())
-      );
-      companionName = companion.name;
-      isCompanionMsLuna = companion.variant == 'ms_luna';
+    String primaryName = primaryRobot?.name ?? (_isMsLuna ? "SYNAPS Cyber" : "SYNAPS Prime");
+    if (primaryName == "SYNAPS Prime" || primaryName == "Mr. Luna" || primaryName == "SYNAPS Cyber" || primaryName == "Ms. Luna") {
+      primaryName = _isMsLuna ? "SYNAPS Cyber" : "SYNAPS Prime";
     }
 
+    final activeMember = _squadMembers.firstWhere(
+      (m) => m['id'] == _selectedSquadCharacter,
+      orElse: () => _squadMembers[0],
+    );
+    final memberColor = activeMember['color'] as Color;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      margin: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(
-          color: _accentColor.withOpacity(0.12),
-          width: 1.2,
-        )),
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: _accentColor.withOpacity(0.25),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 6,
+            color: const Color(0xFF0F172A).withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: memberColor.withOpacity(0.12),
+            blurRadius: 12,
             offset: const Offset(0, 2),
           ),
         ],
@@ -1627,139 +1704,190 @@ class _MainDashboardState extends State<MainDashboard> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Left: Menu & Brand Pill
           Row(
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _accentColor.withOpacity(0.2),
-                      blurRadius: 8,
+              // High-Tech Menu Button
+              GestureDetector(
+                onTap: () => _showQuickCommandMenu(context, db, ble),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _accentColor.withOpacity(0.25),
+                      width: 1.2,
                     ),
-                  ],
-                  image: const DecorationImage(
-                    image: AssetImage('assets/logo.png'),
-                    fit: BoxFit.cover,
+                  ),
+                  child: Icon(
+                    Icons.grid_view_rounded,
+                    color: _accentColor,
+                    size: 20,
                   ),
                 ),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+
+              // Brand Pill with 3D Squad Logo
+              Row(
                 children: [
-                  if (!hasRelationship) ...[
-                    Row(
-                      children: [
-                        Text(
-                          primaryName,
-                          style: GoogleFonts.outfit(
-                            color: _accentColor,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.2,
-                          ),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: memberColor,
+                        width: 1.6,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: memberColor.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
-                        const SizedBox(width: 6),
-                        _buildStatusDot(ble.isConnected),
-                        if (ble.isConnected) ...[
-                          const SizedBox(width: 6),
-                          _buildVersionBadge(ble.hasSpeaker),
-                        ],
                       ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      ble.isConnected ? "Connected" : "Disconnected",
-                      style: GoogleFonts.outfit(color: textColor54, fontSize: 10, fontWeight: FontWeight.w500),
-                    ),
-                  ] else ...[
-                    Row(
-                      children: [
-                        Text(
-                          primaryName,
-                          style: GoogleFonts.outfit(
-                            color: _accentColor,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        _buildStatusDot(ble.isConnected),
-                        if (ble.isConnected) ...[
-                          const SizedBox(width: 4),
-                          _buildVersionBadge(ble.hasSpeaker),
-                        ],
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: Icon(
-                            db.primaryRobot?.relationshipType == 'couple' ? Icons.favorite : Icons.link,
-                            color: db.primaryRobot?.relationshipType == 'couple' ? Colors.pink : Colors.green,
-                            size: 14,
-                          ),
-                        ),
-                        Text(
-                          companionName!,
-                          style: GoogleFonts.outfit(
-                            color: isCompanionMsLuna ? const Color(0xFFE91E8C) : const Color(0xFF0284C7),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        _buildStatusDot(ble.isCompanionConnected),
-                        if (ble.isCompanionConnected) ...[
-                          const SizedBox(width: 4),
-                          _buildVersionBadge(ble.companionHasSpeaker),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "Bond: ${db.primaryRobot?.relationshipType.toUpperCase() ?? 'NONE'}",
-                      style: GoogleFonts.outfit(
-                        color: textColor54,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w500,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset(
+                        'assets/logo.png',
+                        fit: BoxFit.cover,
                       ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            "SYNAPS",
+                            style: GoogleFonts.outfit(
+                              color: _accentColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: memberColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              (activeMember['name'] as String).toUpperCase(),
+                              style: GoogleFonts.outfit(
+                                color: memberColor,
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: ble.isConnected ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (ble.isConnected ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withOpacity(0.6),
+                                  blurRadius: 4,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            ble.isConnected ? "LINKED (${ble.batteryPercentage}%)" : "STANDBY",
+                            style: GoogleFonts.outfit(
+                              color: ble.isConnected ? const Color(0xFF059669) : const Color(0xFFD97706),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ],
           ),
-          
+
+          // Right: Action Hub (Notifications, BLE, Profile)
           Row(
             children: [
+              // Notification Hub Button with Active Badge
               GestureDetector(
-                onTap: () => _showTerminalLogsDialog(ble),
+                onTap: () => _showNotificationCenterSheet(context, ble, db),
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
-                    shape: BoxShape.circle,
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: const Color(0xFFFF9800).withOpacity(0.35),
+                      color: const Color(0xFFE2E8F0),
+                      width: 1.2,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.terminal,
-                    color: Color(0xFFE65100),
-                    size: 18,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        Icons.notifications_active_outlined,
+                        color: _accentColor,
+                        size: 20,
+                      ),
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFFEF4444),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0xFFEF4444),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
               const SizedBox(width: 8),
+
+              // BLE Quick Sync Pill
               GestureDetector(
                 onTap: () async {
-                  final db = Provider.of<DatabaseService>(context, listen: false);
                   if (ble.isConnected) {
                     ble.disconnect();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text("Disconnected from robots."),
+                        content: Text("Disconnected from SYNAPS Robot."),
                         duration: Duration(seconds: 2),
                       ),
                     );
@@ -1778,35 +1906,52 @@ class _MainDashboardState extends State<MainDashboard> {
                   }
                 },
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
-                    color: ble.isConnected
-                        ? _accentColor.withOpacity(0.10)
-                        : const Color(0xFFF5F5F5),
-                    shape: BoxShape.circle,
+                    color: ble.isConnected ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: ble.isConnected
-                          ? _accentColor.withOpacity(0.35)
-                          : const Color(0xFF9E9E9E).withOpacity(0.3),
+                      color: ble.isConnected ? const Color(0xFF10B981).withOpacity(0.5) : const Color(0xFFCBD5E1),
+                      width: 1.2,
                     ),
                   ),
                   child: Icon(
-                    ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                    color: ble.isConnected ? _accentColor : const Color(0xFF9E9E9E),
-                    size: 18,
+                    ble.isConnected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded,
+                    color: ble.isConnected ? const Color(0xFF059669) : const Color(0xFF94A3B8),
+                    size: 20,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
+
+              // Profile Avatar with Neon Ring
               GestureDetector(
-                onTap: () => setState(() => _activeTabIdx = 6),
-                child: CircleAvatar(
-                  radius: 17,
-                  backgroundImage: NetworkImage(
-                    Provider.of<FirebaseService>(context).currentUser?['photoUrl'] ?? 
-                    'https://api.dicebear.com/7.x/adventurer/png?seed=Luna'
+                onTap: () => _showUserProfileDialog(context),
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: memberColor,
+                      width: 1.8,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: memberColor.withOpacity(0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  backgroundColor: _accentColor.withOpacity(0.1),
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundImage: NetworkImage(
+                      Provider.of<FirebaseService>(context).currentUser?['photoUrl'] ?? 
+                      'https://api.dicebear.com/7.x/adventurer/png?seed=Luna'
+                    ),
+                    backgroundColor: _accentColor.withOpacity(0.1),
+                  ),
                 ),
               ),
             ],
@@ -1816,6 +1961,411 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
+  // ================= 2. SYNAPS NOTIFICATION CENTER SHEET =================
+  void _showNotificationCenterSheet(BuildContext context, BLEService ble, DatabaseService db) {
+    final activeMember = _squadMembers.firstWhere(
+      (m) => m['id'] == _selectedSquadCharacter,
+      orElse: () => _squadMembers[0],
+    );
+    final memberColor = activeMember['color'] as Color;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.78,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.97),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border.all(color: _accentColor.withOpacity(0.2), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.15),
+                blurRadius: 32,
+                offset: const Offset(0, -8),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Drag Handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+
+              // Sheet Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _accentColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.notifications_active_rounded, color: _accentColor, size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "NOTIFICATION HUB",
+                              style: GoogleFonts.outfit(
+                                color: textColor,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            Text(
+                              "Real-time telemetry & device alerts",
+                              style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(
+                        "DONE",
+                        style: GoogleFonts.outfit(color: _accentColor, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+              // Notification Cards List
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    // Card 1: Hardware Core Telemetry
+                    _buildNotifCard(
+                      icon: Icons.memory_rounded,
+                      iconColor: const Color(0xFF10B981),
+                      title: "ESP32-S3 Hardware Core",
+                      time: "LIVE TELEMETRY",
+                      message: ble.isConnected
+                          ? "Linked via BLE • 80MHz SPI Double-Buffer • Battery at ${ble.batteryPercentage}%"
+                          : "Device offline • Standby mode ready to sync with Waveshare 1.69\"",
+                      isUrgent: !ble.isConnected,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Card 2: Active Squad Companion Alert
+                    _buildNotifCard(
+                      icon: Icons.auto_awesome_rounded,
+                      iconColor: memberColor,
+                      title: "${activeMember['name']} (${activeMember['role']})",
+                      time: "SQUAD AI",
+                      message: "${activeMember['name']} is ready! Tap expressions or synth to interact with the companion.",
+                      isUrgent: false,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Card 3: Luna Pet & Tamagotchi Evolution
+                    _buildNotifCard(
+                      icon: Icons.pets_rounded,
+                      iconColor: const Color(0xFF8B5CF6),
+                      title: "Tamagotchi Evolution: ${ble.lunaStage}",
+                      time: "PET STATUS",
+                      message: "Level ${ble.lunaLevel} (${ble.lunaXP} XP) • ${ble.lunaFeeds} meals fed • Age: ${ble.lunaAge} days.",
+                      isUrgent: false,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Card 4: Phone Push Forwarding Bridge
+                    _buildNotifCard(
+                      icon: Icons.cell_tower_rounded,
+                      iconColor: const Color(0xFF0284C7),
+                      title: "Notification Forwarding Relay",
+                      time: "BRIDGE",
+                      message: db.notificationSyncEnabled
+                          ? "Active • WhatsApp, Google Maps & Caller alerts relayed to 1.69\" display."
+                          : "Paused in Settings. Enable notification sync to push phone alerts to robot.",
+                      isUrgent: false,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNotifCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String time,
+    required String message,
+    required bool isUrgent,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isUrgent ? const Color(0xFFFCA5A5) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.outfit(
+                        color: textColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      time,
+                      style: GoogleFonts.outfit(
+                        color: textColor54,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 9,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: GoogleFonts.outfit(
+                    color: textColor60,
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ================= 3. SYNAPS QUICK COMMAND DRAWER / MENU =================
+  void _showQuickCommandMenu(BuildContext context, DatabaseService db, BLEService ble) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.97),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border.all(color: _accentColor.withOpacity(0.2), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.15),
+                blurRadius: 32,
+                offset: const Offset(0, -8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag Handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "SYNAPS COMMAND MATRIX",
+                    style: GoogleFonts.outfit(
+                      color: textColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Command Grid
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 3,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.05,
+                children: [
+                  _buildCommandTile(
+                    icon: Icons.calendar_month_rounded,
+                    label: "Events",
+                    color: const Color(0xFF3B82F6),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      setState(() => _activeTabIdx = 4);
+                    },
+                  ),
+                  _buildCommandTile(
+                    icon: Icons.badge_rounded,
+                    label: "ID Card",
+                    color: const Color(0xFF8B5CF6),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      setState(() => _activeTabIdx = 5);
+                    },
+                  ),
+                  _buildCommandTile(
+                    icon: Icons.tune_rounded,
+                    label: "System",
+                    color: const Color(0xFF10B981),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      setState(() {
+                        _activeTabIdx = 6;
+                        _currentSettingsSection = 'categories';
+                      });
+                    },
+                  ),
+                  _buildCommandTile(
+                    icon: Icons.terminal_rounded,
+                    label: "Console Logs",
+                    color: const Color(0xFFF59E0B),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showTerminalLogsDialog(ble);
+                    },
+                  ),
+                  _buildCommandTile(
+                    icon: Icons.bluetooth_searching_rounded,
+                    label: "BLE Scanner",
+                    color: const Color(0xFFEC4899),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showBleScanner(db, ble);
+                    },
+                  ),
+                  _buildCommandTile(
+                    icon: Icons.invert_colors_rounded,
+                    label: "Invert Color",
+                    color: const Color(0xFF06B6D4),
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      final newVal = !db.oledInvert;
+                      await db.updateOledInvert(newVal);
+                      if (ble.isConnected) {
+                        ble.transmitText(newVal ? "INVERT:ON" : "INVERT:OFF");
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("OLED Invert: ${newVal ? 'ON' : 'OFF'}")),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCommandTile({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withOpacity(0.25), width: 1.2),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                color: textColor,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================= 4. REDESIGNED SYNAPS CYBER-ID PROFILE MODAL =================
   void _showUserProfileDialog(BuildContext context) {
     final firebase = Provider.of<FirebaseService>(context, listen: false);
     final user = firebase.currentUser;
@@ -1826,63 +2376,164 @@ class _MainDashboardState extends State<MainDashboard> {
     final robotNameController = TextEditingController(text: user['robotName'] ?? '');
     String selectedVariant = user['robotVariant'] ?? 'ms_luna';
 
-    showDialog(
+    final activeMember = _squadMembers.firstWhere(
+      (m) => m['id'] == _selectedSquadCharacter,
+      orElse: () => _squadMembers[0],
+    );
+    final memberColor = activeMember['color'] as Color;
+
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             final isPink = selectedVariant == 'ms_luna';
             final themeColor = isPink ? const Color(0xFFEC4899) : const Color(0xFF0074D9);
 
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              content: SingleChildScrollView(
+            return Container(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 14,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border.all(color: themeColor.withOpacity(0.25), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0F172A).withOpacity(0.16),
+                    blurRadius: 32,
+                    offset: const Offset(0, -8),
+                  ),
+                ],
+              ),
+              child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Handle
                     Center(
-                      child: Stack(
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        width: 48,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFCBD5E1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+
+                    // Cyber-ID Card Header
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [themeColor.withOpacity(0.12), memberColor.withOpacity(0.08)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: themeColor.withOpacity(0.25)),
+                      ),
+                      child: Row(
                         children: [
-                          CircleAvatar(
-                            radius: 36,
-                            backgroundImage: NetworkImage(user['photoUrl'] ?? ''),
-                            backgroundColor: themeColor.withOpacity(0.1),
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: themeColor,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
+                          Stack(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: themeColor, width: 2),
+                                ),
+                                child: CircleAvatar(
+                                  radius: 30,
+                                  backgroundImage: NetworkImage(user['photoUrl'] ?? ''),
+                                  backgroundColor: themeColor.withOpacity(0.1),
+                                ),
                               ),
-                              child: const Icon(Icons.edit, size: 12, color: Colors.white),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    color: themeColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 1.5),
+                                  ),
+                                  child: const Icon(Icons.edit, size: 10, color: Colors.white),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      user['displayName']?.isNotEmpty == true ? user['displayName']! : "SYNAPS Pilot",
+                                      style: GoogleFonts.outfit(
+                                        color: textColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: themeColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        "ALPHA PILOT",
+                                        style: GoogleFonts.outfit(color: themeColor, fontSize: 8.5, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  user['email'] ?? 'synaps@user.local',
+                                  style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Squad Companion: ${activeMember['name']} (${activeMember['role']})",
+                                  style: GoogleFonts.outfit(color: memberColor, fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      user['email'] ?? '',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(color: textColor60, fontSize: 13),
-                    ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 18),
+
+                    // Name Field
                     TextField(
                       controller: displayNameController,
                       decoration: InputDecoration(
                         labelText: "My Name / Personalize Greeting",
                         labelStyle: GoogleFonts.outfit(fontSize: 12),
                         prefixIcon: const Icon(Icons.person_outline, size: 18),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
+
+                    // Date of Birth
                     TextField(
                       controller: dobController,
                       readOnly: true,
@@ -1900,29 +2551,37 @@ class _MainDashboardState extends State<MainDashboard> {
                         }
                       },
                       decoration: InputDecoration(
-                        labelText: "Date of Birth",
+                        labelText: "Date of Birth (Hardware Birthday Sync)",
                         labelStyle: GoogleFonts.outfit(fontSize: 12),
                         prefixIcon: const Icon(Icons.cake_outlined, size: 18),
                         hintText: "YYYY-MM-DD",
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
+
+                    // Robot Name
                     TextField(
                       controller: robotNameController,
                       decoration: InputDecoration(
                         labelText: "Robot Name",
                         labelStyle: GoogleFonts.outfit(fontSize: 12),
-                        prefixIcon: const Icon(Icons.android_outlined, size: 18),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.smart_toy_outlined, size: 18),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // Variant Switcher
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Robot Model:",
+                          "Robot Model Variant:",
                           style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                         Row(
@@ -1948,14 +2607,16 @@ class _MainDashboardState extends State<MainDashboard> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 22),
+
+                    // Action Buttons
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
                             onPressed: () => Navigator.pop(ctx),
                             child: Text("CANCEL", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12)),
@@ -1966,8 +2627,8 @@ class _MainDashboardState extends State<MainDashboard> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: themeColor,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
                             onPressed: () async {
                               final dName = displayNameController.text.trim();
@@ -1992,7 +2653,7 @@ class _MainDashboardState extends State<MainDashboard> {
                                 );
                               }
                             },
-                            child: Text("SAVE", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                            child: Text("SAVE & SYNC", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
                           ),
                         ),
                       ],
@@ -2980,7 +3641,7 @@ class _MainDashboardState extends State<MainDashboard> {
             const SizedBox(height: 12),
             Center(
               child: Text(
-                "Syncs local smartphone time to Mr.&Ms Luna's OLED display module clock.",
+                "Syncs local smartphone time to SYNAPS OLED display module clock.",
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
               ),
@@ -3617,69 +4278,302 @@ class _MainDashboardState extends State<MainDashboard> {
   // ================= NEW TAB 0: HOME DASHBOARD PANEL =================
   Widget _buildHomeDashboardPanel(DatabaseService db, BLEService ble, String activeGifId, String activeLabel) {
     final primary = db.primaryRobot ?? RobotProfile(
-      id: 'mr_luna',
-      name: 'Mr. Luna',
+      id: 'synaps_prime',
+      name: 'SYNAPS Prime',
       variant: 'mr_luna',
       remoteId: '',
       lastConnected: DateTime.now(),
     );
     
-    final isMiss = primary.variant == 'ms_luna';
-    final accentColor = isMiss ? const Color(0xFFEC4899) : const Color(0xFFE53935);
-    final personality = isMiss ? "Softer & Calmer Personality" : "Friendly & Energetic Personality";
-    
+    final activeMember = _squadMembers.firstWhere(
+      (m) => m['id'] == _selectedSquadCharacter,
+      orElse: () => _squadMembers[0],
+    );
+    final memberColor = activeMember['color'] as Color;
+    final Color accentColor = memberColor;
+
+    // Custom companion personality quotes
+    final Map<String, String> companionQuotes = {
+      'panda': 'Alpha Fleet Commander • Systems optimal',
+      'bunny': 'Cyber Synth Virtuoso • Audio matrix ready',
+      'fox': 'Tactical BLE Scout • Signal frequency locked',
+      'turtle': 'Chrono Time Master • Precision clock cycle',
+      'cat': 'Arcade Pixel Champion • Game mode loaded',
+      'bird': 'Telepathic Messenger • Airwave link active',
+    };
+    final String companionQuote = companionQuotes[activeMember['id']] ?? 'Active Squad Companion';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Variant header card
-        GlassCard(
+        // ── 1. ACTIVE SQUAD COMPANION CYBER-HERO CARD ───────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                memberColor.withOpacity(0.18),
+                Colors.white.withOpacity(0.92),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: memberColor.withOpacity(0.35),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: memberColor.withOpacity(0.15),
+                blurRadius: 18,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
           child: Row(
             children: [
+              // Glowing 3D Avatar
               Container(
-                width: 48,
-                height: 48,
+                width: 58,
+                height: 58,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: isMiss ? [const Color(0xFFEC4899), const Color(0xFFF472B6)] : [const Color(0xFF0284C7), const Color(0xFF38BDF8)],
+                  border: Border.all(color: memberColor, width: 2.4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: memberColor.withOpacity(0.4),
+                      blurRadius: 14,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    activeMember['asset'] as String,
+                    fit: BoxFit.cover,
                   ),
                 ),
-                child: const Icon(Icons.face, color: textColor, size: 28),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      primary.name,
-                      style: GoogleFonts.outfit(color: textColor, fontSize: 18, fontWeight: FontWeight.bold),
+                    Row(
+                      children: [
+                        Text(
+                          activeMember['name'] as String,
+                          style: GoogleFonts.outfit(
+                            color: memberColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: memberColor.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            (activeMember['role'] as String).toUpperCase(),
+                            style: GoogleFonts.outfit(
+                              color: memberColor,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 3),
                     Text(
-                      personality,
-                      style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
+                      companionQuote,
+                      style: GoogleFonts.outfit(
+                        color: textColor60,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.15),
-                  border: Border.all(color: accentColor.withOpacity(0.3)),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  isMiss ? "MS. LUNA" : "MR. LUNA",
-                  style: GoogleFonts.outfit(color: accentColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+              // Interactive Poke / Ping Button
+              GestureDetector(
+                onTap: () {
+                  if (ble.isConnected) {
+                    ble.transmitAudio(1); // Play cheerful chirp
+                    ble.transmitExpression(2, "HAPPY");
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("${activeMember['name']} says hello! 👋"),
+                      duration: const Duration(seconds: 1),
+                      backgroundColor: memberColor,
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: memberColor,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: memberColor.withOpacity(0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.touch_app_rounded, color: Colors.white, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        "POKE",
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
+        const SizedBox(height: 14),
+
+        // ── 2. SYNAPS CHARACTERS SQUAD SELECTOR ─────────────────────
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.stars_rounded, color: memberColor, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  "SELECT SQUAD COMPANION",
+                  style: GoogleFonts.outfit(
+                    color: textColor54,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _squadMembers.map((member) {
+                  final bool isSelected = member['id'] == _selectedSquadCharacter;
+                  final Color cColor = member['color'] as Color;
+
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedSquadCharacter = member['id'] as String;
+                        if (member['id'] == 'bunny') {
+                          _activeTabIdx = 2; // Synth
+                        } else if (member['id'] == 'fox') {
+                          _activeTabIdx = 3; // Synapse Link
+                        } else if (member['id'] == 'turtle') {
+                          if (ble.isConnected) ble.transmitText("SCREEN:CLOCK");
+                          _localActiveGifId = 'clock';
+                          _localActiveLabel = 'Clock Face';
+                        } else if (member['id'] == 'cat') {
+                          if (ble.isConnected) ble.transmitText("SCREEN:GAMES");
+                          _localActiveGifId = 'games';
+                          _localActiveLabel = 'SYNAPS Arcade';
+                        } else if (member['id'] == 'bird') {
+                          if (ble.isConnected) ble.transmitText("SCREEN:NOTIF");
+                          _localActiveGifId = 'notif';
+                          _localActiveLabel = 'Notifications';
+                        } else if (member['id'] == 'panda') {
+                          _activeTabIdx = 1; // Expressions
+                        }
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(right: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? cColor.withOpacity(0.14) : Colors.white.withOpacity(0.88),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? cColor : const Color(0xFFE2E8F0),
+                          width: isSelected ? 2.0 : 1.0,
+                        ),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: cColor.withOpacity(0.28),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: cColor, width: 1.5),
+                            ),
+                            child: ClipOval(
+                              child: Image.asset(member['asset'] as String, fit: BoxFit.cover),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                member['name'] as String,
+                                style: GoogleFonts.outfit(
+                                  color: isSelected ? cColor : textColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                member['role'] as String,
+                                style: GoogleFonts.outfit(
+                                  color: textColor60,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
 
-        // Firmware Screen Mode Quick Selector
+        // ── 3. HARDWARE DISPLAY MODE SELECTOR DOCK ───────────────────
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -3708,100 +4602,244 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
         const SizedBox(height: 14),
 
-        // OLED Simulator Container with Interactive Touch & Swipe
-        Center(
-          child: GestureDetector(
-            onTap: () {
-              if (ble.isConnected) {
-                ble.transmitText("TOUCH_SIM:TAP");
-              }
-            },
-            onDoubleTap: () {
-              if (ble.isConnected) {
-                ble.transmitText("TOUCH_SIM:DOUBLE");
-              }
-            },
-            onLongPress: () {
-              if (ble.isConnected) {
-                ble.transmitText("TOUCH_SIM:LONG");
-              }
-            },
-            onHorizontalDragEnd: (details) {
-              if (details.primaryVelocity != null) {
-                if (details.primaryVelocity! < -200) {
-                  // Swipe Left -> Next screen
-                  _cycleWatchScreen(1, ble);
-                } else if (details.primaryVelocity! > 200) {
-                  // Swipe Right -> Prev screen
-                  _cycleWatchScreen(-1, ble);
-                }
-              }
-            },
-            child: OLEDSimulator(
-              activeGifId: activeGifId,
-              activeLabel: activeLabel,
-              marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
-              invertColor: db.oledInvert, 
-            ),
+        // ── 4. LIVE OLED HARDWARE SIMULATOR WITH CYBER BEZEL ─────────
+        Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: accentColor.withOpacity(0.35), width: 1.8),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.12),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: accentColor.withOpacity(0.18),
+                blurRadius: 16,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 8),
-
-        // Active screen pill indicator with cycle buttons
-        Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: accentColor.withOpacity(0.2)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _cycleWatchScreen(-1, ble),
-                  child: Icon(Icons.chevron_left_rounded, size: 18, color: accentColor),
+          child: Column(
+            children: [
+              // Top Cyber HUD Bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+                  border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  activeLabel.toUpperCase(),
-                  style: GoogleFonts.outfit(
-                    color: accentColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.8,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFF06B6D4),
+                            boxShadow: [
+                              BoxShadow(color: Color(0xFF06B6D4), blurRadius: 4, spreadRadius: 1),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "240×280 IPS",
+                          style: GoogleFonts.firaCode(
+                            color: Colors.white70,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      "ESP32-S3 80MHz SPI",
+                      style: GoogleFonts.outfit(
+                        color: accentColor,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Text(
+                          "CST816T",
+                          style: GoogleFonts.firaCode(
+                            color: Colors.white70,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFF10B981),
+                            boxShadow: [
+                              BoxShadow(color: Color(0xFF10B981), blurRadius: 4, spreadRadius: 1),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // OLED Simulator Screen with gestures
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Center(
+                  child: GestureDetector(
+                    onTap: () {
+                      if (ble.isConnected) {
+                        ble.transmitText("TOUCH_SIM:TAP");
+                      }
+                    },
+                    onDoubleTap: () {
+                      if (ble.isConnected) {
+                        ble.transmitText("TOUCH_SIM:DOUBLE");
+                      }
+                    },
+                    onLongPress: () {
+                      if (ble.isConnected) {
+                        ble.transmitText("TOUCH_SIM:LONG");
+                      }
+                    },
+                    onHorizontalDragEnd: (details) {
+                      if (details.primaryVelocity != null) {
+                        if (details.primaryVelocity! < -200) {
+                          _cycleWatchScreen(1, ble);
+                        } else if (details.primaryVelocity! > 200) {
+                          _cycleWatchScreen(-1, ble);
+                        }
+                      }
+                    },
+                    child: OLEDSimulator(
+                      activeGifId: activeGifId,
+                      activeLabel: activeLabel,
+                      marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
+                      invertColor: db.oledInvert, 
+                    ),
                   ),
                 ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _cycleWatchScreen(1, ble),
-                  child: Icon(Icons.chevron_right_rounded, size: 18, color: accentColor),
+              ),
+
+              // Bottom Trigger Console Dock
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+                  border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
                 ),
-              ],
-            ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _cycleWatchScreen(-1, ble),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.arrow_back_ios_new_rounded, size: 12, color: Colors.white70),
+                            const SizedBox(width: 4),
+                            Text(
+                              "PREV",
+                              style: GoogleFonts.outfit(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Active screen pill indicator
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: accentColor.withOpacity(0.20),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: accentColor.withOpacity(0.6), width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: accentColor.withOpacity(0.3),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        activeLabel.toUpperCase(),
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
+
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _cycleWatchScreen(1, ble),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              "NEXT",
+                              style: GoogleFonts.outfit(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.white70),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
 
-        // Robot Status Details Grid
+        // ── 5. UNIFIED CYBER TELEMETRY & HEALTH GRID ─────────────────
         _buildRobotStatusGrid(primary, ble),
         const SizedBox(height: 16),
 
-        // Luna Pet XP, Tamagotchi & Evolution Card
+        // ── 6. LUNA PET XP, TAMAGOTCHI & EVOLUTION ───────────────────
         _buildPetEvolutionCard(ble),
         const SizedBox(height: 20),
 
-        // Relationship Status Banner
+        // ── 7. RELATIONSHIP STATUS BANNER ────────────────────────────
         if (primary.companionDeviceId != null)
           _buildRelationshipBanner(primary, db)
         else
           GestureDetector(
             onTap: () {
               setState(() {
-                _activeTabIdx = 5; // Profile/Settings tab
+                _activeTabIdx = 6;
                 _currentSettingsSection = 'companions';
               });
             },
@@ -3828,6 +4866,24 @@ class _MainDashboardState extends State<MainDashboard> {
 
         // Quick Actions panel
         _buildQuickActionsPanel(ble),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 8),
+        Text(
+          title.toUpperCase(),
+          style: GoogleFonts.outfit(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
+          ),
+        ),
       ],
     );
   }
@@ -3980,7 +5036,7 @@ class _MainDashboardState extends State<MainDashboard> {
       {'id': 'calendar', 'label': 'Calendar', 'cmd': 'CALENDAR'},
       if (ble.isNavActive)
         {'id': 'map', 'label': 'Navigation Map', 'cmd': 'MAPS'},
-      {'id': 'games', 'label': 'Luna Arcade', 'cmd': 'GAMES'},
+      {'id': 'games', 'label': 'SYNAPS Arcade', 'cmd': 'GAMES'},
       {'id': 'settings', 'label': 'Settings', 'cmd': 'SETTINGS'},
       {'id': 'pomodoro', 'label': 'Pomodoro Timer', 'cmd': 'POMODORO'},
     ];
@@ -4037,21 +5093,21 @@ class _MainDashboardState extends State<MainDashboard> {
         }
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? accent : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: isSelected ? accent : Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isSelected ? accent : Colors.black.withOpacity(0.08),
-            width: 1.2,
+            color: isSelected ? accent : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.8 : 1.2,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: accent.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                    color: accent.withOpacity(0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
                 ]
               : null,
@@ -4060,13 +5116,13 @@ class _MainDashboardState extends State<MainDashboard> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 14, color: isSelected ? Colors.white : const Color(0xFF64748B)),
-            const SizedBox(width: 4),
+            const SizedBox(width: 5),
             Text(
               label,
               style: GoogleFonts.outfit(
                 color: isSelected ? Colors.white : const Color(0xFF334155),
                 fontSize: 11,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
               ),
             ),
           ],
@@ -4367,80 +5423,168 @@ class _MainDashboardState extends State<MainDashboard> {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 1.8,
+      childAspectRatio: 1.65,
       children: [
-        // Battery status card
-        GlassCard(
-          padding: const EdgeInsets.all(12),
+        // Card 1: Power Core Telemetry
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.90),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: batteryPct < 20 ? const Color(0xFFEF4444).withOpacity(0.4) : const Color(0xFF10B981).withOpacity(0.3),
+              width: 1.3,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Icon(Icons.battery_std, color: Colors.green, size: 18),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: (batteryPct < 20 ? const Color(0xFFEF4444) : const Color(0xFF10B981)).withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      batteryPct < 20 ? Icons.battery_alert_rounded : Icons.battery_charging_full_rounded,
+                      color: batteryPct < 20 ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                      size: 18,
+                    ),
+                  ),
                   Text(
                     ble.isConnected ? "$batteryPct%" : "--",
-                    style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 16),
+                    style: GoogleFonts.outfit(
+                      color: textColor,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text("Battery Level", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
-              if (ble.isConnected) ...[
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: batteryPct / 100.0,
-                    minHeight: 4,
-                    backgroundColor: Colors.white.withOpacity(0.05),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      batteryPct < 20 ? Colors.red : (batteryPct < 55 ? Colors.yellow : Colors.green),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "POWER CORE",
+                    style: GoogleFonts.outfit(
+                      color: textColor54,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: ble.isConnected ? (batteryPct / 100.0) : 0.0,
+                      minHeight: 5,
+                      backgroundColor: const Color(0xFFE2E8F0),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        batteryPct < 20 ? const Color(0xFFEF4444) : (batteryPct < 50 ? const Color(0xFFF59E0B) : const Color(0xFF10B981)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
 
-        // BLE connection card
-        GlassCard(
-          padding: const EdgeInsets.all(12),
+        // Card 2: Synapse BLE Radar
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.90),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: ble.isConnected ? _accentColor.withOpacity(0.35) : const Color(0xFFE2E8F0),
+              width: 1.3,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(
-                    ble.isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                    color: ble.isConnected ? const Color(0xFFE53935) : Colors.white38,
-                    size: 18,
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: ble.isConnected ? _accentColor.withOpacity(0.12) : const Color(0xFFF1F5F9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      ble.isConnected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_disabled_rounded,
+                      color: ble.isConnected ? _accentColor : const Color(0xFF94A3B8),
+                      size: 18,
+                    ),
                   ),
-                  Text(
-                    ble.isConnected ? "Active" : "Offline",
-                    style: GoogleFonts.outfit(
-                      color: ble.isConnected ? const Color(0xFFE53935) : Colors.white38,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: ble.isConnected ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      ble.isConnected ? "LINKED" : "OFFLINE",
+                      style: GoogleFonts.outfit(
+                        color: ble.isConnected ? const Color(0xFF059669) : const Color(0xFF64748B),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 9,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                ble.isConnected ? "Bluetooth" : "Disconnected",
-                style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "SYNAPSE RADAR",
+                    style: GoogleFonts.outfit(
+                      color: textColor54,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    ble.isConnected ? "ESP32-S3 (80MHz)" : "Awaiting Pairing",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      color: textColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-              Text("BLE Status", style: GoogleFonts.outfit(color: textColor54, fontSize: 11)),
             ],
           ),
         ),
-
       ],
     );
   }
@@ -6044,7 +7188,7 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  // ================= NEW TAB 4: CALENDAR MANAGEMENT PANEL =================
+  // ================= 4. REVOLUTIONARY CYBER-CALENDAR & CHRONO HUB =================
   Widget _buildCalendarPanel(DatabaseService db, BLEService ble) {
     final year = _calendarViewDate.year;
     final month = _calendarViewDate.month;
@@ -6070,28 +7214,67 @@ class _MainDashboardState extends State<MainDashboard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          "ROBOT CALENDAR & EVENT CENTER",
-          style: GoogleFonts.outfit(
-            color: textColor60,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1,
-          ),
+        // Top Header with Quick Action
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "CHRONO & EVENTS HUB",
+                  style: GoogleFonts.outfit(
+                    color: textColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                Text(
+                  "Schedule hardware alarms, reminders & meetings",
+                  style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
+                ),
+              ],
+            ),
+            ElevatedButton.icon(
+              onPressed: () => _showEventSchedulerPopup(context, DateTime.now(), db, ble),
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: const Text("NEW EVENT"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accentColor,
+                foregroundColor: Colors.white,
+                textStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 11),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
 
-        // Visual Monthly Calendar Grid
-        GlassCard(
-          padding: const EdgeInsets.all(12),
+        // Visual Monthly Calendar GlassCard
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: _accentColor.withOpacity(0.20), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.06),
+                blurRadius: 18,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
           child: Column(
             children: [
+              // Month Switcher Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    icon: Icon(Icons.chevron_left, color: textColor),
-                    onPressed: () {
+                  GestureDetector(
+                    onTap: () {
                       setState(() {
                         _calendarViewDate = DateTime(
                           _calendarViewDate.year,
@@ -6100,19 +7283,54 @@ class _MainDashboardState extends State<MainDashboard> {
                         );
                       });
                     },
-                  ),
-                  Text(
-                    "${_getMonthName(_calendarViewDate.month)} ${_calendarViewDate.year}".toUpperCase(),
-                    style: GoogleFonts.outfit(
-                      color: textColor,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.chevron_left_rounded, color: textColor, size: 20),
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(Icons.chevron_right, color: textColor),
-                    onPressed: () {
+                  Row(
+                    children: [
+                      Text(
+                        "${_getMonthName(_calendarViewDate.month)} ${_calendarViewDate.year}".toUpperCase(),
+                        style: GoogleFonts.outfit(
+                          color: textColor,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _calendarViewDate = DateTime.now();
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _accentColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: _accentColor.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            "TODAY",
+                            style: GoogleFonts.outfit(
+                              color: _accentColor,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  GestureDetector(
+                    onTap: () {
                       setState(() {
                         _calendarViewDate = DateTime(
                           _calendarViewDate.year,
@@ -6121,40 +7339,58 @@ class _MainDashboardState extends State<MainDashboard> {
                         );
                       });
                     },
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.chevron_right_rounded, color: textColor, size: 20),
+                    ),
                   ),
                 ],
               ),
-              const Divider(color: Colors.white10),
-              const SizedBox(height: 8),
+              const SizedBox(height: 14),
               
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((day) {
-                  return Expanded(
-                    child: Center(
-                      child: Text(
-                        day,
-                        style: GoogleFonts.outfit(
-                          color: _accentColor.withOpacity(0.8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+              // Weekday Header Strip
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((day) {
+                    final bool isWeekend = day == "SAT" || day == "SUN";
+                    return Expanded(
+                      child: Center(
+                        child: Text(
+                          day,
+                          style: GoogleFonts.outfit(
+                            color: isWeekend ? const Color(0xFFEF4444) : textColor54,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
 
+              // Calendar Days Grid
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: 42,
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 7,
-                  childAspectRatio: 1.0,
-                  crossAxisSpacing: 4,
-                  mainAxisSpacing: 4,
+                  childAspectRatio: 1.05,
+                  crossAxisSpacing: 5,
+                  mainAxisSpacing: 5,
                 ),
                 itemBuilder: (context, idx) {
                   final cellDate = cells[idx];
@@ -6173,16 +7409,32 @@ class _MainDashboardState extends State<MainDashboard> {
                     onTap: () => _showEventSchedulerPopup(context, cellDate, db, ble),
                     child: Container(
                       decoration: BoxDecoration(
+                        gradient: isToday
+                            ? LinearGradient(
+                                colors: [_accentColor, const Color(0xFF8B5CF6)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : null,
                         color: isToday
-                            ? _accentColor.withOpacity(0.15)
-                            : (isCurrentMonth ? Colors.white.withOpacity(0.03) : Colors.transparent),
+                            ? null
+                            : (isCurrentMonth ? const Color(0xFFF8FAFC) : Colors.transparent),
                         border: Border.all(
                           color: isToday
                               ? _accentColor
-                              : (isCurrentMonth ? Colors.white.withOpacity(0.05) : Colors.transparent),
+                              : (isCurrentMonth ? const Color(0xFFE2E8F0) : Colors.transparent),
                           width: isToday ? 1.5 : 1.0,
                         ),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: isToday
+                            ? [
+                                BoxShadow(
+                                  color: _accentColor.withOpacity(0.35),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -6190,29 +7442,29 @@ class _MainDashboardState extends State<MainDashboard> {
                           Text(
                             "${cellDate.day}",
                             style: GoogleFonts.outfit(
-                              color: isCurrentMonth
-                                  ? (isToday ? _accentColor : textColor)
-                                  : textColor38.withOpacity(0.3),
-                              fontSize: 13,
-                              fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                              color: isToday
+                                  ? Colors.white
+                                  : (isCurrentMonth ? textColor : const Color(0xFFCBD5E1)),
+                              fontSize: 12,
+                              fontWeight: isToday ? FontWeight.w900 : FontWeight.w600,
                             ),
                           ),
                           if (dayEvents.isNotEmpty) ...[
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 3),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              children: dayEvents.take(4).map((ev) {
-                                Color dotColor = const Color(0xFFE2E8F0);
+                              children: dayEvents.take(3).map((ev) {
+                                Color dotColor = const Color(0xFF3B82F6);
                                 if (ev.type == 'meeting') dotColor = const Color(0xFFEF4444);
                                 else if (ev.type == 'birthday') dotColor = const Color(0xFFEC4899);
-                                else if (ev.type == 'alarm') dotColor = const Color(0xFF14B8A6);
+                                else if (ev.type == 'alarm') dotColor = const Color(0xFF10B981);
                                 else if (ev.type == 'reminder') dotColor = const Color(0xFFF59E0B);
                                 return Container(
-                                  width: 4,
-                                  height: 4,
+                                  width: 4.5,
+                                  height: 4.5,
                                   margin: const EdgeInsets.symmetric(horizontal: 1),
                                   decoration: BoxDecoration(
-                                    color: dotColor,
+                                    color: isToday ? Colors.white : dotColor,
                                     shape: BoxShape.circle,
                                   ),
                                 );
@@ -6228,23 +7480,29 @@ class _MainDashboardState extends State<MainDashboard> {
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
 
         // Scheduled Events List Header
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              "SCHEDULED EVENTS (${db.events.length})",
-              style: GoogleFonts.outfit(
-                color: textColor60,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-              ),
+            Row(
+              children: [
+                Icon(Icons.event_note_rounded, color: _accentColor, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  "SCHEDULED CHRONO TIMELINE (${db.events.length})",
+                  style: GoogleFonts.outfit(
+                    color: textColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ],
             ),
             if (ble.isConnected)
-              InkWell(
+              GestureDetector(
                 onTap: () async {
                   await ble.queryHardwareEvents();
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -6255,20 +7513,20 @@ class _MainDashboardState extends State<MainDashboard> {
                   );
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.sync, color: Color(0xFF10B981), size: 12),
+                      const Icon(Icons.sync_rounded, color: Color(0xFF059669), size: 13),
                       const SizedBox(width: 4),
                       Text(
-                        "LUNA SYNC (${ble.hardwareEvents.length})",
-                        style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
+                        "HARDWARE SYNC (${ble.hardwareEvents.length})",
+                        style: GoogleFonts.outfit(color: const Color(0xFF059669), fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -6276,15 +7534,30 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
 
         if (db.events.isEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 36),
-            alignment: Alignment.center,
-            child: Text(
-              "No upcoming meetings, birthdays, alarms or reminders.",
-              style: GoogleFonts.outfit(color: textColor38),
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.event_busy_rounded, color: Color(0xFF94A3B8), size: 36),
+                const SizedBox(height: 10),
+                Text(
+                  "No upcoming scheduled events",
+                  style: GoogleFonts.outfit(color: textColor, fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Tap '+ NEW EVENT' or click on any calendar day to schedule.",
+                  style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
+                ),
+              ],
             ),
           )
         else
@@ -6297,59 +7570,61 @@ class _MainDashboardState extends State<MainDashboard> {
               final isMeeting = event.type == 'meeting';
               final isBirthday = event.type == 'birthday';
               final isAlarm = event.type == 'alarm';
-              final isReminder = event.type == 'reminder';
 
               final hh = event.dateTime.hour.toString().padLeft(2, '0');
               final mm = event.dateTime.minute.toString().padLeft(2, '0');
               final timeStr = "$hh:$mm";
               final dateStr = "${event.dateTime.day}/${event.dateTime.month}/${event.dateTime.year}";
 
-              IconData eventIcon = Icons.groups;
-              List<Color> gradientColors = [const Color(0xFFE53935), const Color(0xFFFFB300)];
-              String typeLabel = "Event";
+              IconData eventIcon = Icons.notifications_active_rounded;
+              Color catColor = const Color(0xFFF59E0B);
+              String catLabel = "Reminder";
 
               if (isMeeting) {
-                eventIcon = Icons.groups;
-                gradientColors = [const Color(0xFFE53935), const Color(0xFFFFB300)];
-                typeLabel = "Meeting @ $timeStr ($dateStr)";
+                eventIcon = Icons.groups_rounded;
+                catColor = const Color(0xFFEF4444);
+                catLabel = "Meeting";
               } else if (isBirthday) {
-                eventIcon = Icons.cake;
-                gradientColors = [const Color(0xFFEC4899), const Color(0xFFF43F5E)];
-                typeLabel = "Birthday ($dateStr)";
+                eventIcon = Icons.cake_rounded;
+                catColor = const Color(0xFFEC4899);
+                catLabel = "Birthday";
               } else if (isAlarm) {
-                eventIcon = Icons.alarm;
-                gradientColors = [const Color(0xFF14B8A6), const Color(0xFF0D9488)];
-                typeLabel = "Alarm @ $timeStr ($dateStr)";
-              } else if (isReminder) {
-                eventIcon = Icons.notifications;
-                gradientColors = [const Color(0xFFF59E0B), const Color(0xDDF59E0B)];
-                typeLabel = "Reminder @ $timeStr ($dateStr)";
+                eventIcon = Icons.alarm_rounded;
+                catColor = const Color(0xFF10B981);
+                catLabel = "Alarm";
               }
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.03),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withOpacity(0.92),
+                  border: Border.all(color: catColor.withOpacity(0.25), width: 1.2),
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0F172A).withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: 36,
-                      height: 36,
+                      width: 42,
+                      height: 42,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(colors: gradientColors),
+                        color: catColor.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(
                         eventIcon,
-                        color: textColor,
-                        size: 18,
+                        color: catColor,
+                        size: 20,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 14),
 
                     Expanded(
                       child: Column(
@@ -6357,126 +7632,59 @@ class _MainDashboardState extends State<MainDashboard> {
                         children: [
                           Row(
                             children: [
-                              Expanded(
-                                child: Text(
-                                  event.title,
-                                  style: GoogleFonts.outfit(
-                                    color: textColor,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                              Text(
+                                event.title,
+                                style: GoogleFonts.outfit(
+                                  color: textColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                               if (ble.hardwareEvents.any((h) => h.id == event.id))
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                                   margin: const EdgeInsets.only(left: 6),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF10B981).withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(4),
+                                    color: const Color(0xFFECFDF5),
+                                    borderRadius: BorderRadius.circular(6),
                                     border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
                                   ),
                                   child: Text(
                                     "ON LUNA",
-                                    style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.bold),
+                                    style: GoogleFonts.outfit(color: const Color(0xFF059669), fontSize: 8.5, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                             ],
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 3),
                           Text(
-                            typeLabel,
-                            style: GoogleFonts.outfit(
-                              color: textColor54,
-                              fontSize: 11,
-                            ),
+                            "$catLabel • $timeStr • $dateStr",
+                            style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
                           ),
                         ],
                       ),
                     ),
 
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          onPressed: () async {
-                            if (!ble.isConnected) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Bluetooth not connected"),
-                                  backgroundColor: Colors.orangeAccent,
-                                ),
-                              );
-                              return;
-                            }
-                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                            final dateStr = (event.type == 'alarm')
-                                ? "*"
-                                : "${event.dateTime.day.toString().padLeft(2, '0')} ${monthNames[event.dateTime.month - 1]}";
-                            await ble.transmitHardwareEvent(
-                              id: event.id,
-                              type: event.type,
-                              date: dateStr,
-                              time: timeStr,
-                              title: event.title,
-                            );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text("Pushed '${event.title}' to Luna hardware!"),
-                                backgroundColor: const Color(0xFF10B981),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.send, color: Color(0xFF10B981), size: 18),
-                          tooltip: "Push to Luna hardware",
-                        ),
-                        IconButton(
-                          onPressed: () async {
-                            final deletedTitle = event.title;
-                            await db.deleteEvent(event.id);
-                            if (isAlarm) {
-                              await db.deleteAlarm(event.id);
-                            }
-                            if (ble.isConnected) {
-                              await ble.deleteHardwareEvent(event.id);
-                            }
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text("Event '$deletedTitle' deleted permanently from Luna hardware & app"),
-                                backgroundColor: Colors.redAccent,
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.delete, color: Color(0xFFEF4444), size: 18),
-                          tooltip: "Delete permanently",
-                        ),
-                      ],
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                      onPressed: () async {
+                        await db.deleteEvent(event.id);
+                        if (ble.isConnected) {
+                          ble.transmitText('EVT_DEL:${event.id}');
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Deleted '${event.title}'")),
+                        );
+                        setState(() {});
+                      },
                     ),
                   ],
                 ),
               );
             },
           ),
-      ],
-    );
-  }
-
-  // ================= NEW TAB 4: ADVANCED SETTINGS PANEL =================
-  Widget _buildSectionHeader(String title, IconData icon, Color color) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 8),
-        Text(
-          title.toUpperCase(),
-          style: GoogleFonts.outfit(
-            color: textColor,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.0,
-          ),
-        ),
+        const SizedBox(height: 20),
       ],
     );
   }
@@ -7608,7 +8816,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          "Configure which applications are permitted to send notifications to Mr.&Ms Luna.",
+                          "Configure which applications are permitted to send notifications to SYNAPS.",
                           style: GoogleFonts.outfit(
                             color: textColor60,
                             fontSize: 12,
@@ -7927,7 +9135,7 @@ class _MainDashboardState extends State<MainDashboard> {
       _profileDisplayNameController.text = user['displayName'] ?? '';
       final rName = (user['robotName'] != null && user['robotName'].toString().isNotEmpty)
           ? user['robotName']
-          : (db.primaryRobot?.name ?? 'Mr. Luna Robot');
+          : (db.primaryRobot?.name ?? 'SYNAPS Robot');
       final rVariant = user['robotVariant'] ?? (db.primaryRobot?.variant ?? 'mr_luna');
       _profileRobotNameController.text = rName;
       _profileSelectedVariant = rVariant;
@@ -8064,8 +9272,8 @@ class _MainDashboardState extends State<MainDashboard> {
                           if (val) {
                             setState(() {
                               _profileSelectedVariant = 'ms_luna';
-                              if (_profileRobotNameController.text == "Mr. Luna Robot" || _profileRobotNameController.text.isEmpty) {
-                                _profileRobotNameController.text = "Ms. Luna Robot";
+                              if (_profileRobotNameController.text == "SYNAPS Prime" || _profileRobotNameController.text.isEmpty) {
+                                _profileRobotNameController.text = "SYNAPS Cyber";
                               }
                             });
                           }
@@ -8080,8 +9288,8 @@ class _MainDashboardState extends State<MainDashboard> {
                           if (val) {
                             setState(() {
                               _profileSelectedVariant = 'mr_luna';
-                              if (_profileRobotNameController.text == "Ms. Luna Robot" || _profileRobotNameController.text.isEmpty) {
-                                _profileRobotNameController.text = "Mr. Luna Robot";
+                              if (_profileRobotNameController.text == "SYNAPS Cyber" || _profileRobotNameController.text.isEmpty) {
+                                _profileRobotNameController.text = "SYNAPS Prime";
                               }
                             });
                           }
@@ -8185,47 +9393,151 @@ class _MainDashboardState extends State<MainDashboard> {
         
         const SizedBox(height: 32),
         
-        // ------------------ ALL SETTINGS UNDER PROFILE ------------------
-        Text(
-          "ROBOT & SYSTEM SETTINGS",
-          style: GoogleFonts.outfit(
-            color: textColor,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+        // ================= MODERN CATEGORIZED CYBER SETTINGS =================
+        const SizedBox(height: 28),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "SETTINGS & CONTROLS",
+                  style: GoogleFonts.outfit(
+                    color: textColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                Text(
+                  "Configure hardware, companion sync & gesture triggers",
+                  style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
+                ),
+              ],
+            ),
+            if (_currentSettingsSection != 'all')
+              TextButton.icon(
+                onPressed: () => setState(() => _currentSettingsSection = 'all'),
+                icon: const Icon(Icons.apps_rounded, size: 14),
+                label: Text("VIEW ALL", style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // Settings Category Filter Pills
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildSettingsCategoryPill("All Settings", "all", Icons.dashboard_customize_rounded, _accentColor),
+              const SizedBox(width: 8),
+              _buildSettingsCategoryPill("Companions", "companions", Icons.people_alt_rounded, const Color(0xFF3B82F6)),
+              const SizedBox(width: 8),
+              _buildSettingsCategoryPill("Bonding Taps", "bonding", Icons.favorite_rounded, const Color(0xFFEC4899)),
+              const SizedBox(width: 8),
+              _buildSettingsCategoryPill("Clock & Sync", "clock", Icons.watch_later_rounded, const Color(0xFF8B5CF6)),
+              const SizedBox(width: 8),
+              _buildSettingsCategoryPill("Notifications", "notifications", Icons.notifications_active_rounded, const Color(0xFF10B981)),
+              const SizedBox(width: 8),
+              _buildSettingsCategoryPill("Hardware", "hardware", Icons.memory_rounded, const Color(0xFFF59E0B)),
+            ],
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          "Configure gesture controls, sync schedules, and device settings below.",
-          style: GoogleFonts.outfit(
-            color: textColor60,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
 
-        // 1. Companion Profiles
-        _buildSectionHeader("Companion Profiles", Icons.people, Colors.blue.shade600),
-        const SizedBox(height: 12),
-        _buildCompanionsPanel(db, ble),
-        const SizedBox(height: 28),
+        // Section 1: Companion Profiles
+        if (_currentSettingsSection == 'all' || _currentSettingsSection == 'companions') ...[
+          _buildSectionHeader("Companion Robot Profiles", Icons.people_alt_rounded, const Color(0xFF3B82F6)),
+          const SizedBox(height: 10),
+          _buildCompanionsPanel(db, ble),
+          const SizedBox(height: 24),
+        ],
 
-        // 2. Bonding Tap Sequences
-        _buildSectionHeader("Bonding Tap Sequences", Icons.sync_alt, Colors.pink.shade600),
-        const SizedBox(height: 12),
-        _buildRelationshipActionsCard(db, ble),
-        const SizedBox(height: 28),
+        // Section 2: Bonding Tap Sequences
+        if (_currentSettingsSection == 'all' || _currentSettingsSection == 'bonding') ...[
+          _buildSectionHeader("Touch & Bonding Tap Sequences", Icons.favorite_rounded, const Color(0xFFEC4899)),
+          const SizedBox(height: 10),
+          _buildRelationshipActionsCard(db, ble),
+          const SizedBox(height: 24),
+        ],
 
-        // 3. Device Configuration
-        _buildSectionHeader("Device Configuration", Icons.settings, Colors.purple.shade600),
-        const SizedBox(height: 12),
-        _buildChronosPanel(db, ble),
-        const SizedBox(height: 28),
-        _buildNotificationSyncPanel(db, ble),
-        const SizedBox(height: 28),
-        _buildHardwarePanel(db, ble),
-        const SizedBox(height: 24),
+        // Section 3: Clock & Time Settings
+        if (_currentSettingsSection == 'all' || _currentSettingsSection == 'clock') ...[
+          _buildSectionHeader("Clock & Display Synchronization", Icons.watch_later_rounded, const Color(0xFF8B5CF6)),
+          const SizedBox(height: 10),
+          _buildChronosPanel(db, ble),
+          const SizedBox(height: 24),
+        ],
+
+        // Section 4: Notification Relay Sync
+        if (_currentSettingsSection == 'all' || _currentSettingsSection == 'notifications') ...[
+          _buildSectionHeader("Phone Push Notifications Bridge", Icons.notifications_active_rounded, const Color(0xFF10B981)),
+          const SizedBox(height: 10),
+          _buildNotificationSyncPanel(db, ble),
+          const SizedBox(height: 24),
+        ],
+
+        // Section 5: Hardware & Sensors Configuration
+        if (_currentSettingsSection == 'all' || _currentSettingsSection == 'hardware') ...[
+          _buildSectionHeader("ESP32-S3 Hardware & Gestures", Icons.memory_rounded, const Color(0xFFF59E0B)),
+          const SizedBox(height: 10),
+          _buildHardwarePanel(db, ble),
+          const SizedBox(height: 24),
+        ],
       ],
+    );
+  }
+
+  Widget _buildSettingsCategoryPill(String title, String sectionId, IconData icon, Color categoryColor) {
+    final bool isSelected = _currentSettingsSection == sectionId || (_currentSettingsSection == 'categories' && sectionId == 'all');
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _currentSettingsSection = sectionId;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: isSelected ? categoryColor : Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? categoryColor : const Color(0xFFE2E8F0),
+            width: 1.2,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: categoryColor.withOpacity(0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isSelected ? Colors.white : categoryColor,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: GoogleFonts.outfit(
+                color: isSelected ? Colors.white : textColor,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

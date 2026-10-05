@@ -159,31 +159,30 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Header Logo or Title
                     Center(
                       child: Container(
-                        padding: const EdgeInsets.all(16),
+                        width: 90,
+                        height: 90,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(22),
                           boxShadow: [
                             BoxShadow(
-                              color: accentColor.withOpacity(0.1),
+                              color: accentColor.withOpacity(0.25),
                               blurRadius: 20,
-                              spreadRadius: 5,
-                            )
+                              offset: const Offset(0, 6),
+                            ),
                           ],
                         ),
-                        child: Icon(
-                          Icons.favorite_rounded,
-                          size: 56,
-                          color: accentColor,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(22),
+                          child: Image.asset('assets/logo.png', fit: BoxFit.contain),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
                     Text(
-                      _isSignUp ? "Create Account" : "Welcome Back",
+                      _isSignUp ? "Create Account" : "Welcome to SYNAPS",
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
-                        fontSize: 32,
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: Colors.grey[900],
                       ),
@@ -191,11 +190,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     Text(
                       _isSignUp 
-                          ? "Sign up to pair and interact with your companion robot."
-                          : "Sign in to connect to your live Mr.&Ms Luna robot.",
+                          ? "Sign up to pair and interact with your SYNAPS robot."
+                          : "Sign in to connect to your live SYNAPS companion.",
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
-                        fontSize: 15,
+                        fontSize: 14,
                         color: Colors.grey[600],
                       ),
                     ),

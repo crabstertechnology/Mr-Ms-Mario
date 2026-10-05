@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../services/bluetooth_service.dart';
 import '../services/database_service.dart';
 import 'main_dashboard.dart';
@@ -159,7 +158,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        "LUNA STUDIO",
+                        "SYNAPS STUDIO",
                         style: GoogleFonts.outfit(
                           color: const Color(0xFF0F172A),
                           fontSize: 16,
@@ -297,29 +296,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 110,
-            height: 110,
+            width: 130,
+            height: 130,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [accentColor, secondaryColor],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: accentColor.withOpacity(0.35),
-                  blurRadius: 24,
-                  spreadRadius: 2,
+                  color: accentColor.withOpacity(0.30),
+                  blurRadius: 20,
                   offset: const Offset(0, 6),
                 ),
               ],
             ),
-            child: const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 55),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset('assets/logo.png', fit: BoxFit.contain),
+            ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           Text(
-            "Meet Mr. & Ms. Luna",
+            "Meet The SYNAPS Squad",
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               color: const Color(0xFF0F172A),
@@ -329,7 +325,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            "Your intelligent desktop robot companion. Luna expresses 12 dynamic moods, feels hungry during meal times, and evolves as you bond together!",
+            "Your intelligent desktop robot companion. SYNAPS expresses dynamic neural moods, synthesizes 8-bit melodies, and evolves as you bond together!",
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               color: const Color(0xFF64748B),
@@ -369,7 +365,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            "Luna greets you personally on boot and expresses thoughts tailored to you.",
+            "SYNAPS greets you personally on boot and adapts its personality to you.",
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               color: const Color(0xFF64748B),
@@ -433,7 +429,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            "Luna counts the days and celebrates your special day with exclusive melodies and animations!",
+            "SYNAPS counts the days and celebrates your special day with exclusive melodies and animations!",
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               color: const Color(0xFF64748B),
@@ -493,7 +489,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            "Pet XP & Evolution",
+            "Companion XP & Evolution",
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               color: const Color(0xFF0F172A),
@@ -503,7 +499,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            "Luna feels hungry during Breakfast, Lunch & Dinner. Feed via the power button to earn +50 XP and watch Luna evolve from Baby Luna to Omega Luna!",
+            "SYNAPS connects with your daily rhythm. Interact, feed energy, and watch your companion evolve from Novice to Omega Core!",
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               color: const Color(0xFF64748B),

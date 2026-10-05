@@ -197,17 +197,17 @@ W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\1.69\ Luna\ Fi
  W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\wallpaper_image.h \
  W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\imu.h \
  W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\robot_eye_animation.h \
- W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\sprite_ai_data.h \
- W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\image_transfer.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\LittleFS\src/LittleFS.h \
- C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\FS\src/FS.h \
  C:\Users\sasit\OneDrive\Documents\Arduino\libraries\TJpg_Decoder\src/TJpg_Decoder.h \
  C:\Users\sasit\OneDrive\Documents\Arduino\libraries\TJpg_Decoder\src/User_Config.h \
  C:\Users\sasit\OneDrive\Documents\Arduino\libraries\TJpg_Decoder\src/tjpgd.h \
  C:\Users\sasit\OneDrive\Documents\Arduino\libraries\TJpg_Decoder\src/tjpgdcnf.h \
+ C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\FS\src/FS.h \
+ C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\LittleFS\src/LittleFS.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\SPIFFS\src/SPIFFS.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\SD\src/SD.h \
  C:\Users\sasit\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.3.11\libraries\SD\src/sd_defines.h \
+ W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\video_frames_data.h \
+ W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\image_transfer.h \
  W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\games.h \
  C:\Users\sasit\OneDrive\Documents\Arduino\libraries\Adafruit_ST7735_and_ST7789_Library/Adafruit_ST7735.h \
  W:\Mr.mario\1.69\ Luna\ Firmware\build\esp32.esp32.esp32s3\sketch\audio.h \

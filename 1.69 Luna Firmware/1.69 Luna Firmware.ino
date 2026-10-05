@@ -14,6 +14,8 @@
 #include "qr_card.h"
 #include "imu.h"
 #include "image_transfer.h"
+#include "image_logo.h"
+#include "smart_home.h"
 
 // Forward declaration for BLE command handler
 void handleRobotCommand(String cmd);
@@ -28,6 +30,7 @@ LunaInteraction interaction;   // touch screen interface
 LunaIMU imu;                   // QMI8658 Accelerometer & Gyroscope
 LunaImageTransfer imgTransfer; // BLE wallpaper image transfer state machine
 LunaRTC rtcDevice;             // PCF85063 Hardware RTC
+LunaSmartHome smartHome;       // Home Automation Relay Controller
 
 float readBatteryVolts() {
   uint32_t totalMv = 0;
@@ -64,7 +67,7 @@ bool notificationSelected = false;
 int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
 volatile bool hardwareLoopbackActive = false;
 bool optionSelected = false;
-SmartwatchScreen currentScreen = SCREEN_CLOCK;
+SmartwatchScreen currentScreen = SCREEN_FACE;
 
 // ── Smooth inertial scroll state (Settings & Arcade) ─────────────────────────
 float settingsScrollPx  = 0.0f;  // pixel offset into settings list
@@ -671,7 +674,6 @@ void notifyScreenAndExprSync() {
     case SCREEN_CALENDAR: screenName = "CALENDAR"; break;
     case SCREEN_GAMES: screenName = "GAMES"; break;
     case SCREEN_SETTINGS: screenName = "SETTINGS"; break;
-    case SCREEN_LEVEL: screenName = "LEVEL"; break;
     case SCREEN_POMODORO: screenName = "POMODORO"; break;
     case SCREEN_MAPS: screenName = "MAPS"; break;
     case SCREEN_WALLPAPER: screenName = "WALLPAPER"; break;
@@ -694,8 +696,23 @@ void notifyScreenAndExprSync() {
 }
 
 const char* getSpriteAiAnimationName(int idx) {
-  (void)idx;
-  return "Luna Anime";
+  switch (idx) {
+    case 0: return "Luna Idle";
+    case 1: return "Angry Face";
+    case 2: return "Hungry Menu";
+    case 3: return "Getting Hungry";
+    case 4: return "Eat Fish";
+    case 5: return "Drink Milk";
+    case 6: return "Eat Salad";
+    case 7: return "Getting Sick";
+    case 8: return "Luna Sick";
+    case 9: return "Recovered";
+    case 10: return "Going to Sleep";
+    case 11: return "Sleeping";
+    case 12: return "Waking Up";
+    case 13: return "Luna Thinking";
+    default: return "Luna Anime";
+  }
 }
 
 const char* getAnimationThought(int idx) {
@@ -1385,7 +1402,6 @@ void handleRobotCommand(String text) {
     else if (arg == "FACE" || arg == "EYES") sVal = SCREEN_FACE;
     else if (arg == "CARD") sVal = SCREEN_CARD;
     else if (arg == "SETTINGS") sVal = SCREEN_SETTINGS;
-    else if (arg == "LEVEL") sVal = SCREEN_LEVEL;
     else if (arg == "POMODORO" || arg == "POMO") sVal = SCREEN_POMODORO;
     else sVal = arg.toInt();
 
@@ -1848,17 +1864,6 @@ void configureST7789HardwareEnhanced() {
   Serial.println(F("[TFT] ST7789 Enhanced Hardware Calibration applied (Bright Red & Smooth Shadow Gamma)."));
 }
 
-void drawRGBBitmapScaled(int16_t x, int16_t y, const uint16_t *bitmap, int16_t w, int16_t h, int16_t targetW, int16_t targetH) {
-  for (int16_t ty = 0; ty < targetH; ty++) {
-    int16_t sy = (ty * h) / targetH;
-    int32_t rowOffset = (int32_t)sy * w;
-    for (int16_t tx = 0; tx < targetW; tx++) {
-      int16_t sx = (tx * w) / targetW;
-      uint16_t color = pgm_read_word(&bitmap[rowOffset + sx]);
-      tft.drawPixel(x + tx, y + ty + 20, color); // Apply 20px screen vertical offset
-    }
-  }
-}
 
 void applySettings(String payload) {
   // Robust CSV parsing — split by commas into an array
@@ -2082,7 +2087,8 @@ void setup() {
   face.setFrameDelay(gifSpeed);
   face.setDefaultExpression(EXPR_ROBOT_EYE);
   face.setExpression(EXPR_ROBOT_EYE);
-  face.getRobotEyeAnim().setAnimationIndex(0); // Happy Smile
+  face.getRobotEyeAnim().setAnimationIndex(0); // Luna Idle
+  face.setStateLabel("Luna Idle");
   lastFedTime = millis();
   moodStartTime = millis();
 
@@ -2103,7 +2109,11 @@ void setup() {
   // Perform Hardware Reset
   pinMode(TFT_DC, OUTPUT);
   pinMode(TFT_RST, OUTPUT);
+  #ifdef TFT_BLK
   pinMode(TFT_BLK, OUTPUT);
+  analogWriteFrequency(TFT_BLK, TFT_PWM_FREQ);
+  analogWrite(TFT_BLK, 0); // Keep screen completely dark while initializing
+  #endif
   
   digitalWrite(TFT_RST, HIGH);
   delay(50);
@@ -2123,43 +2133,113 @@ void setup() {
   // Apply enhanced hardware registers (calibrated gamma, VCOM, gate voltage, porch timing)
   configureST7789HardwareEnhanced();
   
-  tft.invertDisplay(true);   // Standard color representation for IPS screen during logo — gives white background
+  tft.invertDisplay(true);   // Standard color representation for IPS screen
+  
+  // Initialize white canvas background while backlight is dark (duty 0)
   tft.fillScreen(ST77XX_WHITE);
-  
-  display.fillScreen(ST77XX_WHITE);
-  
-  // Apply 10 kHz PWM frequency to backlight to eliminate optical beat noise
-  #ifdef TFT_BLK
-  analogWriteFrequency(TFT_BLK, TFT_PWM_FREQ);
-  #endif
-  applyDisplayBrightness(oledBrightness);
+  display.drawRGBBitmap(0, 0, image_logo_pixels, 240, 280);
 
-  // Display startup logo on white background
-  int logoSize = (SCREEN_WIDTH < SCREEN_HEIGHT) ? SCREEN_WIDTH : SCREEN_HEIGHT;
-  int logoX = (SCREEN_WIDTH - logoSize) / 2;
-  int logoY = (SCREEN_HEIGHT - logoSize) / 2;
-  drawRGBBitmapScaled(logoX, logoY, image_logo_pixels, 240, 240, logoSize, logoSize);
+  // Target brightness duty based on saved preferences
+  uint8_t targetDuty = 230;
+  if (oledBrightness == 1) targetDuty = 90;
+  else if (oledBrightness == 3) targetDuty = 255;
 
-  // Play startup sound immediately so it plays while loading the logo
-  audio.playSound(SOUND_STARTUP, introSoundSpeed);
+  // Play boot chime immediately while starting the bottom-to-top reveal effect
+  audio.playSound(SOUND_BOOT_CHIME, introSoundSpeed);
 
+  // 1. Startup Logo Reveal Effect: Sweeps upwards from bottom to top (70 steps x 4 scanlines = 280px)
+  const int REVEAL_STEP_PX = 4;
+  const int TOTAL_REVEAL_STEPS = SCREEN_HEIGHT / REVEAL_STEP_PX; // 280 / 4 = 70 steps
+  for (int step = 0; step < TOTAL_REVEAL_STEPS; step++) {
+    int curY = SCREEN_HEIGHT - (step + 1) * REVEAL_STEP_PX;
+    if (curY < 0) curY = 0;
+    
+    // Draw 4-scanline strip of the logo directly from PROGMEM at hardware Y offset (+20)
+    tft.drawRGBBitmap(0, 20 + curY, &image_logo_pixels[curY * SCREEN_WIDTH], SCREEN_WIDTH, REVEAL_STEP_PX);
 
-  // Show logo for 3 seconds while playing the startup sound and ignoring/clearing touches
-  unsigned long bootStart = millis();
-  while (millis() - bootStart < 3000) {
+    // Smoothly ramp up backlight in first 14 steps (~110ms)
+    if (step < 14) {
+      uint8_t d = (uint8_t)(targetDuty * ((step + 1) / 14.0f));
+      #ifdef TFT_BLK
+      analogWrite(TFT_BLK, d);
+      #endif
+    } else if (step == 14) {
+      #ifdef TFT_BLK
+      analogWrite(TFT_BLK, targetDuty);
+      #endif
+    }
+
     audio.update();
-    interaction.update(); // read to clear/ignore early boot noise
-    delay(1);
+    interaction.update();
+    delay(8);
+  }
+  #ifdef TFT_BLK
+  analogWrite(TFT_BLK, targetDuty);
+  #endif
+
+  // 2. Full Logo Display & Audio Chime Hold Phase (~1300ms)
+  unsigned long holdStart = millis();
+  while (millis() - holdStart < 1300) {
+    audio.update();
+    interaction.update();
+    delay(5);
   }
 
-  // Restore saved invert setting for standard operation
+  // 3. Closing Logo Animation: Smooth Fade-Out to Pitch Black (~400ms)
+  const unsigned long FADE_OUT_MS = 400;
+  unsigned long fadeOutStart = millis();
+  while (millis() - fadeOutStart < FADE_OUT_MS) {
+    float t = (float)(millis() - fadeOutStart) / (float)FADE_OUT_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = 1.0f - (t * t * (3.0f - 2.0f * t)); // Smooth cubic ease-out to zero
+    uint8_t duty = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, duty);
+    #endif
+    audio.update();
+    interaction.update();
+    delay(5);
+  }
+  #ifdef TFT_BLK
+  analogWrite(TFT_BLK, 0); // Completely dark
+  #endif
+
+  // 4. Clean Transition to Pet Face while screen is dark (no visual pop or color flashing)
+  tft.fillScreen(ST77XX_BLACK);
+  display.fillScreen(ST77XX_BLACK);
   tft.invertDisplay(true);
   
-  // Set intro speed
   face.setFrameDelay(gifIntroSpeed);
   face.setExpression(EXPR_ROBOT_EYE);
+  face.getRobotEyeAnim().setAnimationIndex(0); // Luna Idle
+  face.setStateLabel("Luna Idle");
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+  face.update();
+  face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
 
-  inIntroPhase = true;
+  // 5. Smooth Fade-In to Pet Screen (~200ms)
+  const unsigned long PET_FADE_IN_MS = 200;
+  unsigned long petFadeStart = millis();
+  while (millis() - petFadeStart < PET_FADE_IN_MS) {
+    float t = (float)(millis() - petFadeStart) / (float)PET_FADE_IN_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = t * t * (3.0f - 2.0f * t);
+    uint8_t duty = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, duty);
+    #endif
+    audio.update();
+    delay(4);
+  }
+  applyDisplayBrightness(oledBrightness);
+
+  // Synchronize animation playback timer immediately after fade-in so video starts with zero delay
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+
+  currentScreen = SCREEN_FACE;
+  inIntroPhase = false;
   introAnimationStartTime = 0;
   lastInteractionTime = millis();
   lastRtcMillis = millis();
@@ -2167,6 +2247,7 @@ void setup() {
 
   games.begin();
   qrCard.begin();  // Load persisted business card URL from NVS
+  smartHome.begin(); // Launch background Wi-Fi and relay connection task
 
   // Init LittleFS and check for saved wallpaper
   imgTransfer.begin();
@@ -2201,11 +2282,255 @@ void feedLuna() {
   Serial.printf("[LUNA] FEEDING: XP now %u (Lv %d). Food bubbles floating up...\n", lunaXP, lunaLevel);
 }
 
+// ── Returns the matching sound effect for a given animation index ────────────
+SoundEffect getAnimationSound(int idx) {
+  switch (idx) {
+    case 0:  return SOUND_ANIM_IDLE;
+    case 1:  return SOUND_ANIM_ANGRY;
+    case 2:  return SOUND_ANIM_HUNGRY_MENU;
+    case 3:  return SOUND_ANIM_GETTING_HUNGRY;
+    case 4:  return SOUND_ANIM_EAT_FISH;
+    case 5:  return SOUND_ANIM_DRINK_MILK;
+    case 6:  return SOUND_ANIM_EAT_SALAD;
+    case 7:  return SOUND_ANIM_GETTING_SICK;
+    case 8:  return SOUND_ANIM_SICK;
+    case 9:  return SOUND_ANIM_RECOVERED;
+    case 10: return SOUND_ANIM_SLEEP;
+    case 11: return SOUND_ANIM_SLEEPING;
+    case 12: return SOUND_ANIM_WAKEUP;
+    case 13: return SOUND_ANIM_THINKING;
+    default: return SOUND_ANIM_IDLE;
+  }
+}
+
+// ── Fast, Smooth Fade Transition Between Video Animations (Zero Delay) ──────
+void transitionToVideoIndexWithFade(int targetIdx, bool playSound = true) {
+  uint8_t targetDuty = 230;
+  if (oledBrightness == 1) targetDuty = 90;
+  else if (oledBrightness == 3) targetDuty = 255;
+
+  // 1. Fast, fluid Fade-Out (65ms) - Quick cinematic dip to black
+  const unsigned long FADE_MS = 65;
+  unsigned long t0 = millis();
+  while (millis() - t0 < FADE_MS) {
+    float t = (float)(millis() - t0) / (float)FADE_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = 1.0f - (t * t * (3.0f - 2.0f * t)); // smooth cubic ease-out
+    uint8_t d = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, d);
+    #endif
+    audio.update();
+    interaction.update();
+    delay(2);
+  }
+  #ifdef TFT_BLK
+  analogWrite(TFT_BLK, 0);
+  #endif
+
+  // 2. Set target video animation while screen is black
+  int oldIdx = face.getRobotEyeAnim().getAnimationIndex();
+  face.getRobotEyeAnim().setAnimationIndex(targetIdx);
+  int newIdx = face.getRobotEyeAnim().getAnimationIndex();
+  const char* animName = getSpriteAiAnimationName(newIdx);
+  face.setStateLabel(animName);
+
+  // Render Frame 0 of the new animation into display buffer & TFT while black
+  face.update();
+  face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+
+  // 3. Play matching animation sound effect if requested
+  if (playSound) {
+    audio.playSound(getAnimationSound(newIdx));
+  }
+
+  // 4. Fast, fluid Fade-In (65ms) - Restores full brightness seamlessly
+  t0 = millis();
+  while (millis() - t0 < FADE_MS) {
+    float t = (float)(millis() - t0) / (float)FADE_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = t * t * (3.0f - 2.0f * t); // smooth cubic ease-in
+    uint8_t d = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, d);
+    #endif
+    audio.update();
+    interaction.update();
+    delay(2);
+  }
+  applyDisplayBrightness(oledBrightness);
+
+  // 5. Synchronize animation playback timer immediately after fade:
+  // Starts Frame 0 timing fresh right now so the video plays INSTANTLY with zero pause or delay!
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+
+  Serial.printf("[VIDEO] Anim %d -> Faded -> Anim %d (%s, %d frames)\n",
+                oldIdx, newIdx, animName, face.getRobotEyeAnim().getFrameCount());
+  notifyScreenAndExprSync();
+}
+
+void transitionToNextVideoWithFade() {
+  int nextIdx = (face.getRobotEyeAnim().getAnimationIndex() + 1) % TOTAL_ANIMATIONS;
+  transitionToVideoIndexWithFade(nextIdx, true);
+}
+
+enum LunaSleepState {
+  LUNA_AWAKE,          // Normal awake: cycles IDLE (0) and THINKING (13)
+  LUNA_GOING_TO_SLEEP, // Transitioning: anim 10 (Going to Sleep)
+  LUNA_SLEEPING_LOOP,  // Sleeping: anim 11 (Sleeping loop) indefinitely
+  LUNA_WAKING_UP,      // Transitioning: anim 12 (Waking Up)
+  LUNA_GOING_TO_SICK,  // Transitioning: anim 7 (Idle to Sick)
+  LUNA_SICK_LOOP,      // Sick: anim 8 (Sick loop) indefinitely
+  LUNA_RECOVERING      // Transitioning: anim 9 (Sick to Idle / Recovered)
+};
+
+LunaSleepState lunaSleepState = LUNA_AWAKE;
+int idleLoopCount = 0;
+
+const char* const motivationalQuotes[] = {
+  "Believe in yourself!",
+  "Make today wonderful!",
+  "Small steps every day!",
+  "Stay curious and kind!",
+  "You are doing great!",
+  "Keep shining bright!",
+  "Dream big, smile more!",
+  "Every day is a fresh start!",
+  "Kindness is a superpower!",
+  "Radiate positive vibes!"
+};
+const int numMotivationalQuotes = sizeof(motivationalQuotes) / sizeof(motivationalQuotes[0]);
+static int currentQuoteIdx = 0;
+
+void pickNewMotivationalQuote() {
+  currentQuoteIdx = (currentQuoteIdx + 1) % numMotivationalQuotes;
+  face.setThoughtText(motivationalQuotes[currentQuoteIdx]);
+}
+
 void updateLunaLife() {
-  if (currentScreen != SCREEN_FACE || isAsleep || inIntroPhase || mapsActive || gamePlaying) return;
-  // Silent animation maintainer: zero sounds, zero hunger alerts, zero thought text
+  if (currentScreen != SCREEN_FACE || inIntroPhase || mapsActive || gamePlaying) return;
+
   if (!face.getRobotEyeAnim().isPlaying()) {
     face.getRobotEyeAnim().play();
+  }
+
+  if (face.getRobotEyeAnim().isCycleCompleted()) {
+    face.getRobotEyeAnim().clearCycleCompleted();
+    int curIdx = face.getRobotEyeAnim().getAnimationIndex();
+
+    // ── 1. If in Awake state: circulate IDLE (0) <-> THINKING (13) <-> ANGRY (1) ──
+    if (lunaSleepState == LUNA_AWAKE) {
+      if (curIdx == 0) {
+        // Completed 1 cycle of IDLE (anim 0)
+        idleLoopCount++;
+        // After 2 complete cycles of Idle (~15s), circulate to Thinking (13) or Angry (1)!
+        if (idleLoopCount >= 2) {
+          idleLoopCount = 0;
+          static int awakeCycleCounter = 0;
+          awakeCycleCounter++;
+          // Alternate/circulate between Thinking (Anim 13) and Angry (Anim 1)
+          if (awakeCycleCounter % 2 == 1) {
+            pickNewMotivationalQuote();
+            Serial.println(F("[LUNA] Idle complete -> Transitioning to Luna Thinking (Anim 13)"));
+            transitionToVideoIndexWithFade(13, true);
+          } else {
+            face.setThoughtText("");
+            Serial.println(F("[LUNA] Idle complete -> Transitioning to Angry Face (Anim 1)"));
+            transitionToVideoIndexWithFade(1, true);
+          }
+        }
+      } else if (curIdx == 13) {
+        // Completed 1 cycle of THINKING (anim 13) (~7.5s)
+        idleLoopCount = 0;
+        face.setThoughtText("");
+        Serial.println(F("[LUNA] Thinking complete -> Transitioning to Luna Idle (Anim 0)"));
+        transitionToVideoIndexWithFade(0, true);
+      } else if (curIdx == 1) {
+        // Completed 1 cycle of ANGRY (anim 1) (~7.5s)
+        idleLoopCount = 0;
+        face.setThoughtText("");
+        Serial.println(F("[LUNA] Angry Face complete -> Transitioning to Luna Idle (Anim 0)"));
+        transitionToVideoIndexWithFade(0, true);
+      } else if (curIdx == 4 || curIdx == 5 || curIdx == 6) {
+        // Completed eating animation -> return to Idle
+        idleLoopCount = 0;
+        face.setThoughtText("");
+        transitionToVideoIndexWithFade(0, true);
+      }
+    }
+    // ── 2. If Going to Sleep (Anim 10) ──
+    else if (lunaSleepState == LUNA_GOING_TO_SLEEP) {
+      if (curIdx == 10) {
+        // Finished "Going to Sleep" (anim 10)!
+        // Seamless cut directly to continuous Sleeping loop (anim 11) - ZERO fade, ZERO gap, ZERO glitch!
+        lunaSleepState = LUNA_SLEEPING_LOOP;
+        face.getRobotEyeAnim().setAnimationIndex(11);
+        face.getRobotEyeAnim().reset();
+        face.getRobotEyeAnim().play();
+        face.setStateLabel("Sleeping");
+        audio.playSound(SOUND_ANIM_SLEEPING);
+        Serial.println(F("[LUNA] Going to Sleep complete -> Seamlessly playing Sleeping loop (Anim 11)"));
+        notifyScreenAndExprSync();
+      }
+    }
+    // ── 3. If Sleeping Loop (Anim 11) ──
+    else if (lunaSleepState == LUNA_SLEEPING_LOOP) {
+      // Keep looping Sleeping animation (anim 11) continuously!
+    }
+    // ── 4. If Waking Up (Anim 12) ──
+    else if (lunaSleepState == LUNA_WAKING_UP) {
+      if (curIdx == 12) {
+        // Finished "Waking Up" (anim 12)!
+        // Seamless cut directly to Luna Idle (anim 0) - ZERO fade, ZERO gap, ZERO glitch!
+        lunaSleepState = LUNA_AWAKE;
+        idleLoopCount = 0;
+        face.setThoughtText("");
+        face.getRobotEyeAnim().setAnimationIndex(0);
+        face.getRobotEyeAnim().reset();
+        face.getRobotEyeAnim().play();
+        face.setStateLabel("Luna Idle");
+        audio.playSound(SOUND_ANIM_IDLE);
+        Serial.println(F("[LUNA] Waking Up complete -> Seamlessly playing Luna Idle (Anim 0)"));
+        notifyScreenAndExprSync();
+      }
+    }
+    // ── 5. If Going to Sick (Anim 7) ──
+    else if (lunaSleepState == LUNA_GOING_TO_SICK) {
+      if (curIdx == 7) {
+        // Finished "Idle to Sick" (anim 7)!
+        // Seamless cut directly to continuous Sick loop (anim 8) - ZERO fade, ZERO gap, ZERO glitch!
+        lunaSleepState = LUNA_SICK_LOOP;
+        face.getRobotEyeAnim().setAnimationIndex(8);
+        face.getRobotEyeAnim().reset();
+        face.getRobotEyeAnim().play();
+        face.setStateLabel("Luna Sick");
+        audio.playSound(SOUND_ANIM_SICK);
+        Serial.println(F("[LUNA] Idle to Sick complete -> Seamlessly playing Sick loop (Anim 8)"));
+        notifyScreenAndExprSync();
+      }
+    }
+    // ── 6. If Sick Loop (Anim 8) ──
+    else if (lunaSleepState == LUNA_SICK_LOOP) {
+      // Keep looping Sick animation (anim 8) continuously!
+    }
+    // ── 7. If Recovering (Anim 9) ──
+    else if (lunaSleepState == LUNA_RECOVERING) {
+      if (curIdx == 9) {
+        // Finished "Sick to Idle" (anim 9)!
+        // Seamless cut directly to Luna Idle (anim 0) - ZERO fade, ZERO gap, ZERO glitch!
+        lunaSleepState = LUNA_AWAKE;
+        idleLoopCount = 0;
+        face.setThoughtText("");
+        face.getRobotEyeAnim().setAnimationIndex(0);
+        face.getRobotEyeAnim().reset();
+        face.getRobotEyeAnim().play();
+        face.setStateLabel("Luna Idle");
+        audio.playSound(SOUND_ANIM_IDLE);
+        Serial.println(F("[LUNA] Sick to Idle complete -> Seamlessly playing Luna Idle (Anim 0)"));
+        notifyScreenAndExprSync();
+      }
+    }
   }
 }
 
@@ -2337,12 +2662,7 @@ void handleBtn1Single() {
 
   if (inIntroPhase) {
     inIntroPhase = false;
-    face.setFrameDelay(gifSpeed);
-    currentScreen = SCREEN_CLOCK;
-    audio.playSound(SOUND_POWERUP);
-    Serial.println(F("[Intro] Tap skipped intro -> SCREEN_CLOCK"));
-    notifyScreenAndExprSync();
-    return;
+    currentScreen = SCREEN_FACE;
   }
 
   // Tapping on QR Card returns to Clock Home
@@ -2430,11 +2750,9 @@ void handleBtn1Single() {
     return;
   }
 
+
   if (currentScreen == SCREEN_FACE) {
-    // Interactive touch: replay/reset animation smoothly without any sound
-    face.getRobotEyeAnim().reset();
-    face.getRobotEyeAnim().play();
-    notifyScreenAndExprSync();
+    // Touch screen tap disabled on SCREEN_FACE — screen transitions only via physical middle button
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
     // Tap on clock screen cycles the clock style between 0 and 1
@@ -2493,10 +2811,6 @@ void handleBtn1Single() {
     face.cycleCalendarView();
     audio.playSound(SOUND_CHIRP);
     Serial.println("[BTN1] Cycled calendar");
-  } else if (currentScreen == SCREEN_LEVEL) {
-    // Calibrate level sensor on single tap
-    calibrateRequest = true;
-    Serial.println("[BTN1] Triggered Level calibration");
   } else if (currentScreen == SCREEN_POMODORO) {
     int lastY = interaction.getLastY();
     int canvasY = lastY - 20;
@@ -2619,6 +2933,11 @@ void handleBtn1Long() {
 // =============================================================================
 void handleBtn2Single() {
   lastInteractionTime = millis();
+  if (currentScreen == SCREEN_FACE) {
+    // Navigation gestures and right-side taps are disabled while in animation player!
+    Serial.println(F("[BTN2] Ignored on SCREEN_FACE (animation locked until Clock)"));
+    return;
+  }
   if (currentScreen == SCREEN_MAPS || mapsActive) {
     mapsActive = false;
   }
@@ -2643,12 +2962,12 @@ void handleBtn2Single() {
   lastScreenTransitionTime = transitionNow;
   if (inIntroPhase) inIntroPhase = false;
 
-  // Screen cycle: Clock (Home) -> Notifications -> Calendar -> Maps -> Focus -> Level -> Games -> Settings -> Card -> Face
+  // Screen cycle: Clock (Home) -> Notifications -> Calendar -> Maps -> Focus -> Games -> Settings -> Card -> Face
   static const SmartwatchScreen CYCLE[] = {
     SCREEN_CLOCK, SCREEN_NOTIFICATIONS, SCREEN_CALENDAR, SCREEN_MAPS, SCREEN_POMODORO,
-    SCREEN_LEVEL, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD, SCREEN_FACE
+    SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD, SCREEN_FACE
   };
-  static const int CYCLE_LEN = 10;
+  static const int CYCLE_LEN = 9;
 
   int idx = 0;
   for (int i = 0; i < CYCLE_LEN; i++) {
@@ -2673,7 +2992,7 @@ void handleBtn2Single() {
   settingsScrollPx = 0.0f; settingsVelPx = 0.0f; settingsWasScroll = false;
   gamesScrollPx    = 0.0f; gamesVelPx    = 0.0f; gamesWasScroll    = false;
 
-  const char* names[] = {"CLOCK","NOTIF","CAL","MAPS","POMO","LEVEL","GAMES","SETTINGS","CARD","FACE"};
+  const char* names[] = {"CLOCK","NOTIF","CAL","MAPS","POMO","GAMES","SETTINGS","CARD","FACE"};
   Serial.printf("[BTN2] >>> %s (screen %d)\n", names[idx], currentScreen);
   notifyScreenAndExprSync();
 }
@@ -2681,6 +3000,11 @@ void handleBtn2Single() {
 
 void handleBtn2Double() {
   lastInteractionTime = millis();
+  if (currentScreen == SCREEN_FACE) {
+    // Navigation gestures and left-side taps are disabled while in animation player!
+    Serial.println(F("[BTN2 DBL] Ignored on SCREEN_FACE (animation locked until Clock)"));
+    return;
+  }
   if (currentScreen == SCREEN_MAPS || mapsActive) {
     mapsActive = false;
   }
@@ -2695,9 +3019,9 @@ void handleBtn2Double() {
 
   static const SmartwatchScreen CYCLE[] = {
     SCREEN_CLOCK, SCREEN_NOTIFICATIONS, SCREEN_CALENDAR, SCREEN_MAPS, SCREEN_POMODORO,
-    SCREEN_LEVEL, SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD, SCREEN_FACE
+    SCREEN_GAMES, SCREEN_SETTINGS, SCREEN_CARD, SCREEN_FACE
   };
-  static const int CYCLE_LEN = 10;
+  static const int CYCLE_LEN = 9;
 
   int idx = 0;
   for (int i = 0; i < CYCLE_LEN; i++) {
@@ -2722,7 +3046,7 @@ void handleBtn2Double() {
   settingsScrollPx = 0.0f; settingsVelPx = 0.0f; settingsWasScroll = false;
   gamesScrollPx    = 0.0f; gamesVelPx    = 0.0f; gamesWasScroll    = false;
 
-  const char* names[] = {"CLOCK","NOTIF","CAL","MAPS","POMO","LEVEL","GAMES","SETTINGS","CARD","FACE"};
+  const char* names[] = {"CLOCK","HOME","NOTIF","CAL","MAPS","POMO","LEVEL","GAMES","SETTINGS","CARD","FACE"};
   Serial.printf("[BTN2 DBL] <<< %s (screen %d)\n", names[(idx-1+CYCLE_LEN)%CYCLE_LEN], currentScreen);
   notifyScreenAndExprSync();
 }
@@ -2839,11 +3163,14 @@ void updateStateLabel() {
 void loop() {
   unsigned long now = millis();
 
-  // ── 0. Poll Physical Buttons for Sleep/Wake ──────────────────────────────
+  // ── 0. Poll Physical Buttons for Sleep/Wake & Sick/Cure ───────────────────
   static unsigned long powerBtnPressStart = 0;
   static bool powerBtnWasPressed = false;
   static unsigned long bootBtnPressStart = 0;
   static bool bootBtnWasPressed = false;
+
+  static int powerClickCount = 0;
+  static unsigned long lastPowerClickReleaseTime = 0;
 
   bool powerPressed = (digitalRead(40) == LOW);
   bool bootPressed = (digitalRead(0) == LOW);
@@ -2858,6 +3185,7 @@ void loop() {
         // Long press -> Enter Badge Mode: cut all battery-heavy subsystems
         if (!isAsleep) {
           isAsleep = true;
+          powerClickCount = 0;
           wallpaperDrawnInSleep = false;
           // Stop BLE entirely to save ~15-20mA
           ble.setBLEActive(false);
@@ -2880,10 +3208,11 @@ void loop() {
       powerBtnWasPressed = false;
       powerBtnPressStart = 0;
 
-      if (pressDuration >= 50 && pressDuration < 1500) {
+      if (pressDuration >= 40 && pressDuration < 1200) {
         if (isAsleep) {
           // Short press while in badge mode -> full wake: restart BLE, restore audio
           isAsleep = false;
+          powerClickCount = 0;
           wallpaperDrawnInSleep = false;
           ble.setBLEActive(true);          // restart BLE advertising
           audio.silentMode = silentMode;   // restore user silent preference
@@ -2891,20 +3220,82 @@ void loop() {
           Serial.println("[Power Button] Short press -> Waking from Badge Mode, BLE restarted");
         } else if (gamePlaying) {
           gamePlaying = false;
+          powerClickCount = 0;
           gamesActive = true;
           audio.playSound(SOUND_POWERDOWN);
           Serial.println("[Power Button] Short press in game -> Exited to arcade");
-        } else {
-          // Short press while awake: feed Luna ONLY when hungry!
+        } else if (currentScreen != SCREEN_FACE) {
+          // Short press while awake on non-face screens: feed Luna ONLY when hungry!
+          powerClickCount = 0;
           if (isHungry || face.isHungry()) {
             feedLuna();
+          }
+        } else {
+          // SCREEN_FACE: Multi-click detection
+          powerClickCount++;
+          lastPowerClickReleaseTime = now;
+          if (powerClickCount >= 2) {
+            // ── DOUBLE CLICK ACTION ──
+            powerClickCount = 0;
+            if (lunaSleepState == LUNA_AWAKE || lunaSleepState == LUNA_WAKING_UP) {
+              // Awake -> Seamlessly transition to Sick (Anim 7)
+              lunaSleepState = LUNA_GOING_TO_SICK;
+              face.setThoughtText("");
+              face.getRobotEyeAnim().setAnimationIndex(7);
+              face.getRobotEyeAnim().reset();
+              face.getRobotEyeAnim().play();
+              face.setStateLabel("Getting Sick");
+              audio.playSound(SOUND_ANIM_GETTING_SICK);
+              Serial.println(F("[Power Button] Double Click: Idle -> Getting Sick (Anim 7)"));
+              notifyScreenAndExprSync();
+            } else if (lunaSleepState == LUNA_SICK_LOOP || lunaSleepState == LUNA_GOING_TO_SICK) {
+              // Sick -> Seamlessly transition back to Idle (Anim 9 - Recovered)
+              lunaSleepState = LUNA_RECOVERING;
+              face.setThoughtText("");
+              face.getRobotEyeAnim().setAnimationIndex(9);
+              face.getRobotEyeAnim().reset();
+              face.getRobotEyeAnim().play();
+              face.setStateLabel("Recovering");
+              audio.playSound(SOUND_ANIM_RECOVERED);
+              Serial.println(F("[Power Button] Double Click: Sick -> Recovering to Idle (Anim 9)"));
+              notifyScreenAndExprSync();
+            }
           }
         }
       }
     }
   }
 
-  // Handle Boot button (GPIO 0)
+  // Single click timeout check for SCREEN_FACE (wait 280ms for a potential second click)
+  if (powerClickCount == 1 && !powerBtnWasPressed && (now - lastPowerClickReleaseTime > 280)) {
+    powerClickCount = 0;
+    if (currentScreen == SCREEN_FACE) {
+      if (lunaSleepState == LUNA_AWAKE || lunaSleepState == LUNA_WAKING_UP) {
+        // Awake -> Seamlessly start Going to Sleep (Anim 10)
+        lunaSleepState = LUNA_GOING_TO_SLEEP;
+        face.setThoughtText("");
+        face.getRobotEyeAnim().setAnimationIndex(10);
+        face.getRobotEyeAnim().reset();
+        face.getRobotEyeAnim().play();
+        face.setStateLabel("Going to Sleep");
+        audio.playSound(SOUND_ANIM_SLEEP);
+        Serial.println(F("[Power Button] Single Click: Awake -> Going to Sleep (Anim 10)"));
+        notifyScreenAndExprSync();
+      } else if (lunaSleepState == LUNA_SLEEPING_LOOP || lunaSleepState == LUNA_GOING_TO_SLEEP) {
+        // Asleep -> Seamlessly start Waking Up (Anim 12)
+        lunaSleepState = LUNA_WAKING_UP;
+        face.getRobotEyeAnim().setAnimationIndex(12);
+        face.getRobotEyeAnim().reset();
+        face.getRobotEyeAnim().play();
+        face.setStateLabel("Waking Up");
+        audio.playSound(SOUND_ANIM_WAKEUP);
+        Serial.println(F("[Power Button] Single Click: Asleep -> Waking Up (Anim 12)"));
+        notifyScreenAndExprSync();
+      }
+    }
+  }
+
+  // Handle Boot button (GPIO 0) - Physical Center / Middle Button
   if (bootPressed) {
     if (!bootBtnWasPressed) {
       bootBtnWasPressed = true;
@@ -2949,8 +3340,23 @@ void loop() {
       bootBtnWasPressed = false;
       bootBtnPressStart = 0;
       
-      if (pressDuration >= 50 && pressDuration < 1500) {
-        if (gamePlaying && !isAsleep) {
+      if (pressDuration >= 30 && pressDuration < 1500) {
+        if (currentScreen == SCREEN_FACE || inIntroPhase) {
+          inIntroPhase = false;
+          currentScreen = SCREEN_CLOCK;
+          settingsActive = false;
+          optionSelected = false;
+          notificationsActive = false;
+          notificationSelected = false;
+          hardwareLoopbackActive = false;
+          audio.micStreaming = false;
+          audio.audioMode = LunaAudio::AUDIO_MODE_SYNTH;
+          audio.prebuffering = true;
+          face.setStateLabel("CLOCK");
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[Middle Button (GPIO 0)] Clicked on SCREEN_FACE -> Navigating to SCREEN_CLOCK"));
+          notifyScreenAndExprSync();
+        } else if (gamePlaying && !isAsleep) {
           gamePlaying = false;
           gamesActive = true;
           audio.playSound(SOUND_POWERDOWN);
@@ -3111,6 +3517,18 @@ void loop() {
       break;
     case BTN_SWIPE_UP:   handleSwipeUp();   break;
     case BTN_SWIPE_DOWN: handleSwipeDown(); break;
+    case BTN_CIRCLE_LEFT:
+      Serial.println(F("[Action] Hungry Menu: Salad (LEFT) tapped!"));
+      transitionToVideoIndexWithFade(6, true);
+      break;
+    case BTN_CIRCLE_MID:
+      Serial.println(F("[Action] Hungry Menu: Milk (MIDDLE) tapped!"));
+      transitionToVideoIndexWithFade(5, true);
+      break;
+    case BTN_CIRCLE_RIGHT:
+      Serial.println(F("[Action] Hungry Menu: Fish (RIGHT) tapped!"));
+      transitionToVideoIndexWithFade(4, true);
+      break;
     default: break;
   }
 
@@ -3297,9 +3715,11 @@ void loop() {
     currentScreen = SCREEN_FACE; // Show the GIF animation on boot
     if (introAnimationStartTime == 0) {
       introAnimationStartTime = now;
+      face.getRobotEyeAnim().setAnimationIndex(0); // Luna Idle
+      face.setStateLabel("Luna Idle");
       face.getRobotEyeAnim().reset();
       face.getRobotEyeAnim().play();
-      Serial.println(F("[Boot] Starting Intro GIF animation on SCREEN_FACE..."));
+      Serial.println(F("[Boot] Starting Luna Idle video animation on SCREEN_FACE..."));
     }
     // Play the GIF animation for at least ~3.0 seconds (about 4-5 complete animation cycles)
     // then when a cycle completes cleanly, transition to SCREEN_CARD (QR code)
@@ -3384,27 +3804,71 @@ void loop() {
     sendLunaStatsToBLE();
   }
 
-  // Update GIF frame states on every loop iteration (skip when wallpaper is shown)
-  if (currentScreen != SCREEN_WALLPAPER) {
-    face.update();
+  // Track screen transitions to manage power, Wi-Fi radio, and animation state
+  static SmartwatchScreen lastLoopScreen = SCREEN_FACE;
+  bool screenChanged = (currentScreen != lastLoopScreen);
+  if (screenChanged) {
+
+    // 2. Freeze/Pause Robot Face Video Animation when away from SCREEN_FACE:
+    // Pauses frame progression, JPEG decoding, and memory bandwidth while on Clock/Settings/etc.
+    // Seamlessly unfreezes and resumes playback when returning to SCREEN_FACE!
+    if (currentScreen == SCREEN_FACE) {
+      face.getRobotEyeAnim().resume();
+      Serial.println(F("[Power] Entered SCREEN_FACE -> Resumed Video Animation"));
+    } else if (lastLoopScreen == SCREEN_FACE) {
+      face.getRobotEyeAnim().pause();
+      Serial.println(F("[Power] Exited SCREEN_FACE -> Frozen/Paused Video Animation (Battery Saved)"));
+    }
+
+    lastLoopScreen = currentScreen;
+    face.requestRedraw();
   }
 
-  // Draw the display: 12ms on SCREEN_FACE (~80Hz cap) for smooth video, ~18ms elsewhere
+  // Update GIF frame states on every loop iteration (skip when wallpaper is shown)
+  bool faceChanged = false;
+  if (currentScreen != SCREEN_WALLPAPER) {
+    faceChanged = face.update();
+  }
+
+  // Draw the display:
+  // On SCREEN_FACE: redraw ONLY when a new video frame is ready (10 FPS locked cadence)
+  // or on screen transition or when an interactive alert/overlay is active.
+  // On non-face screens: redraw at ~18ms (~55 FPS) for smooth touch/inertia scrolling & games.
   static int lastDrawnSecond = -1;
   static unsigned long lastDisplayDrawTime = 0;
-  unsigned long displayDrawInterval = (currentScreen == SCREEN_FACE) ? 12 : 18;
-  if (now - lastDisplayDrawTime >= displayDrawInterval) {
-    lastDisplayDrawTime = now;
-    if (currentScreen == SCREEN_WALLPAPER) {
-      // Wallpaper screen: static JPEG already rendered — continuously animate HUD while receiving, verifying, or decoding
+  bool shouldDraw = false;
+
+  if (currentScreen == SCREEN_FACE) {
+    if (faceChanged || screenChanged) {
+      shouldDraw = true;
+    } else if (face.isPopupActive() || face.isCallRingingActive() || 
+               face.isQuickReplyActive() || isAlarmRinging || isReminderRinging) {
+      if (now - lastDisplayDrawTime >= 30) {
+        shouldDraw = true;
+      }
+    }
+  } else if (currentScreen == SCREEN_WALLPAPER) {
+    if (now - lastDisplayDrawTime >= 33) {
       if (imgTransfer.state() == LunaImageTransfer::RECEIVING ||
           imgTransfer.state() == LunaImageTransfer::VERIFYING ||
           imgTransfer.state() == LunaImageTransfer::DECODING) {
-        drawWallpaperLoadingScreen();
+        shouldDraw = true;
       }
+    }
+  } else {
+    if (screenChanged || (now - lastDisplayDrawTime >= 18)) {
+      shouldDraw = true;
+    }
+  }
+
+  if (shouldDraw) {
+    lastDisplayDrawTime = now;
+    if (currentScreen == SCREEN_WALLPAPER) {
+      // Wallpaper screen: static JPEG already rendered — continuously animate HUD while receiving, verifying, or decoding
+      drawWallpaperLoadingScreen();
     } else {
       lastDrawnSecond = rtcSecond;
-      face.setConnectivityStatus(ble.isConnected(), false);
+      face.setConnectivityStatus(ble.isConnected(), smartHome.isWifiConnected());
       face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
     }
   }

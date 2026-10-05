@@ -5,17 +5,52 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include "config.h"
-#include "sprite_ai_data_1_3.h"  // 1.69" GIF animations downscaled to 120x120 RGB565
 #include "image_logo.h"
 
-// 12 Full-Color Sprite AI animation names
+// 14 Full-Color Video AI animation names
+inline const char* getSpriteAiAnimationName(int idx) {
+  switch (idx) {
+    case 0: return "Luna Idle";
+    case 1: return "Angry Face";
+    case 2: return "Hungry Menu";
+    case 3: return "Getting Hungry";
+    case 4: return "Eat Fish";
+    case 5: return "Drink Milk";
+    case 6: return "Eat Salad";
+    case 7: return "Getting Sick";
+    case 8: return "Luna Sick";
+    case 9: return "Recovered";
+    case 10: return "Going to Sleep";
+    case 11: return "Sleeping";
+    case 12: return "Waking Up";
+    case 13: return "Luna Thinking";
+    default: return "Luna Anime";
+  }
+}
+
+// Backward compatibility alias
 inline const char* getSpriteAi13AnimName(int idx) {
-  static const char* const names[12] = {
-    "IDLE", "HAPPY", "SAD", "ANGRY", "SURPRISED", "SLEEPING",
-    "WINK", "EXCITED", "LOVE", "SCARED", "LAUGH", "PEACE"
-  };
-  if (idx < 0 || idx >= SPRITE_AI13_ANIMATION_COUNT) return "IDLE";
-  return names[idx];
+  return getSpriteAiAnimationName(idx);
+}
+
+inline SoundEffect getAnimationSound(int idx) {
+  switch (idx) {
+    case 0:  return SOUND_ANIM_IDLE;
+    case 1:  return SOUND_ANIM_ANGRY;
+    case 2:  return SOUND_ANIM_HUNGRY_MENU;
+    case 3:  return SOUND_ANIM_GETTING_HUNGRY;
+    case 4:  return SOUND_ANIM_EAT_FISH;
+    case 5:  return SOUND_ANIM_DRINK_MILK;
+    case 6:  return SOUND_ANIM_EAT_SALAD;
+    case 7:  return SOUND_ANIM_GETTING_SICK;
+    case 8:  return SOUND_ANIM_SICK;
+    case 9:  return SOUND_ANIM_RECOVERED;
+    case 10: return SOUND_ANIM_SLEEP;
+    case 11: return SOUND_ANIM_SLEEPING;
+    case 12: return SOUND_ANIM_WAKEUP;
+    case 13: return SOUND_ANIM_THINKING;
+    default: return SOUND_ANIM_IDLE;
+  }
 }
 #include "qr_card.h"
 #include "wallpaper_image.h"
@@ -202,6 +237,10 @@ protected:
     drawFastVLine(x, y, h, color);
   }
 
+public:
+  uint16_t* getTopBuffer() { return topBuf; }
+  uint16_t* getBtmBuffer() { return btmBuf; }
+
   uint16_t getRawPixel(int16_t x, int16_t y) const {
     if (x < 0 || x >= 240 || y < 0 || y >= 240) return 0;
     if (y < 120) {
@@ -211,6 +250,8 @@ protected:
     }
   }
 };
+
+#include "robot_eye_animation.h"
 
 class LunaFace {
 private:
@@ -303,6 +344,9 @@ private:
   bool showSilentOverlay;
   bool silentOverlayState;
 
+  // Video AI Robot Eye Animation Controller
+  RobotEyeAnimation robotEyeAnim;
+
 public:
   String headerText;
   bool timeSynced = false;
@@ -318,6 +362,7 @@ public:
   unsigned long getFeedingStartTime() const { return feedingStartTime; }
   void setThoughtText(const String& txt) { thoughtText = txt; }
   String getThoughtText() const { return thoughtText; }
+  RobotEyeAnimation& getRobotEyeAnim() { return robotEyeAnim; }
 
   // Call Ringing Controls
   void setCallRinging(bool ringing, String caller = "Incoming Call") {
@@ -406,16 +451,15 @@ public:
   }
 
   LunaFace(Adafruit_ST7789& tftDisp, LunaCanvas16& disp) 
-    : tft(tftDisp), display(disp), currentExpr(EXPR_IDLE), targetExpr(EXPR_IDLE), defaultExpr(EXPR_IDLE), stateLabel("IDLE"), frameDelayMs(100), expressionChanged(true) {
+    : tft(tftDisp), display(disp), currentExpr(EXPR_ROBOT_EYE), targetExpr(EXPR_ROBOT_EYE), defaultExpr(EXPR_ROBOT_EYE), stateLabel("Luna Idle"), frameDelayMs(105), expressionChanged(true) {
     currentFrame = 0;
     currentGifIndex = 0;
     lastFrameTime = 0;
     gifFinished = false;
 
-    // Sprite AI animation state init
-    spriteAnimIndex = 0;
-    spriteFrameIndex = 0;
-    lastSpriteFrameTime = 0;
+    // Video AI animation controller init
+    robotEyeAnim.reset();
+    robotEyeAnim.play();
 
     notificationTitle = "";
     notificationText = "";
@@ -479,23 +523,7 @@ public:
   }
 
   void updateLabelFromState() {
-    Expression exprToLabel = currentExpr;
-    if (exprToLabel == EXPR_IDLE) {
-      exprToLabel = defaultExpr;
-    }
-    
-    if (exprToLabel == EXPR_ALL_GIF) {
-      stateLabel = String(getSpriteAi13AnimName(spriteAnimIndex));
-    } else if ((int)exprToLabel >= 0 && (int)exprToLabel < SPRITE_AI13_ANIMATION_COUNT) {
-      stateLabel = String(getSpriteAi13AnimName((int)exprToLabel));
-    } else {
-      switch (exprToLabel) {
-        case EXPR_CLOCK:     stateLabel = "CLOCK"; break;
-        case EXPR_TEXT:      stateLabel = "TEXT"; break;
-        case EXPR_MAP:       stateLabel = "MAPS"; break;
-        default:             stateLabel = "IDLE"; break;
-      }
-    }
+    stateLabel = String(getSpriteAiAnimationName(robotEyeAnim.getAnimationIndex()));
   }
 
   void setDefaultExpression(Expression expr) {
@@ -510,11 +538,11 @@ public:
   void setExpression(Expression expr) {
     if ((int)expr >= 100) {
       int gifIdx = (int)expr - 100;
-      if (gifIdx >= 0 && gifIdx < SPRITE_AI13_ANIMATION_COUNT) {
+      if (gifIdx >= 0 && gifIdx < TOTAL_ANIMATIONS) {
         setGifIndex(gifIdx);
         expr = (Expression)gifIdx;
       }
-    } else if ((int)expr >= 0 && (int)expr < SPRITE_AI13_ANIMATION_COUNT) {
+    } else if ((int)expr >= 0 && (int)expr < TOTAL_ANIMATIONS) {
       setGifIndex((int)expr);
     }
     if (currentExpr == expr && expr != EXPR_ALL_GIF) return;
@@ -524,6 +552,9 @@ public:
     lastFrameTime = millis();
     gifFinished = false;
     expressionChanged = true;
+
+    robotEyeAnim.reset();
+    robotEyeAnim.play();
     
     if (expr == EXPR_TEXT) {
       scrollPos = SCREEN_WIDTH;
@@ -704,32 +735,30 @@ public:
   }
 
   void setGifIndex(int idx) {
-    if (idx >= 0 && idx < SPRITE_AI13_ANIMATION_COUNT) {
+    if (idx >= 0 && idx < TOTAL_ANIMATIONS) {
       currentGifIndex = idx;
-      spriteAnimIndex = idx;
-      spriteFrameIndex = 0;
-      lastSpriteFrameTime = millis();
-      currentFrame = 0;
-      lastFrameTime = millis();
-      gifFinished = false;
+      robotEyeAnim.setAnimationIndex(idx);
+      robotEyeAnim.reset();
+      robotEyeAnim.play();
       expressionChanged = true;
       updateLabelFromState();
     }
   }
 
   int getGifIndex() const {
-    return spriteAnimIndex;
+    return robotEyeAnim.getAnimationIndex();
   }
 
   int getGifCount() const {
-    return SPRITE_AI13_ANIMATION_COUNT;
+    return TOTAL_ANIMATIONS;
   }
 
   bool isGifFinished() {
-    return gifFinished;
+    return robotEyeAnim.isCycleCompleted() || gifFinished;
   }
 
   void clearGifFinished() {
+    robotEyeAnim.clearCycleCompleted();
     gifFinished = false;
   }
 
@@ -742,22 +771,12 @@ public:
       changed = true;
     }
 
-    // Frame Animation logic
-    if (currentExpr != EXPR_TEXT) {
-      int maxFrames = SPRITE_AI13_FRAME_COUNT;
-      int delayToUse = frameDelayMs;
+    if (robotEyeAnim.update()) {
+      changed = true;
+    }
 
-      if (now - lastFrameTime >= (unsigned long)delayToUse) {
-        lastFrameTime = now;
-        currentFrame++;
-        if (currentFrame >= maxFrames) {
-          currentFrame = 0;
-          gifFinished = true;
-        }
-        changed = true;
-      }
-    } else {
-      // Text scrolling
+    // Scroll text logic
+    if (currentExpr == EXPR_TEXT) {
       if (now - lastScrollTime >= 30) {
         lastScrollTime = now;
         scrollPos -= 2;
@@ -1318,89 +1337,8 @@ public:
     display.print(nav);
   }
 
-  // ---- Sprite AI animation state (for primary expression face) ----
-  int spriteAnimIndex;      // which of the 12 sprite_ai animations is active (0-11)
-  int spriteFrameIndex;     // current frame within that animation (0-3)
-  unsigned long lastSpriteFrameTime;
-
-  // Map Expression -> sprite_ai animation index (all 12 animations supported)
-  int exprToSpriteAnim(Expression expr) {
-    Expression e = expr;
-    if (e == EXPR_IDLE) e = defaultExpr;
-    int idx = (int)e;
-    if (idx >= 0 && idx < SPRITE_AI13_ANIMATION_COUNT) {
-      return idx;
-    }
-    return spriteAnimIndex;
-  }
-
   void drawRobotFaceScreen() {
-    Expression exprToDraw = currentExpr;
-    if (exprToDraw == EXPR_IDLE) {
-      exprToDraw = defaultExpr;
-    }
-
-    int animIdx = exprToSpriteAnim(exprToDraw);
-    if (animIdx != spriteAnimIndex) {
-      spriteAnimIndex = animIdx;
-      spriteFrameIndex = 0;
-      lastSpriteFrameTime = millis();
-    }
-
-    // Advance sprite frame timer
-    unsigned long now = millis();
-    if (now - lastSpriteFrameTime >= (unsigned long)frameDelayMs) {
-      lastSpriteFrameTime = now;
-      spriteFrameIndex = (spriteFrameIndex + 1) % SPRITE_AI13_FRAME_COUNT;
-    }
-
-    const uint16_t* frameData = getSpriteAi13Frame(spriteAnimIndex, spriteFrameIndex);
-    if (frameData != nullptr) {
-      display.drawRGBBitmap2x(frameData);
-    } else {
-      display.fillScreen(TFT_BLACK);
-    }
-
-    // Silent mode indicator (top-right)
-    if (silentMode) {
-      uint16_t silentColor = TFT_WHITE;
-      int silentX = SCREEN_WIDTH - 20;
-      int silentY = 10;
-      display.fillRect(silentX, silentY - 2, 2, 4, silentColor);
-      display.fillTriangle(silentX + 2, silentY - 4, silentX + 2, silentY + 4, silentX + 4, silentY, silentColor);
-      display.drawLine(silentX + 6, silentY - 2, silentX + 8, silentY, silentColor);
-      display.drawLine(silentX + 8, silentY - 2, silentX + 6, silentY, silentColor);
-    }
-
-    // Clean text directly on top of expression without any border or bg box
-    String dispText = thoughtText;
-    if (dispText.length() == 0 && hungryState) {
-      dispText = "HUNGRY";
-    }
-    if (dispText.length() > 0) {
-      display.setTextColor(TFT_WHITE);
-      display.setTextSize(2);
-      int tWidth = dispText.length() * 12;
-      int tx = (SCREEN_WIDTH - tWidth) / 2;
-      if (tx < 4) tx = 4;
-      display.setCursor(tx, 4);
-      display.print(dispText);
-    }
-
-    // Feeding animation: cute glowing bubbles/food particles float up from bottom
-    if (isFeeding) {
-      unsigned long elapsed = millis() - feedingStartTime;
-      for (int i = 0; i < 7; i++) {
-        int t = (elapsed + i * 220) % 1200;
-        float progress = (float)t / 1200.0f;
-        int py = 225 - (int)(progress * 125); // rises towards face center
-        int px = 75 + (i * 14) + (int)(sin(progress * 6.28f + i) * 6);
-        int r = (i % 2 == 0) ? 4 : 3;
-        uint16_t pCol = (i % 3 == 0) ? 0x07FF : ((i % 3 == 1) ? 0xFDE0 : 0xF81F);
-        display.fillCircle(px, py, r, pCol);
-        display.drawCircle(px, py, r + 1, TFT_WHITE);
-      }
-    }
+    robotEyeAnim.drawDirect(tft);
   }
 
   void drawMapScreenLandscape(int hour, int minute, bool is12Hour) {
@@ -2293,7 +2231,9 @@ public:
     }
     
     // Draw directly at (0, 0) for 1.3" display (no Y offset!)
-    display.flush(tft);
+    if (currentScreen != SCREEN_FACE) {
+      display.flush(tft);
+    }
   }
 
   // Legacy compatibility

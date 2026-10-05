@@ -27,6 +27,7 @@ void handleBtn1Long();
 void handleBtn2Single();
 void handleBtn2Double();
 void handleBtn2Long();
+void transitionToNextVideoWithFade();
 
 #include "luna_network.h"
 
@@ -96,8 +97,8 @@ void updatePomodoroTimer() {
 // NVS Settings Persistence
 Preferences preferences;
 bool bleActive = true;
-int gifSpeed = 169;
-int gifIntroSpeed = 169;
+int gifSpeed = 165;
+int gifIntroSpeed = 165;
 int introSoundSpeed = 80;
 int defaultGif = 99;      // default GIF expression (0-6, or 99 for Cycle Mode)
 bool isCycleMode = true;
@@ -631,15 +632,19 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
   if (label.length() > 0) {
     label.toUpperCase();
     int foundIdx = -1;
-    for (int i = 0; i < SPRITE_AI13_ANIMATION_COUNT; i++) {
-      if (label.equals(getSpriteAi13AnimName(i))) {
+    for (int i = 0; i < TOTAL_ANIMATIONS; i++) {
+      if (label.equalsIgnoreCase(getSpriteAiAnimationName(i))) {
         foundIdx = i;
         break;
       }
     }
     if (foundIdx != -1) {
-      face.setGifIndex(foundIdx);
-      expr = (Expression)foundIdx;
+      face.getRobotEyeAnim().setAnimationIndex(foundIdx);
+      face.getRobotEyeAnim().reset();
+      face.getRobotEyeAnim().play();
+      face.setExpression(EXPR_ROBOT_EYE);
+      face.setStateLabel(String(getSpriteAiAnimationName(foundIdx)));
+      audio.playSound(getAnimationSound(foundIdx));
     }
   }
   
@@ -946,17 +951,72 @@ void handleRobotCommand(String text) {
     notifyScreenAndExprSync();
   } else if (text == "ANGRY" || text == "ANIM:ANGRY" || text == "EXPR_ANGRY") {
     currentScreen = SCREEN_FACE;
-    face.setGifIndex(1);
-    face.setExpression((Expression)1);
-    face.setStateLabel(String(getSpriteAi13AnimName(1)));
+    face.getRobotEyeAnim().setAnimationIndex(1);
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Angry Face");
     face.setThoughtText("Hmph!");
-    audio.playSound(SOUND_POWERDOWN);
+    audio.playSound(SOUND_ANIM_ANGRY);
     notifyScreenAndExprSync();
     Serial.println("OK:AngryAnimationTriggered");
-  } else if (text == "FEED" || text == "EAT") {
+  } else if (text == "FEED" || text == "EAT" || text == "FEED:FISH") {
     currentScreen = SCREEN_FACE;
+    face.getRobotEyeAnim().setAnimationIndex(4); // Eat Fish
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Eat Fish");
+    audio.playSound(SOUND_ANIM_EAT_FISH);
     feedLuna();
-    Serial.println("OK:LunaFed");
+    Serial.println("OK:LunaFedFish");
+  } else if (text == "FEED:MILK") {
+    currentScreen = SCREEN_FACE;
+    face.getRobotEyeAnim().setAnimationIndex(5); // Drink Milk
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Drink Milk");
+    audio.playSound(SOUND_ANIM_DRINK_MILK);
+    feedLuna();
+    Serial.println("OK:LunaFedMilk");
+  } else if (text == "FEED:SALAD") {
+    currentScreen = SCREEN_FACE;
+    face.getRobotEyeAnim().setAnimationIndex(6); // Eat Salad
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Eat Salad");
+    audio.playSound(SOUND_ANIM_EAT_SALAD);
+    feedLuna();
+    Serial.println("OK:LunaFedSalad");
+  } else if (text == "SICK") {
+    currentScreen = SCREEN_FACE;
+    face.getRobotEyeAnim().setAnimationIndex(8); // Luna Sick
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Luna Sick");
+    audio.playSound(SOUND_ANIM_SICK);
+    notifyScreenAndExprSync();
+  } else if (text == "CURE" || text == "RECOVER") {
+    currentScreen = SCREEN_FACE;
+    face.getRobotEyeAnim().setAnimationIndex(9); // Recovered
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Recovered");
+    audio.playSound(SOUND_ANIM_RECOVERED);
+    notifyScreenAndExprSync();
+  } else if (text == "THINK") {
+    currentScreen = SCREEN_FACE;
+    face.getRobotEyeAnim().setAnimationIndex(13); // Luna Thinking
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Luna Thinking");
+    audio.playSound(SOUND_ANIM_THINKING);
+    notifyScreenAndExprSync();
   } else if (text == "GET_STATS" || text == "STATS") {
     sendLunaStatsToBLE();
     Serial.println("OK:StatsSent");
@@ -965,9 +1025,11 @@ void handleRobotCommand(String text) {
     isHungry = true;
     face.setHungry(true);
     currentMood = MOOD_HUNGRY;
-    face.setGifIndex(10); // Crying
-    face.setExpression((Expression)10);
-    face.setStateLabel("Hungry");
+    face.getRobotEyeAnim().setAnimationIndex(3); // Getting Hungry
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Getting Hungry");
     face.setThoughtText("HUNGRY");
     audio.playSound(SOUND_ALERT_BEEP);
     notifyScreenAndExprSync();
@@ -1010,9 +1072,11 @@ void handleRobotCommand(String text) {
     lastExpressionCycleTime = millis();
     face.setPopupDismiss();
     currentScreen = SCREEN_FACE;
-    face.setGifIndex(1); // Angry Face
-    face.setExpression((Expression)1);
-    face.setStateLabel(String(getSpriteAi13AnimName(1)));
+    face.getRobotEyeAnim().setAnimationIndex(1); // Angry Face
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Angry Face");
     face.setThoughtText("Focus on work!");
     audio.playSound(SOUND_ALERT_BEEP);
     ble.sendLog("FOCUS_ALERT_TRIGGERED:" + appName);
@@ -1024,9 +1088,11 @@ void handleRobotCommand(String text) {
     lastExpressionCycleTime = millis();
     face.setPopupDismiss();
     currentScreen = SCREEN_FACE;
-    face.setGifIndex(1);
-    face.setExpression((Expression)1);
-    face.setStateLabel(String(getSpriteAi13AnimName(1)));
+    face.getRobotEyeAnim().setAnimationIndex(1);
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel("Angry Face");
     face.setThoughtText("Focus on work!");
     audio.playSound(SOUND_ALERT_BEEP);
     ble.sendLog("FOCUS_ALERT_TRIGGERED:Test");
@@ -1035,13 +1101,14 @@ void handleRobotCommand(String text) {
   } else if (text.startsWith("ANIM:") || text.startsWith("SPRITE:")) {
     int colon = text.indexOf(':');
     int idx = text.substring(colon + 1).toInt();
-    if (idx >= 0 && idx < SPRITE_AI13_ANIMATION_COUNT) {
+    if (idx >= 0 && idx < TOTAL_ANIMATIONS) {
       currentScreen = SCREEN_FACE;
-      face.setGifIndex(idx);
-      face.setExpression((Expression)idx);
-      face.setStateLabel(String(getSpriteAi13AnimName(idx)));
-      face.setThoughtText(getAnimationThought(idx));
-      playAnimationSound(idx);
+      face.getRobotEyeAnim().setAnimationIndex(idx);
+      face.getRobotEyeAnim().reset();
+      face.getRobotEyeAnim().play();
+      face.setExpression(EXPR_ROBOT_EYE);
+      face.setStateLabel(String(getSpriteAiAnimationName(idx)));
+      audio.playSound(getAnimationSound(idx));
       notifyScreenAndExprSync();
       Serial.printf("OK:AnimIndexSet:%d\n", idx);
     }
@@ -1567,6 +1634,10 @@ void handleRobotCommand(String text) {
 }
 
 void drawRGBBitmapScaled(int16_t x, int16_t y, const uint16_t *bitmap, int16_t w, int16_t h, int16_t targetW, int16_t targetH) {
+  if (w == targetW && h == targetH) {
+    tft.drawRGBBitmap(x, y, bitmap, w, h);
+    return;
+  }
   for (int16_t ty = 0; ty < targetH; ty++) {
     int16_t sy = (ty * h) / targetH;
     int32_t rowOffset = (int32_t)sy * w;
@@ -1645,11 +1716,11 @@ void applySettings(String payload) {
     isCycleMode = false;
     int animIdx = defaultGif;
     if (animIdx >= 100) animIdx -= 100;
-    if (animIdx < 0 || animIdx >= SPRITE_AI13_ANIMATION_COUNT) animIdx = 0;
+    if (animIdx < 0 || animIdx >= TOTAL_ANIMATIONS) animIdx = 0;
     face.setGifIndex(animIdx);
-    face.setDefaultExpression((Expression)animIdx);
-    face.setExpression((Expression)animIdx);
-    face.setStateLabel(String(getSpriteAi13AnimName(animIdx)));
+    face.setDefaultExpression(EXPR_ROBOT_EYE);
+    face.setExpression(EXPR_ROBOT_EYE);
+    face.setStateLabel(String(getSpriteAiAnimationName(animIdx)));
   }
 
   ble.setBLEActive(bleActive);
@@ -1757,10 +1828,10 @@ void setup() {
     isCycleMode = false;
     int animIdx = defaultGif;
     if (animIdx >= 100) animIdx -= 100;
-    if (animIdx < 0 || animIdx >= SPRITE_AI13_ANIMATION_COUNT) animIdx = 0;
+    if (animIdx < 0 || animIdx >= TOTAL_ANIMATIONS) animIdx = 0;
     face.setGifIndex(animIdx);
-    face.setDefaultExpression((Expression)animIdx);
-    face.setExpression((Expression)animIdx);
+    face.setDefaultExpression(EXPR_ROBOT_EYE);
+    face.setExpression(EXPR_ROBOT_EYE);
   }
 
   // Perform Hardware Reset
@@ -1780,7 +1851,7 @@ void setup() {
   
   // Initialize ST7789 Display in SPI MODE 3
   tft.init(240, 240, SPI_MODE3);
-  tft.setSPISpeed(20000000UL); // 20 MHz SPI speed
+  tft.setSPISpeed(40000000UL); // 40 MHz SPI speed for ultra-smooth video & UI
   tft.setRotation(2);          // Rotate right to make it vertical!
   
   tft.invertDisplay(true);   // Standard color representation for IPS screen during logo — gives white background
@@ -1799,9 +1870,8 @@ void setup() {
   int logoY = (SCREEN_HEIGHT - logoSize) / 2;
   drawRGBBitmapScaled(logoX, logoY, image_logo_pixels, 240, 240, logoSize, logoSize);
 
-  // Play startup sound immediately so it plays while loading the logo
-  audio.playSound(SOUND_STARTUP, introSoundSpeed);
-
+  // Play cinematic startup chime
+  audio.playSound(SOUND_BOOT_CHIME);
 
   // Show logo for 3 seconds while playing the startup sound and ignoring/clearing touches
   unsigned long bootStart = millis();
@@ -1820,19 +1890,19 @@ void setup() {
 
   int introIdx = gifIntro;
   if (introIdx >= 100) introIdx -= 100;
-  if (introIdx < 0 || introIdx >= SPRITE_AI13_ANIMATION_COUNT) introIdx = 0;
+  if (introIdx < 0 || introIdx >= TOTAL_ANIMATIONS) introIdx = 0;
   face.setGifIndex(introIdx);
-  face.setExpression((Expression)introIdx);
+  face.setExpression(EXPR_ROBOT_EYE);
 
   lastInteractionTime = millis();
   lastRtcMillis = millis();
   lastExpressionCycleTime = millis();
 
-  // Dump all loaded Sprite AI animation names to serial for debugging
-  Serial.println("====== SPRITE AI ANIMATION DUMP ======");
-  Serial.printf("Total Sprite Animations: %d (4 frames each)\n", SPRITE_AI13_ANIMATION_COUNT);
-  for (int i = 0; i < SPRITE_AI13_ANIMATION_COUNT; i++) {
-    Serial.printf("ANIM[%d] %s (4 frames)\n", i, getSpriteAi13AnimName(i));
+  // Dump all loaded Video AI animation names to serial for debugging
+  Serial.println("====== VIDEO AI ANIMATION DUMP ======");
+  Serial.printf("Total Video Animations: %d\n", TOTAL_ANIMATIONS);
+  for (int i = 0; i < TOTAL_ANIMATIONS; i++) {
+    Serial.printf("ANIM[%d] %s (%d frames)\n", i, getSpriteAiAnimationName(i), anim_frame_counts[i]);
   }
   Serial.println("======================================");
   if (!SPIFFS.begin(true)) {
@@ -1845,25 +1915,93 @@ void setup() {
   resetPomodoroTimer();
 }
 
-// Global index for sprite-ai cycling — advances through all 12 animations
-int spriteAnimCycleIdx = 0;
+// ── Smooth Fade Transition Between Video Animations (Cinematic Dip) ──────
+void transitionToNextVideoWithFade() {
+  if (isAsleep || mapsActive || gamePlaying) return;
+  if (currentScreen != SCREEN_FACE) {
+    currentScreen = SCREEN_FACE;
+  }
 
-void cycleExpression() {
-  spriteAnimCycleIdx = (spriteAnimCycleIdx + 1) % SPRITE_AI13_ANIMATION_COUNT;
-  face.setGifIndex(spriteAnimCycleIdx);
-  face.setExpression((Expression)spriteAnimCycleIdx);
-  const char* animName = getSpriteAi13AnimName(spriteAnimCycleIdx);
+  uint8_t targetDuty = 255;
+  if (oledBrightness == 1) targetDuty = 40;
+  else if (oledBrightness == 2) targetDuty = 140;
+  else targetDuty = 255;
+
+  // 1. Smooth Fade-Out (70ms) - Cinematic dip to black
+  const unsigned long FADE_MS = 70;
+  unsigned long t0 = millis();
+  while (millis() - t0 < FADE_MS) {
+    float t = (float)(millis() - t0) / (float)FADE_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = 1.0f - (t * t * (3.0f - 2.0f * t)); // smooth cubic ease-out
+    uint8_t d = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, d);
+    #endif
+    audio.update();
+    interaction.update();
+    delay(2);
+  }
+  #ifdef TFT_BLK
+  analogWrite(TFT_BLK, 0);
+  #endif
+
+  // 2. Advance to next video animation while screen is black
+  face.getRobotEyeAnim().nextAnimation();
+  int newIdx = face.getRobotEyeAnim().getAnimationIndex();
+  const char* animName = getSpriteAiAnimationName(newIdx);
   face.setStateLabel(String(animName));
-  Serial.printf("PLAYING ANIM[%d/%d]: %s (4 frames)\n",
-    spriteAnimCycleIdx, SPRITE_AI13_ANIMATION_COUNT - 1, animName);
+  face.setGifIndex(newIdx);
+  face.setExpression(EXPR_ROBOT_EYE);
+
+  // Render Frame 0 of the new animation into display buffer & TFT while black
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+  face.clearGifFinished();
+  face.update();
+  face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+
+  // 3. Play the matching animation sound effect while the screen fades back in
+  audio.playSound(getAnimationSound(newIdx));
+
+  // 4. Smooth Fade-In (70ms) - Restores full brightness seamlessly
+  t0 = millis();
+  while (millis() - t0 < FADE_MS) {
+    float t = (float)(millis() - t0) / (float)FADE_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = t * t * (3.0f - 2.0f * t); // smooth cubic ease-in
+    uint8_t d = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, d);
+    #endif
+    audio.update();
+    interaction.update();
+    delay(2);
+  }
+  #ifdef TFT_BLK
+  analogWrite(TFT_BLK, targetDuty);
+  #endif
+
+  // 5. Synchronize animation playback timer immediately after fade:
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+
+  Serial.printf("[VIDEO] Anim -> %s (%d frames)\n",
+                animName, face.getRobotEyeAnim().getFrameCount());
+  notifyScreenAndExprSync();
+}
+
+// Global index for video-ai cycling — advances through all 14 animations with fade
+void cycleExpression() {
+  transitionToNextVideoWithFade();
 }
 
 String getExpressionName(int expr) {
   if (expr >= 100) expr -= 100;
-  if (expr >= 0 && expr < SPRITE_AI13_ANIMATION_COUNT) {
-    return String(getSpriteAi13AnimName(expr));
+  if (expr >= 0 && expr < TOTAL_ANIMATIONS) {
+    return String(getSpriteAiAnimationName(expr));
   }
-  return "IDLE";
+  return "Luna Idle";
 }
 
 void executeTouchAction(int actionType, TouchEvent eventType) {
@@ -1895,7 +2033,6 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
       Serial.println("Triggered Full Screen Clock");
     } else if (actionType == 2) {
       cycleExpression();
-      audio.playSound(SOUND_COIN);
       Serial.println("Skipped to next animation");
     } else if (actionType == 3) {
       // BLE is always ON, do not toggle
@@ -1903,16 +2040,15 @@ void executeTouchAction(int actionType, TouchEvent eventType) {
       audio.playSound(SOUND_CHIRP);
       Serial.println("BLE Toggle touch action ignored (BLE is always ON)");
     } else if (actionType >= 20) {
-      // Specific Sprite AI anim index: actionType = 20 + animIdx
+      // Specific Video AI anim index: actionType = 20 + animIdx
       int animIdx = actionType - 20;
-      if (animIdx >= 0 && animIdx < SPRITE_AI13_ANIMATION_COUNT) {
+      if (animIdx >= 0 && animIdx < TOTAL_ANIMATIONS) {
         face.setGifIndex(animIdx);
-        face.setExpression((Expression)animIdx);
-        spriteAnimCycleIdx = animIdx;
-        audio.playSound(SOUND_COIN);
-        Serial.printf("Touch triggered specific Anim #%d: %s\n", animIdx, getSpriteAi13AnimName(animIdx));
+        face.setExpression(EXPR_ROBOT_EYE);
+        audio.playSound(getAnimationSound(animIdx));
+        Serial.printf("Triggered specific Anim #%d: %s\n", animIdx, getSpriteAiAnimationName(animIdx));
       }
-    } else if (actionType >= 10 && actionType < 10 + SPRITE_AI13_ANIMATION_COUNT) {
+    } else if (actionType >= 10 && actionType < 10 + TOTAL_ANIMATIONS) {
       Expression target = (Expression)(actionType - 10);
       face.setExpression(target);
       audio.playSound(SOUND_CHIRP);
@@ -2058,7 +2194,6 @@ void handleBtn1Single() {
     }
     // Next expression/animation
     cycleExpression();
-    audio.playSound(SOUND_COIN);
     Serial.println("[BTN1] Next expression");
   } else if (currentScreen == SCREEN_POMODORO) {
     if (pomoState == 0 || pomoState == 2) {
@@ -2348,14 +2483,7 @@ void handleBtn2Long() {
 
 void updateStateLabel() {
   if (currentScreen == SCREEN_FACE) {
-    Expression expr = face.getExpression();
-    if ((int)expr >= 0 && (int)expr < SPRITE_AI13_ANIMATION_COUNT) {
-      face.setStateLabel(String(getSpriteAi13AnimName((int)expr)));
-    } else if (expr == EXPR_ALL_GIF) {
-      face.setStateLabel(String(getSpriteAi13AnimName(face.getGifIndex())));
-    } else {
-      face.setStateLabel("IDLE");
-    }
+    face.setStateLabel(String(getSpriteAiAnimationName(face.getRobotEyeAnim().getAnimationIndex())));
   } else if (currentScreen == SCREEN_GAMES) {
     if (gamePlaying) {
       const char* gameNames[] = {
@@ -2519,11 +2647,11 @@ void loop() {
     } else if (cmd == "GET") {
       Serial.println("SETTINGS:" + String(bleActive ? "1" : "0") + "," + String(gifSpeed) + "," + String(defaultGif) + "," + String(gifIntro) + "," + String(touchSingle) + "," + String(touchDouble) + "," + String(touchLong) + "," + String(negativeDisplay ? "1" : "0"));
     } else if (cmd == "LIST") {
-      // Re-print all Sprite AI animation entries for debugging
-      Serial.println("====== SPRITE AI ANIMATION DUMP ======");
-      Serial.printf("Total Sprite Animations: %d (4 frames each)\n", SPRITE_AI13_ANIMATION_COUNT);
-      for (int i = 0; i < SPRITE_AI13_ANIMATION_COUNT; i++) {
-        Serial.printf("ANIM[%d] %s (4 frames)\n", i, getSpriteAi13AnimName(i));
+      // Re-print all Video AI animation entries for debugging
+      Serial.println("====== VIDEO AI ANIMATION DUMP ======");
+      Serial.printf("Total Video Animations: %d\n", TOTAL_ANIMATIONS);
+      for (int i = 0; i < TOTAL_ANIMATIONS; i++) {
+        Serial.printf("ANIM[%d] %s (%d frames)\n", i, getSpriteAiAnimationName(i), anim_frame_counts[i]);
       }
       Serial.println("======================================");
     } else {
@@ -2556,19 +2684,17 @@ void loop() {
   // 3.6. Expression cycling and transitions
   if (inIntroPhase) {
     currentScreen = SCREEN_FACE; // Force face screen on boot for intro animation
-    if (face.isGifFinished()) {
-      face.clearGifFinished();
+    if (face.getRobotEyeAnim().isCycleCompleted()) {
       inIntroPhase = false;
       face.setFrameDelay(gifSpeed);
-      currentScreen = SCREEN_FACE; // Switch to face after boot!
       if (isCycleMode) {
-        cycleExpression();
+        transitionToNextVideoWithFade();
       } else {
         int animIdx = defaultGif;
         if (animIdx >= 100) animIdx -= 100;
-        if (animIdx < 0 || animIdx >= SPRITE_AI13_ANIMATION_COUNT) animIdx = 0;
+        if (animIdx < 0 || animIdx >= TOTAL_ANIMATIONS) animIdx = 0;
         face.setGifIndex(animIdx);
-        face.setExpression((Expression)animIdx);
+        face.setExpression(EXPR_ROBOT_EYE);
       }
       lastExpressionCycleTime = now;
     }
@@ -2576,9 +2702,9 @@ void loop() {
     // Regular operation expression cycling (only when on SCREEN_FACE screen)
     if (currentScreen == SCREEN_FACE && !isAsleep) {
       if (isCycleMode) {
-        // Switch to next sprite animation every 8 seconds in cycle mode
-        if (now - lastExpressionCycleTime >= 8000) {
-          cycleExpression();
+        // Auto-advance to next video with fade when the current animation finishes its single full cycle:
+        if (face.getRobotEyeAnim().isCycleCompleted()) {
+          transitionToNextVideoWithFade();
           lastExpressionCycleTime = now;
         }
       } else {
@@ -2587,9 +2713,9 @@ void loop() {
           face.headerText = ""; // Clear header overlay
           int animIdx = defaultGif;
           if (animIdx >= 100) animIdx -= 100;
-          if (animIdx < 0 || animIdx >= SPRITE_AI13_ANIMATION_COUNT) animIdx = 0;
+          if (animIdx < 0 || animIdx >= TOTAL_ANIMATIONS) animIdx = 0;
           face.setGifIndex(animIdx);
-          face.setExpression((Expression)animIdx);
+          face.setExpression(EXPR_ROBOT_EYE);
           lastExpressionCycleTime = now;
         }
       }
@@ -2646,15 +2772,23 @@ void loop() {
   }
 
   // Update GIF frame states on every loop iteration
-  face.update();
+  bool frameChanged = face.update();
 
-  // Draw the display at ~30fps rate
   static int lastDrawnSecond = -1;
   static unsigned long lastDisplayDrawTime = 0;
-  if (now - lastDisplayDrawTime >= 33) {
-    lastDisplayDrawTime = now;
-    lastDrawnSecond = rtcSecond;
-    face.setConnectivityStatus(ble.isConnected(), network.isWifiConnected());
-    face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+
+  if (currentScreen == SCREEN_FACE) {
+    // Ultra-smooth event-driven video rendering: draw immediately and only when a frame actually advances!
+    if (frameChanged) {
+      face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+    }
+  } else {
+    // Other smartwatch screens (games, menus, clock) draw at standard ~30fps rate
+    if (now - lastDisplayDrawTime >= 33) {
+      lastDisplayDrawTime = now;
+      lastDrawnSecond = rtcSecond;
+      face.setConnectivityStatus(ble.isConnected(), network.isWifiConnected());
+      face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+    }
   }
 }

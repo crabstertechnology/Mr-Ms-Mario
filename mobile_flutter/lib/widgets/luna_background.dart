@@ -1,10 +1,10 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
-/// Luna-themed animated background — ultra-light, white-dominant.
-/// Mr. Luna: white + blue + red accents.
-/// Ms. Luna: white + pink accents.
-/// Floating pixel elements are very subtle (low opacity) so content remains clear.
+/// SYNAPS Character Squad Animated Background
+/// Features the 6 SYNAPS characters floating gracefully in the background,
+/// soft character squad watermark banner, floating colorful bubbles,
+/// and smooth ambient light orbs while keeping foreground content ultra-readable.
 class LunaBackground extends StatefulWidget {
   final Widget child;
   final bool isMsLuna;
@@ -21,73 +21,43 @@ class LunaBackground extends StatefulWidget {
 
 class _LunaBackgroundState extends State<LunaBackground>
     with TickerProviderStateMixin {
-  late AnimationController _cloudController;
   late AnimationController _floatController;
+  late AnimationController _driftController;
   late AnimationController _twinkleController;
 
-  late final List<_FloatItem> _clouds;
-  late final List<_FloatItem> _coins;
-  late final List<_FloatItem> _stars;
-  late final List<_FloatItem> _questionBlocks;
-
-  final _rng = Random(7);
+  final List<Map<String, dynamic>> _characters = [
+    {'name': 'bunny', 'asset': 'assets/characters/bunny.png', 'color': Color(0xFF00E5FF), 'x': 0.08, 'y': 0.12, 'size': 54.0},
+    {'name': 'fox', 'asset': 'assets/characters/fox.png', 'color': Color(0xFFFF7A00), 'x': 0.82, 'y': 0.18, 'size': 50.0},
+    {'name': 'turtle', 'asset': 'assets/characters/turtle.png', 'color': Color(0xFF10B981), 'x': 0.06, 'y': 0.46, 'size': 48.0},
+    {'name': 'panda', 'asset': 'assets/characters/panda.png', 'color': Color(0xFF6366F1), 'x': 0.85, 'y': 0.52, 'size': 56.0},
+    {'name': 'cat', 'asset': 'assets/characters/cat.png', 'color': Color(0xFF9333EA), 'x': 0.12, 'y': 0.80, 'size': 52.0},
+    {'name': 'bird', 'asset': 'assets/characters/bird.png', 'color': Color(0xFF38BDF8), 'x': 0.82, 'y': 0.82, 'size': 50.0},
+  ];
 
   @override
   void initState() {
     super.initState();
 
-    _cloudController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 30),
-    )..repeat();
-
     _floatController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2800),
+      duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
+
+    _driftController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 20),
+    )..repeat();
 
     _twinkleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 2400),
     )..repeat(reverse: true);
-
-    _clouds = List.generate(5, (i) => _FloatItem(
-          x: _rng.nextDouble(),
-          y: 0.02 + _rng.nextDouble() * 0.10,
-          phase: _rng.nextDouble(),
-          speed: 0.012 + _rng.nextDouble() * 0.010,
-          scale: 0.55 + _rng.nextDouble() * 0.45,
-        ));
-
-    _coins = List.generate(6, (i) => _FloatItem(
-          x: _rng.nextDouble(),
-          y: 0.12 + _rng.nextDouble() * 0.72,
-          phase: _rng.nextDouble(),
-          speed: 0,
-          scale: 0.6 + _rng.nextDouble() * 0.5,
-        ));
-
-    _stars = List.generate(16, (i) => _FloatItem(
-          x: _rng.nextDouble(),
-          y: _rng.nextDouble() * 0.88,
-          phase: _rng.nextDouble(),
-          speed: 0,
-          scale: 1.2 + _rng.nextDouble() * 1.8,
-        ));
-
-    _questionBlocks = List.generate(3, (i) => _FloatItem(
-          x: 0.06 + i * 0.40 + _rng.nextDouble() * 0.08,
-          y: 0.10 + _rng.nextDouble() * 0.07,
-          phase: _rng.nextDouble(),
-          speed: 0,
-          scale: 0.75 + _rng.nextDouble() * 0.35,
-        ));
   }
 
   @override
   void dispose() {
-    _cloudController.dispose();
     _floatController.dispose();
+    _driftController.dispose();
     _twinkleController.dispose();
     super.dispose();
   }
@@ -96,191 +66,151 @@ class _LunaBackgroundState extends State<LunaBackground>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    // Color palette per variant
-    final Color primaryAccent =
-        widget.isMsLuna ? const Color(0xFFE91E8C) : const Color(0xFF0284C7);
-    final Color secondaryAccent =
-        widget.isMsLuna ? const Color(0xFFF48FB1) : const Color(0xFFE53935);
-    final Color bgEnd =
-        widget.isMsLuna ? const Color(0xFFFCE4EC) : const Color(0xFFE3F2FD);
-
     return AnimatedBuilder(
-      animation: Listenable.merge(
-          [_cloudController, _floatController, _twinkleController]),
-      builder: (ctx, _) {
+      animation: Listenable.merge([_floatController, _driftController, _twinkleController]),
+      builder: (context, _) {
+        final floatVal = sin(_floatController.value * 2 * pi);
+
         return Stack(
           children: [
-            // ── 1. WHITE-DOMINANT GRADIENT ────────────────────────────────
+            // ── 1. CLEAN LUMINOUS WHITE BACKGROUND ─────────────────────
             Positioned.fill(
               child: Container(
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    stops: const [0.0, 0.6, 1.0],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                     colors: [
                       Colors.white,
-                      Colors.white,
-                      bgEnd.withOpacity(0.45),
+                      Color(0xFFF8FAFC),
+                      Color(0xFFF1F5F9),
                     ],
                   ),
                 ),
               ),
             ),
 
-            // ── 2. TOP EDGE ACCENT BAND ───────────────────────────────────
+            // ── 2. ARTISTIC SYNAPS CHARACTERS WATERMARK BANNER ─────────
+            // Softly visible behind content with gradient fade
             Positioned(
-              top: 0,
+              top: 40 + floatVal * 8,
               left: 0,
               right: 0,
-              child: Container(
-                height: 3,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      primaryAccent,
-                      secondaryAccent,
-                      primaryAccent,
-                    ],
+              height: size.height * 0.38,
+              child: Opacity(
+                opacity: 0.14,
+                child: ShaderMask(
+                  shaderCallback: (rect) {
+                    return const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: [0.0, 0.6, 1.0],
+                      colors: [Colors.black, Colors.black, Colors.transparent],
+                    ).createShader(rect);
+                  },
+                  blendMode: BlendMode.dstIn,
+                  child: Image.asset(
+                    'assets/characters/characters_banner.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),
             ),
 
-            // ── 3. SUBTLE GLOW ORBS ───────────────────────────────────────
+            // ── 3. AMBIENT CHARACTER CHROMATIC AURA ORBS ───────────────
             Positioned(
-              top: -60,
-              left: -60,
+              top: -40,
+              left: -40,
               child: Container(
-                width: 200,
-                height: 200,
+                width: 240,
+                height: 240,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [
-                    primaryAccent.withOpacity(0.07),
-                    Colors.transparent,
-                  ]),
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF00E5FF).withOpacity(0.08),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
             Positioned(
-              bottom: -80,
-              right: -60,
+              bottom: 80,
+              right: -50,
               child: Container(
                 width: 260,
                 height: 260,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [
-                    secondaryAccent.withOpacity(0.06),
-                    Colors.transparent,
-                  ]),
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF9333EA).withOpacity(0.07),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
 
-            // ── 4. DOT PATTERN ────────────────────────────────────────────
-            Positioned.fill(
-              child: CustomPaint(painter: _DotPatternPainter()),
-            ),
+            // ── 4. FLOATING CHARACTERS SQUAD BUBBLES IN BACKGROUND ─────
+            ..._characters.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final c = entry.value;
+              final double phase = (idx * 1.05);
+              final double offsetY = sin((_floatController.value * 2 * pi) + phase) * 12;
+              final double offsetX = cos((_driftController.value * 2 * pi) + phase) * 8;
 
-            // ── 5. TWINKLING STARS ────────────────────────────────────────
-            ..._stars.map((s) {
-              final alpha = 0.10 +
-                  sin((s.phase + _twinkleController.value) * pi * 2).abs() *
-                      0.28;
+              final double posX = (c['x'] as double) * size.width + offsetX;
+              final double posY = (c['y'] as double) * size.height + offsetY;
+              final double bubbleSize = c['size'] as double;
+              final Color glowColor = c['color'] as Color;
+
               return Positioned(
-                left: s.x * size.width,
-                top: s.y * size.height,
+                left: posX.clamp(0.0, size.width - bubbleSize),
+                top: posY.clamp(0.0, size.height - bubbleSize),
                 child: Opacity(
-                  opacity: alpha,
+                  opacity: 0.35 + (_twinkleController.value * 0.15),
                   child: Container(
-                    width: s.scale,
-                    height: s.scale,
+                    width: bubbleSize,
+                    height: bubbleSize,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: s.phase > 0.6
-                          ? primaryAccent
-                          : const Color(0xFFFFD600),
+                      color: Colors.white.withOpacity(0.75),
+                      border: Border.all(
+                        color: glowColor.withOpacity(0.4),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: glowColor.withOpacity(0.20),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        c['asset'] as String,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
               );
             }),
 
-            // ── 6. SCROLLING CLOUDS ───────────────────────────────────────
-            ..._clouds.map((c) {
-              final scroll =
-                  (_cloudController.value * c.speed * 1.6) % 1.4;
-              final x =
-                  ((c.x - scroll + 1.4) % 1.4 - 0.2) * size.width;
-              return Positioned(
-                left: x,
-                top: c.y * size.height,
-                child: Opacity(
-                  opacity: 0.50,
-                  child: Transform.scale(
-                    scale: c.scale,
-                    alignment: Alignment.topLeft,
-                    child: const _PixelCloud(),
-                  ),
+            // ── 5. SPARKLING PLAYFUL PARTICLES ─────────────────────────
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _PlayfulSparklesPainter(
+                  time: _driftController.value,
+                  twinkle: _twinkleController.value,
                 ),
-              );
-            }),
-
-            // ── 7. FLOATING QUESTION BLOCKS ───────────────────────────────
-            ..._questionBlocks.map((b) {
-              final bob =
-                  sin((b.phase + _floatController.value) * pi * 2) * 4.0;
-              return Positioned(
-                left: b.x * size.width - 12,
-                top: b.y * size.height + bob,
-                child: Opacity(
-                  opacity: 0.14,
-                  child: Transform.scale(
-                    scale: b.scale,
-                    child: _PixelQuestionBlock(color: primaryAccent),
-                  ),
-                ),
-              );
-            }),
-
-            // ── 8. FLOATING COINS ─────────────────────────────────────────
-            ..._coins.map((coin) {
-              final bob =
-                  sin((coin.phase + _floatController.value) * pi * 2) * 6.0;
-              return Positioned(
-                left: coin.x * size.width,
-                top: coin.y * size.height + bob,
-                child: Opacity(
-                  opacity: 0.18,
-                  child: Transform.scale(
-                    scale: coin.scale,
-                    child: const _PixelCoin(),
-                  ),
-                ),
-              );
-            }),
-
-            // ── 9. EDGE PIPES ─────────────────────────────────────────────
-            Positioned(
-              bottom: 76,
-              left: -10,
-              child: Opacity(
-                opacity: 0.11,
-                child: const _PixelPipe(width: 30, height: 54),
-              ),
-            ),
-            Positioned(
-              bottom: 76,
-              right: -10,
-              child: Opacity(
-                opacity: 0.11,
-                child: const _PixelPipe(width: 28, height: 40),
               ),
             ),
 
-            // ── 10. CONTENT ───────────────────────────────────────────────
+            // ── 6. FOREGROUND CONTENT ──────────────────────────────────
             widget.child,
           ],
         );
@@ -289,176 +219,67 @@ class _LunaBackgroundState extends State<LunaBackground>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Data model
-// ─────────────────────────────────────────────────────────────────────────────
+class _PlayfulSparklesPainter extends CustomPainter {
+  final double time;
+  final double twinkle;
 
-class _FloatItem {
-  final double x, y, phase, speed, scale;
-  const _FloatItem(
-      {required this.x,
-      required this.y,
-      required this.phase,
-      required this.speed,
-      required this.scale});
-}
+  _PlayfulSparklesPainter({
+    required this.time,
+    required this.twinkle,
+  });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Dot pattern painter
-// ─────────────────────────────────────────────────────────────────────────────
+  static final List<Offset> _baseStars = [
+    const Offset(0.22, 0.18),
+    const Offset(0.75, 0.14),
+    const Offset(0.30, 0.40),
+    const Offset(0.68, 0.38),
+    const Offset(0.18, 0.65),
+    const Offset(0.85, 0.70),
+    const Offset(0.45, 0.88),
+  ];
 
-class _DotPatternPainter extends CustomPainter {
+  static final List<Color> _starColors = [
+    Color(0xFF00E5FF),
+    Color(0xFFFF9800),
+    Color(0xFF10B981),
+    Color(0xFF8B5CF6),
+    Color(0xFFFF2A85),
+    Color(0xFF38BDF8),
+    Color(0xFFFBBF24),
+  ];
+
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = const Color(0xFF000000).withOpacity(0.015)
-      ..style = PaintingStyle.fill;
-    const step = 28.0;
-    const r = 1.2;
-    for (double x = step; x < size.width; x += step) {
-      for (double y = step; y < size.height; y += step) {
-        canvas.drawCircle(Offset(x, y), r, p);
-      }
+    for (int i = 0; i < _baseStars.length; i++) {
+      final base = _baseStars[i];
+      final color = _starColors[i % _starColors.length];
+
+      final double px = (base.dx * size.width + sin(time * 2 * pi + i) * 6) % size.width;
+      final double py = (base.dy * size.height + cos(time * 2 * pi + i) * 6) % size.height;
+
+      final double scale = 1.0 + 0.3 * sin(twinkle * 2 * pi + i);
+      final double alpha = 0.20 + 0.15 * sin(twinkle * pi + i);
+
+      final paint = Paint()
+        ..color = color.withOpacity(alpha)
+        ..style = PaintingStyle.fill;
+
+      // Draw little four-point sparkle
+      _drawSparkle(canvas, Offset(px, py), 4.5 * scale, paint);
     }
   }
 
-  @override
-  bool shouldRepaint(_) => false;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pixel Cloud
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PixelCloud extends StatelessWidget {
-  const _PixelCloud();
-
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(70, 28), painter: _CloudPainter());
-}
-
-class _CloudPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width / 18.0;
-    final p = Paint()..color = Colors.white;
-    final blocks = [
-      [5, 0], [6, 0], [7, 0], [11, 0], [12, 0],
-      [4, 1], [5, 1], [6, 1], [7, 1], [8, 1], [9, 1], [10, 1], [11, 1], [12, 1], [13, 1],
-      [2, 2], [3, 2], [4, 2], [5, 2], [6, 2], [7, 2], [8, 2], [9, 2], [10, 2], [11, 2], [12, 2], [13, 2], [14, 2], [15, 2],
-      [0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3], [7, 3], [8, 3], [9, 3], [10, 3], [11, 3], [12, 3], [13, 3], [14, 3], [15, 3], [16, 3], [17, 3],
-      [0, 4], [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [10, 4], [11, 4], [12, 4], [13, 4], [14, 4], [15, 4], [16, 4], [17, 4],
-    ];
-    for (final b in blocks) {
-      canvas.drawRect(
-          Rect.fromLTWH(b[0] * s, b[1] * s, s - 0.8, s - 0.8), p);
-    }
+  void _drawSparkle(Canvas canvas, Offset center, double r, Paint paint) {
+    final path = Path();
+    path.moveTo(center.dx, center.dy - r);
+    path.quadraticBezierTo(center.dx, center.dy, center.dx + r, center.dy);
+    path.quadraticBezierTo(center.dx, center.dy, center.dx, center.dy + r);
+    path.quadraticBezierTo(center.dx, center.dy, center.dx - r, center.dy);
+    path.quadraticBezierTo(center.dx, center.dy, center.dx, center.dy - r);
+    path.close();
+    canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(_) => false;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pixel Question Block
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PixelQuestionBlock extends StatelessWidget {
-  final Color color;
-  const _PixelQuestionBlock({this.color = const Color(0xFFFFB300)});
-
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(26, 26), painter: _QBlockPainter(color));
-}
-
-class _QBlockPainter extends CustomPainter {
-  final Color color;
-  const _QBlockPainter(this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width / 8;
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = const Color(0xFFFFB300));
-    final border = Paint()..color = const Color(0xFF6D4C41);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, s), border);
-    canvas.drawRect(
-        Rect.fromLTWH(0, size.height - s, size.width, s), border);
-    canvas.drawRect(Rect.fromLTWH(0, 0, s, size.height), border);
-    canvas.drawRect(
-        Rect.fromLTWH(size.width - s, 0, s, size.height), border);
-    final tp = TextPainter(
-      text: const TextSpan(
-          text: '?',
-          style: TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w900)),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas,
-        Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2 - 1));
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pixel Coin
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PixelCoin extends StatelessWidget {
-  const _PixelCoin();
-
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(16, 16), painter: _CoinPainter());
-}
-
-class _CoinPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = size.width / 2;
-    canvas.drawCircle(c, r, Paint()..color = const Color(0xFFFFD600));
-    canvas.drawCircle(c, r * 0.70, Paint()..color = const Color(0xFFFF8F00));
-    canvas.drawCircle(Offset(c.dx - r * 0.22, c.dy - r * 0.22), r * 0.20,
-        Paint()..color = Colors.white.withOpacity(0.75));
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pixel Pipe
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PixelPipe extends StatelessWidget {
-  final double width, height;
-  const _PixelPipe({required this.width, required this.height});
-
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: Size(width, height), painter: _PipePainter());
-}
-
-class _PipePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Rect.fromLTWH(4, 14, size.width - 8, size.height - 14),
-        Paint()..color = const Color(0xFF388E3C));
-    canvas.drawRect(Rect.fromLTWH(6, 16, 5, size.height - 18),
-        Paint()..color = const Color(0xFF66BB6A));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 15),
-        Paint()..color = const Color(0xFF2E7D32));
-    canvas.drawRect(Rect.fromLTWH(2, 2, 8, 11),
-        Paint()..color = const Color(0xFF43A047));
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
+  bool shouldRepaint(covariant _PlayfulSparklesPainter oldDelegate) => true;
 }

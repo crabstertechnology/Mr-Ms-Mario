@@ -14,100 +14,78 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
+  late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
+
+    _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 700),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: const Interval(0.0, 0.8, curve: Curves.easeOut),
-      ),
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeIn,
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: const Interval(0.0, 0.8, curve: Curves.easeOutBack),
-      ),
-    );
+    _fadeController.forward();
 
-    _animationController.forward();
+    // Show logo cleanly on pure white background, then go straight into the app
+    Timer(const Duration(milliseconds: 1600), () async {
+      if (!mounted) return;
+      final prefs = await SharedPreferences.getInstance();
+      final bool onboardingDone = prefs.getBool('onboarding_completed') ?? false;
 
-    // Check onboarding and login state and navigate after 3.5 seconds
-    Timer(const Duration(milliseconds: 3500), () async {
+      Widget targetScreen;
+      if (!onboardingDone) {
+        targetScreen = const OnboardingScreen();
+      } else {
+        final bool isAlreadyLoggedIn = FirebaseAuth.instance.currentUser != null;
+        targetScreen = isAlreadyLoggedIn ? const MainDashboard() : const LoginScreen();
+      }
+
       if (mounted) {
-        final prefs = await SharedPreferences.getInstance();
-        final bool onboardingDone = prefs.getBool('onboarding_completed') ?? false;
-
-        Widget targetScreen;
-        if (!onboardingDone) {
-          targetScreen = const OnboardingScreen();
-        } else {
-          final bool isAlreadyLoggedIn = FirebaseAuth.instance.currentUser != null;
-          targetScreen = isAlreadyLoggedIn ? const MainDashboard() : const LoginScreen();
-        }
-
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: child,
-                );
-              },
-              transitionDuration: const Duration(milliseconds: 800),
-            ),
-          );
-        }
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
+        );
       }
     });
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Determine dynamic size as 80% of screen width, capped at 360
     final double screenWidth = MediaQuery.of(context).size.width;
-    final double logoSize = (screenWidth * 0.8).clamp(200.0, 360.0);
+    final double logoSize = (screenWidth * 0.78).clamp(240.0, 360.0);
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        child: AnimatedBuilder(
-          animation: _animationController,
-          builder: (context, child) {
-            return Opacity(
-              opacity: _fadeAnimation.value,
-              child: Transform.scale(
-                scale: _scaleAnimation.value,
-                child: child,
-              ),
-            );
-          },
-          child: Container(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: SizedBox(
             width: logoSize,
             height: logoSize,
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/logo.png'),
-                fit: BoxFit.contain,
-              ),
+            child: Image.asset(
+              'assets/logo.png',
+              fit: BoxFit.contain,
             ),
           ),
         ),

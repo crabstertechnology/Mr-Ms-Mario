@@ -1,7 +1,7 @@
 name: mr_ms_luna_controller
-description: "A premium Flutter controller for Mr.&Ms Luna Smart Toy Robot."
+description: "SYNAPS - Next-Gen Smart Robot Companion & AI Hub"
 publish_to: 'none'
-version: 2.0.6+2006
+version: 3.0.0+3000
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -42,3 +42,4 @@ flutter:
   assets:
     - assets/animations/
     - assets/logo.png
+    - assets/characters/

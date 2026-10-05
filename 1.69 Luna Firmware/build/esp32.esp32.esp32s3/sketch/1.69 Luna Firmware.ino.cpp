@@ -16,6 +16,7 @@
 #include "qr_card.h"
 #include "imu.h"
 #include "image_transfer.h"
+#include "image_logo.h"
 
 // Forward declaration for BLE command handler
 void handleRobotCommand(String cmd);
@@ -31,91 +32,105 @@ LunaIMU imu;                   // QMI8658 Accelerometer & Gyroscope
 LunaImageTransfer imgTransfer; // BLE wallpaper image transfer state machine
 LunaRTC rtcDevice;             // PCF85063 Hardware RTC
 
-#line 32 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 33 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 float readBatteryVolts();
-#line 100 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 101 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void resetPomodoroTimer();
-#line 108 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 109 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void updatePomodoroTimer();
-#line 175 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 176 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void saveAllEventsToNVS();
-#line 202 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 203 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void loadCalendarEventsFromNVS();
-#line 261 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 262 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void addOrUpdateHardwareEvent(const String& id, const String& type, const String& date, const String& time, const String& title);
-#line 301 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 302 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void saveCalendarEventToNVS(const String& type, const String& time, const String& title);
-#line 305 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 306 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 bool deleteHardwareEvent(const String& id);
-#line 329 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 330 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void clearAllHardwareEvents();
-#line 336 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 337 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void sendAllEventsToBLE();
-#line 354 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 355 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void dismissAlarmRinging();
-#line 379 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 380 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void checkHardwareScheduledAlarms();
-#line 451 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 452 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 bool isCompanionPaired();
-#line 455 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 456 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 bool isRelationshipActive();
-#line 470 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 471 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void saveTimeToNVS(int h, int m, int s, const String& day, const String& date);
-#line 481 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 482 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void parseAndSyncTime(String timeStr);
-#line 552 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 563 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+String getLunaEvolutionStage(int lvl);
+#line 570 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+int calculateLunaLevel(uint32_t xp);
+#line 576 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+void loadLunaPetStats();
+#line 590 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+void saveLunaPetStats();
+#line 600 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+void sendLunaStatsToBLE();
+#line 608 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+void playAnimationSound(int animIndex);
+#line 663 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void notifyScreenAndExprSync();
-#line 586 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 697 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 const char * getSpriteAiAnimationName(int idx);
-#line 605 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 717 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+const char * getAnimationThought(int idx);
+#line 723 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEExpressionWithLabel(Expression expr, String label);
-#line 685 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 803 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEExpression(Expression expr);
-#line 689 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 807 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEAudio(SoundEffect sound);
-#line 695 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 813 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEText(String text);
-#line 700 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 818 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEImageChunk(uint8_t* data, size_t len);
-#line 719 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 837 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void drawWallpaperLoadingScreen();
-#line 945 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1063 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleRobotCommand(String text);
-#line 1617 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1773 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void applyDisplayBrightness(int level);
-#line 1633 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1789 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void configureST7789HardwareEnhanced();
-#line 1711 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
-void drawRGBBitmapScaled(int16_t x, int16_t y, const uint16_t *bitmap, int16_t w, int16_t h, int16_t targetW, int16_t targetH);
-#line 1723 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1868 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void applySettings(String payload);
-#line 1819 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1964 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void setup();
-#line 2030 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2283 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+void transitionToNextVideoWithFade();
+#line 2357 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void cycleExpression();
-#line 2037 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2361 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 String getExpressionName(int expr);
-#line 2061 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2385 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void adjustOption(int option, int direction);
-#line 2134 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2458 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn1Single();
-#line 2354 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2668 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn1Double();
-#line 2391 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2705 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn1Long();
-#line 2444 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2758 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn2Single();
-#line 2506 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2820 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn2Double();
-#line 2554 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2868 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleSwipeUp();
-#line 2581 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2895 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleSwipeDown();
-#line 2612 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2926 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void updateStateLabel();
-#line 2663 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2977 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void loop();
-#line 32 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 33 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 float readBatteryVolts() {
   uint32_t totalMv = 0;
   for (int i = 0; i < 10; i++) {
@@ -151,7 +166,7 @@ bool notificationSelected = false;
 int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
 volatile bool hardwareLoopbackActive = false;
 bool optionSelected = false;
-SmartwatchScreen currentScreen = SCREEN_CLOCK;
+SmartwatchScreen currentScreen = SCREEN_FACE;
 
 // ── Smooth inertial scroll state (Settings & Arcade) ─────────────────────────
 float settingsScrollPx  = 0.0f;  // pixel offset into settings list
@@ -617,6 +632,116 @@ void parseAndSyncTime(String timeStr) {
 }
 
 
+// ── Luna Mood & Living Life Engine ──────────────────────────────────────────
+enum LunaMood {
+  MOOD_HAPPY = 0,
+  MOOD_PLAYFUL,
+  MOOD_CURIOUS,
+  MOOD_SLEEPY,
+  MOOD_HUNGRY,
+  MOOD_FED
+};
+
+// ── Luna Meal-time Schedule ─────────────────────────────────────────────────
+enum MealSlot {
+  MEAL_NONE = 0,
+  MEAL_BREAKFAST = 1, // 08:00 - 10:00
+  MEAL_LUNCH = 2,     // 12:30 - 14:30
+  MEAL_DINNER = 3     // 19:30 - 21:30
+};
+
+MealSlot lastMealFed = MEAL_NONE;
+String lastFedDate = "";
+
+// ── Luna Pet XP, Level, Feeding & Age Persistence ───────────────────────────
+uint32_t lunaXP = 0;
+int      lunaLevel = 1;
+uint32_t lunaFeedCount = 0;
+uint32_t lunaAgeDays = 1;
+uint32_t lunaBirthDayOfYear = 0;
+uint32_t lunaBirthYear = 0;
+
+String getLunaEvolutionStage(int lvl) {
+  if (lvl < 5) return "Baby Luna";
+  if (lvl < 10) return "Mochi Child";
+  if (lvl < 20) return "Cyber Teen";
+  return "Omega Luna";
+}
+
+int calculateLunaLevel(uint32_t xp) {
+  int lvl = 1 + (int)(xp / 100);
+  if (lvl < 1) lvl = 1;
+  return lvl;
+}
+
+void loadLunaPetStats() {
+  preferences.begin("luna", false);
+  lunaXP = preferences.getUInt("pet_xp", 0);
+  lunaFeedCount = preferences.getUInt("pet_feeds", 0);
+  lunaLevel = calculateLunaLevel(lunaXP);
+  lunaBirthDayOfYear = preferences.getUInt("pet_bday", 0);
+  lunaBirthYear = preferences.getUInt("pet_byear", 0);
+  lunaAgeDays = preferences.getUInt("pet_age", 1);
+  if (lunaAgeDays == 0) lunaAgeDays = 1;
+  preferences.end();
+  Serial.printf("[PET] Loaded: XP=%u, Level=%d, Feeds=%u, Age=%u days, Stage=%s\n",
+                lunaXP, lunaLevel, lunaFeedCount, lunaAgeDays, getLunaEvolutionStage(lunaLevel).c_str());
+}
+
+void saveLunaPetStats() {
+  preferences.begin("luna", false);
+  preferences.putUInt("pet_xp", lunaXP);
+  preferences.putUInt("pet_feeds", lunaFeedCount);
+  preferences.putUInt("pet_age", lunaAgeDays);
+  if (lunaBirthYear > 0) preferences.putUInt("pet_byear", lunaBirthYear);
+  if (lunaBirthDayOfYear > 0) preferences.putUInt("pet_bday", lunaBirthDayOfYear);
+  preferences.end();
+}
+
+void sendLunaStatsToBLE() {
+  if (!ble.isConnected()) return;
+  String stage = getLunaEvolutionStage(lunaLevel);
+  String statsMsg = "LUNA_STATS:" + String(lunaXP) + ":" + String(lunaLevel) + ":" +
+                    String(lunaFeedCount) + ":" + String(lunaAgeDays) + ":" + stage;
+  ble.sendLog(statsMsg);
+}
+
+void playAnimationSound(int animIndex) {
+  switch (animIndex) {
+    case 0:  audio.playSound(SOUND_CHIRP); break;         // Happy Smile
+    case 1:  audio.playSound(SOUND_POWERDOWN); break;     // Angry Face
+    case 2:  audio.playSound(SOUND_JUMP); break;          // Confused
+    case 3:  audio.playSound(SOUND_COIN); break;          // Playful Wink
+    case 4:  audio.playSound(SOUND_THEMECHANGE); break;    // Sparkle Eye
+    case 5:  audio.playSound(SOUND_POWERDOWN); break;     // Sleepy Zzz
+    case 6:  audio.playSound(SOUND_CHIRP); break;         // Curious
+    case 7:  audio.playSound(SOUND_COIN); break;          // Giggle
+    case 8:  audio.playSound(SOUND_JUMP); break;          // Excited
+    case 9:  audio.playSound(SOUND_POWERDOWN); break;     // Extreme Angry
+    case 10: audio.playSound(SOUND_ALERT_BEEP); break;     // Crying
+    case 11: audio.playSound(SOUND_POWERUP); break;       // Cheery
+    default: audio.playSound(SOUND_CHIRP); break;
+  }
+}
+
+LunaMood currentMood = MOOD_HAPPY;
+bool isHungry = false;
+unsigned long lastFedTime = 0;
+unsigned long nextHungerIntervalMs = 90000;
+unsigned long moodStartTime = 0;
+unsigned long moodDurationMs = 8000;
+unsigned long lastHungerWhimperTime = 0;
+unsigned long fedAnimationEndTime = 0;
+
+// Owner Personalization & Greeting
+String ownerName = "Sasi";
+String ownerDOB = "";
+bool isGreeting = false;
+unsigned long greetingEndTime = 0;
+
+void feedLuna();
+void updateLunaLife();
+
 // Periodic expression cycling — all 7 available face expressions
 const Expression cycleExpressions[] = {
   EXPR_IDLE,
@@ -672,20 +797,27 @@ void notifyScreenAndExprSync() {
 
 const char* getSpriteAiAnimationName(int idx) {
   switch (idx) {
-    case 0: return "Happy Smile";
+    case 0: return "Luna Idle";
     case 1: return "Angry Face";
-    case 2: return "Confused";
-    case 3: return "Playful Wink";
-    case 4: return "Sparkle Eye";
-    case 5: return "Sleepy Zzz";
-    case 6: return "Curious";
-    case 7: return "Giggle";
-    case 8: return "Excited";
-    case 9: return "Heart Eye";
-    case 10: return "Surprised";
-    case 11: return "Cheery";
-    default: return "ROBOT_EYE";
+    case 2: return "Hungry Menu";
+    case 3: return "Getting Hungry";
+    case 4: return "Eat Fish";
+    case 5: return "Drink Milk";
+    case 6: return "Eat Salad";
+    case 7: return "Getting Sick";
+    case 8: return "Luna Sick";
+    case 9: return "Recovered";
+    case 10: return "Going to Sleep";
+    case 11: return "Sleeping";
+    case 12: return "Waking Up";
+    case 13: return "Luna Thinking";
+    default: return "Luna Anime";
   }
+}
+
+const char* getAnimationThought(int idx) {
+  (void)idx;
+  return "";
 }
 
 // Global BLE Write Event Handlers (declared extern in bluetooth.h)
@@ -1080,6 +1212,44 @@ void handleRobotCommand(String text) {
     currentScreen = SCREEN_FACE;
     face.setExpression(EXPR_ANGRY);
     Serial.println("OK:AngryAnimationTriggered");
+  } else if (text == "FEED" || text == "EAT") {
+    currentScreen = SCREEN_FACE;
+    feedLuna();
+    Serial.println("OK:LunaFed");
+  } else if (text == "GET_STATS" || text == "STATS") {
+    sendLunaStatsToBLE();
+    Serial.println("OK:StatsSent");
+  } else if (text == "HUNGRY") {
+    currentScreen = SCREEN_FACE;
+    isHungry = true;
+    face.setHungry(true);
+    currentMood = MOOD_HUNGRY;
+    face.getRobotEyeAnim().setAnimationIndex(10); // Crying
+    face.getRobotEyeAnim().reset();
+    face.getRobotEyeAnim().play();
+    face.setStateLabel("Hungry");
+    face.setThoughtText("HUNGRY");
+    audio.playSound(SOUND_ALERT_BEEP);
+    notifyScreenAndExprSync();
+    Serial.println("OK:LunaHungryTriggered");
+  } else if (text.startsWith("SET_NAME:") || text.startsWith("USER:")) {
+    ownerName = text.substring(text.indexOf(':') + 1);
+    ownerName.trim();
+    if (ownerName.length() == 0) ownerName = "Sasi";
+    preferences.begin("luna", false);
+    preferences.putString("ownerName", ownerName);
+    preferences.end();
+    isGreeting = true;
+    greetingEndTime = millis() + 4000;
+    face.setThoughtText("Hi " + ownerName + "!");
+    Serial.printf("[USER] Updated owner name: %s\n", ownerName.c_str());
+  } else if (text.startsWith("SET_DOB:") || text.startsWith("DOB:")) {
+    ownerDOB = text.substring(text.indexOf(':') + 1);
+    ownerDOB.trim();
+    preferences.begin("luna", false);
+    preferences.putString("ownerDOB", ownerDOB);
+    preferences.end();
+    Serial.printf("[USER] Updated owner DOB: %s\n", ownerDOB.c_str());
   } else if (text.startsWith("FOCUS_ALERT:") || text.startsWith("APPLIMIT:")) {
     // Format: FOCUS_ALERT:<appName>:<limitMinutes> (e.g. FOCUS_ALERT:Instagram:5m)
     String payload = text.substring(text.indexOf(':') + 1);
@@ -1795,17 +1965,6 @@ void configureST7789HardwareEnhanced() {
   Serial.println(F("[TFT] ST7789 Enhanced Hardware Calibration applied (Bright Red & Smooth Shadow Gamma)."));
 }
 
-void drawRGBBitmapScaled(int16_t x, int16_t y, const uint16_t *bitmap, int16_t w, int16_t h, int16_t targetW, int16_t targetH) {
-  for (int16_t ty = 0; ty < targetH; ty++) {
-    int16_t sy = (ty * h) / targetH;
-    int32_t rowOffset = (int32_t)sy * w;
-    for (int16_t tx = 0; tx < targetW; tx++) {
-      int16_t sx = (tx * w) / targetW;
-      uint16_t color = pgm_read_word(&bitmap[rowOffset + sx]);
-      tft.drawPixel(x + tx, y + ty + 20, color); // Apply 20px screen vertical offset
-    }
-  }
-}
 
 void applySettings(String payload) {
   // Robust CSV parsing — split by commas into an array
@@ -2029,11 +2188,32 @@ void setup() {
   face.setFrameDelay(gifSpeed);
   face.setDefaultExpression(EXPR_ROBOT_EYE);
   face.setExpression(EXPR_ROBOT_EYE);
+  face.getRobotEyeAnim().setAnimationIndex(0); // Happy Smile
+  lastFedTime = millis();
+  moodStartTime = millis();
+
+  // Load Owner Personalization from NVS
+  {
+    preferences.begin("luna", true);
+    ownerName = preferences.getString("ownerName", "Sasi");
+    ownerDOB  = preferences.getString("ownerDOB", "");
+    preferences.end();
+    isGreeting = true;
+    greetingEndTime = millis() + 6000;
+    face.setThoughtText("Hi " + ownerName + "!");
+  }
+
+  // Load Luna Pet XP & Evolution Stats from NVS
+  loadLunaPetStats();
 
   // Perform Hardware Reset
   pinMode(TFT_DC, OUTPUT);
   pinMode(TFT_RST, OUTPUT);
+  #ifdef TFT_BLK
   pinMode(TFT_BLK, OUTPUT);
+  analogWriteFrequency(TFT_BLK, TFT_PWM_FREQ);
+  analogWrite(TFT_BLK, 0); // Keep screen completely dark while initializing
+  #endif
   
   digitalWrite(TFT_RST, HIGH);
   delay(50);
@@ -2053,43 +2233,112 @@ void setup() {
   // Apply enhanced hardware registers (calibrated gamma, VCOM, gate voltage, porch timing)
   configureST7789HardwareEnhanced();
   
-  tft.invertDisplay(true);   // Standard color representation for IPS screen during logo — gives white background
+  tft.invertDisplay(true);   // Standard color representation for IPS screen
+  
+  // Initialize white canvas background while backlight is dark (duty 0)
   tft.fillScreen(ST77XX_WHITE);
-  
-  display.fillScreen(ST77XX_WHITE);
-  
-  // Apply 10 kHz PWM frequency to backlight to eliminate optical beat noise
-  #ifdef TFT_BLK
-  analogWriteFrequency(TFT_BLK, TFT_PWM_FREQ);
-  #endif
-  applyDisplayBrightness(oledBrightness);
+  display.drawRGBBitmap(0, 0, image_logo_pixels, 240, 280);
 
-  // Display startup logo on white background
-  int logoSize = (SCREEN_WIDTH < SCREEN_HEIGHT) ? SCREEN_WIDTH : SCREEN_HEIGHT;
-  int logoX = (SCREEN_WIDTH - logoSize) / 2;
-  int logoY = (SCREEN_HEIGHT - logoSize) / 2;
-  drawRGBBitmapScaled(logoX, logoY, image_logo_pixels, 240, 240, logoSize, logoSize);
+  // Target brightness duty based on saved preferences
+  uint8_t targetDuty = 230;
+  if (oledBrightness == 1) targetDuty = 90;
+  else if (oledBrightness == 3) targetDuty = 255;
 
-  // Play startup sound immediately so it plays while loading the logo
+  // Play startup sound immediately while starting the bottom-to-top reveal effect
   audio.playSound(SOUND_STARTUP, introSoundSpeed);
 
+  // 1. Startup Logo Reveal Effect: Sweeps upwards from bottom to top (70 steps x 4 scanlines = 280px)
+  const int REVEAL_STEP_PX = 4;
+  const int TOTAL_REVEAL_STEPS = SCREEN_HEIGHT / REVEAL_STEP_PX; // 280 / 4 = 70 steps
+  for (int step = 0; step < TOTAL_REVEAL_STEPS; step++) {
+    int curY = SCREEN_HEIGHT - (step + 1) * REVEAL_STEP_PX;
+    if (curY < 0) curY = 0;
+    
+    // Draw 4-scanline strip of the logo directly from PROGMEM at hardware Y offset (+20)
+    tft.drawRGBBitmap(0, 20 + curY, &image_logo_pixels[curY * SCREEN_WIDTH], SCREEN_WIDTH, REVEAL_STEP_PX);
 
-  // Show logo for 3 seconds while playing the startup sound and ignoring/clearing touches
-  unsigned long bootStart = millis();
-  while (millis() - bootStart < 3000) {
+    // Smoothly ramp up backlight in first 14 steps (~110ms)
+    if (step < 14) {
+      uint8_t d = (uint8_t)(targetDuty * ((step + 1) / 14.0f));
+      #ifdef TFT_BLK
+      analogWrite(TFT_BLK, d);
+      #endif
+    } else if (step == 14) {
+      #ifdef TFT_BLK
+      analogWrite(TFT_BLK, targetDuty);
+      #endif
+    }
+
     audio.update();
-    interaction.update(); // read to clear/ignore early boot noise
-    delay(1);
+    interaction.update();
+    delay(8);
+  }
+  #ifdef TFT_BLK
+  analogWrite(TFT_BLK, targetDuty);
+  #endif
+
+  // 2. Full Logo Display & Audio Chime Hold Phase (~1300ms)
+  unsigned long holdStart = millis();
+  while (millis() - holdStart < 1300) {
+    audio.update();
+    interaction.update();
+    delay(5);
   }
 
-  // Restore saved invert setting for standard operation
+  // 3. Closing Logo Animation: Smooth Fade-Out to Pitch Black (~400ms)
+  const unsigned long FADE_OUT_MS = 400;
+  unsigned long fadeOutStart = millis();
+  while (millis() - fadeOutStart < FADE_OUT_MS) {
+    float t = (float)(millis() - fadeOutStart) / (float)FADE_OUT_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = 1.0f - (t * t * (3.0f - 2.0f * t)); // Smooth cubic ease-out to zero
+    uint8_t duty = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, duty);
+    #endif
+    audio.update();
+    interaction.update();
+    delay(5);
+  }
+  #ifdef TFT_BLK
+  analogWrite(TFT_BLK, 0); // Completely dark
+  #endif
+
+  // 4. Clean Transition to Pet Face while screen is dark (no visual pop or color flashing)
+  tft.fillScreen(ST77XX_BLACK);
+  display.fillScreen(ST77XX_BLACK);
   tft.invertDisplay(true);
   
-  // Set intro speed
   face.setFrameDelay(gifIntroSpeed);
   face.setExpression(EXPR_ROBOT_EYE);
+  face.getRobotEyeAnim().setAnimationIndex(0);
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+  face.update();
+  face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
 
-  inIntroPhase = true;
+  // 5. Smooth Fade-In to Pet Screen (~200ms)
+  const unsigned long PET_FADE_IN_MS = 200;
+  unsigned long petFadeStart = millis();
+  while (millis() - petFadeStart < PET_FADE_IN_MS) {
+    float t = (float)(millis() - petFadeStart) / (float)PET_FADE_IN_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = t * t * (3.0f - 2.0f * t);
+    uint8_t duty = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, duty);
+    #endif
+    audio.update();
+    delay(4);
+  }
+  applyDisplayBrightness(oledBrightness);
+
+  // Synchronize animation playback timer immediately after fade-in so video starts with zero delay
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+
+  currentScreen = SCREEN_FACE;
+  inIntroPhase = false;
   introAnimationStartTime = 0;
   lastInteractionTime = millis();
   lastRtcMillis = millis();
@@ -2114,11 +2363,100 @@ void setup() {
 // Global index for all-gifs cycling — advances through all 63 entries
 int allGifCycleIdx = 0;
 
+void feedLuna() {
+  if (!isHungry && !face.isHungry()) return; // Only feed if hungry!
+
+  // Add +50 XP and increment feed count
+  lunaFeedCount++;
+  lunaXP += 50;
+  lunaLevel = calculateLunaLevel(lunaXP);
+  saveLunaPetStats();
+  sendLunaStatsToBLE();
+
+  // Start feeding animation: bubbles float up towards crying face
+  face.startFeeding();
+  face.setThoughtText("+50 XP! Eating...");
+  audio.playSound(SOUND_CHIRP);
+  Serial.printf("[LUNA] FEEDING: XP now %u (Lv %d). Food bubbles floating up...\n", lunaXP, lunaLevel);
+}
+
+// ── Fast, Smooth Fade Transition Between Video Animations (Zero Delay) ──────
+void transitionToNextVideoWithFade() {
+  uint8_t targetDuty = 230;
+  if (oledBrightness == 1) targetDuty = 90;
+  else if (oledBrightness == 3) targetDuty = 255;
+
+  // 1. Fast, fluid Fade-Out (65ms) - Quick cinematic dip to black
+  const unsigned long FADE_MS = 65;
+  unsigned long t0 = millis();
+  while (millis() - t0 < FADE_MS) {
+    float t = (float)(millis() - t0) / (float)FADE_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = 1.0f - (t * t * (3.0f - 2.0f * t)); // smooth cubic ease-out
+    uint8_t d = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, d);
+    #endif
+    audio.update();
+    interaction.update();
+    delay(2);
+  }
+  #ifdef TFT_BLK
+  analogWrite(TFT_BLK, 0);
+  #endif
+
+  // 2. Advance to next video animation while screen is black
+  int oldIdx = face.getRobotEyeAnim().getAnimationIndex();
+  face.getRobotEyeAnim().nextAnimation();
+  int newIdx = face.getRobotEyeAnim().getAnimationIndex();
+  const char* animName = getSpriteAiAnimationName(newIdx);
+  face.setStateLabel(animName);
+
+  // Render Frame 0 of the new animation into display buffer & TFT while black
+  face.update();
+  face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle, is12HourFormat);
+
+  // 3. Fast, fluid Fade-In (65ms) - Restores full brightness seamlessly
+  t0 = millis();
+  while (millis() - t0 < FADE_MS) {
+    float t = (float)(millis() - t0) / (float)FADE_MS;
+    if (t > 1.0f) t = 1.0f;
+    float ease = t * t * (3.0f - 2.0f * t); // smooth cubic ease-in
+    uint8_t d = (uint8_t)(ease * targetDuty);
+    #ifdef TFT_BLK
+    analogWrite(TFT_BLK, d);
+    #endif
+    audio.update();
+    interaction.update();
+    delay(2);
+  }
+  applyDisplayBrightness(oledBrightness);
+
+  // 4. Synchronize animation playback timer immediately after fade:
+  // Starts Frame 0 timing fresh right now so the video plays INSTANTLY with zero pause or delay!
+  face.getRobotEyeAnim().reset();
+  face.getRobotEyeAnim().play();
+
+  Serial.printf("[VIDEO] Anim %d -> Faded -> Anim %d (%s, %d frames)\n",
+                oldIdx, newIdx, animName, face.getRobotEyeAnim().getFrameCount());
+  notifyScreenAndExprSync();
+}
+
+void updateLunaLife() {
+  if (currentScreen != SCREEN_FACE || isAsleep || inIntroPhase || mapsActive || gamePlaying) return;
+  // Silent animation maintainer: zero sounds, zero hunger alerts, zero thought text
+  if (!face.getRobotEyeAnim().isPlaying()) {
+    face.getRobotEyeAnim().play();
+  }
+  // Auto-advance to next video only after the full video animation cycle has cleanly played to the end:
+  if (face.getRobotEyeAnim().isCycleCompleted()) {
+    face.getRobotEyeAnim().clearCycleCompleted();
+    transitionToNextVideoWithFade();
+  }
+}
+
 void cycleExpression() {
-  face.setDefaultExpression(EXPR_ROBOT_EYE);
-  face.setExpression(EXPR_ROBOT_EYE);
-  face.setStateLabel("ROBOT_EYE");
-  Serial.println("PLAYING ROBOT_EYE ANIMATION (Sprite AI)");
+  updateLunaLife();
 }
 
 String getExpressionName(int expr) {
@@ -2245,12 +2583,7 @@ void handleBtn1Single() {
 
   if (inIntroPhase) {
     inIntroPhase = false;
-    face.setFrameDelay(gifSpeed);
-    currentScreen = SCREEN_CLOCK;
-    audio.playSound(SOUND_POWERUP);
-    Serial.println(F("[Intro] Tap skipped intro -> SCREEN_CLOCK"));
-    notifyScreenAndExprSync();
-    return;
+    currentScreen = SCREEN_FACE;
   }
 
   // Tapping on QR Card returns to Clock Home
@@ -2339,13 +2672,8 @@ void handleBtn1Single() {
   }
 
   if (currentScreen == SCREEN_FACE) {
-    // Center tap on FACE screen -> cycle through all 12 Sprite AI animations
-    face.getRobotEyeAnim().nextAnimation();
-    int curIdx = face.getRobotEyeAnim().getAnimationIndex();
-    face.setStateLabel(getSpriteAiAnimationName(curIdx));
-    audio.playSound(SOUND_CHIRP);
-    Serial.printf("[BTN1] Cycled Sprite AI animation -> Anim #%d (%s)\n", curIdx, face.getStateLabel().c_str());
-    notifyScreenAndExprSync();
+    // Tap on face screen cycles through all 14 video animations with smooth fade!
+    transitionToNextVideoWithFade();
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
     // Tap on clock screen cycles the clock style between 0 and 1
@@ -2805,6 +3133,11 @@ void loop() {
           gamesActive = true;
           audio.playSound(SOUND_POWERDOWN);
           Serial.println("[Power Button] Short press in game -> Exited to arcade");
+        } else {
+          // Short press while awake: feed Luna ONLY when hungry!
+          if (isHungry || face.isHungry()) {
+            feedLuna();
+          }
         }
       }
     }
@@ -3214,29 +3547,25 @@ void loop() {
       if (now - introAnimationStartTime >= 2000) {
         inIntroPhase = false;
         face.setFrameDelay(gifSpeed);
-        currentScreen = SCREEN_CLOCK; // Boot into Monolith Watchface Home!
+        currentScreen = SCREEN_FACE; // Stay on animation screen!
         lastInteractionTime = now;
         lastScreenTransitionTime = now;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println(F("[Boot] Intro completed -> Booted to SCREEN_CLOCK (Home Watchface)"));
+        Serial.println(F("[Boot] Intro completed -> Playing animation on SCREEN_FACE"));
         notifyScreenAndExprSync();
       }
     } else if (now - introAnimationStartTime >= 3000) {
       // Failsafe timeout
       inIntroPhase = false;
       face.setFrameDelay(gifSpeed);
-      currentScreen = SCREEN_CLOCK;
+      currentScreen = SCREEN_FACE;
       lastInteractionTime = now;
       lastScreenTransitionTime = now;
-      audio.playSound(SOUND_POWERUP);
-      Serial.println(F("[Boot] Intro timeout -> Booted to SCREEN_CLOCK (Home Watchface)"));
+      Serial.println(F("[Boot] Intro timeout -> Playing animation on SCREEN_FACE"));
       notifyScreenAndExprSync();
     }
   } else {
     if (currentScreen == SCREEN_FACE && !isAsleep) {
-      if (face.getExpression() != EXPR_ROBOT_EYE) {
-        cycleExpression();
-      }
+      updateLunaLife();
     }
   }
 
@@ -3291,6 +3620,7 @@ void loop() {
     updateStateLabel();
     int reportExpr = (currentScreen == SCREEN_FACE) ? face.getRobotEyeAnim().getAnimationIndex() : (int)face.getExpression();
     ble.updateStatus(uptimeSec, touchCount, batteryVolts, (Expression)reportExpr, face.getStateLabel());
+    sendLunaStatsToBLE();
   }
 
   // Update GIF frame states on every loop iteration (skip when wallpaper is shown)
@@ -3298,10 +3628,11 @@ void loop() {
     face.update();
   }
 
-  // Draw the display at ~55-60fps rate
+  // Draw the display: 12ms on SCREEN_FACE (~80Hz cap) for smooth video, ~18ms elsewhere
   static int lastDrawnSecond = -1;
   static unsigned long lastDisplayDrawTime = 0;
-  if (now - lastDisplayDrawTime >= 18) {
+  unsigned long displayDrawInterval = (currentScreen == SCREEN_FACE) ? 12 : 18;
+  if (now - lastDisplayDrawTime >= displayDrawInterval) {
     lastDisplayDrawTime = now;
     if (currentScreen == SCREEN_WALLPAPER) {
       // Wallpaper screen: static JPEG already rendered — continuously animate HUD while receiving, verifying, or decoding

@@ -30,6 +30,7 @@ private:
     isPlaying = false;
     inGap = false;
     noTone(buzzerPin);
+    digitalWrite(buzzerPin, LOW);
   }
 
   void enqueueNote(uint16_t freq, uint16_t dur) {
@@ -70,6 +71,7 @@ public:
 
   void begin() {
     pinMode(buzzerPin, OUTPUT);
+    digitalWrite(buzzerPin, LOW);
   }
 
   void update() {
@@ -79,6 +81,7 @@ public:
     if (now >= currentNoteEndTime) {
       if (!inGap) {
         noTone(buzzerPin);
+        digitalWrite(buzzerPin, LOW);
         currentNoteEndTime = now + interNoteGapDuration;
         inGap = true;
       } else {
@@ -235,6 +238,7 @@ public:
     if (queueCount == 0) {
       isPlaying = false;
       noTone(buzzerPin);
+      digitalWrite(buzzerPin, LOW);
       return;
     }
 

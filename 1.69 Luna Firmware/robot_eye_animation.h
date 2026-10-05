@@ -7,7 +7,7 @@
 #include <TJpg_Decoder.h>
 #include "video_frames_data.h"
 
-#define SPRITE_AI_ANIMATION_COUNT 1
+#define SPRITE_AI_ANIMATION_COUNT TOTAL_ANIMATIONS
 
 enum RobotEyeState {
   ROBOT_EYE_IDLE = 0,
@@ -27,6 +27,20 @@ static bool _videoTftOutput(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16
   uint16_t* dest = _videoDecTargetCanvas->getBuffer();
   if (!dest) return false;
 
+  // Ultra-fast path: block fully within canvas boundary (covers 95%+ of all MCUs)
+  // Eliminates per-row bounds checks, multiplications, and branches!
+  if (x >= 0 && (x + w) <= VIDEO_FRAME_WIDTH && y >= 0 && (y + h) <= VIDEO_FRAME_HEIGHT) {
+    uint16_t* dstRow = &dest[y * VIDEO_FRAME_WIDTH + x];
+    const uint16_t* srcRow = bitmap;
+    for (int16_t r = 0; r < h; r++) {
+      memcpy(dstRow, srcRow, w * sizeof(uint16_t));
+      dstRow += VIDEO_FRAME_WIDTH;
+      srcRow += w;
+    }
+    return true;
+  }
+
+  // Clipped path for boundary blocks
   for (int16_t r = 0; r < h; r++) {
     int16_t cy = y + r;
     if (cy >= VIDEO_FRAME_HEIGHT) break;
@@ -53,20 +67,35 @@ private:
   float fps;
   int loopCount;
   bool cycleCompleted;
+  bool needsRedraw;
 
 public:
   RobotEyeAnimation() 
-    : state(ROBOT_EYE_IDLE), animIndex(0), currentFrame(0), frameCount(TOTAL_VIDEO_FRAMES), 
-      frameDelayMs(30), lastFrameTime(0), playing(true), 
-      fps(33.3f), loopCount(0), cycleCompleted(false) {}
+    : state(ROBOT_EYE_IDLE), animIndex(0), currentFrame(0), 
+      frameCount(ANIM_0_FRAME_COUNT), frameDelayMs(100), 
+      lastFrameTime(0), playing(true), fps(10.0f), 
+      loopCount(0), cycleCompleted(false), needsRedraw(true) {}
 
   void play() {
     playing = true;
     lastFrameTime = millis();
+    needsRedraw = true;
   }
 
   void stop() {
     playing = false;
+  }
+
+  void pause() {
+    playing = false;
+  }
+
+  void resume() {
+    if (!playing) {
+      playing = true;
+      lastFrameTime = millis();
+      needsRedraw = true;
+    }
   }
 
   void reset() {
@@ -74,24 +103,30 @@ public:
     loopCount = 0;
     cycleCompleted = false;
     lastFrameTime = millis();
+    needsRedraw = true;
   }
 
   void nextAnimation() {
-    animIndex = 0;
-    currentFrame = 0;
-    loopCount = 0;
-    cycleCompleted = false;
-    lastFrameTime = millis();
+    int nextIdx = (animIndex + 1) % TOTAL_ANIMATIONS;
+    setAnimationIndex(nextIdx);
   }
 
   void setAnimationIndex(int idx) {
-    (void)idx;
-    animIndex = 0;
+    if (idx < 0 || idx >= TOTAL_ANIMATIONS) idx = 0;
+    animIndex = idx;
+    frameCount = anim_frame_counts[animIndex];
+    fps = 10.0f;
+    frameDelayMs = 100; // 100ms (10 FPS): natural, smooth, relaxed playback
     currentFrame = 0;
     loopCount = 0;
     cycleCompleted = false;
     lastFrameTime = millis();
     playing = true;
+    needsRedraw = true;
+  }
+
+  void requestRedraw() {
+    needsRedraw = true;
   }
 
   int getAnimationIndex() const {
@@ -102,6 +137,7 @@ public:
     if (frame >= 0 && frame < frameCount) {
       currentFrame = frame;
       lastFrameTime = millis();
+      needsRedraw = true;
     }
   }
 
@@ -134,14 +170,32 @@ public:
   bool update() {
     if (!playing || frameCount <= 0) return false;
 
+    // Immediate draw request (e.g. anim switch, reset, wake-up)
+    if (needsRedraw) {
+      needsRedraw = false;
+      return true;
+    }
+
     unsigned long now = millis();
     if (now - lastFrameTime >= (unsigned long)frameDelayMs) {
-      int framesToAdvance = (now - lastFrameTime) / frameDelayMs;
-      if (framesToAdvance < 1) framesToAdvance = 1;
-      lastFrameTime += (unsigned long)(framesToAdvance * frameDelayMs);
-      currentFrame += framesToAdvance;
+      // Advance strictly 1 frame per tick — NEVER drop or skip video frames!
+      currentFrame++;
+
+      // Prevent phase drift while keeping cadence locked
+      if (now - lastFrameTime >= (unsigned long)(frameDelayMs * 2)) {
+        lastFrameTime = now;
+      } else {
+        lastFrameTime += (unsigned long)frameDelayMs;
+      }
+
       if (currentFrame >= frameCount) {
-        currentFrame = currentFrame % frameCount;
+        // For one-shot transitional animations (10: Going to Sleep, 12: Waking Up, 7: Idle to Sick, 9: Sick to Idle, 1: Angry, 13: Thinking),
+        // clamp to last frame so it doesn't wrap to frame 0 and flash before state machine transitions!
+        if (animIndex == 10 || animIndex == 12 || animIndex == 7 || animIndex == 9 || animIndex == 1 || animIndex == 13) {
+          currentFrame = frameCount - 1;
+        } else {
+          currentFrame = 0;
+        }
         loopCount++;
         cycleCompleted = true;
       }
@@ -156,16 +210,20 @@ public:
 
   // Hardware-optimized direct JPEG blit into display PSRAM canvas
   void draw(GFXcanvas16& canvas) {
-    if (TOTAL_VIDEO_FRAMES == 0) return;
+    if (frameCount <= 0) return;
     _videoDecTargetCanvas = &canvas;
     TJpgDec.setJpgScale(1);
     TJpgDec.setSwapBytes(false);
     TJpgDec.setCallback(_videoTftOutput);
 
-    const uint8_t* fData = video_frames[currentFrame];
-    uint32_t fSize = video_frame_sizes[currentFrame];
-    if (fData != nullptr && fSize > 0) {
-      TJpgDec.drawJpg(0, 0, fData, fSize);
+    const uint8_t* const* curFrames = anim_frame_pointers[animIndex];
+    const uint32_t* curSizes = anim_size_pointers[animIndex];
+    if (curFrames != nullptr && curSizes != nullptr) {
+      const uint8_t* fData = curFrames[currentFrame];
+      uint32_t fSize = curSizes[currentFrame];
+      if (fData != nullptr && fSize > 0) {
+        TJpgDec.drawJpg(0, 0, fData, fSize);
+      }
     }
   }
 

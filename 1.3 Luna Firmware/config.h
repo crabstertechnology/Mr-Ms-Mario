@@ -36,7 +36,7 @@
 #define STATUS_CHAR_UUID       "fb2f0e05-73ee-4f32-833d-1f2c6db8a102"
 #define AUDIO_STREAM_CHAR_UUID "a823e50b-71ee-48c5-9276-2e8c6db8a103"
 
-// Robot Expression States (12 Full-Color Sprite AI animations)
+// Robot Expression States (14 Full-Color Video AI animations)
 enum Expression {
   EXPR_IDLE = 0,
   EXPR_HAPPY,
@@ -53,7 +53,8 @@ enum Expression {
   EXPR_TEXT,
   EXPR_CLOCK,
   EXPR_MAP,
-  EXPR_ALL_GIF
+  EXPR_ALL_GIF,
+  EXPR_ROBOT_EYE = 20  // 14 AI Pet Video Animation System
 };
 
 // Buzzer Sound Effects
@@ -69,10 +70,26 @@ enum SoundEffect {
   SOUND_CASTLE,
   SOUND_UNDERWORLD,
   SOUND_THEMECHANGE,
-  SOUND_ALERT_BEEP
+  SOUND_ALERT_BEEP,
+  SOUND_BOOT_CHIME,   // Clean cinematic power-on chime
+  // Per-animation transition sounds
+  SOUND_ANIM_IDLE,        // 0: Luna Idle
+  SOUND_ANIM_ANGRY,       // 1: Angry Face
+  SOUND_ANIM_HUNGRY_MENU, // 2: Hungry Menu
+  SOUND_ANIM_GETTING_HUNGRY, // 3: Getting Hungry
+  SOUND_ANIM_EAT_FISH,    // 4: Eat Fish
+  SOUND_ANIM_DRINK_MILK,  // 5: Drink Milk
+  SOUND_ANIM_EAT_SALAD,   // 6: Eat Salad
+  SOUND_ANIM_GETTING_SICK,// 7: Getting Sick
+  SOUND_ANIM_SICK,        // 8: Luna Sick
+  SOUND_ANIM_RECOVERED,   // 9: Recovered
+  SOUND_ANIM_SLEEP,       // 10: Going to Sleep
+  SOUND_ANIM_SLEEPING,    // 11: Sleeping
+  SOUND_ANIM_WAKEUP,      // 12: Waking Up
+  SOUND_ANIM_THINKING,    // 13: Luna Thinking
 };
 
-// Smartwatch UI Screen Modes
+// Smartwatch UI Screen Modes (Level Monitor removed - No IMU hardware on 1.3")
 enum SmartwatchScreen {
   SCREEN_CLOCK = 0,
   SCREEN_NOTIFICATIONS,

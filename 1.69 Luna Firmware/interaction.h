@@ -21,6 +21,9 @@ enum ButtonEvent {
   BTN_SWIPE_DOWN,   // Swipe down  → scroll up
   BTN_SWIPE_LEFT,   // Swipe left  → next screen
   BTN_SWIPE_RIGHT,  // Swipe right → previous screen
+  BTN_CIRCLE_LEFT,  // Hungry menu circle 0 (Left - Salad)
+  BTN_CIRCLE_MID,   // Hungry menu circle 1 (Middle - Milk)
+  BTN_CIRCLE_RIGHT  // Hungry menu circle 2 (Right - Fish)
 };
 
 // ── Keep backwards-compatible TouchEvent ─────────────────────────────────────
@@ -37,6 +40,8 @@ extern bool virtualBtn1;
 extern bool virtualBtn2;
 extern bool gamePlaying;
 extern SmartwatchScreen currentScreen;
+class LunaFace;
+extern LunaFace face;
 
 // ── Hardware interrupt flag ───────────────────────────────────────────────────
 static volatile bool touchInterruptOccurred = false;
@@ -149,6 +154,58 @@ public:
     bool fresh = readTouch(gesture, fingerNum, x, y, allowPoll);
     ButtonEvent ev = BTN_NONE;
 
+    // ── On Character Animation Screen: only the 3 action circles are interactive ──
+    if (currentScreen == SCREEN_FACE) {
+      if (fresh) {
+        if (fingerNum > 0) {
+          lastTouchMs = now;
+          lastX = x;
+          lastY = y;
+          if (!isDown) {
+            isDown = true;
+            startX = x;
+            startY = y;
+            startMs = now;
+            _hasScrolled = false;
+          } else {
+            if (abs(x - startX) >= 10 || abs(y - startY) >= 10) {
+              _hasScrolled = true;
+            }
+          }
+        } else {
+          // Finger released
+          if (isDown) {
+            isDown = false;
+            unsigned long held = now - startMs;
+            int dx = lastX - startX;
+            int dy = lastY - startY;
+            // Clean stationary tap ONLY while displaying Hungry Menu (Anim 2)
+            // While playing eating animations (Milk, Fish, Salad), touch is completely ignored
+            if (face.getRobotEyeAnim().getAnimationIndex() == 2 &&
+                !_hasScrolled && abs(dx) < 16 && abs(dy) < 16 && held >= 20 && held < 600) {
+              int touchY = getMappedY(); // 0..279 canvas coordinate
+              // Circles are centered at Y = 242, radius = 24 -> target Y range 195..275
+              if (touchY >= 195 && touchY <= 275) {
+                if (lastX >= 5 && lastX <= 72) {
+                  ev = BTN_CIRCLE_LEFT;
+                  Serial.printf("[Touch] Hungry Menu: Circle LEFT (Salad) tapped (X=%d, Y=%d)\n", lastX, touchY);
+                } else if (lastX >= 78 && lastX <= 146) {
+                  ev = BTN_CIRCLE_MID;
+                  Serial.printf("[Touch] Hungry Menu: Circle MID (Milk) tapped (X=%d, Y=%d)\n", lastX, touchY);
+                } else if (lastX >= 152 && lastX <= 222) {
+                  ev = BTN_CIRCLE_RIGHT;
+                  Serial.printf("[Touch] Hungry Menu: Circle RIGHT (Fish) tapped (X=%d, Y=%d)\n", lastX, touchY);
+                }
+              }
+            }
+          }
+          gestureState = STATE_IDLE;
+          _hasScrolled = false;
+        }
+      }
+      return ev;
+    }
+
     // ── Finger DOWN / HELD ───────────────────────────────────────────────────
     if (fresh && fingerNum > 0) {
       lastTouchMs = now;
@@ -219,7 +276,11 @@ public:
         if (_hasScrolled || gestureState == STATE_SCROLL_VERTICAL || gestureState == STATE_SWIPE_HORIZONTAL) {
           // Horizontal screen swipe
           if (gestureState == STATE_SWIPE_HORIZONTAL || (absX >= 35 && absX > (absY * 3 / 2))) {
-            if (now - lastSwipeTransitionMs >= 300) {
+            if (currentScreen == SCREEN_FACE) {
+              // Strictly suppress screen transition swipes while playing character animation
+              ev = BTN_NONE;
+              Serial.println("[Touch] Horizontal swipe suppressed on animation screen");
+            } else if (now - lastSwipeTransitionMs >= 300) {
               lastSwipeTransitionMs = now;
               ev = (deltaX < 0) ? BTN_SWIPE_LEFT : BTN_SWIPE_RIGHT;
             }
@@ -237,15 +298,25 @@ public:
             Serial.println("[Touch] Long press (>=500ms) -> Home Screen");
           } else if (held >= 20) {
             if (currentScreen == SCREEN_FACE) {
+              // On animation screen: Left and Right side touches are DISABLED!
+              // Only Center tap (X between 40 and 200) is recognized to navigate to Clock.
+              if (lastX >= 40 && lastX < 200) {
+                ev = BTN1_SINGLE;
+                Serial.printf("[Touch] CENTER tap on ANIMATION (X=%d) -> Go to Clock\n", lastX);
+              } else {
+                Serial.printf("[Touch] Side tap ignored on ANIMATION (X=%d)\n", lastX);
+                ev = BTN_NONE;
+              }
+            } else if (currentScreen == SCREEN_CLOCK) {
               if (lastX < 40) {
                 ev = BTN2_DOUBLE;
-                Serial.printf("[Touch] LEFT tap (X=%d) -> prev screen\n", lastX);
-              } else if (lastX >= 200) {
+                Serial.printf("[Touch] Clock LEFT tap (X=%d) -> prev screen\n", lastX);
+              } else if (lastX >= 190) {
                 ev = BTN2_SINGLE;
-                Serial.printf("[Touch] RIGHT tap (X=%d) -> next screen\n", lastX);
+                Serial.printf("[Touch] Clock RIGHT tap (X=%d) -> next screen\n", lastX);
               } else {
                 ev = BTN1_SINGLE;
-                Serial.printf("[Touch] CENTER tap (X=%d) -> select\n", lastX);
+                Serial.printf("[Touch] Clock CENTER tap (X=%d) -> toggle style\n", lastX);
               }
             } else {
               if (lastX < 15) {

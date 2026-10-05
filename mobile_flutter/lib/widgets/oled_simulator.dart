@@ -1360,22 +1360,27 @@ class _OLEDSimulatorState extends State<OLEDSimulator> with TickerProviderStateM
     return RotatedBox(
       quarterTurns: quarterTurns,
       child: Container(
-        width: 240,
-        height: 280, // Exact 240x280 ST7789 screen size
+        width: 242,
+        height: 282, // Exact 240x280 ST7789 screen size + bezel
         decoration: BoxDecoration(
-          color: Colors.black,
-          border: Border.all(color: const Color(0xFF27273A), width: 7),
-          borderRadius: BorderRadius.circular(12),
+          color: const Color(0xFF0F141E),
+          border: Border.all(color: const Color(0xFF1E2536), width: 6),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
-              blurRadius: 18,
+              color: Colors.black.withOpacity(0.55),
+              blurRadius: 22,
               offset: const Offset(0, 8),
             ),
             BoxShadow(
-              color: oledThemeColor.withOpacity(0.12),
-              blurRadius: 28,
-              spreadRadius: 2,
+              color: oledThemeColor.withOpacity(0.20),
+              blurRadius: 24,
+              spreadRadius: 1,
+            ),
+            BoxShadow(
+              color: const Color(0xFF00E5FF).withOpacity(0.08),
+              blurRadius: 12,
+              spreadRadius: 0,
             ),
           ],
         ),

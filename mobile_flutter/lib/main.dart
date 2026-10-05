@@ -53,12 +53,17 @@ class LunaControllerApp extends StatelessWidget {
     final Color accentTextColor = isMsLuna ? const Color(0xFFDB2777) : const Color(0xFF1D4ED8);
 
     return MaterialApp(
-      title: 'Mr.&Ms Luna',
+      title: 'SYNAPS',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
         primaryColor: accentColor,
+        colorScheme: ColorScheme.light(
+          primary: accentColor,
+          secondary: const Color(0xFF8B5CF6),
+          surface: Colors.white,
+        ),
         cardColor: Colors.white,
         sliderTheme: SliderThemeData(
           activeTrackColor: accentColor,

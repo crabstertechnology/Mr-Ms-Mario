@@ -178,6 +178,18 @@ private:
 public:
   String headerText;
   bool timeSynced = false; // true after first TIME: sync from companion app
+  bool hungryState = false;
+  bool isFeeding = false;
+  unsigned long feedingStartTime = 0;
+  String thoughtText = "";
+  void setHungry(bool h) { hungryState = h; }
+  bool isHungry() const { return hungryState; }
+  void startFeeding() { isFeeding = true; feedingStartTime = millis(); }
+  void stopFeeding() { isFeeding = false; }
+  bool isFeedingActive() const { return isFeeding; }
+  unsigned long getFeedingStartTime() const { return feedingStartTime; }
+  void setThoughtText(const String& txt) { thoughtText = txt; }
+  String getThoughtText() const { return thoughtText; }
   RobotEyeAnimation& getRobotEyeAnim() { return robotEyeAnim; }
   LunaFace(Adafruit_ST7789& tftDisp, GFXcanvas16& disp) 
     : tft(tftDisp), display(disp), currentExpr(EXPR_ROBOT_EYE), targetExpr(EXPR_ROBOT_EYE), defaultExpr(EXPR_ROBOT_EYE), stateLabel("ROBOT_EYE"), frameDelayMs(100), expressionChanged(true) {
@@ -1904,12 +1916,7 @@ public:
   }
 
   void drawRobotFaceScreen() {
-    display.fillScreen(TFT_BLACK);
-    
-    const uint16_t* frameData = robotEyeAnim.getCurrentFrameData();
-    if (frameData != nullptr) {
-      display.drawRGBBitmap(robotEyeAnim.getXOffset(), robotEyeAnim.getYOffset(), frameData, robotEyeAnim.getWidth(), robotEyeAnim.getHeight());
-    }
+    robotEyeAnim.draw(display);
     if (silentMode) {
       uint16_t silentColor = TFT_WHITE;
       int silentX = SCREEN_WIDTH - 20;
