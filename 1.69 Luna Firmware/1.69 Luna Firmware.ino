@@ -67,7 +67,7 @@ bool notificationSelected = false;
 int menuOption = 0; // 0: BLE, 1: GIF Speed, 2: Clock Style, 3: Invert, 4: Brightness, 5: Save, 6: Exit
 volatile bool hardwareLoopbackActive = false;
 bool optionSelected = false;
-SmartwatchScreen currentScreen = SCREEN_CLOCK;
+SmartwatchScreen currentScreen = SCREEN_FACE;
 
 // ── Smooth inertial scroll state (Settings & Arcade) ─────────────────────────
 float settingsScrollPx  = 0.0f;  // pixel offset into settings list
@@ -2246,7 +2246,7 @@ void setup() {
   face.getRobotEyeAnim().reset();
   face.getRobotEyeAnim().play();
 
-  currentScreen = SCREEN_CLOCK;
+  currentScreen = SCREEN_FACE;
   inIntroPhase = false;
   introAnimationStartTime = 0;
   lastInteractionTime = millis();
@@ -2814,10 +2814,14 @@ void handleBtn1Single() {
     // Touch screen tap disabled on SCREEN_FACE — screen transitions only via physical middle button
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
-    // Tap on clock screen cycles the clock style between 0 and 1
-    clockStyle = (clockStyle + 1) % 2;
-    audio.playSound(SOUND_CHIRP);
-    Serial.printf("[BTN1] Cycled clock style -> %d\n", clockStyle);
+    // Single watchface locked - tap on right side opens App Launcher Menu
+    int canvasX = interaction.getLastX();
+    if (canvasX > 150) {
+      currentScreen = SCREEN_MENU;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[BTN1] Tap right on Clock -> SCREEN_MENU"));
+      notifyScreenAndExprSync();
+    }
   } else if (currentScreen == SCREEN_NOTIFICATIONS) {
     int lastX = interaction.getLastX();
     int canvasY = interaction.getMappedY();
@@ -3435,11 +3439,25 @@ void loop() {
           audio.playSound(SOUND_POWERUP);
           Serial.println(F("[Middle Button (GPIO 0)] Clicked on SCREEN_FACE -> Navigating to SCREEN_CLOCK"));
           notifyScreenAndExprSync();
+        } else if (currentScreen == SCREEN_CLOCK) {
+          // Navigating back to Luna Face Animation!
+          currentScreen = SCREEN_FACE;
+          face.setStateLabel("");
+          face.getRobotEyeAnim().play();
+          audio.playSound(SOUND_CHIRP);
+          Serial.println(F("[Middle Button (GPIO 0)] Clicked on SCREEN_CLOCK -> Navigating back to SCREEN_FACE"));
+          notifyScreenAndExprSync();
         } else if (gamePlaying && !isAsleep) {
           gamePlaying = false;
           gamesActive = true;
           audio.playSound(SOUND_POWERDOWN);
           Serial.println("[Boot Button] Short press in game -> Exited to arcade");
+        } else {
+          // In Menu, Pomodoro, Calendar, etc. -> Return to Clock
+          currentScreen = SCREEN_CLOCK;
+          audio.playSound(SOUND_CHIRP);
+          Serial.println(F("[Middle Button (GPIO 0)] Short press in app -> Returning to SCREEN_CLOCK"));
+          notifyScreenAndExprSync();
         }
       }
     }
