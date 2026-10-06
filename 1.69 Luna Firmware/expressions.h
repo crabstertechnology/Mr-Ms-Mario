@@ -1658,21 +1658,17 @@ public:
   void drawSettingsMenuLandscape(int option, bool selected, bool bleOn, int speed, int clockStyle, bool invertOn, int brightness) {
     display.fillScreen(0x0000); // AMOLED dark black background
 
-    // 1. Top Header (No pill tag, clean time/date + BLE/battery)
-    drawUnifiedTopHeader(rtcHour, rtcMinute, rtcDay, rtcDate);
-
-    // 2. 5 Modern Settings Cards (matching uploaded reference media_1791244035061.jpg)
-    const int CONTENT_TOP    = 34;
+    // 4 Modern Settings Cards (Display, Sounds & Vibration, Time & Date, Save & Exit)
+    const int CONTENT_TOP    = 46;
     const int ITEM_H         = 44;
-    const int ROW_H          = 48; // 44px + 4px gap
-    const int TOTAL_ITEMS    = 5;
+    const int ROW_H          = 50; // 44px + 6px gap
+    const int TOTAL_ITEMS    = 4;
     float     scrollPx       = settingsScrollPx;
 
     const char* titles[TOTAL_ITEMS] = {
       "Display",
       "Sounds & Vibration",
       "Time & Date",
-      "Battery",
       "Save & Exit"
     };
 
@@ -1680,16 +1676,12 @@ public:
     subTitles[0] = (brightness == 1) ? "Brightness: 33%" : ((brightness == 2) ? "Brightness: 66%" : "Brightness: 100%");
     subTitles[1] = silentMode ? "Volume: Muted" : "Volume: Active";
     subTitles[2] = is12HourFormat ? "12H Format (AM/PM)" : "24H Format (Military)";
-    int batPct = getBatteryPercentage(batteryVolts);
-    if (batPct <= 0 || batPct > 100) batPct = 85;
-    subTitles[3] = String(batPct) + "% - Optimal Health";
-    subTitles[4] = "Save settings & return to menu";
+    subTitles[3] = "Save & return"; // Short, clean subtitle fitting screen perfectly
 
     const uint16_t badgeColors[TOTAL_ITEMS] = {
       0x03FF, // Electric Blue for Display
       0x815E, // Purple for Sounds
       0x04F5, // Cyan for Time
-      0x0BE4, // Emerald Green for Battery
       0xF9A4  // Coral / Red-Orange for Save & Exit
     };
 
@@ -1703,7 +1695,7 @@ public:
       // Card Background (Dark AMOLED)
       display.fillRoundRect(12, yPos, 216, ITEM_H, 12, 0x0842);
       if (isCurrent) {
-        // Glowing electric blue border on active item (matching uploaded mockup)
+        // Glowing electric blue border on active item
         display.drawRoundRect(11, yPos - 1, 218, ITEM_H + 2, 13, 0x0215);
         display.drawRoundRect(12, yPos, 216, ITEM_H, 12, 0x03FF);
         display.drawRoundRect(13, yPos + 1, 214, ITEM_H - 2, 11, 0x03FF);
@@ -1743,13 +1735,7 @@ public:
           display.drawLine(bx + 15, by + 15, bx + 19, by + 15, TFT_WHITE);
           break;
 
-        case 3: // Battery
-          display.drawRoundRect(bx + 8, by + 10, 12, 10, 2, TFT_WHITE);
-          display.fillRect(bx + 20, by + 13, 2, 4, TFT_WHITE);
-          display.fillRect(bx + 10, by + 12, 8, 6, TFT_WHITE);
-          break;
-
-        case 4: // Save & Exit Checkmark
+        case 3: // Save & Exit Checkmark
           display.drawLine(bx + 8, by + 15, bx + 13, by + 20, TFT_WHITE);
           display.drawLine(bx + 9, by + 15, bx + 14, by + 20, TFT_WHITE);
           display.drawLine(bx + 13, by + 20, bx + 22, by + 10, TFT_WHITE);
@@ -1781,6 +1767,10 @@ public:
       display.drawLine(chX - 4, chY - 5, chX, chY, 0x8CD6);
       display.drawLine(chX, chY, chX - 4, chY + 5, 0x8CD6);
     }
+
+    // Lock Top Header Bar: Clean black barrier so scrolled content never clips/bleeds into status bar
+    display.fillRect(0, 0, SCREEN_WIDTH, 42, 0x0000);
+    drawUnifiedTopHeader(rtcHour, rtcMinute, rtcDay, rtcDate);
   }
 
   void drawPomodoroScreen(int remainingSec, int totalSec, int pomoState, int pomoMode, int completedSessions, int hour, int minute, const String& dayStr = "", const String& dateStr = "") {
@@ -1947,34 +1937,34 @@ public:
     // 2. Unified Top Header (Consistent across all screens)
     drawUnifiedTopHeader(hour, minute, dayStr, dateStr);
 
-    // 3. 6 App Launcher Tiles (2 Rows x 3 Columns) — 3px thick solid borders!
-    // Row 0: Y = 36, H = 58, r = 16
+    // 3. 6 App Launcher Tiles (2 Rows x 3 Columns) — Vertically centered on screen!
+    // Row 0: Y = 58, H = 58, r = 16
     // Col 0: Notifications (X = 14, W = 62)
-    display.fillRoundRect(14, 36, 62, 58, 16, 0x1A5D);
-    display.drawRoundRect(14, 36, 62, 58, 16, 0x4DDF);
-    display.drawRoundRect(15, 37, 60, 56, 15, 0x4DDF);
-    display.drawRoundRect(16, 38, 58, 54, 14, 0x4DDF);
-    int bcx = 45, bcy = 62;
+    display.fillRoundRect(14, 58, 62, 58, 16, 0x1A5D);
+    display.drawRoundRect(14, 58, 62, 58, 16, 0x4DDF);
+    display.drawRoundRect(15, 59, 60, 56, 15, 0x4DDF);
+    display.drawRoundRect(16, 60, 58, 54, 14, 0x4DDF);
+    int bcx = 45, bcy = 84;
     display.fillCircle(bcx, bcy - 5, 7, TFT_WHITE);
     display.fillRect(bcx - 9, bcy - 5, 19, 10, TFT_WHITE);
     display.fillRoundRect(bcx - 11, bcy + 4, 23, 4, 2, TFT_WHITE);
     display.fillCircle(bcx, bcy + 8, 3, TFT_WHITE);
-    display.fillCircle(65, 41, 9, 0xF800);
-    display.drawCircle(65, 41, 9, TFT_WHITE);
-    display.drawCircle(65, 41, 8, TFT_WHITE);
+    display.fillCircle(65, 63, 9, 0xF800);
+    display.drawCircle(65, 63, 9, TFT_WHITE);
+    display.drawCircle(65, 63, 8, TFT_WHITE);
     display.setTextSize(1);
     display.setTextColor(TFT_WHITE);
-    display.setCursor(63, 38);
+    display.setCursor(63, 60);
     display.print("3");
-    display.setCursor(10, 98);
+    display.setCursor(10, 120);
     display.print("Notifications");
 
     // Col 1: Calendar (X = 89, W = 62)
-    display.fillRoundRect(89, 36, 62, 58, 16, 0x0A28);
-    display.drawRoundRect(89, 36, 62, 58, 16, 0x2DBF);
-    display.drawRoundRect(90, 37, 60, 56, 15, 0x2DBF);
-    display.drawRoundRect(91, 38, 58, 54, 14, 0x2DBF);
-    int ccx = 120, ccy = 62;
+    display.fillRoundRect(89, 58, 62, 58, 16, 0x0A28);
+    display.drawRoundRect(89, 58, 62, 58, 16, 0x2DBF);
+    display.drawRoundRect(90, 59, 60, 56, 15, 0x2DBF);
+    display.drawRoundRect(91, 60, 58, 54, 14, 0x2DBF);
+    int ccx = 120, ccy = 84;
     display.fillRoundRect(ccx - 14, ccy - 12, 28, 25, 4, TFT_WHITE);
     display.fillRoundRect(ccx - 14, ccy - 12, 28, 9, 4, 0xF968);
     display.fillRect(ccx - 14, ccy - 7, 28, 4, 0xF968);
@@ -1985,15 +1975,15 @@ public:
     display.setCursor(ccx - 6, ccy - 1);
     display.print("31");
     display.setTextColor(TFT_WHITE);
-    display.setCursor(98, 98);
+    display.setCursor(98, 120);
     display.print("Calendar");
 
     // Col 2: Focus (X = 164, W = 62)
-    display.fillRoundRect(164, 36, 62, 58, 16, 0x3866);
-    display.drawRoundRect(164, 36, 62, 58, 16, 0xFA60);
-    display.drawRoundRect(165, 37, 60, 56, 15, 0xFA60);
-    display.drawRoundRect(166, 38, 58, 54, 14, 0xFA60);
-    int fcx = 195, fcy = 62;
+    display.fillRoundRect(164, 58, 62, 58, 16, 0x3866);
+    display.drawRoundRect(164, 58, 62, 58, 16, 0xFA60);
+    display.drawRoundRect(165, 59, 60, 56, 15, 0xFA60);
+    display.drawRoundRect(166, 60, 58, 54, 14, 0xFA60);
+    int fcx = 195, fcy = 84;
     display.fillCircle(fcx - 1, fcy + 1, 12, 0xF9A4);
     display.fillRoundRect(fcx - 3, fcy - 13, 6, 5, 2, 0x2E68);
     display.drawPixel(fcx - 6, fcy - 11, 0x2E68);
@@ -2004,19 +1994,19 @@ public:
     display.drawLine(fcx + 7, fcy + 6, fcx + 7, fcy + 2, 0x0000);
     display.drawLine(fcx + 7, fcy + 6, fcx + 9, fcy + 6, 0x0000);
     display.setTextColor(TFT_WHITE);
-    display.setCursor(179, 98);
+    display.setCursor(179, 120);
     display.print("Focus");
     display.setTextColor(0x7CDF);
-    display.setCursor(171, 108);
+    display.setCursor(171, 130);
     display.print("Pomodoro");
 
-    // Row 1: Y = 126, H = 58, r = 16
+    // Row 1: Y = 152, H = 58, r = 16
     // Col 0: Games (X = 14, W = 62)
-    display.fillRoundRect(14, 126, 62, 58, 16, 0x288C);
-    display.drawRoundRect(14, 126, 62, 58, 16, 0x89DF);
-    display.drawRoundRect(15, 127, 60, 56, 15, 0x89DF);
-    display.drawRoundRect(16, 128, 58, 54, 14, 0x89DF);
-    int gcx = 45, gcy = 152;
+    display.fillRoundRect(14, 152, 62, 58, 16, 0x288C);
+    display.drawRoundRect(14, 152, 62, 58, 16, 0x89DF);
+    display.drawRoundRect(15, 153, 60, 56, 15, 0x89DF);
+    display.drawRoundRect(16, 154, 58, 54, 14, 0x89DF);
+    int gcx = 45, gcy = 178;
     display.fillRoundRect(gcx - 16, gcy - 9, 32, 19, 7, 0xDF7E);
     display.drawRoundRect(gcx - 16, gcy - 9, 32, 19, 7, 0x0000);
     display.fillRect(gcx - 12, gcy - 3, 8, 4, 0x288C);
@@ -2026,15 +2016,15 @@ public:
     display.fillCircle(gcx + 6, gcy + 3, 2, 0x001F);
     display.fillCircle(gcx + 1, gcy, 2, 0xFFE0);
     display.setTextColor(TFT_WHITE);
-    display.setCursor(30, 188);
+    display.setCursor(30, 214);
     display.print("Games");
 
     // Col 1: QR (X = 89, W = 62)
-    display.fillRoundRect(89, 126, 62, 58, 16, 0x0287);
-    display.drawRoundRect(89, 126, 62, 58, 16, 0x0E1E);
-    display.drawRoundRect(90, 127, 60, 56, 15, 0x0E1E);
-    display.drawRoundRect(91, 128, 58, 54, 14, 0x0E1E);
-    int qcx = 120, qcy = 152;
+    display.fillRoundRect(89, 152, 62, 58, 16, 0x0287);
+    display.drawRoundRect(89, 152, 62, 58, 16, 0x0E1E);
+    display.drawRoundRect(90, 153, 60, 56, 15, 0x0E1E);
+    display.drawRoundRect(91, 154, 58, 54, 14, 0x0E1E);
+    int qcx = 120, qcy = 178;
     display.drawRect(qcx - 13, qcy - 13, 9, 9, 0x07F3);
     display.drawRect(qcx - 12, qcy - 12, 7, 7, 0x07F3);
     display.fillRect(qcx - 11, qcy - 11, 5, 5, TFT_WHITE);
@@ -2047,30 +2037,26 @@ public:
     display.fillRect(qcx - 1, qcy - 1, 4, 4, 0x07F3);
     display.fillRect(qcx + 5, qcy + 5, 5, 5, TFT_WHITE);
     display.setTextColor(TFT_WHITE);
-    display.setCursor(114, 188);
+    display.setCursor(114, 214);
     display.print("QR");
     display.setTextColor(0x7CDF);
-    display.setCursor(99, 198);
+    display.setCursor(99, 224);
     display.print("My Card");
 
     // Col 2: Settings (X = 164, W = 62)
-    display.fillRoundRect(164, 126, 62, 58, 16, 0x11AB);
-    display.drawRoundRect(164, 126, 62, 58, 16, 0x44DF);
-    display.drawRoundRect(165, 127, 60, 56, 15, 0x44DF);
-    display.drawRoundRect(166, 128, 58, 54, 14, 0x44DF);
-    int scx = 195, scy = 152;
+    display.fillRoundRect(164, 152, 62, 58, 16, 0x11AB);
+    display.drawRoundRect(164, 152, 62, 58, 16, 0x44DF);
+    display.drawRoundRect(165, 153, 60, 56, 15, 0x44DF);
+    display.drawRoundRect(166, 154, 58, 54, 14, 0x44DF);
+    int scx = 195, scy = 178;
     display.fillCircle(scx, scy, 11, 0xDF7E);
     display.fillRect(scx - 4, scy - 14, 8, 28, 0xDF7E);
     display.fillRect(scx - 14, scy - 4, 28, 8, 0xDF7E);
     display.fillCircle(scx, scy, 5, 0x11AB);
     display.fillCircle(scx, scy, 2, 0xDF7E);
     display.setTextColor(TFT_WHITE);
-    display.setCursor(171, 188);
+    display.setCursor(171, 214);
     display.print("Settings");
-
-    // 4. Page Indicator Dots (Y = 262)
-    display.fillCircle(114, 262, 4, 0x04FF);
-    display.fillCircle(126, 262, 4, 0x39E7);
   }
 
 
@@ -2185,207 +2171,342 @@ public:
 
   void drawMapScreenLandscape(int hour, int minute, bool is12Hour) {
     if (hasLiveMap && liveMapBuffer != nullptr && (millis() - lastLiveMapMs < 60000)) {
-      // Draw live Google Maps screen bitmap frame edge-to-edge!
       display.drawRGBBitmap(0, 0, liveMapBuffer, SCREEN_WIDTH, SCREEN_HEIGHT);
       return;
     }
 
-    ThemeColors theme = getTheme();
-    uint16_t themeAccent  = theme.accent;
-    uint16_t themeBg      = theme.bg;
-    uint16_t themeText    = theme.text;
-    uint16_t themeCardBg  = theme.cardBg;
-    uint16_t themeBorder  = theme.border;
-    uint16_t themeSubText = theme.subText;
-
-    // Full screen 240x280 edge-to-edge background (no status bar, no header row)
-    display.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, themeBg);
+    display.fillScreen(0x0000); // AMOLED pitch black background
     display.setTextWrap(false);
 
-    int cardX = 8;
-    int cardW = SCREEN_WIDTH - 16; // 224
+    // ── 1. Top Status Header ───────────────────────────────────────────────
+    // Left: Current Watch Time (Size 2, White)
+    char timeBuf[12];
+    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    display.setCursor(20, 8);
+    display.print(timeBuf);
 
-    // ── 1. Upper Maneuver & Distance Card (Y: 6..138, Height = 132) ──
-    int card1Y = 6;
-    int card1H = 132;
-    display.fillRoundRect(cardX, card1Y, cardW, card1H, 12, themeCardBg);
-    display.drawRoundRect(cardX, card1Y, cardW, card1H, 12, themeBorder);
+    // Center: [ 🧭 NAVIGATION ] Pill Badge (X=74, Y=6, W=88, H=20, R=10)
+    display.fillRoundRect(74, 6, 88, 20, 10, 0x0113); // Deep navy fill
+    display.drawRoundRect(74, 6, 88, 20, 10, 0x03FF); // Bright cyan/blue border
+    // Mini compass arrow
+    display.fillTriangle(84, 11, 80, 20, 84, 17, 0x07FF);
+    display.fillTriangle(84, 11, 88, 20, 84, 17, TFT_WHITE);
+    // Pill text
+    display.setTextSize(1);
+    display.setTextColor(0x07FF);
+    display.setCursor(92, 12);
+    display.print("NAVIGATION");
 
-    // Centered Maneuver Arrow
-    int cx = SCREEN_WIDTH / 2;
-    int cy = 38;
+    // Right: Bluetooth & Battery Status
+    display.drawLine(166, 8, 166, 18, TFT_WHITE);
+    display.drawLine(167, 8, 167, 18, TFT_WHITE);
+    display.drawLine(166, 8, 171, 11, TFT_WHITE);
+    display.drawLine(171, 11, 164, 15, TFT_WHITE);
+    display.drawLine(164, 11, 171, 15, TFT_WHITE);
+    display.drawLine(171, 15, 166, 18, TFT_WHITE);
+
+    int batPct = getBatteryPercentage(batteryVolts);
+    if (batPct <= 0 || batPct > 100) batPct = 85;
+    display.drawRoundRect(178, 8, 18, 10, 2, TFT_WHITE);
+    display.drawRoundRect(179, 9, 16, 8, 1, TFT_WHITE);
+    display.fillRect(196, 11, 2, 4, TFT_WHITE);
+    int barW = map(batPct, 0, 100, 0, 12);
+    if (barW < 2) barW = 2;
+    uint16_t batCol = (batPct > 20) ? 0x2E68 : 0xF900;
+    display.fillRect(181, 10, barW, 6, batCol);
+    display.setCursor(200, 9);
+    display.setTextColor(TFT_WHITE);
+    display.print(String(batPct) + "%");
+
+    // ── 2. Upper Turn & Distance Instruction Header ────────────────────────
+    String distStr = (mapDistance.length() == 0 || mapDistance == "--") ? "200 m" : mapDistance;
+    String roadStr = (mapRoad.length() == 0) ? "Anna Salai" : mapRoad;
 
     String dirUpper = mapDirection;
     dirUpper.toUpperCase();
+    dirUpper.trim();
 
-    if (dirUpper.indexOf("LEFT") >= 0) {
-      // Clean Left Turn Arrow
-      display.fillRect(cx + 8, cy - 6, 12, 34, themeAccent);
-      display.fillRect(cx - 22, cy - 6, 32, 12, themeAccent);
-      display.fillTriangle(cx - 36, cy,
-                           cx - 18, cy - 16,
-                           cx - 18, cy + 16, themeAccent);
+    // Determine Direction Type & Instruction Text
+    enum NavDirType {
+      NAV_STRAIGHT,
+      NAV_RIGHT,
+      NAV_LEFT,
+      NAV_UTURN,
+      NAV_ROUNDABOUT,
+      NAV_SLIGHT_RIGHT,
+      NAV_SLIGHT_LEFT,
+      NAV_SHARP_RIGHT,
+      NAV_SHARP_LEFT,
+      NAV_ARRIVE
+    };
 
+    NavDirType navType = NAV_RIGHT; // Default to Turn Right (matching mockup)
+    String turnText = "Turn Right";
+
+    if (dirUpper.indexOf("UTURN") >= 0 || dirUpper.indexOf("U-TURN") >= 0 || dirUpper.indexOf("REVERSE") >= 0) {
+      navType = NAV_UTURN;
+      turnText = "Make U-Turn";
+    } else if (dirUpper.indexOf("ROUNDABOUT") >= 0 || dirUpper.indexOf("ROTARY") >= 0 || dirUpper.indexOf("CIRCLE") >= 0 || dirUpper.indexOf("ROUND") >= 0) {
+      navType = NAV_ROUNDABOUT;
+      turnText = "Roundabout";
+    } else if (dirUpper.indexOf("SHARP_RIGHT") >= 0 || dirUpper.indexOf("SHARP RIGHT") >= 0) {
+      navType = NAV_SHARP_RIGHT;
+      turnText = "Sharp Right";
+    } else if (dirUpper.indexOf("SHARP_LEFT") >= 0 || dirUpper.indexOf("SHARP LEFT") >= 0) {
+      navType = NAV_SHARP_LEFT;
+      turnText = "Sharp Left";
+    } else if (dirUpper.indexOf("SLIGHT_RIGHT") >= 0 || dirUpper.indexOf("SLIGHT RIGHT") >= 0 || dirUpper.indexOf("KEEP_RIGHT") >= 0 || dirUpper.indexOf("KEEP RIGHT") >= 0 || dirUpper.indexOf("FORK_RIGHT") >= 0) {
+      navType = NAV_SLIGHT_RIGHT;
+      turnText = "Keep Right";
+    } else if (dirUpper.indexOf("SLIGHT_LEFT") >= 0 || dirUpper.indexOf("SLIGHT LEFT") >= 0 || dirUpper.indexOf("KEEP_LEFT") >= 0 || dirUpper.indexOf("KEEP LEFT") >= 0 || dirUpper.indexOf("FORK_LEFT") >= 0) {
+      navType = NAV_SLIGHT_LEFT;
+      turnText = "Keep Left";
+    } else if (dirUpper.indexOf("LEFT") >= 0) {
+      navType = NAV_LEFT;
+      turnText = "Turn Left";
     } else if (dirUpper.indexOf("RIGHT") >= 0) {
-      // Clean Right Turn Arrow
-      display.fillRect(cx - 20, cy - 6, 12, 34, themeAccent);
-      display.fillRect(cx - 10, cy - 6, 32, 12, themeAccent);
-      display.fillTriangle(cx + 36, cy,
-                           cx + 18, cy - 16,
-                           cx + 18, cy + 16, themeAccent);
-
-    } else if (dirUpper.indexOf("UTURN") >= 0 || dirUpper.indexOf("U-TURN") >= 0) {
-      // Clean U-Turn Arrow
-      display.fillCircle(cx, cy - 8, 20, themeAccent);
-      display.fillCircle(cx, cy - 8, 10, themeCardBg);
-      display.fillRect(cx - 24, cy - 8, 48, 24, themeCardBg);
-      display.fillRect(cx - 20, cy - 8, 10, 28, themeAccent);
-      display.fillRect(cx + 10, cy - 8, 10, 20, themeAccent);
-      display.fillTriangle(cx + 15, cy + 22,
-                           cx + 4, cy + 9,
-                           cx + 26, cy + 9, themeAccent);
-
-    } else if (dirUpper.indexOf("ROUNDABOUT") >= 0 || dirUpper.indexOf("ROUND") >= 0) {
-      // Roundabout circle with exit
-      display.fillCircle(cx, cy, 20, themeAccent);
-      display.fillCircle(cx, cy, 12, themeCardBg);
-      display.fillRect(cx - 4, cy + 12, 8, 16, themeAccent);
-      display.fillTriangle(cx + 18, cy - 22,
-                           cx + 5, cy - 16,
-                           cx + 18, cy - 9, themeAccent);
-
-    } else {
-      // STRAIGHT arrow pointing up
-      display.fillRect(cx - 6, cy - 8, 12, 36, themeAccent);
-      display.fillTriangle(cx, cy - 28,
-                           cx - 20, cy - 6,
-                           cx + 20, cy - 6, themeAccent);
+      navType = NAV_RIGHT;
+      turnText = "Turn Right";
+    } else if (dirUpper.indexOf("ARRIVE") >= 0 || dirUpper.indexOf("DEST") >= 0) {
+      navType = NAV_ARRIVE;
+      turnText = "Destination Ahead";
+    } else if (dirUpper.indexOf("STRAIGHT") >= 0 || dirUpper.indexOf("CONTINUE") >= 0 || dirUpper.indexOf("AHEAD") >= 0) {
+      navType = NAV_STRAIGHT;
+      turnText = "Continue Straight";
     }
 
-    // Next Turn Distance — Large bold Size 3 at Y: 74
+    // Distance in Size 3 Bold White at Y: 36
     display.setTextSize(3);
-    display.setTextColor(themeText, themeCardBg);
-    String distStr = (mapDistance == "" || mapDistance == "--") ? "---" : mapDistance;
+    display.setTextColor(TFT_WHITE);
     int distW = distStr.length() * 18;
     int distX = (SCREEN_WIDTH - distW) / 2;
-    if (distX < cardX + 6) distX = cardX + 6;
-    display.setCursor(distX, 74);
+    display.setCursor(distX, 36);
     display.print(distStr);
 
-    // Turn Direction / Road Instruction at Y: 106
-    String dirLabel = mapRoad;
-    if (dirLabel.length() == 0) {
-      if (dirUpper.indexOf("LEFT") >= 0) dirLabel = "Turn Left";
-      else if (dirUpper.indexOf("RIGHT") >= 0) dirLabel = "Turn Right";
-      else if (dirUpper.indexOf("UTURN") >= 0 || dirUpper.indexOf("U-TURN") >= 0) dirLabel = "Make U-Turn";
-      else if (dirUpper.indexOf("ROUNDABOUT") >= 0 || dirUpper.indexOf("ROUND") >= 0) dirLabel = "Roundabout";
-      else dirLabel = "Continue Straight";
-    }
-
-    if (dirLabel.length() <= 16) {
-      display.setTextSize(2);
-      display.setTextColor(themeAccent, themeCardBg);
-      int lblW = dirLabel.length() * 12;
-      int lblX = (SCREEN_WIDTH - lblW) / 2;
-      if (lblX < cardX + 6) lblX = cardX + 6;
-      display.setCursor(lblX, 106);
-      display.print(dirLabel);
-    } else {
-      display.setTextSize(1);
-      display.setTextColor(themeAccent, themeCardBg);
-      int lblW = dirLabel.length() * 6;
-      int lblX = (SCREEN_WIDTH - lblW) / 2;
-      if (lblX < cardX + 6) lblX = cardX + 6;
-      display.setCursor(lblX, 110);
-      display.print(dirLabel);
-    }
-
-    // ── 2. Route Telemetry Card (Y: 144..240, Height = 96) ───────────
-    int card2Y = 144;
-    int card2H = 96;
-    display.fillRoundRect(cardX, card2Y, cardW, card2H, 12, themeCardBg);
-    display.drawRoundRect(cardX, card2Y, cardW, card2H, 12, themeBorder);
-
-    // Subtitle badge "REMAINING TRIP" at Y: 154
-    display.setTextSize(1);
-    display.setTextColor(themeSubText, themeCardBg);
-    const char* remTxt = "REMAINING TRIP";
-    int remW = strlen(remTxt) * 6;
-    display.setCursor((SCREEN_WIDTH - remW) / 2, 154);
-    display.print(remTxt);
-
-    // Route Summary (Total Minutes & Total Kilometers) at Y: 170
-    String summaryStr = "";
-    if (mapTotalTime.length() > 0 && mapTotalDist.length() > 0) {
-      summaryStr = mapTotalTime + " - " + mapTotalDist;
-    } else if (mapTotalTime.length() > 0) {
-      summaryStr = mapTotalTime;
-    } else if (mapTotalDist.length() > 0) {
-      summaryStr = mapTotalDist;
-    } else if (mapDescription.length() > 0) {
-      summaryStr = mapDescription;
-    } else {
-      summaryStr = "GPS SYNC";
-    }
-
-    if (summaryStr.length() <= 16) {
-      display.setTextSize(2);
-      display.setTextColor(themeText, themeCardBg);
-      int sW = summaryStr.length() * 12;
-      int sX = (SCREEN_WIDTH - sW) / 2;
-      if (sX < cardX + 6) sX = cardX + 6;
-      display.setCursor(sX, 170);
-      display.print(summaryStr);
-    } else {
-      display.setTextSize(1);
-      display.setTextColor(themeText, themeCardBg);
-      int sW = summaryStr.length() * 6;
-      int sX = (SCREEN_WIDTH - sW) / 2;
-      if (sX < cardX + 6) sX = cardX + 6;
-      display.setCursor(sX, 174);
-      display.print(summaryStr);
-    }
-
-    // Divider Line at Y: 196
-    display.drawFastHLine(cardX + 16, 196, cardW - 32, themeBorder);
-
-    // Destination Arrival / ETA at Y: 206
-    String etaStr = (mapEta.length() > 0) ? ("ETA " + mapEta) : "ON ROUTE";
+    // Turn Text in Size 2 Bold White/Cyan at Y: 66
     display.setTextSize(2);
-    display.setTextColor(themeAccent, themeCardBg);
-    int eW = etaStr.length() * 12;
-    int eX = (SCREEN_WIDTH - eW) / 2;
-    if (eX < cardX + 6) eX = cardX + 6;
-    display.setCursor(eX, 206);
-    display.print(etaStr);
+    display.setTextColor(TFT_WHITE);
+    int turnW = turnText.length() * 12;
+    int turnX = (SCREEN_WIDTH - turnW) / 2;
+    if (turnX < 8) turnX = 8;
+    display.setCursor(turnX, 66);
+    display.print(turnText);
 
-    // ── 3. Bottom Live & Watch Time Bar (Y: 246..274, Height = 28) ───
-    int footY = 246;
-    int footH = 28;
-    display.fillRoundRect(cardX, footY, cardW, footH, 8, themeCardBg);
-    display.drawRoundRect(cardX, footY, cardW, footH, 8, themeBorder);
-
-    // Left: Live Navigation Indicator Dot + Label
-    display.fillCircle(cardX + 12, footY + 14, 3, 0x07E0); // Bright green dot
+    // Road Name in Size 1 Soft Cyan/Grey at Y: 86
     display.setTextSize(1);
-    display.setTextColor(themeSubText, themeCardBg);
-    display.setCursor(cardX + 20, footY + 10);
-    display.print("MAPS LIVE");
+    display.setTextColor(0x8CD6);
+    int roadW = roadStr.length() * 6;
+    int roadX = (SCREEN_WIDTH - roadW) / 2;
+    if (roadX < 8) roadX = 8;
+    display.setCursor(roadX, 86);
+    display.print(roadStr);
 
-    // Right: Current Watch Time
-    char timeBuf[12];
-    if (is12Hour) {
-      int h12 = hour % 12;
-      if (h12 == 0) h12 = 12;
-      snprintf(timeBuf, sizeof(timeBuf), "%d:%02d %s", h12, minute, (hour >= 12) ? "PM" : "AM");
-    } else {
-      snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
+    // ── 3. 3D Perspective Road Grid & Maneuver Visualization ──────────────
+    // Background stylized street grid lines (deep subtle navy)
+    display.drawLine(20, 80, 65, 145, 0x0905);
+    display.drawLine(65, 145, 30, 212, 0x0905);
+    display.drawLine(210, 75, 175, 140, 0x0905);
+    display.drawLine(175, 140, 215, 212, 0x0905);
+    display.drawLine(25, 120, 215, 120, 0x08A4);
+    display.drawLine(15, 165, 225, 165, 0x08A4);
+    display.drawLine(65, 145, 105, 145, 0x0905);
+    display.drawLine(175, 140, 215, 140, 0x0905);
+
+    // Main perspective road surface (trapezoid from Y=145 to Y=212)
+    for (int ry = 145; ry <= 212; ry++) {
+      float t = (float)(ry - 145) / 67.0f;
+      int rw = (int)(36.0f + t * 58.0f); // road width expands from 36 to 94
+      display.drawFastHLine(120 - rw / 2, ry, rw, 0x00E5);
     }
-    int tW = strlen(timeBuf) * 6;
+    // Road glowing shoulder lines
+    display.drawLine(102, 145, 73, 212, 0x0276);
+    display.drawLine(103, 145, 74, 212, 0x031B);
+    display.drawLine(138, 145, 167, 212, 0x0276);
+    display.drawLine(137, 145, 166, 212, 0x031B);
+
+    // Center dashed lane markings
+    display.drawFastVLine(120, 148, 5, 0x03FF);
+    display.drawFastVLine(120, 160, 7, 0x03FF);
+    display.drawFastVLine(120, 175, 10, 0x03FF);
+
+    // Glowing Maneuver Route Paths (Thick electric blue/cyan gradient)
+    const uint16_t COLOR_GLOW = 0x01D7;
+    const uint16_t COLOR_CORE = 0x04DF;
+    const uint16_t COLOR_TIP  = 0x07FF;
+
+    if (navType == NAV_RIGHT || navType == NAV_SHARP_RIGHT) {
+      // ── RIGHT TURN ARROW (matches uploaded mockup media_1791248870351.jpg) ──
+      // Outer glow stem
+      display.fillRoundRect(110, 126, 20, 60, 6, COLOR_GLOW);
+      display.fillRoundRect(115, 118, 48, 20, 6, COLOR_GLOW);
+      // Bright core stem
+      display.fillRect(113, 134, 14, 52, COLOR_CORE);
+      // 90° smooth bend right
+      display.fillCircle(127, 134, 14, COLOR_CORE);
+      display.fillCircle(120, 141, 7, 0x00E5); // inner curve cutout
+      display.fillRect(127, 120, 28, 14, COLOR_CORE);
+      // Arrow head pointing right
+      display.fillTriangle(176, 127, 150, 108, 150, 146, COLOR_TIP);
+      display.drawTriangle(177, 127, 149, 107, 149, 147, TFT_WHITE);
+
+    } else if (navType == NAV_LEFT || navType == NAV_SHARP_LEFT) {
+      // ── LEFT TURN ARROW ──
+      // Outer glow stem
+      display.fillRoundRect(110, 126, 20, 60, 6, COLOR_GLOW);
+      display.fillRoundRect(77, 118, 48, 20, 6, COLOR_GLOW);
+      // Bright core stem
+      display.fillRect(113, 134, 14, 52, COLOR_CORE);
+      // 90° smooth bend left
+      display.fillCircle(113, 134, 14, COLOR_CORE);
+      display.fillCircle(120, 141, 7, 0x00E5);
+      display.fillRect(85, 120, 28, 14, COLOR_CORE);
+      // Arrow head pointing left
+      display.fillTriangle(64, 127, 90, 108, 90, 146, COLOR_TIP);
+      display.drawTriangle(63, 127, 91, 107, 91, 147, TFT_WHITE);
+
+    } else if (navType == NAV_UTURN) {
+      // ── U-TURN 180° LOOP ARROW (Requested in user audio) ──
+      // Right entry stem from car
+      display.fillRoundRect(126, 130, 16, 56, 4, COLOR_GLOW);
+      display.fillRect(127, 132, 14, 54, COLOR_CORE);
+      // Arched 180° top semicircle
+      display.fillCircle(119, 130, 22, COLOR_CORE);
+      display.fillCircle(119, 130, 8, 0x0000); // center hollow
+      display.fillRect(97, 130, 44, 22, 0x0000);
+      // Left exit stem going down
+      display.fillRoundRect(96, 130, 16, 26, 4, COLOR_GLOW);
+      display.fillRect(97, 130, 14, 26, COLOR_CORE);
+      // Downward arrow head
+      display.fillTriangle(104, 178, 88, 154, 120, 154, COLOR_TIP);
+      display.drawTriangle(104, 179, 87, 153, 121, 153, TFT_WHITE);
+
+    } else if (navType == NAV_ROUNDABOUT) {
+      // ── ROUNDABOUT / ROTARY ARROW (Requested in user audio) ──
+      // Entry stem from car
+      display.fillRoundRect(113, 156, 14, 30, 4, COLOR_CORE);
+      // Roundabout circle ring
+      display.fillCircle(120, 130, 25, COLOR_GLOW);
+      display.fillCircle(120, 130, 23, COLOR_CORE);
+      display.fillCircle(120, 130, 12, 0x0842); // Roundabout center island
+      display.drawCircle(120, 130, 12, 0x03FF);
+      // Mini roundabout rotary icon in center island
+      display.drawCircle(120, 130, 5, TFT_WHITE);
+      // Exit branch curving towards upper-right
+      display.fillRoundRect(134, 108, 18, 18, 4, COLOR_CORE);
+      // Arrow head pointing to exit lane (diagonal up-right)
+      display.fillTriangle(168, 106, 146, 104, 158, 126, COLOR_TIP);
+      display.drawTriangle(169, 105, 145, 103, 159, 127, TFT_WHITE);
+
+    } else if (navType == NAV_SLIGHT_RIGHT) {
+      // ── SLIGHT RIGHT / KEEP RIGHT ARROW ──
+      display.fillRect(113, 150, 14, 36, COLOR_CORE);
+      // Angled branch 45°
+      for (int i = 0; i < 14; i++) {
+        display.drawLine(113 + i, 152, 148 + i, 120, COLOR_CORE);
+      }
+      display.fillTriangle(166, 106, 144, 106, 158, 128, COLOR_TIP);
+      display.drawTriangle(167, 105, 143, 105, 159, 129, TFT_WHITE);
+
+    } else if (navType == NAV_SLIGHT_LEFT) {
+      // ── SLIGHT LEFT / KEEP LEFT ARROW ──
+      display.fillRect(113, 150, 14, 36, COLOR_CORE);
+      // Angled branch 45°
+      for (int i = 0; i < 14; i++) {
+        display.drawLine(113 + i, 152, 78 + i, 120, COLOR_CORE);
+      }
+      display.fillTriangle(74, 106, 82, 128, 96, 106, COLOR_TIP);
+      display.drawTriangle(73, 105, 81, 129, 97, 105, TFT_WHITE);
+
+    } else if (navType == NAV_ARRIVE) {
+      // ── ARRIVE / DESTINATION MARKER ──
+      display.fillRect(113, 145, 14, 41, COLOR_CORE);
+      // Destination flag & beacon
+      display.drawCircle(120, 142, 16, 0x0215);
+      display.drawCircle(120, 142, 10, 0x03FF);
+      display.fillCircle(120, 142, 4, 0x07FF);
+      display.drawFastVLine(118, 108, 36, TFT_WHITE);
+      display.fillRect(119, 108, 18, 12, 0x07FF);
+      display.drawRect(119, 108, 18, 12, TFT_WHITE);
+
+    } else {
+      // ── STRAIGHT / CONTINUE ARROW ──
+      display.fillRoundRect(111, 122, 18, 64, 4, COLOR_GLOW);
+      display.fillRect(113, 124, 14, 62, COLOR_CORE);
+      display.fillTriangle(120, 100, 100, 126, 140, 126, COLOR_TIP);
+      display.drawTriangle(120, 99, 99, 127, 141, 127, TFT_WHITE);
+    }
+
+    // Glowing Vehicle Position Cursor ▲ at (120, 192)
+    display.fillTriangle(120, 184, 110, 200, 120, 195, 0x07FF);
+    display.fillTriangle(120, 184, 130, 200, 120, 195, 0x07FF);
+    display.drawLine(120, 183, 109, 201, TFT_WHITE);
+    display.drawLine(120, 183, 131, 201, TFT_WHITE);
+    display.drawLine(109, 201, 120, 196, TFT_WHITE);
+    display.drawLine(131, 201, 120, 196, TFT_WHITE);
+
+    // ── 4. Bottom 3-Column Telemetry Card (Y: 214..272, Height = 58) ───────
+    int cX = 12;
+    int cY = 214;
+    int cW = 216;
+    int cH = 58;
+    display.fillRoundRect(cX, cY, cW, cH, 12, 0x0842); // Dark card fill
+    display.drawRoundRect(cX, cY, cW, cH, 12, 0x1928); // Subtle border
+
+    // Vertical column divider lines
+    display.drawFastVLine(cX + 72, cY + 8, cH - 16, 0x1928);
+    display.drawFastVLine(cX + 144, cY + 8, cH - 16, 0x1928);
+
+    String etaVal  = (mapEta.length() == 0) ? "10:42" : mapEta;
+    String remVal  = (mapTotalDist.length() == 0) ? "1.8 km" : mapTotalDist;
+    String leftVal = (mapTotalTime.length() == 0) ? "14 min" : mapTotalTime;
+
+    // Column 1: [ 🕒 ] ETA (Center X = 48)
+    display.drawCircle(48, cY + 11, 5, 0x8CD6);
+    display.drawLine(48, cY + 11, 48, cY + 8, 0x8CD6);
+    display.drawLine(48, cY + 11, 51, cY + 11, 0x8CD6);
     display.setTextSize(1);
-    display.setTextColor(themeText, themeCardBg);
-    display.setCursor(cardX + cardW - 10 - tW, footY + 10);
-    display.print(timeBuf);
+    display.setTextColor(0x8CD6);
+    display.setCursor(39, cY + 20);
+    display.print("ETA");
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    int eW = etaVal.length() * 12;
+    int eX = 48 - (eW / 2);
+    display.setCursor(eX, cY + 34);
+    display.print(etaVal);
+
+    // Column 2: [ /|\ ] Remaining (Center X = 120)
+    display.drawLine(115, cY + 15, 117, cY + 7, 0x8CD6);
+    display.drawLine(125, cY + 15, 123, cY + 7, 0x8CD6);
+    display.drawFastVLine(120, cY + 8, 6, 0x8CD6);
+    display.setTextSize(1);
+    display.setTextColor(0x8CD6);
+    int rLblW = 54;
+    display.setCursor(120 - rLblW / 2, cY + 20);
+    display.print("Remaining");
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    int rW = remVal.length() * 12;
+    int rX = 120 - (rW / 2);
+    display.setCursor(rX, cY + 34);
+    display.print(remVal);
+
+    // Column 3: [ 🏁 ] Time Left (Center X = 192)
+    display.drawFastVLine(188, cY + 7, 9, 0x8CD6);
+    display.fillRect(189, cY + 7, 6, 5, 0x8CD6);
+    display.setTextSize(1);
+    display.setTextColor(0x8CD6);
+    int tLblW = 54;
+    display.setCursor(192 - tLblW / 2, cY + 20);
+    display.print("Time Left");
+    display.setTextSize(2);
+    display.setTextColor(TFT_WHITE);
+    int lW = leftVal.length() * 12;
+    int lX = 192 - (lW / 2);
+    display.setCursor(lX, cY + 34);
+    display.print(leftVal);
   }
 
   // Optimized bold outlined text — 3 shadow passes + 1 main = 4 total (was 6)

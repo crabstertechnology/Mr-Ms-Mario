@@ -2596,12 +2596,7 @@ void adjustOption(int option, int direction) {
       Serial.printf("[SETTINGS] 12H Format toggled -> %d\n", is12HourFormat);
       break;
 
-    case 3: // Battery
-      audio.playSound(SOUND_CHIRP);
-      Serial.printf("[SETTINGS] Battery status checked: %d mV\n", (int)(batteryVolts * 1000.0f));
-      break;
-
-    case 4: // Save & Exit
+    case 3: // Save & Exit
       {
         preferences.begin("luna", false);
         preferences.putBool("ble",       bleActive);
@@ -2633,6 +2628,42 @@ void adjustOption(int option, int direction) {
 // =============================================================================
 void handleBtn1Single() {
   lastInteractionTime = millis();
+
+  // ── Universal Bottom-Left Corner Back Navigation ────────────────────────
+  // Tapping bottom-left corner (X <= 45, Y >= 240) exits to previous parent screen (invisible gesture)
+  int touchCornerX = interaction.getLastX();
+  int touchCornerY = interaction.getMappedY();
+  if (touchCornerX <= 45 && touchCornerY >= 240) {
+    if (currentScreen == SCREEN_SETTINGS || currentScreen == SCREEN_POMODORO || 
+        currentScreen == SCREEN_CALENDAR || currentScreen == SCREEN_NOTIFICATIONS || 
+        currentScreen == SCREEN_GAMES || currentScreen == SCREEN_CARD ||
+        currentScreen == SCREEN_MAPS || mapsActive) {
+      currentScreen = SCREEN_MENU;
+      mapsActive = false;
+      settingsActive = false;
+      gamesActive = false;
+      gamePlaying = false;
+      notificationsActive = false;
+      notificationSelected = false;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[CORNER BACK] App -> SCREEN_MENU"));
+      notifyScreenAndExprSync();
+      return;
+    } else if (currentScreen == SCREEN_MENU) {
+      currentScreen = SCREEN_CLOCK;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[CORNER BACK] SCREEN_MENU -> SCREEN_CLOCK"));
+      notifyScreenAndExprSync();
+      return;
+    } else if (currentScreen == SCREEN_CLOCK) {
+      currentScreen = SCREEN_FACE;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[CORNER BACK] SCREEN_CLOCK -> SCREEN_FACE"));
+      notifyScreenAndExprSync();
+      return;
+    }
+  }
+
   if (mapsActive) return;
 
   // Dismiss popup toast on tap (or open Quick Reply if WhatsApp reply button tapped)
@@ -2661,46 +2692,13 @@ void handleBtn1Single() {
     currentScreen = SCREEN_FACE;
   }
 
-  // ── Universal Bottom-Left Corner Back Navigation ────────────────────────
-  // Tapping bottom-left corner (X <= 45, Y >= 240) exits to previous parent screen (invisible gesture)
-  int touchCornerX = interaction.getLastX();
-  int touchCornerY = interaction.getMappedY();
-  if (touchCornerX <= 45 && touchCornerY >= 240) {
-    if (currentScreen == SCREEN_SETTINGS || currentScreen == SCREEN_POMODORO || 
-        currentScreen == SCREEN_CALENDAR || currentScreen == SCREEN_NOTIFICATIONS || 
-        currentScreen == SCREEN_GAMES || currentScreen == SCREEN_CARD) {
-      currentScreen = SCREEN_MENU;
-      settingsActive = false;
-      gamesActive = false;
-      gamePlaying = false;
-      notificationsActive = false;
-      notificationSelected = false;
-      audio.playSound(SOUND_CHIRP);
-      Serial.println(F("[CORNER BACK] App -> SCREEN_MENU"));
-      notifyScreenAndExprSync();
-      return;
-    } else if (currentScreen == SCREEN_MENU) {
-      currentScreen = SCREEN_CLOCK;
-      audio.playSound(SOUND_CHIRP);
-      Serial.println(F("[CORNER BACK] SCREEN_MENU -> SCREEN_CLOCK"));
-      notifyScreenAndExprSync();
-      return;
-    } else if (currentScreen == SCREEN_CLOCK) {
-      currentScreen = SCREEN_FACE;
-      audio.playSound(SOUND_CHIRP);
-      Serial.println(F("[CORNER BACK] SCREEN_CLOCK -> SCREEN_FACE"));
-      notifyScreenAndExprSync();
-      return;
-    }
-  }
-
   // Tapping on App Launcher Grid Menu (SCREEN_MENU)
   if (currentScreen == SCREEN_MENU) {
     int curX = interaction.getLastX();
     int curY = interaction.getMappedY();
     Serial.printf("[MENU TAP] X=%d, Y=%d\n", curX, curY);
 
-    if (curY >= 30 && curY <= 120) {
+    if (curY >= 48 && curY <= 140) {
       if (curX < 76) {
         // App 0: Notifications
         currentScreen = SCREEN_NOTIFICATIONS;
@@ -2720,7 +2718,7 @@ void handleBtn1Single() {
         audio.playSound(SOUND_POWERUP);
         Serial.println("[MENU] -> POMODORO");
       }
-    } else if (curY > 120 && curY <= 225) {
+    } else if (curY > 140 && curY <= 235) {
       if (curX < 76) {
         // App 3: Games
         currentScreen = SCREEN_GAMES;
@@ -2765,9 +2763,9 @@ void handleBtn1Single() {
       return;
     }
     int canvasY = interaction.getMappedY();
-    if (canvasY >= 32 && canvasY <= 276) {
-      int optIdx = (int)((canvasY - 34 + settingsScrollPx) / 48.0f);
-      if (optIdx >= 0 && optIdx < 5) {
+    if (canvasY >= 40 && canvasY <= 265) {
+      int optIdx = (int)((canvasY - 46 + settingsScrollPx) / 50.0f);
+      if (optIdx >= 0 && optIdx < 4) {
         menuOption = optIdx;
         optionSelected = true;
         adjustOption(optIdx, 1);
@@ -3736,7 +3734,7 @@ void loop() {
 
     // — Settings scroll —
     if (currentScreen == SCREEN_SETTINGS && settingsActive) {
-      const float SETTINGS_MAX = 20.0f;  // calibrated for 5 modern AMOLED cards (240px)
+      const float SETTINGS_MAX = 0.0f;  // 4 modern AMOLED cards fit entirely on screen (200px)
       if (inScroll) {
         if (settingsWasScroll) {
           float dy = (float)(curY - settingsPrevY);
