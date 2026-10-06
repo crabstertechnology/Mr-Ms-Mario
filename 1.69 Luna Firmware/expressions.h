@@ -2175,7 +2175,7 @@ public:
       return;
     }
 
-    display.fillScreen(0x0000); // AMOLED pitch black background
+    display.fillScreen(0x0000); // Pure AMOLED black background (no cluttered road grid)
     display.setTextWrap(false);
 
     // ── 1. Top Status Header ───────────────────────────────────────────────
@@ -2190,10 +2190,8 @@ public:
     // Center: [ 🧭 NAVIGATION ] Pill Badge (X=74, Y=6, W=88, H=20, R=10)
     display.fillRoundRect(74, 6, 88, 20, 10, 0x0113); // Deep navy fill
     display.drawRoundRect(74, 6, 88, 20, 10, 0x03FF); // Bright cyan/blue border
-    // Mini compass arrow
     display.fillTriangle(84, 11, 80, 20, 84, 17, 0x07FF);
     display.fillTriangle(84, 11, 88, 20, 84, 17, TFT_WHITE);
-    // Pill text
     display.setTextSize(1);
     display.setTextColor(0x07FF);
     display.setCursor(92, 12);
@@ -2285,7 +2283,7 @@ public:
     display.setCursor(distX, 36);
     display.print(distStr);
 
-    // Turn Text in Size 2 Bold White/Cyan at Y: 66
+    // Turn Text in Size 2 Bold White at Y: 66
     display.setTextSize(2);
     display.setTextColor(TFT_WHITE);
     int turnW = turnText.length() * 12;
@@ -2303,210 +2301,197 @@ public:
     display.setCursor(roadX, 86);
     display.print(roadStr);
 
-    // ── 3. 3D Perspective Road Grid & Maneuver Visualization ──────────────
-    // Background stylized street grid lines (deep subtle navy)
-    display.drawLine(20, 80, 65, 145, 0x0905);
-    display.drawLine(65, 145, 30, 212, 0x0905);
-    display.drawLine(210, 75, 175, 140, 0x0905);
-    display.drawLine(175, 140, 215, 212, 0x0905);
-    display.drawLine(25, 120, 215, 120, 0x08A4);
-    display.drawLine(15, 165, 225, 165, 0x08A4);
-    display.drawLine(65, 145, 105, 145, 0x0905);
-    display.drawLine(175, 140, 215, 140, 0x0905);
-
-    // Main perspective road surface (trapezoid from Y=145 to Y=212)
-    for (int ry = 145; ry <= 212; ry++) {
-      float t = (float)(ry - 145) / 67.0f;
-      int rw = (int)(36.0f + t * 58.0f); // road width expands from 36 to 94
-      display.drawFastHLine(120 - rw / 2, ry, rw, 0x00E5);
-    }
-    // Road glowing shoulder lines
-    display.drawLine(102, 145, 73, 212, 0x0276);
-    display.drawLine(103, 145, 74, 212, 0x031B);
-    display.drawLine(138, 145, 167, 212, 0x0276);
-    display.drawLine(137, 145, 166, 212, 0x031B);
-
-    // Center dashed lane markings
-    display.drawFastVLine(120, 148, 5, 0x03FF);
-    display.drawFastVLine(120, 160, 7, 0x03FF);
-    display.drawFastVLine(120, 175, 10, 0x03FF);
-
-    // Glowing Maneuver Route Paths (Thick electric blue/cyan gradient)
+    // ── 3. Prominent Direction Arrow (Clean AMOLED Black Background) ───────
+    // Background graphics, 3D perspective road lines, and vehicle cursor removed as requested
     const uint16_t COLOR_GLOW = 0x01D7;
     const uint16_t COLOR_CORE = 0x04DF;
     const uint16_t COLOR_TIP  = 0x07FF;
 
     if (navType == NAV_RIGHT || navType == NAV_SHARP_RIGHT) {
-      // ── RIGHT TURN ARROW (matches uploaded mockup media_1791248870351.jpg) ──
-      // Outer glow stem
-      display.fillRoundRect(110, 126, 20, 60, 6, COLOR_GLOW);
-      display.fillRoundRect(115, 118, 48, 20, 6, COLOR_GLOW);
-      // Bright core stem
-      display.fillRect(113, 134, 14, 52, COLOR_CORE);
-      // 90° smooth bend right
-      display.fillCircle(127, 134, 14, COLOR_CORE);
-      display.fillCircle(120, 141, 7, 0x00E5); // inner curve cutout
-      display.fillRect(127, 120, 28, 14, COLOR_CORE);
-      // Arrow head pointing right
-      display.fillTriangle(176, 127, 150, 108, 150, 146, COLOR_TIP);
-      display.drawTriangle(177, 127, 149, 107, 149, 147, TFT_WHITE);
+      // ── RIGHT TURN ARROW ──
+      display.fillRoundRect(106, 126, 22, 62, 6, COLOR_GLOW);
+      display.fillRoundRect(112, 120, 52, 22, 6, COLOR_GLOW);
+      display.fillRect(110, 134, 16, 52, COLOR_CORE);
+      display.fillCircle(126, 134, 16, COLOR_CORE);
+      display.fillCircle(118, 142, 8, 0x0000);
+      display.fillRect(126, 120, 30, 16, COLOR_CORE);
+      display.fillTriangle(176, 128, 148, 108, 148, 148, COLOR_TIP);
+      display.drawTriangle(177, 128, 147, 107, 147, 149, TFT_WHITE);
 
     } else if (navType == NAV_LEFT || navType == NAV_SHARP_LEFT) {
       // ── LEFT TURN ARROW ──
-      // Outer glow stem
-      display.fillRoundRect(110, 126, 20, 60, 6, COLOR_GLOW);
-      display.fillRoundRect(77, 118, 48, 20, 6, COLOR_GLOW);
-      // Bright core stem
-      display.fillRect(113, 134, 14, 52, COLOR_CORE);
-      // 90° smooth bend left
-      display.fillCircle(113, 134, 14, COLOR_CORE);
-      display.fillCircle(120, 141, 7, 0x00E5);
-      display.fillRect(85, 120, 28, 14, COLOR_CORE);
-      // Arrow head pointing left
-      display.fillTriangle(64, 127, 90, 108, 90, 146, COLOR_TIP);
-      display.drawTriangle(63, 127, 91, 107, 91, 147, TFT_WHITE);
+      display.fillRoundRect(112, 126, 22, 62, 6, COLOR_GLOW);
+      display.fillRoundRect(76, 120, 52, 22, 6, COLOR_GLOW);
+      display.fillRect(114, 134, 16, 52, COLOR_CORE);
+      display.fillCircle(114, 134, 16, COLOR_CORE);
+      display.fillCircle(122, 142, 8, 0x0000);
+      display.fillRect(84, 120, 30, 16, COLOR_CORE);
+      display.fillTriangle(64, 128, 92, 108, 92, 148, COLOR_TIP);
+      display.drawTriangle(63, 128, 93, 107, 93, 149, TFT_WHITE);
 
     } else if (navType == NAV_UTURN) {
-      // ── U-TURN 180° LOOP ARROW (Requested in user audio) ──
-      // Right entry stem from car
-      display.fillRoundRect(126, 130, 16, 56, 4, COLOR_GLOW);
-      display.fillRect(127, 132, 14, 54, COLOR_CORE);
-      // Arched 180° top semicircle
-      display.fillCircle(119, 130, 22, COLOR_CORE);
-      display.fillCircle(119, 130, 8, 0x0000); // center hollow
-      display.fillRect(97, 130, 44, 22, 0x0000);
-      // Left exit stem going down
-      display.fillRoundRect(96, 130, 16, 26, 4, COLOR_GLOW);
-      display.fillRect(97, 130, 14, 26, COLOR_CORE);
-      // Downward arrow head
-      display.fillTriangle(104, 178, 88, 154, 120, 154, COLOR_TIP);
-      display.drawTriangle(104, 179, 87, 153, 121, 153, TFT_WHITE);
+      // ── U-TURN 180° LOOP ARROW ──
+      display.fillRoundRect(128, 130, 18, 56, 4, COLOR_GLOW);
+      display.fillRect(129, 132, 16, 54, COLOR_CORE);
+      display.fillCircle(120, 130, 25, COLOR_CORE);
+      display.fillCircle(120, 130, 9, 0x0000);
+      display.fillRect(95, 130, 50, 25, 0x0000);
+      display.fillRoundRect(94, 130, 18, 28, 4, COLOR_GLOW);
+      display.fillRect(95, 130, 16, 28, COLOR_CORE);
+      display.fillTriangle(103, 180, 85, 154, 121, 154, COLOR_TIP);
+      display.drawTriangle(103, 181, 84, 153, 122, 153, TFT_WHITE);
 
     } else if (navType == NAV_ROUNDABOUT) {
-      // ── ROUNDABOUT / ROTARY ARROW (Requested in user audio) ──
-      // Entry stem from car
-      display.fillRoundRect(113, 156, 14, 30, 4, COLOR_CORE);
-      // Roundabout circle ring
-      display.fillCircle(120, 130, 25, COLOR_GLOW);
-      display.fillCircle(120, 130, 23, COLOR_CORE);
-      display.fillCircle(120, 130, 12, 0x0842); // Roundabout center island
-      display.drawCircle(120, 130, 12, 0x03FF);
-      // Mini roundabout rotary icon in center island
-      display.drawCircle(120, 130, 5, TFT_WHITE);
-      // Exit branch curving towards upper-right
-      display.fillRoundRect(134, 108, 18, 18, 4, COLOR_CORE);
-      // Arrow head pointing to exit lane (diagonal up-right)
-      display.fillTriangle(168, 106, 146, 104, 158, 126, COLOR_TIP);
-      display.drawTriangle(169, 105, 145, 103, 159, 127, TFT_WHITE);
+      // ── ROUNDABOUT / ROTARY ARROW ──
+      display.fillRoundRect(112, 156, 16, 32, 4, COLOR_CORE);
+      display.fillCircle(120, 130, 28, COLOR_GLOW);
+      display.fillCircle(120, 130, 25, COLOR_CORE);
+      display.fillCircle(120, 130, 13, 0x0842);
+      display.drawCircle(120, 130, 13, 0x03FF);
+      display.drawCircle(120, 130, 6, TFT_WHITE);
+      display.fillRoundRect(134, 108, 20, 20, 4, COLOR_CORE);
+      display.fillTriangle(170, 106, 146, 104, 158, 128, COLOR_TIP);
+      display.drawTriangle(171, 105, 145, 103, 159, 129, TFT_WHITE);
 
     } else if (navType == NAV_SLIGHT_RIGHT) {
       // ── SLIGHT RIGHT / KEEP RIGHT ARROW ──
-      display.fillRect(113, 150, 14, 36, COLOR_CORE);
-      // Angled branch 45°
-      for (int i = 0; i < 14; i++) {
-        display.drawLine(113 + i, 152, 148 + i, 120, COLOR_CORE);
+      display.fillRect(112, 150, 16, 36, COLOR_CORE);
+      for (int i = 0; i < 16; i++) {
+        display.drawLine(112 + i, 152, 148 + i, 120, COLOR_CORE);
       }
-      display.fillTriangle(166, 106, 144, 106, 158, 128, COLOR_TIP);
-      display.drawTriangle(167, 105, 143, 105, 159, 129, TFT_WHITE);
+      display.fillTriangle(168, 106, 144, 106, 158, 128, COLOR_TIP);
+      display.drawTriangle(169, 105, 143, 105, 159, 129, TFT_WHITE);
 
     } else if (navType == NAV_SLIGHT_LEFT) {
       // ── SLIGHT LEFT / KEEP LEFT ARROW ──
-      display.fillRect(113, 150, 14, 36, COLOR_CORE);
-      // Angled branch 45°
-      for (int i = 0; i < 14; i++) {
-        display.drawLine(113 + i, 152, 78 + i, 120, COLOR_CORE);
+      display.fillRect(112, 150, 16, 36, COLOR_CORE);
+      for (int i = 0; i < 16; i++) {
+        display.drawLine(112 + i, 152, 76 + i, 120, COLOR_CORE);
       }
-      display.fillTriangle(74, 106, 82, 128, 96, 106, COLOR_TIP);
-      display.drawTriangle(73, 105, 81, 129, 97, 105, TFT_WHITE);
+      display.fillTriangle(72, 106, 82, 128, 96, 106, COLOR_TIP);
+      display.drawTriangle(71, 105, 81, 129, 97, 105, TFT_WHITE);
 
     } else if (navType == NAV_ARRIVE) {
       // ── ARRIVE / DESTINATION MARKER ──
-      display.fillRect(113, 145, 14, 41, COLOR_CORE);
-      // Destination flag & beacon
-      display.drawCircle(120, 142, 16, 0x0215);
-      display.drawCircle(120, 142, 10, 0x03FF);
-      display.fillCircle(120, 142, 4, 0x07FF);
-      display.drawFastVLine(118, 108, 36, TFT_WHITE);
-      display.fillRect(119, 108, 18, 12, 0x07FF);
-      display.drawRect(119, 108, 18, 12, TFT_WHITE);
+      display.fillRect(112, 145, 16, 42, COLOR_CORE);
+      display.drawCircle(120, 142, 18, 0x0215);
+      display.drawCircle(120, 142, 12, 0x03FF);
+      display.fillCircle(120, 142, 5, 0x07FF);
+      display.drawFastVLine(118, 106, 38, TFT_WHITE);
+      display.fillRect(119, 106, 20, 14, 0x07FF);
+      display.drawRect(119, 106, 20, 14, TFT_WHITE);
 
     } else {
       // ── STRAIGHT / CONTINUE ARROW ──
-      display.fillRoundRect(111, 122, 18, 64, 4, COLOR_GLOW);
-      display.fillRect(113, 124, 14, 62, COLOR_CORE);
-      display.fillTriangle(120, 100, 100, 126, 140, 126, COLOR_TIP);
-      display.drawTriangle(120, 99, 99, 127, 141, 127, TFT_WHITE);
+      display.fillRoundRect(110, 120, 20, 68, 4, COLOR_GLOW);
+      display.fillRect(112, 122, 16, 66, COLOR_CORE);
+      display.fillTriangle(120, 98, 98, 126, 142, 126, COLOR_TIP);
+      display.drawTriangle(120, 97, 97, 127, 143, 127, TFT_WHITE);
     }
 
-    // Glowing Vehicle Position Cursor ▲ at (120, 192)
-    display.fillTriangle(120, 184, 110, 200, 120, 195, 0x07FF);
-    display.fillTriangle(120, 184, 130, 200, 120, 195, 0x07FF);
-    display.drawLine(120, 183, 109, 201, TFT_WHITE);
-    display.drawLine(120, 183, 131, 201, TFT_WHITE);
-    display.drawLine(109, 201, 120, 196, TFT_WHITE);
-    display.drawLine(131, 201, 120, 196, TFT_WHITE);
-
-    // ── 4. Bottom 3-Column Telemetry Card (Y: 214..272, Height = 58) ───────
-    int cX = 12;
-    int cY = 214;
-    int cW = 216;
-    int cH = 58;
+    // ── 4. Bottom 3-Column Telemetry Card (Y: 212..274, Height = 62) ───────
+    // Generously spaced so text NEVER overlaps and NEVER spills outside the box
+    int cX = 10;
+    int cY = 212;
+    int cW = 220;
+    int cH = 62;
     display.fillRoundRect(cX, cY, cW, cH, 12, 0x0842); // Dark card fill
     display.drawRoundRect(cX, cY, cW, cH, 12, 0x1928); // Subtle border
 
-    // Vertical column divider lines
-    display.drawFastVLine(cX + 72, cY + 8, cH - 16, 0x1928);
-    display.drawFastVLine(cX + 144, cY + 8, cH - 16, 0x1928);
+    // Vertical column divider lines (Col 1: 10..82, Col 2: 82..158, Col 3: 158..230)
+    display.drawFastVLine(82,  cY + 8, cH - 16, 0x1928);
+    display.drawFastVLine(158, cY + 8, cH - 16, 0x1928);
 
-    String etaVal  = (mapEta.length() == 0) ? "10:42" : mapEta;
-    String remVal  = (mapTotalDist.length() == 0) ? "1.8 km" : mapTotalDist;
-    String leftVal = (mapTotalTime.length() == 0) ? "14 min" : mapTotalTime;
+    // Sanitize ETA (Strip "ETA", strip "AM/PM", keep clean HH:MM)
+    String etaVal = mapEta;
+    etaVal.trim();
+    if (etaVal.length() == 0 || etaVal == "--") {
+      etaVal = "10:42";
+    } else {
+      if (etaVal.startsWith("ETA ") || etaVal.startsWith("eta ")) {
+        etaVal = etaVal.substring(4);
+        etaVal.trim();
+      }
+      int sp = etaVal.indexOf(' ');
+      if (sp > 0 && (etaVal.indexOf("AM") > 0 || etaVal.indexOf("PM") > 0 || etaVal.indexOf("am") > 0 || etaVal.indexOf("pm") > 0)) {
+        etaVal = etaVal.substring(0, sp);
+      }
+      int c1 = etaVal.indexOf(':');
+      if (c1 > 0) {
+        int c2 = etaVal.indexOf(':', c1 + 1);
+        if (c2 > 0) {
+          etaVal = etaVal.substring(0, c2);
+        }
+      }
+    }
 
-    // Column 1: [ 🕒 ] ETA (Center X = 48)
-    display.drawCircle(48, cY + 11, 5, 0x8CD6);
-    display.drawLine(48, cY + 11, 48, cY + 8, 0x8CD6);
-    display.drawLine(48, cY + 11, 51, cY + 11, 0x8CD6);
+    // Sanitize Remaining Distance
+    String remVal = mapTotalDist;
+    remVal.trim();
+    if (remVal.length() == 0 || remVal == "--") {
+      remVal = "1.8 km";
+    } else {
+      if (remVal.startsWith("DIST ") || remVal.startsWith("dist ")) {
+        remVal = remVal.substring(5);
+        remVal.trim();
+      }
+    }
+
+    // Sanitize Time Left
+    String leftVal = mapTotalTime;
+    leftVal.trim();
+    if (leftVal.length() == 0 || leftVal == "--") {
+      leftVal = "14 min";
+    } else {
+      if (leftVal.startsWith("TIME ") || leftVal.startsWith("time ")) {
+        leftVal = leftVal.substring(5);
+        leftVal.trim();
+      }
+      leftVal.replace("minutes", "min");
+      leftVal.replace("hours", "hr");
+      leftVal.replace("hour", "hr");
+    }
+
+    // Helper for crisp, bold, double-drawn text that stays strictly centered and never overflows
+    auto drawCardVal = [&](const String& str, int cx, int y) {
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      int w = str.length() * 6;
+      int x = cx - (w / 2);
+      display.setCursor(x, y);
+      display.print(str);
+      display.setCursor(x + 1, y);
+      display.print(str);
+    };
+
+    // Column 1: [ 🕒 ] ETA (Center X = 46)
+    display.drawCircle(46, cY + 11, 5, 0x07FF);
+    display.drawLine(46, cY + 11, 46, cY + 8, 0x07FF);
+    display.drawLine(46, cY + 11, 49, cY + 11, 0x07FF);
     display.setTextSize(1);
     display.setTextColor(0x8CD6);
-    display.setCursor(39, cY + 20);
+    display.setCursor(37, cY + 21);
     display.print("ETA");
-    display.setTextSize(2);
-    display.setTextColor(TFT_WHITE);
-    int eW = etaVal.length() * 12;
-    int eX = 48 - (eW / 2);
-    display.setCursor(eX, cY + 34);
-    display.print(etaVal);
+    drawCardVal(etaVal, 46, cY + 36);
 
-    // Column 2: [ /|\ ] Remaining (Center X = 120)
-    display.drawLine(115, cY + 15, 117, cY + 7, 0x8CD6);
-    display.drawLine(125, cY + 15, 123, cY + 7, 0x8CD6);
-    display.drawFastVLine(120, cY + 8, 6, 0x8CD6);
+    // Column 2: [ 🛣️ ] Remain (Center X = 120)
+    display.drawLine(115, cY + 15, 117, cY + 7, 0x07FF);
+    display.drawLine(125, cY + 15, 123, cY + 7, 0x07FF);
+    display.drawFastVLine(120, cY + 8, 6, 0x07FF);
     display.setTextSize(1);
     display.setTextColor(0x8CD6);
-    int rLblW = 54;
-    display.setCursor(120 - rLblW / 2, cY + 20);
-    display.print("Remaining");
-    display.setTextSize(2);
-    display.setTextColor(TFT_WHITE);
-    int rW = remVal.length() * 12;
-    int rX = 120 - (rW / 2);
-    display.setCursor(rX, cY + 34);
-    display.print(remVal);
+    display.setCursor(102, cY + 21);
+    display.print("Remain");
+    drawCardVal(remVal, 120, cY + 36);
 
-    // Column 3: [ 🏁 ] Time Left (Center X = 192)
-    display.drawFastVLine(188, cY + 7, 9, 0x8CD6);
-    display.fillRect(189, cY + 7, 6, 5, 0x8CD6);
+    // Column 3: [ 🏁 ] Time Left (Center X = 194)
+    display.drawFastVLine(190, cY + 7, 9, 0x07FF);
+    display.fillRect(191, cY + 7, 6, 5, 0x07FF);
     display.setTextSize(1);
     display.setTextColor(0x8CD6);
-    int tLblW = 54;
-    display.setCursor(192 - tLblW / 2, cY + 20);
-    display.print("Time Left");
-    display.setTextSize(2);
-    display.setTextColor(TFT_WHITE);
-    int lW = leftVal.length() * 12;
-    int lX = 192 - (lW / 2);
-    display.setCursor(lX, cY + 34);
-    display.print(leftVal);
+    display.setCursor(182, cY + 21);
+    display.print("Time");
+    drawCardVal(leftVal, 194, cY + 36);
   }
 
   // Optimized bold outlined text — 3 shadow passes + 1 main = 4 total (was 6)
