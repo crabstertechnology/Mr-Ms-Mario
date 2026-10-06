@@ -3233,10 +3233,6 @@ public:
                 games.updateAndDrawCatcher(display, audio);
               } else if (gameSelected == 5) {
                 games.updateAndDrawJump(display, audio);
-              } else if (gameSelected == 6) {
-                games.updateAndDrawStacker(display, audio);
-              } else if (gameSelected == 7) {
-                games.updateAndDrawMemory(display, audio);
               }
             }
           }

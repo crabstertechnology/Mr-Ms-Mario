@@ -332,8 +332,6 @@ public:
     if (gameSelected == 3) return flapGameOver;
     if (gameSelected == 4) return catGameOver;
     if (gameSelected == 5) return jumpGameOver;
-    if (gameSelected == 6) return stkGameOver;
-    if (gameSelected == 7) return memGameOver;
     return false;
   }
 
@@ -429,13 +427,13 @@ public:
     display.fillCircle(180, 35, pulse ? 3 : 4, 0x07FF);
     display.drawFastHLine(20, 46, SCREEN_WIDTH - 40, themeBorder);
 
-    const int opt = constrain(gameMenuOption, 0, 7);
+    const int opt = constrain(gameMenuOption, 0, 5);
 
-    const char* titlesL1[] = {"LUNA","LUNA","FLAPPY","COIN","MOCHY","STACKER","MEMORY","EXIT"};
-    const char* titlesL2[] = {"RACER","SPACE","MOCHY","CATCHER","JUMP","TOWER","MATRIX","ARCADE"};
+    const char* titlesL1[] = {"LUNA","LUNA","FLAPPY","COIN","MOCHY","EXIT"};
+    const char* titlesL2[] = {"RACER","SPACE","MOCHY","CATCHER","JUMP","ARCADE"};
     int highScores[] = {
       racHighScore, spcHighScore, flapHighScore, catHighScore,
-      jumpHighScore, stkHighScore, memHighScore, 0
+      jumpHighScore, 0
     };
 
     // Game title (large 2-line)
@@ -451,7 +449,7 @@ public:
     display.setTextSize(1);
     display.setTextColor(themeSubText);
     display.setCursor(20, 114);
-    if (opt < 7) {
+    if (opt < 5) {
       char buf[48];
       if (opt == 0 || opt == 1 || opt == 3 || opt == 4)
         snprintf(buf, sizeof(buf), "HI:%d // GYRO TILT ACTIVE", highScores[opt]);
@@ -538,31 +536,7 @@ public:
         display.drawLine(cx + 10, cy - 14 + wave, cx + 10, cy - 10 + wave, 0x07E0);
       } break;
 
-      case 5: { // STACKER
-        display.drawFastVLine(cx, cy - 28, 56, 0xCE79);
-        uint16_t colors[] = {themeAccent, 0x07FF, 0xF7BE, themeAccent};
-        int widths[] = {48, 36, 24, 14};
-        for (int i = 0; i < 4; i++) {
-          int by = cy + 12 - i * 12 + wave;
-          display.fillRect(cx - widths[i]/2, by, widths[i], 10, colors[i]);
-          display.drawRect(cx - widths[i]/2, by, widths[i], 10, TFT_WHITE);
-        }
-      } break;
-
-      case 6: { // MEMORY MATRIX
-        // Pulsing tile grid
-        for (int r = 0; r < 3; r++) {
-          for (int c = 0; c < 3; c++) {
-            int tx = cx - 30 + c * 22;
-            int ty = cy - 22 + r * 22 + wave;
-            uint16_t col = (r == (t/400)%3 && c == (t/300)%3) ? TFT_YELLOW : 0x0182;
-            display.fillRoundRect(tx, ty, 18, 18, 3, col);
-            display.drawRoundRect(tx, ty, 18, 18, 3, TFT_WHITE);
-          }
-        }
-      } break;
-
-      case 7: { // EXIT
+      case 5: { // EXIT
         display.drawCircle(cx, cy + wave, 24, 0xF800);
         display.drawCircle(cx, cy + wave, 22, 0xF800);
         display.drawLine(cx - 8, cy + wave, cx + 8, cy + wave, 0xF800);
@@ -574,7 +548,7 @@ public:
     // ── Play Button ────────────────────────────────────────────────────────
     const int btnW = 140, btnH = 34;
     const int btnX = (SCREEN_WIDTH - btnW) / 2, btnY = 194;
-    const uint16_t btnColor = (opt == 7) ? 0xF800 : themeAccent;
+    const uint16_t btnColor = (opt == 5) ? 0xF800 : themeAccent;
     // Subtle shadow
     display.fillRoundRect(btnX + 2, btnY + 2, btnW, btnH, 8, 0x8410);
     display.fillRoundRect(btnX, btnY, btnW, btnH, 8, btnColor);
@@ -583,14 +557,14 @@ public:
 
     display.setTextSize(2);
     display.setTextColor(TFT_WHITE);
-    const char* btnTxt = (opt == 7) ? "EXIT <" : "PLAY >";
+    const char* btnTxt = (opt == 5) ? "EXIT <" : "PLAY >";
     int bW = strlen(btnTxt) * 12;
     display.setCursor(btnX + (btnW - bW) / 2, btnY + 9);
     display.print(btnTxt);
 
     // ── Carousel indicator ─────────────────────────────────────────────────
-    const int dotStartX = 72;
-    for (int d = 0; d < 8; d++) {
+    const int dotStartX = 85;
+    for (int d = 0; d < 6; d++) {
       int dx = dotStartX + d * 14;
       if (d == opt) {
         display.fillRoundRect(dx - 4, 238, 12, 4, 2, btnColor);

@@ -3143,7 +3143,7 @@ void handleBtn1Single() {
         int canvasY = lastY - 20; // 20px screen offset calibration
         if (canvasY >= 180 && canvasY <= 240) {
           // Tapped on the PLAY trigger button!
-          if (gameMenuOption == 7) {
+          if (gameMenuOption == 5) {
             // Exit arcade menu -> Return to Clock Home
             gamesActive = false;
             gamePlaying = false;
@@ -3158,15 +3158,13 @@ void handleBtn1Single() {
             else if (gameSelected == 3) games.resetFlappy();
             else if (gameSelected == 4) games.resetCatcher();
             else if (gameSelected == 5) games.resetJump();
-            else if (gameSelected == 6) games.resetStacker();
-            else if (gameSelected == 7) games.resetMemory();
             gamePlaying = true;
             audio.playSound(SOUND_STARTUP);
             Serial.printf("[BTN1] Started Game %d\n", gameSelected);
           }
         } else {
           // Tap anywhere else in the launcher advances to next game
-          gameMenuOption = (gameMenuOption + 1) % 8;
+          gameMenuOption = (gameMenuOption + 1) % 6;
           audio.playSound(SOUND_CHIRP);
           Serial.printf("[BTN1] Advanced to Game Option -> %d\n", gameMenuOption);
         }
@@ -3531,7 +3529,7 @@ void handleSwipeUp() {
   }
   // Arcade: swipe up advances carousel to next game
   else if (currentScreen == SCREEN_GAMES && gamesActive && !gamePlaying) {
-    gameMenuOption = (gameMenuOption + 1) % 8;
+    gameMenuOption = (gameMenuOption + 1) % 6;
     audio.playSound(SOUND_CHIRP);
     Serial.printf("[Arcade] Next game -> %d\n", gameMenuOption);
   }
@@ -3552,7 +3550,7 @@ void handleSwipeDown() {
   }
   // Arcade: swipe down goes to previous game
   else if (currentScreen == SCREEN_GAMES && gamesActive && !gamePlaying) {
-    gameMenuOption = (gameMenuOption - 1 + 8) % 8;
+    gameMenuOption = (gameMenuOption - 1 + 6) % 6;
     audio.playSound(SOUND_CHIRP);
     Serial.printf("[Arcade] Prev game -> %d\n", gameMenuOption);
   }
@@ -3580,9 +3578,9 @@ void updateStateLabel() {
     if (gamePlaying) {
       const char* gameNames[] = {
         "LUNA RACER", "LUNA SPACE", "FLAPPY MOCHY", "COIN CATCHER",
-        "MOCHY JUMP", "STACKER", "MEMORY MATRIX"
+        "MOCHY JUMP"
       };
-      if (gameSelected >= 1 && gameSelected <= 7) {
+      if (gameSelected >= 1 && gameSelected <= 5) {
         face.setStateLabel(gameNames[gameSelected - 1]);
       } else {
         face.setStateLabel("ARCADE");
