@@ -66,11 +66,34 @@ class BLEService with ChangeNotifier {
   int _lunaAge = 1;
   String _lunaStage = "Baby Luna";
 
+  // 3 Daily Meal Schedule (Breakfast, Lunch, Dinner)
+  String _mealTimeBreakfast = "08:30";
+  String _mealTimeLunch = "13:00";
+  String _mealTimeDinner = "20:00";
+  int _mealFedMask = 0; // Bit 0: Breakfast, Bit 1: Lunch, Bit 2: Dinner
+
+  // Sleep & Wake Schedule
+  String _sleepTime = "23:00";
+  String _wakeTime = "07:00";
+
+  // SICK State tracking (from Instagram limit / screen time)
+  bool _isNexaSick = false;
+
   int get lunaXP => _lunaXP;
   int get lunaLevel => _lunaLevel;
   int get lunaFeeds => _lunaFeeds;
   int get lunaAge => _lunaAge;
   String get lunaStage => _lunaStage;
+
+  String get mealTimeBreakfast => _mealTimeBreakfast;
+  String get mealTimeLunch => _mealTimeLunch;
+  String get mealTimeDinner => _mealTimeDinner;
+  int get mealFedMask => _mealFedMask;
+  bool isMealFed(int mealIndex) => (_mealFedMask & (1 << mealIndex)) != 0;
+
+  String get sleepTime => _sleepTime;
+  String get wakeTime => _wakeTime;
+  bool get isNexaSick => _isNexaSick;
 
   int get lunaNextLevelXP => _lunaLevel * 100;
   int get lunaCurrentLevelBaseXP => (_lunaLevel - 1) * 100;
@@ -331,7 +354,32 @@ class BLEService with ChangeNotifier {
       _lunaFeeds = prefs.getInt('luna_feeds') ?? 0;
       _lunaAge = prefs.getInt('luna_age') ?? 1;
       _lunaStage = prefs.getString('luna_stage') ?? "Baby Luna";
+      _mealTimeBreakfast = prefs.getString('meal_time_b') ?? "08:30";
+      _mealTimeLunch = prefs.getString('meal_time_l') ?? "13:00";
+      _mealTimeDinner = prefs.getString('meal_time_d') ?? "20:00";
+      _mealFedMask = prefs.getInt('meal_fed_mask') ?? 0;
+      _sleepTime = prefs.getString('sleep_time') ?? "23:00";
+      _wakeTime = prefs.getString('wake_time') ?? "07:00";
+      _isNexaSick = prefs.getBool('is_nexa_sick') ?? false;
       notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _savePetStats() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('luna_xp', _lunaXP);
+      await prefs.setInt('luna_level', _lunaLevel);
+      await prefs.setInt('luna_feeds', _lunaFeeds);
+      await prefs.setInt('luna_age', _lunaAge);
+      await prefs.setString('luna_stage', _lunaStage);
+      await prefs.setString('meal_time_b', _mealTimeBreakfast);
+      await prefs.setString('meal_time_l', _mealTimeLunch);
+      await prefs.setString('meal_time_d', _mealTimeDinner);
+      await prefs.setInt('meal_fed_mask', _mealFedMask);
+      await prefs.setString('sleep_time', _sleepTime);
+      await prefs.setString('wake_time', _wakeTime);
+      await prefs.setBool('is_nexa_sick', _isNexaSick);
     } catch (_) {}
   }
 
@@ -896,6 +944,22 @@ class BLEService with ChangeNotifier {
             });
             notifyListeners();
           }
+        } else if (logMsg.startsWith("MEAL_SYNC:")) {
+          final payload = logMsg.substring(10).trim();
+          final parts = payload.split(',');
+          if (parts.length >= 4) {
+            _mealTimeBreakfast = parts[0].trim();
+            _mealTimeLunch = parts[1].trim();
+            _mealTimeDinner = parts[2].trim();
+            _mealFedMask = int.tryParse(parts[3].trim()) ?? _mealFedMask;
+            _savePetStats();
+            notifyListeners();
+          }
+        } else if (logMsg.startsWith("STATUS_SICK:")) {
+          final val = logMsg.substring(12).trim();
+          _isNexaSick = (val == "1" || val.toLowerCase() == "true");
+          _savePetStats();
+          notifyListeners();
         } else if (logMsg.startsWith("SCREEN_SYNC:")) {
           final screenName = logMsg.substring(12).trim();
           _activeScreenMode = screenName;
@@ -1248,7 +1312,63 @@ class BLEService with ChangeNotifier {
   }
 
   Future<void> feedLuna() async {
-    await _writeTextWithAck("FEED", "Feed Luna (+50 XP)");
+    await _writeTextWithAck("FEED", "Feed NEXA (+50 XP)");
+    _lunaXP += 50;
+    _lunaFeeds++;
+    if (_lunaXP >= lunaNextLevelXP) {
+      _lunaLevel++;
+    }
+    _savePetStats();
+    notifyListeners();
+  }
+
+  Future<void> transmitMealTimes(String bTime, String lTime, String dTime) async {
+    _mealTimeBreakfast = bTime;
+    _mealTimeLunch = lTime;
+    _mealTimeDinner = dTime;
+    await _savePetStats();
+    notifyListeners();
+    await _writeTextWithAck("SET_MEAL_TIMES:$bTime,$lTime,$dTime", "Sync Meal Times ($bTime, $lTime, $dTime)");
+  }
+
+  Future<void> transmitFeedNexa({int mealIndex = 0}) async {
+    _mealFedMask |= (1 << mealIndex);
+    _lunaXP += 50;
+    _lunaFeeds++;
+    if (_lunaXP >= lunaNextLevelXP) {
+      _lunaLevel++;
+    }
+    await _savePetStats();
+    notifyListeners();
+    await _writeTextWithAck("FEED:NEXA", "Feed NEXA Meal (+50 XP)");
+  }
+
+  Future<void> transmitSleepSchedule(String sTime, String wTime) async {
+    _sleepTime = sTime;
+    _wakeTime = wTime;
+    await _savePetStats();
+    notifyListeners();
+    await _writeTextWithAck("SET_SLEEP_SCHED:$sTime,$wTime", "Sync Sleep Schedule ($sTime to $wTime)");
+  }
+
+  Future<void> transmitRecoverActivity() async {
+    _isNexaSick = false;
+    await _savePetStats();
+    notifyListeners();
+    await _writeTextWithAck("RECOVER:ACTIVITY", "Heal NEXA Real-World Activity");
+  }
+
+  Future<void> transmitSickAlert(String appName) async {
+    _isNexaSick = true;
+    await _savePetStats();
+    notifyListeners();
+    await _writeTextWithAck("FOCUS_ALERT:$appName:Exceeded", "Trigger Sick Lock for $appName");
+  }
+
+  void setNexaSick(bool sick) {
+    _isNexaSick = sick;
+    _savePetStats();
+    notifyListeners();
   }
 
   Future<void> triggerHunger() async {

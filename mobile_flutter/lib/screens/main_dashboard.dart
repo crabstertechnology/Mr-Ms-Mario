@@ -78,50 +78,15 @@ class _MainDashboardState extends State<MainDashboard> {
   String _selectedEventType = 'meeting';
   DateTime _selectedEventDateTime = DateTime.now();
   DateTime _calendarViewDate = DateTime.now();
-  String _selectedSquadCharacter = 'panda';
+  String _selectedSquadCharacter = 'nexa';
 
   static final List<Map<String, dynamic>> _squadMembers = [
     {
-      'id': 'panda',
-      'name': 'Panda',
-      'role': 'Leader',
+      'id': 'nexa',
+      'name': 'NEXA',
+      'role': 'Cyber Guardian & Pet',
       'asset': 'assets/characters/panda.png',
-      'color': Color(0xFF6366F1),
-    },
-    {
-      'id': 'bunny',
-      'name': 'Bunny',
-      'role': 'Synth Master',
-      'asset': 'assets/characters/bunny.png',
       'color': Color(0xFF00E5FF),
-    },
-    {
-      'id': 'fox',
-      'name': 'Fox',
-      'role': 'BLE Scout',
-      'asset': 'assets/characters/fox.png',
-      'color': Color(0xFFFF7A00),
-    },
-    {
-      'id': 'turtle',
-      'name': 'Turtle',
-      'role': 'Logic & Time',
-      'asset': 'assets/characters/turtle.png',
-      'color': Color(0xFF10B981),
-    },
-    {
-      'id': 'cat',
-      'name': 'Cat',
-      'role': 'Arcade Gamer',
-      'asset': 'assets/characters/cat.png',
-      'color': Color(0xFF9333EA),
-    },
-    {
-      'id': 'bird',
-      'name': 'Bird',
-      'role': 'Messenger',
-      'asset': 'assets/characters/bird.png',
-      'color': Color(0xFF38BDF8),
     },
   ];
   bool _isSettingsSaving = false;
@@ -4450,381 +4415,9 @@ class _MainDashboardState extends State<MainDashboard> {
             ],
           ),
         ),
-        const SizedBox(height: 14),
-
-        // ── 2. SYNAPS CHARACTERS SQUAD SELECTOR ─────────────────────
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.stars_rounded, color: memberColor, size: 16),
-                const SizedBox(width: 6),
-                Text(
-                  "SELECT SQUAD COMPANION",
-                  style: GoogleFonts.outfit(
-                    color: textColor54,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _squadMembers.map((member) {
-                  final bool isSelected = member['id'] == _selectedSquadCharacter;
-                  final Color cColor = member['color'] as Color;
-
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedSquadCharacter = member['id'] as String;
-                        if (member['id'] == 'bunny') {
-                          _activeTabIdx = 2; // Synth
-                        } else if (member['id'] == 'fox') {
-                          _activeTabIdx = 3; // Synapse Link
-                        } else if (member['id'] == 'turtle') {
-                          if (ble.isConnected) ble.transmitText("SCREEN:CLOCK");
-                          _localActiveGifId = 'clock';
-                          _localActiveLabel = 'Clock Face';
-                        } else if (member['id'] == 'cat') {
-                          if (ble.isConnected) ble.transmitText("SCREEN:GAMES");
-                          _localActiveGifId = 'games';
-                          _localActiveLabel = 'SYNAPS Arcade';
-                        } else if (member['id'] == 'bird') {
-                          if (ble.isConnected) ble.transmitText("SCREEN:NOTIF");
-                          _localActiveGifId = 'notif';
-                          _localActiveLabel = 'Notifications';
-                        } else if (member['id'] == 'panda') {
-                          _activeTabIdx = 1; // Expressions
-                        }
-                      });
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.only(right: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? cColor.withOpacity(0.14) : Colors.white.withOpacity(0.88),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected ? cColor : const Color(0xFFE2E8F0),
-                          width: isSelected ? 2.0 : 1.0,
-                        ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: cColor.withOpacity(0.28),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: cColor, width: 1.5),
-                            ),
-                            child: ClipOval(
-                              child: Image.asset(member['asset'] as String, fit: BoxFit.cover),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                member['name'] as String,
-                                style: GoogleFonts.outfit(
-                                  color: isSelected ? cColor : textColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                member['role'] as String,
-                                style: GoogleFonts.outfit(
-                                  color: textColor60,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
         const SizedBox(height: 16),
 
-        // ── 3. HARDWARE DISPLAY MODE SELECTOR DOCK ───────────────────
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildScreenChip("Face", "sprite_ai_0", Icons.face_rounded, activeGifId, ble),
-              const SizedBox(width: 8),
-              _buildScreenChip("Clock", "clock", Icons.watch_later_outlined, activeGifId, ble),
-              const SizedBox(width: 8),
-              _buildScreenChip("Notifs", "notif", Icons.notifications_none_rounded, activeGifId, ble),
-              const SizedBox(width: 8),
-              _buildScreenChip("Calendar", "calendar", Icons.calendar_month_rounded, activeGifId, ble),
-              const SizedBox(width: 8),
-              _buildScreenChip("Arcade", "games", Icons.sports_esports_outlined, activeGifId, ble),
-              const SizedBox(width: 8),
-              _buildScreenChip("Settings", "settings", Icons.settings_outlined, activeGifId, ble),
-              const SizedBox(width: 8),
-              _buildScreenChip("Pomodoro", "pomodoro", Icons.timer_outlined, activeGifId, ble),
-              const SizedBox(width: 8),
-              _buildScreenChip("Card", "card", Icons.qr_code_2_rounded, activeGifId, ble),
-              if (ble.isNavActive) ...[
-                const SizedBox(width: 8),
-                _buildScreenChip("Maps", "map", Icons.navigation_rounded, activeGifId, ble),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        // ── 4. LIVE OLED HARDWARE SIMULATOR WITH CYBER BEZEL ─────────
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: accentColor.withOpacity(0.35), width: 1.8),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0F172A).withOpacity(0.12),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-              BoxShadow(
-                color: accentColor.withOpacity(0.18),
-                blurRadius: 16,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Top Cyber HUD Bar
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-                  border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(0xFF06B6D4),
-                            boxShadow: [
-                              BoxShadow(color: Color(0xFF06B6D4), blurRadius: 4, spreadRadius: 1),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          "240×280 IPS",
-                          style: GoogleFonts.firaCode(
-                            color: Colors.white70,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      "ESP32-S3 80MHz SPI",
-                      style: GoogleFonts.outfit(
-                        color: accentColor,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Text(
-                          "CST816T",
-                          style: GoogleFonts.firaCode(
-                            color: Colors.white70,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(0xFF10B981),
-                            boxShadow: [
-                              BoxShadow(color: Color(0xFF10B981), blurRadius: 4, spreadRadius: 1),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // OLED Simulator Screen with gestures
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: Center(
-                  child: GestureDetector(
-                    onTap: () {
-                      if (ble.isConnected) {
-                        ble.transmitText("TOUCH_SIM:TAP");
-                      }
-                    },
-                    onDoubleTap: () {
-                      if (ble.isConnected) {
-                        ble.transmitText("TOUCH_SIM:DOUBLE");
-                      }
-                    },
-                    onLongPress: () {
-                      if (ble.isConnected) {
-                        ble.transmitText("TOUCH_SIM:LONG");
-                      }
-                    },
-                    onHorizontalDragEnd: (details) {
-                      if (details.primaryVelocity != null) {
-                        if (details.primaryVelocity! < -200) {
-                          _cycleWatchScreen(1, ble);
-                        } else if (details.primaryVelocity! > 200) {
-                          _cycleWatchScreen(-1, ble);
-                        }
-                      }
-                    },
-                    child: OLEDSimulator(
-                      activeGifId: activeGifId,
-                      activeLabel: activeLabel,
-                      marqueeText: _marqueeController.text.isNotEmpty ? _marqueeController.text : null,
-                      invertColor: db.oledInvert, 
-                    ),
-                  ),
-                ),
-              ),
-
-              // Bottom Trigger Console Dock
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
-                  border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _cycleWatchScreen(-1, ble),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withOpacity(0.12)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.arrow_back_ios_new_rounded, size: 12, color: Colors.white70),
-                            const SizedBox(width: 4),
-                            Text(
-                              "PREV",
-                              style: GoogleFonts.outfit(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Active screen pill indicator
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.20),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: accentColor.withOpacity(0.6), width: 1.2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: accentColor.withOpacity(0.3),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: Text(
-                        activeLabel.toUpperCase(),
-                        style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                    ),
-
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _cycleWatchScreen(1, ble),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withOpacity(0.12)),
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              "NEXT",
-                              style: GoogleFonts.outfit(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.white70),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ── 5. UNIFIED CYBER TELEMETRY & HEALTH GRID ─────────────────
+        // ── 2. UNIFIED CYBER TELEMETRY & HEALTH GRID ─────────────────
         _buildRobotStatusGrid(primary, ble),
         const SizedBox(height: 16),
 
@@ -5589,6 +5182,62 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
+  Future<void> _pickMealTime(BuildContext context, BLEService ble, int mealIndex) async {
+    final curTimeStr = mealIndex == 0
+        ? ble.mealTimeBreakfast
+        : (mealIndex == 1 ? ble.mealTimeLunch : ble.mealTimeDinner);
+    final parts = curTimeStr.split(':');
+    final initialTime = TimeOfDay(
+      hour: parts.isNotEmpty ? (int.tryParse(parts[0]) ?? (mealIndex == 0 ? 8 : (mealIndex == 1 ? 13 : 20))) : 8,
+      minute: parts.length > 1 ? (int.tryParse(parts[1]) ?? 30) : 30,
+    );
+    final picked = await showTimePicker(context: context, initialTime: initialTime);
+    if (picked != null) {
+      final h = picked.hour.toString().padLeft(2, '0');
+      final m = picked.minute.toString().padLeft(2, '0');
+      final newTime = "$h:$m";
+      String b = ble.mealTimeBreakfast;
+      String l = ble.mealTimeLunch;
+      String d = ble.mealTimeDinner;
+      if (mealIndex == 0) b = newTime;
+      else if (mealIndex == 1) l = newTime;
+      else d = newTime;
+      await ble.transmitMealTimes(b, l, d);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Updated meal time: $newTime (Synced to NEXA Hardware!)"),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickScheduleTime(BuildContext context, BLEService ble, bool isSleep) async {
+    final curTimeStr = isSleep ? ble.sleepTime : ble.wakeTime;
+    final parts = curTimeStr.split(':');
+    final initialTime = TimeOfDay(
+      hour: parts.isNotEmpty ? (int.tryParse(parts[0]) ?? (isSleep ? 23 : 7)) : (isSleep ? 23 : 7),
+      minute: parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0,
+    );
+    final picked = await showTimePicker(context: context, initialTime: initialTime);
+    if (picked != null) {
+      final h = picked.hour.toString().padLeft(2, '0');
+      final m = picked.minute.toString().padLeft(2, '0');
+      final newTime = "$h:$m";
+      String s = ble.sleepTime;
+      String w = ble.wakeTime;
+      if (isSleep) s = newTime;
+      else w = newTime;
+      await ble.transmitSleepSchedule(s, w);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Updated ${isSleep ? 'Sleep' : 'Wake'} time: $newTime (Synced to NEXA!)"),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+    }
+  }
+
   Widget _buildPetEvolutionCard(BLEService ble) {
     final int xp = ble.lunaXP;
     final int level = ble.lunaLevel;
@@ -5597,12 +5246,129 @@ class _MainDashboardState extends State<MainDashboard> {
     final String stage = ble.lunaStage;
     final double progress = ble.lunaLevelProgress;
     final int nextXp = ble.lunaNextLevelXP;
+    final bool isSick = ble.isNexaSick;
 
     return GlassCard(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ── SICK LOCKOUT BANNER (if Instagram screen time limit exceeded) ──
+          if (isSick) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFEF4444), width: 1.8),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFEF4444).withOpacity(0.2),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.sick_rounded, color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "NEXA IS SICK!",
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFFB91C1C),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            Text(
+                              "Instagram screen time limit exceeded. Hardware is locked in sick mode.",
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF7F1D1D),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFCA5A5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "REAL-WORLD RECOVERY ACTIVITY",
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFFB91C1C),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Step away from your phone and connect with reality:\n• Walk outside or stretch for 5 minutes\n• Drink a tall glass of water\n• Take 10 deep mindful breaths",
+                          style: GoogleFonts.outfit(
+                            color: textColor70,
+                            fontSize: 11.5,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      await ble.transmitRecoverActivity();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Activity completed! NEXA is healed and back to IDLE."),
+                          backgroundColor: Color(0xFF10B981),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.favorite_rounded, size: 18),
+                    label: const Text("I COMPLETED THE ACTIVITY! HEAL NEXA"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           // Top Row: Title & Badges
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -5613,7 +5379,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
+                        colors: [Color(0xFF00C9FF), Color(0xFF00E5FF)],
                       ),
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -5624,7 +5390,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "LUNA PET & EVOLUTION",
+                        "NEXA FEED & CARE",
                         style: GoogleFonts.outfit(
                           color: textColor60,
                           fontSize: 10,
@@ -5633,7 +5399,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         ),
                       ),
                       Text(
-                        stage,
+                        stage.replaceAll("Luna", "NEXA"),
                         style: GoogleFonts.outfit(
                           color: textColor,
                           fontSize: 18,
@@ -5648,12 +5414,12 @@ class _MainDashboardState extends State<MainDashboard> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                    colors: [Color(0xFF06B6D4), Color(0xFF3B82F6)],
                   ),
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF8B5CF6).withOpacity(0.3),
+                      color: const Color(0xFF06B6D4).withOpacity(0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -5755,7 +5521,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("Luna Age", style: GoogleFonts.outfit(color: textColor54, fontSize: 10)),
+                          Text("NEXA Age", style: GoogleFonts.outfit(color: textColor54, fontSize: 10)),
                           Text(
                             "$age Days",
                             style: GoogleFonts.outfit(color: textColor, fontSize: 13, fontWeight: FontWeight.bold),
@@ -5768,9 +5534,286 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+
+          // ── 3 DAILY MEAL TIMINGS (BREAKFAST, LUNCH, DINNER) ────────
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time_filled_rounded, size: 15, color: Color(0xFF0284C7)),
+                        const SizedBox(width: 6),
+                        Text(
+                          "3 DAILY MEAL TIMINGS",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      "Tap slot to edit",
+                      style: GoogleFonts.outfit(
+                        color: textColor54,
+                        fontSize: 9.5,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    // Breakfast
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _pickMealTime(context, ble, 0),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: ble.isMealFed(0) ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                              width: ble.isMealFed(0) ? 1.5 : 1.0,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Text("🍳 Breakfast", style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: textColor60)),
+                              const SizedBox(height: 3),
+                              Text(ble.mealTimeBreakfast, style: GoogleFonts.firaCode(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: ble.isMealFed(0) ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  ble.isMealFed(0) ? "Fed ✓" : "Pending",
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: ble.isMealFed(0) ? const Color(0xFF15803D) : const Color(0xFFB45309),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+
+                    // Lunch
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _pickMealTime(context, ble, 1),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: ble.isMealFed(1) ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                              width: ble.isMealFed(1) ? 1.5 : 1.0,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Text("🍱 Lunch", style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: textColor60)),
+                              const SizedBox(height: 3),
+                              Text(ble.mealTimeLunch, style: GoogleFonts.firaCode(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: ble.isMealFed(1) ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  ble.isMealFed(1) ? "Fed ✓" : "Pending",
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: ble.isMealFed(1) ? const Color(0xFF15803D) : const Color(0xFFB45309),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+
+                    // Dinner
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _pickMealTime(context, ble, 2),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: ble.isMealFed(2) ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                              width: ble.isMealFed(2) ? 1.5 : 1.0,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Text("🍲 Dinner", style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: textColor60)),
+                              const SizedBox(height: 3),
+                              Text(ble.mealTimeDinner, style: GoogleFonts.firaCode(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: ble.isMealFed(2) ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  ble.isMealFed(2) ? "Fed ✓" : "Pending",
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: ble.isMealFed(2) ? const Color(0xFF15803D) : const Color(0xFFB45309),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── SLEEP & WAKE SCHEDULE ────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.bedtime_rounded, size: 15, color: Color(0xFF6366F1)),
+                        const SizedBox(width: 6),
+                        Text(
+                          "SLEEP & WAKE SCHEDULE",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      "Auto Sleep/Wake on Watch",
+                      style: GoogleFonts.outfit(
+                        color: textColor54,
+                        fontSize: 9.5,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    // Sleep Time
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _pickScheduleTime(context, ble, true),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.nightlight_round, color: Color(0xFF6366F1), size: 18),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Sleep Time", style: GoogleFonts.outfit(fontSize: 10, color: textColor54)),
+                                  Text(ble.sleepTime, style: GoogleFonts.firaCode(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+
+                    // Wake Time
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _pickScheduleTime(context, ble, false),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.wb_sunny_rounded, color: Color(0xFFF59E0B), size: 18),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Wake Time", style: GoogleFonts.outfit(fontSize: 10, color: textColor54)),
+                                  Text(ble.wakeTime, style: GoogleFonts.firaCode(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 14),
 
-          // Action Buttons: Feed Luna (+50 XP) & Trigger Hunger
+          // Action Buttons: Feed NEXA (+50 XP) & Hunger / Overload Test
           Row(
             children: [
               Expanded(
@@ -5779,17 +5822,18 @@ class _MainDashboardState extends State<MainDashboard> {
                     ble.feedLuna();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text("Feeding Luna! +50 XP granted."),
+                        content: Text("Fed NEXA! +50 XP granted. Synced to watch."),
+                        backgroundColor: Color(0xFF10B981),
                         duration: Duration(seconds: 2),
                       ),
                     );
                   },
                   icon: const Icon(Icons.fastfood_rounded, size: 16),
-                  label: const Text("FEED LUNA (+50 XP)"),
+                  label: const Text("FEED NEXA (+50 XP)"),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
@@ -5797,18 +5841,32 @@ class _MainDashboardState extends State<MainDashboard> {
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: () {
-                  ble.triggerHunger();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Triggered meal hunger! Luna is crying for food."),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  if (!isSick) {
+                    ble.setNexaSick(true);
+                    ble.transmitSickAlert("Instagram");
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Simulated Instagram screen time limit! NEXA is sick."),
+                        backgroundColor: Color(0xFFEF4444),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  } else {
+                    ble.transmitRecoverActivity();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Healed NEXA! Restored to IDLE."),
+                        backgroundColor: Color(0xFF10B981),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
                 },
-                icon: const Icon(Icons.notifications_active_outlined, size: 16),
-                label: const Text("HUNGER"),
+                icon: Icon(isSick ? Icons.healing_rounded : Icons.warning_amber_rounded, size: 16),
+                label: Text(isSick ? "HEAL" : "TEST SICK"),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  foregroundColor: isSick ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),

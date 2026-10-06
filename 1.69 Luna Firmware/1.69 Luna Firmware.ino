@@ -546,7 +546,8 @@ enum LunaMood {
   MOOD_CURIOUS,
   MOOD_SLEEPY,
   MOOD_HUNGRY,
-  MOOD_FED
+  MOOD_FED,
+  MOOD_ANGRY
 };
 
 // ── Luna Meal-time Schedule ─────────────────────────────────────────────────
@@ -646,6 +647,40 @@ String ownerDOB = "";
 bool isGreeting = false;
 unsigned long greetingEndTime = 0;
 
+// --- NEXA Meals Schedule (3 daily meals: Breakfast, Lunch, Dinner) ---
+String mealTime1 = "08:30";
+String mealTime2 = "13:00";
+String mealTime3 = "20:00";
+uint8_t todayFedMask = 0;       // bit 0: Breakfast, bit 1: Lunch, bit 2: Dinner
+bool isAngryAtMissedMeal = false;
+
+// --- NEXA Sleep / Wake Schedule ---
+String sleepSched = "23:00";
+String wakeSched = "07:00";
+int lastWakeDay = -1;
+
+// --- SICK Lockout State (Instagram limit) ---
+bool isSickLocked = false;
+
+// --- Active State / Animation Persistence Across Reboots ---
+int savedAnimIndex = 0;
+
+enum LunaSleepState {
+  LUNA_AWAKE,          // Normal awake: cycles IDLE (0) and THINKING (13)
+  LUNA_GOING_TO_SLEEP, // Transitioning: anim 10 (Going to Sleep)
+  LUNA_SLEEPING_LOOP,  // Sleeping: anim 11 (Sleeping loop) indefinitely
+  LUNA_WAKING_UP,      // Transitioning: anim 12 (Waking Up)
+  LUNA_GOING_TO_SICK,  // Transitioning: anim 7 (Idle to Sick)
+  LUNA_SICK_LOOP,      // Sick: anim 8 (Sick loop) indefinitely
+  LUNA_RECOVERING      // Transitioning: anim 9 (Sick to Idle / Recovered)
+};
+
+LunaSleepState lunaSleepState = LUNA_AWAKE;
+void transitionToVideoIndexWithFade(int targetIdx, bool playSound = true);
+
+int parseTimeMinutes(const String& tStr);
+void sendMealSyncToBLE();
+void checkMealAndSleepSchedule();
 void feedLuna();
 void updateLunaLife();
 
@@ -1119,12 +1154,13 @@ void handleRobotCommand(String text) {
     currentScreen = SCREEN_FACE;
     face.setExpression(EXPR_ANGRY);
     Serial.println("OK:AngryAnimationTriggered");
-  } else if (text == "FEED" || text == "EAT") {
+  } else if (text == "FEED" || text.startsWith("FEED:") || text == "EAT") {
     currentScreen = SCREEN_FACE;
     feedLuna();
     Serial.println("OK:LunaFed");
-  } else if (text == "GET_STATS" || text == "STATS") {
+  } else if (text == "GET_STATS" || text == "STATS" || text == "MEAL_GET") {
     sendLunaStatsToBLE();
+    sendMealSyncToBLE();
     Serial.println("OK:StatsSent");
   } else if (text == "HUNGRY") {
     currentScreen = SCREEN_FACE;
@@ -1139,6 +1175,53 @@ void handleRobotCommand(String text) {
     audio.playSound(SOUND_ALERT_BEEP);
     notifyScreenAndExprSync();
     Serial.println("OK:LunaHungryTriggered");
+  } else if (text.startsWith("SET_MEAL_TIMES:")) {
+    // Command format: SET_MEAL_TIMES:08:30,13:00,20:00
+    String payload = text.substring(15);
+    int c1 = payload.indexOf(',');
+    int c2 = payload.indexOf(',', c1 + 1);
+    if (c1 > 0 && c2 > c1) {
+      mealTime1 = payload.substring(0, c1);
+      mealTime2 = payload.substring(c1 + 1, c2);
+      mealTime3 = payload.substring(c2 + 1);
+      mealTime1.trim(); mealTime2.trim(); mealTime3.trim();
+      preferences.begin("luna", false);
+      preferences.putString("meal_t1", mealTime1);
+      preferences.putString("meal_t2", mealTime2);
+      preferences.putString("meal_t3", mealTime3);
+      preferences.end();
+      sendMealSyncToBLE();
+      Serial.printf("[MEALS] Saved meal times: %s, %s, %s\n", mealTime1.c_str(), mealTime2.c_str(), mealTime3.c_str());
+    }
+  } else if (text.startsWith("SET_SLEEP_SCHED:")) {
+    // Command format: SET_SLEEP_SCHED:23:00,07:00
+    String payload = text.substring(16);
+    int comma = payload.indexOf(',');
+    if (comma > 0) {
+      sleepSched = payload.substring(0, comma);
+      wakeSched = payload.substring(comma + 1);
+      sleepSched.trim(); wakeSched.trim();
+      preferences.begin("luna", false);
+      preferences.putString("sleep_sched", sleepSched);
+      preferences.putString("wake_sched", wakeSched);
+      preferences.end();
+      Serial.printf("[SCHED] Saved sleep schedule: %s to %s\n", sleepSched.c_str(), wakeSched.c_str());
+    }
+  } else if (text == "RECOVER:ACTIVITY" || text == "RECOVER") {
+    // Real-world activity completed in mobile app -> recover from SICK!
+    isSickLocked = false;
+    preferences.begin("luna", false);
+    preferences.putBool("is_sick", false);
+    preferences.end();
+    currentScreen = SCREEN_FACE;
+    lunaSleepState = LUNA_RECOVERING;
+    transitionToVideoIndexWithFade(9, true); // Anim 9: Sick to Idle (Recovered)
+    face.setStateLabel("Recovered");
+    face.setDetailedNotification("Recovered", "Great job! NEXA is healed!", rtcHour, rtcMinute);
+    audio.playSound(SOUND_ANIM_RECOVERED);
+    ble.sendLog("STATUS_SICK:0");
+    notifyScreenAndExprSync();
+    Serial.println("[RECOVER] Real-world activity completed. NEXA healed!");
   } else if (text.startsWith("SET_NAME:") || text.startsWith("USER:")) {
     ownerName = text.substring(text.indexOf(':') + 1);
     ownerName.trim();
@@ -1171,7 +1254,7 @@ void handleRobotCommand(String text) {
     }
     appName.trim();
     duration.trim();
-    if (appName.length() == 0) appName = "Phone";
+    if (appName.length() == 0) appName = "Instagram";
 
     // 1. Wake screen if asleep
     isAsleep = false;
@@ -1179,26 +1262,25 @@ void handleRobotCommand(String text) {
     lastInteractionTime = millis();
     lastExpressionCycleTime = millis();
 
-    // 2. Dismiss any active notification popups so only the angry emoji/face shows
-    face.setPopupDismiss();
+    // 2. Lock hardware into SICK state (cannot exit via touch/button)
+    isSickLocked = true;
+    preferences.begin("luna", false);
+    preferences.putBool("is_sick", true);
+    preferences.end();
 
-    // 3. Switch to Robot Face screen
+    // 3. Switch to Robot Face screen & trigger Idle-to-Sick (Anim 7 -> Anim 8)
     currentScreen = SCREEN_FACE;
+    lunaSleepState = LUNA_GOING_TO_SICK;
+    transitionToVideoIndexWithFade(7, true);
+    face.setStateLabel("Getting Sick");
+    face.setDetailedNotification("Limit Exceeded", appName + " limit exceeded! NEXA is sick.", rtcHour, rtcMinute);
+    audio.playSound(SOUND_ANIM_GETTING_SICK);
 
-    // 4. Set Angry Face Robot Eye Animation (index 1 = Angry Face)
-    face.getRobotEyeAnim().setAnimationIndex(1);
-    face.getRobotEyeAnim().reset();
-    face.getRobotEyeAnim().play();
-    face.setExpression(EXPR_ROBOT_EYE);
-    face.setStateLabel("Angry Face");
-
-    // 5. Play urgent warning beep sound
-    audio.playSound(SOUND_ALERT_BEEP);
-
-    // 6. Sync status back to companion app
+    // 4. Sync status back to companion app
     ble.sendLog("FOCUS_ALERT_TRIGGERED:" + appName);
+    ble.sendLog("STATUS_SICK:1");
     notifyScreenAndExprSync();
-    Serial.printf("[FOCUS_ALERT] Triggered for app: %s (%s)\n", appName.c_str(), duration.c_str());
+    Serial.printf("[FOCUS_ALERT] Triggered for app: %s (%s). SICK LOCKED.\n", appName.c_str(), duration.c_str());
   } else if (text == "FOCUS_TEST") {
     isAsleep = false;
     applyDisplayBrightness(oledBrightness);
@@ -2010,6 +2092,17 @@ void setup() {
   relTripleSound = preferences.getInt("rTriSd", 8);
   relLongExpr = preferences.getInt("rLonEx", 5);
   relLongSound = preferences.getInt("rLonSd", 4);
+
+  // Load NEXA Meal and Sleep Schedule from NVS
+  mealTime1 = preferences.getString("meal_t1", "08:30");
+  mealTime2 = preferences.getString("meal_t2", "13:00");
+  mealTime3 = preferences.getString("meal_t3", "20:00");
+  todayFedMask = preferences.getUChar("fed_mask", 0);
+  sleepSched = preferences.getString("sleep_sched", "23:00");
+  wakeSched = preferences.getString("wake_sched", "07:00");
+  lastWakeDay = preferences.getInt("wake_day", -1);
+  isSickLocked = preferences.getBool("is_sick", false);
+  savedAnimIndex = preferences.getInt("saved_anim", 0);
   preferences.end();
 
   loadCalendarEventsFromNVS();
@@ -2217,10 +2310,69 @@ void setup() {
   display.fillScreen(ST77XX_BLACK);
   tft.invertDisplay(true);
   
+  int bootAnim = 0;
+  String bootLabel = "Luna Idle";
+
+  // Check 1: SICK LOCKOUT takes top precedence
+  if (isSickLocked) {
+    lunaSleepState = LUNA_SICK_LOOP;
+    bootAnim = 8; // Anim 8: Luna Sick loop
+    bootLabel = "Luna Sick";
+    face.setDetailedNotification("SICK", "Instagram Limit Exceeded", rtcHour, rtcMinute);
+  }
+  else {
+    int curM = rtcHour * 60 + rtcMinute;
+    int m1M = parseTimeMinutes(mealTime1);
+    int m2M = parseTimeMinutes(mealTime2);
+    int m3M = parseTimeMinutes(mealTime3);
+    int wakeM = parseTimeMinutes(wakeSched);
+
+    // Check 2: Missed Meal Check on Boot -> ANGRY with top notification toast
+    String missedTime = "";
+    if (curM >= m1M && curM < m1M + 240 && !(todayFedMask & 1)) {
+      missedTime = mealTime1;
+    } else if (curM >= m2M && curM < m2M + 240 && !(todayFedMask & 2)) {
+      missedTime = mealTime2;
+    } else if (curM >= m3M && !(todayFedMask & 4)) {
+      missedTime = mealTime3;
+    }
+
+    if (missedTime.length() > 0) {
+      isAngryAtMissedMeal = true;
+      currentMood = MOOD_ANGRY;
+      face.setExpression(EXPR_ANGRY);
+      bootAnim = 1; // Anim 1: Angry Face
+      bootLabel = "ANGRY";
+      face.setThoughtText("Forgot meal!");
+      face.setDetailedNotification("Missed Meal", "You forgot to feed at " + missedTime, rtcHour, rtcMinute);
+      audio.playSound(SOUND_ALERT_BEEP);
+      Serial.printf("[BOOT] Missed meal at %s! Booting in ANGRY state.\n", missedTime.c_str());
+    }
+    // Check 3: Morning Wake-Up Boot Animation
+    else if (curM >= wakeM && curM < wakeM + 180 && lastWakeDay != rtcDay.toInt() && rtcDay.length() > 0) {
+      lastWakeDay = rtcDay.toInt();
+      preferences.begin("luna", false);
+      preferences.putInt("wake_day", lastWakeDay);
+      preferences.end();
+      lunaSleepState = LUNA_WAKING_UP;
+      bootAnim = 12; // Anim 12: Waking Up
+      bootLabel = "Waking Up";
+      audio.playSound(SOUND_ANIM_WAKEUP);
+      Serial.println(F("[BOOT] Morning boot! Playing Waking Up animation (Anim 12)."));
+    }
+    // Check 4: Restore Saved Animation from NVS across reboots
+    else {
+      if (savedAnimIndex >= 0 && savedAnimIndex < SPRITE_AI_ANIMATION_COUNT) {
+        bootAnim = savedAnimIndex;
+        bootLabel = getSpriteAiAnimationName(savedAnimIndex);
+      }
+    }
+  }
+
   face.setFrameDelay(gifIntroSpeed);
   face.setExpression(EXPR_ROBOT_EYE);
-  face.getRobotEyeAnim().setAnimationIndex(0); // Luna Idle
-  face.setStateLabel("Luna Idle");
+  face.getRobotEyeAnim().setAnimationIndex(bootAnim);
+  face.setStateLabel(bootLabel);
   face.getRobotEyeAnim().reset();
   face.getRobotEyeAnim().play();
   face.update();
@@ -2269,8 +2421,127 @@ void setup() {
 // Global index for all-gifs cycling — advances through all 63 entries
 int allGifCycleIdx = 0;
 
+int parseTimeMinutes(const String& tStr) {
+  int colon = tStr.indexOf(':');
+  if (colon <= 0) return 0;
+  int h = tStr.substring(0, colon).toInt();
+  int m = tStr.substring(colon + 1).toInt();
+  return (h * 60) + m;
+}
+
+void sendMealSyncToBLE() {
+  if (ble.isConnected()) {
+    String msg = "MEAL_SYNC:" + mealTime1 + "," + mealTime2 + "," + mealTime3 + "," + String(todayFedMask);
+    ble.sendLog(msg);
+  }
+}
+
+void checkMealAndSleepSchedule() {
+  static unsigned long lastCheckMs = 0;
+  if (millis() - lastCheckMs < 3000) return; // Check every 3 seconds
+  lastCheckMs = millis();
+
+  // 1. Day Rollover Tracking
+  if (rtcDay.length() > 0) {
+    preferences.begin("luna", false);
+    String lastDay = preferences.getString("last_sched_day", "");
+    if (lastDay != rtcDay && lastDay.length() > 0) {
+      todayFedMask = 0;
+      isAngryAtMissedMeal = false;
+      preferences.putString("last_sched_day", rtcDay);
+      preferences.putUChar("fed_mask", 0);
+      preferences.putInt("wake_day", -1);
+      Serial.println(F("[SCHED] New calendar day! Reset fed mask & wake tracking."));
+      sendMealSyncToBLE();
+    } else if (lastDay.length() == 0) {
+      preferences.putString("last_sched_day", rtcDay);
+    }
+    preferences.end();
+  }
+
+  int curM = rtcHour * 60 + rtcMinute;
+  int m1 = parseTimeMinutes(mealTime1);
+  int m2 = parseTimeMinutes(mealTime2);
+  int m3 = parseTimeMinutes(mealTime3);
+  int sM = parseTimeMinutes(sleepSched);
+  int wM = parseTimeMinutes(wakeSched);
+
+  // 2. Sleep Schedule Auto-Trigger
+  if (curM == sM && rtcSecond < 8) {
+    if (lunaSleepState == LUNA_AWAKE || lunaSleepState == LUNA_WAKING_UP) {
+      Serial.println(F("[SCHED] Sleep schedule trigger -> Going to Sleep (Anim 10)"));
+      lunaSleepState = LUNA_GOING_TO_SLEEP;
+      currentScreen = SCREEN_FACE;
+      transitionToVideoIndexWithFade(10, true);
+    }
+  }
+
+  // 3. Wake Schedule Auto-Trigger
+  if (curM == wM && rtcSecond < 8) {
+    if (lunaSleepState == LUNA_SLEEPING_LOOP || lunaSleepState == LUNA_GOING_TO_SLEEP) {
+      Serial.println(F("[SCHED] Wake schedule trigger -> Waking Up (Anim 12)"));
+      lunaSleepState = LUNA_WAKING_UP;
+      currentScreen = SCREEN_FACE;
+      transitionToVideoIndexWithFade(12, true);
+    }
+  }
+
+  // 4. Missed Meal Check -> Angry State & Toast Notification
+  if (!isSickLocked && lunaSleepState == LUNA_AWAKE) {
+    String missedTime = "";
+    if (curM >= m1 && curM < m1 + 240 && !(todayFedMask & 1)) {
+      missedTime = mealTime1;
+    } else if (curM >= m2 && curM < m2 + 240 && !(todayFedMask & 2)) {
+      missedTime = mealTime2;
+    } else if (curM >= m3 && !(todayFedMask & 4)) {
+      missedTime = mealTime3;
+    }
+
+    if (missedTime.length() > 0) {
+      if (!isAngryAtMissedMeal) {
+        isAngryAtMissedMeal = true;
+        currentMood = MOOD_ANGRY;
+        currentScreen = SCREEN_FACE;
+        face.setExpression(EXPR_ANGRY);
+        face.setStateLabel("ANGRY");
+        face.setThoughtText("Forgot meal!");
+        face.setDetailedNotification("Missed Meal", "You forgot to feed at " + missedTime, rtcHour, rtcMinute);
+        audio.playSound(SOUND_ALERT_BEEP);
+        transitionToVideoIndexWithFade(1, true); // Anim 1: Angry Face
+        Serial.printf("[MEAL] Missed meal at %s! Triggered ANGRY state.\n", missedTime.c_str());
+      }
+    } else {
+      if (isAngryAtMissedMeal) {
+        isAngryAtMissedMeal = false;
+      }
+    }
+  }
+}
+
 void feedLuna() {
-  if (!isHungry && !face.isHungry()) return; // Only feed if hungry!
+  // Clear angry & hungry states
+  isHungry = false;
+  face.setHungry(false);
+  isAngryAtMissedMeal = false;
+
+  // Calculate which meal is being fed
+  int curM = rtcHour * 60 + rtcMinute;
+  int m1M = parseTimeMinutes(mealTime1);
+  int m2M = parseTimeMinutes(mealTime2);
+  int m3M = parseTimeMinutes(mealTime3);
+
+  if (curM >= m3M - 30) {
+    todayFedMask |= 4; // Dinner fed
+  } else if (curM >= m2M - 30) {
+    todayFedMask |= 2; // Lunch fed
+  } else {
+    todayFedMask |= 1; // Breakfast fed
+  }
+
+  // Save fed mask in NVS
+  preferences.begin("luna", false);
+  preferences.putUChar("fed_mask", todayFedMask);
+  preferences.end();
 
   // Add +50 XP and increment feed count
   lunaFeedCount++;
@@ -2278,12 +2549,17 @@ void feedLuna() {
   lunaLevel = calculateLunaLevel(lunaXP);
   saveLunaPetStats();
   sendLunaStatsToBLE();
+  sendMealSyncToBLE();
 
-  // Start feeding animation: bubbles float up towards crying face
-  face.startFeeding();
-  face.setThoughtText("+50 XP! Eating...");
-  audio.playSound(SOUND_CHIRP);
-  Serial.printf("[LUNA] FEEDING: XP now %u (Lv %d). Food bubbles floating up...\n", lunaXP, lunaLevel);
+  // Start feeding animation (rotate through eat anims 4: Eat Fish, 5: Drink Milk, 6: Eat Salad)
+  static int eatIdx = 0;
+  int chosenAnim = 4 + (eatIdx++ % 3);
+  currentScreen = SCREEN_FACE;
+  face.setThoughtText("+50 XP! Yum!");
+  face.setDetailedNotification("NEXA Fed", "Yum! +50 XP granted!", rtcHour, rtcMinute);
+  transitionToVideoIndexWithFade(chosenAnim, true);
+
+  Serial.printf("[NEXA] FEEDING: XP now %u (Lv %d). FedMask=0x%02X\n", lunaXP, lunaLevel, todayFedMask);
 }
 
 // ── Returns the matching sound effect for a given animation index ────────────
@@ -2308,7 +2584,7 @@ SoundEffect getAnimationSound(int idx) {
 }
 
 // ── Fast, Smooth Fade Transition Between Video Animations (Zero Delay) ──────
-void transitionToVideoIndexWithFade(int targetIdx, bool playSound = true) {
+void transitionToVideoIndexWithFade(int targetIdx, bool playSound) {
   uint8_t targetDuty = 230;
   if (oledBrightness == 1) targetDuty = 90;
   else if (oledBrightness == 3) targetDuty = 255;
@@ -2371,6 +2647,15 @@ void transitionToVideoIndexWithFade(int targetIdx, bool playSound = true) {
 
   Serial.printf("[VIDEO] Anim %d -> Faded -> Anim %d (%s, %d frames)\n",
                 oldIdx, newIdx, animName, face.getRobotEyeAnim().getFrameCount());
+
+  // Persist steady animation index to NVS across reboots
+  if (newIdx >= 0 && newIdx < TOTAL_ANIMATIONS && newIdx != 10 && newIdx != 12 && newIdx != 7 && newIdx != 9) {
+    savedAnimIndex = newIdx;
+    preferences.begin("luna", false);
+    preferences.putInt("saved_anim", savedAnimIndex);
+    preferences.end();
+  }
+
   notifyScreenAndExprSync();
 }
 
@@ -2379,17 +2664,6 @@ void transitionToNextVideoWithFade() {
   transitionToVideoIndexWithFade(nextIdx, true);
 }
 
-enum LunaSleepState {
-  LUNA_AWAKE,          // Normal awake: cycles IDLE (0) and THINKING (13)
-  LUNA_GOING_TO_SLEEP, // Transitioning: anim 10 (Going to Sleep)
-  LUNA_SLEEPING_LOOP,  // Sleeping: anim 11 (Sleeping loop) indefinitely
-  LUNA_WAKING_UP,      // Transitioning: anim 12 (Waking Up)
-  LUNA_GOING_TO_SICK,  // Transitioning: anim 7 (Idle to Sick)
-  LUNA_SICK_LOOP,      // Sick: anim 8 (Sick loop) indefinitely
-  LUNA_RECOVERING      // Transitioning: anim 9 (Sick to Idle / Recovered)
-};
-
-LunaSleepState lunaSleepState = LUNA_AWAKE;
 int idleLoopCount = 0;
 
 const char* const motivationalQuotes[] = {
@@ -3338,6 +3612,9 @@ void updateStateLabel() {
 void loop() {
   unsigned long now = millis();
 
+  // Check 3 daily meal schedule and auto sleep/wake schedule
+  checkMealAndSleepSchedule();
+
   // ── 0. Poll Physical Buttons for Sleep/Wake & Sick/Cure ───────────────────
   static unsigned long powerBtnPressStart = 0;
   static bool powerBtnWasPressed = false;
@@ -3424,16 +3701,23 @@ void loop() {
               Serial.println(F("[Power Button] Double Click: Idle -> Getting Sick (Anim 7)"));
               notifyScreenAndExprSync();
             } else if (lunaSleepState == LUNA_SICK_LOOP || lunaSleepState == LUNA_GOING_TO_SICK) {
-              // Sick -> Seamlessly transition back to Idle (Anim 9 - Recovered)
-              lunaSleepState = LUNA_RECOVERING;
-              face.setThoughtText("");
-              face.getRobotEyeAnim().setAnimationIndex(9);
-              face.getRobotEyeAnim().reset();
-              face.getRobotEyeAnim().play();
-              face.setStateLabel("Recovering");
-              audio.playSound(SOUND_ANIM_RECOVERED);
-              Serial.println(F("[Power Button] Double Click: Sick -> Recovering to Idle (Anim 9)"));
-              notifyScreenAndExprSync();
+              if (isSickLocked) {
+                // SICK LOCKOUT: Cannot recover via physical button! Must do real-world activity in mobile app!
+                audio.playSound(SOUND_POWERDOWN);
+                face.setDetailedNotification("Still Sick", "Do app activity to heal!", rtcHour, rtcMinute);
+                Serial.println(F("[Power Button] Blocked: NEXA is sick. Complete app activity to recover!"));
+              } else {
+                // Sick -> Seamlessly transition back to Idle (Anim 9 - Recovered)
+                lunaSleepState = LUNA_RECOVERING;
+                face.setThoughtText("");
+                face.getRobotEyeAnim().setAnimationIndex(9);
+                face.getRobotEyeAnim().reset();
+                face.getRobotEyeAnim().play();
+                face.setStateLabel("Recovering");
+                audio.playSound(SOUND_ANIM_RECOVERED);
+                Serial.println(F("[Power Button] Double Click: Sick -> Recovering to Idle (Anim 9)"));
+                notifyScreenAndExprSync();
+              }
             }
           }
         }

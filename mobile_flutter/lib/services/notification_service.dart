@@ -398,14 +398,14 @@ class PhoneNotificationService {
   Future<void> triggerFocusAlert(String appName, int limitMinutes) async {
     final cmd = "FOCUS_ALERT:$appName:${limitMinutes}m";
     _bleService.addLog("Triggering Focus Guard Alert: $cmd", "FOCUS");
-    await _bleService.transmitExpression(1, "Angry Face");
+    _bleService.setNexaSick(true);
     await _forwardToRobot(cmd);
   }
 
   Future<void> testFocusAlert({String appName = "Instagram", int limitMinutes = 5}) async {
     final cmd = "FOCUS_ALERT:$appName:${limitMinutes}m";
     _bleService.addLog("Sending Test Focus Alert: $cmd", "FOCUS");
-    await _bleService.transmitExpression(1, "Angry Face");
+    _bleService.setNexaSick(true);
     await _forwardToRobot(cmd);
   }
 
