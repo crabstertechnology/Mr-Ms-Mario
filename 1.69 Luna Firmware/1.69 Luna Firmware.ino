@@ -2568,7 +2568,7 @@ String getExpressionName(int expr) {
 // =============================================================================
 void adjustOption(int option, int direction) {
   switch (option) {
-    case 0: // Brightness
+    case 0: // Display / Brightness
       if (direction > 0) {
         oledBrightness = (oledBrightness % 3) + 1;
       } else {
@@ -2579,7 +2579,7 @@ void adjustOption(int option, int direction) {
       audio.playSound(SOUND_CHIRP);
       break;
 
-    case 1: // Sound FX
+    case 1: // Sounds & Vibration
       silentMode = !silentMode;
       audio.silentMode = silentMode;
       if (!silentMode) {
@@ -2587,25 +2587,21 @@ void adjustOption(int option, int direction) {
       }
       break;
 
-    case 2: // Clock Face Style (0: Luna OS, 1: Aerospace Chrono)
-      clockStyle = (clockStyle + 1) % 2;
+    case 2: // Time & Date (12H / 24H format toggle)
+      is12HourFormat = !is12HourFormat;
+      preferences.begin("luna", false);
+      preferences.putBool("is12H", is12HourFormat);
+      preferences.end();
       audio.playSound(SOUND_CHIRP);
+      Serial.printf("[SETTINGS] 12H Format toggled -> %d\n", is12HourFormat);
       break;
 
-    case 3: // Speed
-      if (gifSpeed <= 50) gifSpeed = 100;
-      else if (gifSpeed <= 100) gifSpeed = 150;
-      else gifSpeed = 50;
-      face.setFrameDelay(gifSpeed);
+    case 3: // Battery
       audio.playSound(SOUND_CHIRP);
+      Serial.printf("[SETTINGS] Battery status checked: %d mV\n", (int)(batteryVolts * 1000.0f));
       break;
 
-    case 4: // Bluetooth LE
-      bleActive = !bleActive;
-      audio.playSound(SOUND_CHIRP);
-      break;
-
-    case 5: // Save settings
+    case 4: // Save & Exit
       {
         preferences.begin("luna", false);
         preferences.putBool("ble",       bleActive);
@@ -2614,24 +2610,20 @@ void adjustOption(int option, int direction) {
         preferences.putBool("neg",       false);
         preferences.putInt("oledBright", oledBrightness);
         preferences.putBool("silent",    silentMode);
+        preferences.putBool("is12H",     is12HourFormat);
         preferences.end();
         audio.playSound(SOUND_POWERUP);
-        Serial.println("[BTN] Settings SAVED");
+        Serial.println("[BTN] Settings SAVED & EXITING -> SCREEN_MENU");
         
-        // Notify app about changes!
+        // Notify BLE app about changes
         String silentValStr = silentMode ? "1" : "0";
         ble.sendLog("SET_SYNC:" + String(clockStyle) + "," + String(oledBrightness) + ",0," + silentValStr);
 
-        optionSelected = false; // deselect
+        optionSelected = false;
+        settingsActive = false;
+        currentScreen  = SCREEN_MENU;
+        notifyScreenAndExprSync();
       }
-      break;
-
-    case 6: // Exit settings
-      optionSelected = false;
-      settingsActive = false;
-      currentScreen  = SCREEN_CLOCK;
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println("[BTN] Exited Settings to SCREEN_CLOCK");
       break;
   }
 }
@@ -2667,6 +2659,39 @@ void handleBtn1Single() {
   if (inIntroPhase) {
     inIntroPhase = false;
     currentScreen = SCREEN_FACE;
+  }
+
+  // ── Universal Bottom-Left Corner Back Navigation ────────────────────────
+  // Tapping bottom-left corner (X <= 60, Y >= 210) exits to previous parent screen
+  int touchCornerX = interaction.getLastX();
+  int touchCornerY = interaction.getMappedY();
+  if (touchCornerX <= 60 && touchCornerY >= 210) {
+    if (currentScreen == SCREEN_SETTINGS || currentScreen == SCREEN_POMODORO || 
+        currentScreen == SCREEN_CALENDAR || currentScreen == SCREEN_NOTIFICATIONS || 
+        currentScreen == SCREEN_GAMES || currentScreen == SCREEN_CARD) {
+      currentScreen = SCREEN_MENU;
+      settingsActive = false;
+      gamesActive = false;
+      gamePlaying = false;
+      notificationsActive = false;
+      notificationSelected = false;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[CORNER BACK] App -> SCREEN_MENU"));
+      notifyScreenAndExprSync();
+      return;
+    } else if (currentScreen == SCREEN_MENU) {
+      currentScreen = SCREEN_CLOCK;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[CORNER BACK] SCREEN_MENU -> SCREEN_CLOCK"));
+      notifyScreenAndExprSync();
+      return;
+    } else if (currentScreen == SCREEN_CLOCK) {
+      currentScreen = SCREEN_FACE;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[CORNER BACK] SCREEN_CLOCK -> SCREEN_FACE"));
+      notifyScreenAndExprSync();
+      return;
+    }
   }
 
   // Tapping on App Launcher Grid Menu (SCREEN_MENU)
@@ -2710,13 +2735,14 @@ void handleBtn1Single() {
         audio.playSound(SOUND_POWERUP);
         Serial.println("[MENU] -> QR CARD");
       } else {
-        // App 5: Settings
+        // App 5: Settings (Activate immediately so it is scrollable right away!)
         currentScreen = SCREEN_SETTINGS;
-        settingsActive = false;
+        settingsActive = true;
+        menuOption = 0;
         optionSelected = false;
         settingsScrollPx = 0.0f;
         audio.playSound(SOUND_POWERUP);
-        Serial.println("[MENU] -> SETTINGS");
+        Serial.println("[MENU] -> SETTINGS (active)");
       }
     }
     notifyScreenAndExprSync();
@@ -2734,27 +2760,18 @@ void handleBtn1Single() {
 
 
   if (currentScreen == SCREEN_SETTINGS) {
-    if (!settingsActive) {
-      settingsActive = true;
-      menuOption = 0;
-      optionSelected = false;
-      audio.playSound(SOUND_POWERUP);
-      Serial.println("[BTN1] Settings screen ACTIVATED");
-    } else {
-      // Guard: Never select or adjust options if finger moved (scrolled) or inertia is still active
-      if (interaction.hasScrolled() || fabsf(settingsVelPx) > 0.8f) {
-        return;
-      }
-      int lastY = interaction.getLastY();
-      int canvasY = lastY - 20; // 20px screen offset calibration
-      if (canvasY >= 48 && canvasY <= 260) {
-        int optIdx = (int)((canvasY - 52 + settingsScrollPx) / 50.0f);
-        if (optIdx >= 0 && optIdx < 7) {
-          menuOption = optIdx;
-          optionSelected = true;
-          adjustOption(optIdx, 1);
-          Serial.printf("[BTN1] Settings Option %d tapped -> executed\n", optIdx);
-        }
+    // Guard: Never select or adjust options if finger moved (scrolled) or inertia is still active
+    if (interaction.hasScrolled() || fabsf(settingsVelPx) > 0.8f) {
+      return;
+    }
+    int canvasY = interaction.getMappedY();
+    if (canvasY >= 32 && canvasY <= 276) {
+      int optIdx = (int)((canvasY - 34 + settingsScrollPx) / 48.0f);
+      if (optIdx >= 0 && optIdx < 5) {
+        menuOption = optIdx;
+        optionSelected = true;
+        adjustOption(optIdx, 1);
+        Serial.printf("[BTN1] Settings Option %d tapped -> executed\n", optIdx);
       }
     }
     return;
@@ -3642,7 +3659,7 @@ void loop() {
 
     // — Settings scroll —
     if (currentScreen == SCREEN_SETTINGS && settingsActive) {
-      const float SETTINGS_MAX = 7.0f * 50.0f - 206.0f;  // = 144.0f
+      const float SETTINGS_MAX = 20.0f;  // calibrated for 5 modern AMOLED cards (240px)
       if (inScroll) {
         if (settingsWasScroll) {
           float dy = (float)(curY - settingsPrevY);
