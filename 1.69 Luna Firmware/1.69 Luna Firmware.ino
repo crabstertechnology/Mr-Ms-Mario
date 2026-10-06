@@ -2662,10 +2662,10 @@ void handleBtn1Single() {
   }
 
   // ── Universal Bottom-Left Corner Back Navigation ────────────────────────
-  // Tapping bottom-left corner (X <= 60, Y >= 210) exits to previous parent screen
+  // Tapping bottom-left corner (X <= 45, Y >= 240) exits to previous parent screen (invisible gesture)
   int touchCornerX = interaction.getLastX();
   int touchCornerY = interaction.getMappedY();
-  if (touchCornerX <= 60 && touchCornerY >= 210) {
+  if (touchCornerX <= 45 && touchCornerY >= 240) {
     if (currentScreen == SCREEN_SETTINGS || currentScreen == SCREEN_POMODORO || 
         currentScreen == SCREEN_CALENDAR || currentScreen == SCREEN_NOTIFICATIONS || 
         currentScreen == SCREEN_GAMES || currentScreen == SCREEN_CARD) {
@@ -2773,6 +2773,83 @@ void handleBtn1Single() {
         adjustOption(optIdx, 1);
         Serial.printf("[BTN1] Settings Option %d tapped -> executed\n", optIdx);
       }
+    }
+    return;
+  }
+
+  if (currentScreen == SCREEN_POMODORO) {
+    int curX = interaction.getLastX();
+    int curY = interaction.getMappedY();
+    
+    // 1. Mode Buttons at Y = 175..220
+    if (curY >= 175 && curY <= 220) {
+      if (curX >= 15 && curX <= 118) {
+        // Short Break (5 min)
+        pomoMode = 1;
+        resetPomodoroTimer();
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[POMO] Mode -> SHORT BREAK (5m)");
+      } else if (curX >= 122 && curX <= 225) {
+        // Long Break (15 min)
+        pomoMode = 2;
+        resetPomodoroTimer();
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[POMO] Mode -> LONG BREAK (15m)");
+      }
+      notifyScreenAndExprSync();
+      return;
+    }
+    
+    // 2. Play / Pause & Controls at Y = 222..278
+    if (curY >= 222 && curY <= 278) {
+      if (curX >= 36 && curX <= 76) {
+        // Reset button
+        resetPomodoroTimer();
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[POMO] Reset timer");
+      } else if (curX >= 95 && curX <= 145) {
+        // Play / Pause toggle
+        if (pomoState == 1) {
+          pomoState = 2; // Pause
+          audio.playSound(SOUND_CHIRP);
+          Serial.println("[POMO] Paused");
+        } else {
+          pomoState = 1; // Start/Resume
+          pomoLastTickMillis = millis();
+          audio.playSound(SOUND_POWERUP);
+          Serial.println("[POMO] Started/Resumed");
+        }
+      } else if (curX >= 164 && curX <= 204) {
+        // Skip session
+        pomoCompletedSessions++;
+        pomoMode = (pomoMode == 0) ? 1 : 0; // alternate work & break
+        resetPomodoroTimer();
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[POMO] Skipped to next session");
+      }
+      notifyScreenAndExprSync();
+      return;
+    }
+
+    // 3. Tapping the big central circle at Y = 45..170: toggle Focus vs Break
+    if (curY >= 45 && curY <= 170 && curX >= 55 && curX <= 185) {
+      if (pomoMode != 0) {
+        pomoMode = 0; // Back to 25m Focus!
+        resetPomodoroTimer();
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[POMO] Circle tapped -> Back to 25m Focus");
+      } else {
+        if (pomoState == 1) {
+          pomoState = 2;
+          audio.playSound(SOUND_CHIRP);
+        } else {
+          pomoState = 1;
+          pomoLastTickMillis = millis();
+          audio.playSound(SOUND_POWERUP);
+        }
+      }
+      notifyScreenAndExprSync();
+      return;
     }
     return;
   }
