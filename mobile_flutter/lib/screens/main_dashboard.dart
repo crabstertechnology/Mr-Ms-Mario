@@ -1477,10 +1477,9 @@ class _MainDashboardState extends State<MainDashboard> {
     final db = Provider.of<DatabaseService>(context, listen: false);
     final ble = Provider.of<BLEService>(context, listen: false);
 
-    // 5 primary hubs: Hub, Faces, Synth, Synapse, Apps/Menu
+    // 4 primary hubs: Hub, Synth, Synapse, Apps/Menu
     final List<Map<String, dynamic>> items = [
       {'idx': 0, 'icon': Icons.space_dashboard_rounded, 'label': 'Hub'},
-      {'idx': 1, 'icon': Icons.face_retouching_natural_rounded, 'label': 'Faces'},
       {'idx': 2, 'icon': Icons.graphic_eq_rounded, 'label': 'Synth'},
       {'idx': 3, 'icon': Icons.hub_rounded, 'label': 'Synapse'},
       {'idx': -1, 'icon': Icons.apps_rounded, 'label': 'Apps'},

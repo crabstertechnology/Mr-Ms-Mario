@@ -3621,9 +3621,6 @@ void loop() {
   static unsigned long bootBtnPressStart = 0;
   static bool bootBtnWasPressed = false;
 
-  static int powerClickCount = 0;
-  static unsigned long lastPowerClickReleaseTime = 0;
-
   bool powerPressed = (digitalRead(40) == LOW);
   bool bootPressed = (digitalRead(0) == LOW);
 
@@ -3637,7 +3634,6 @@ void loop() {
         // Long press -> Enter Badge Mode: cut all battery-heavy subsystems
         if (!isAsleep) {
           isAsleep = true;
-          powerClickCount = 0;
           wallpaperDrawnInSleep = false;
           // Stop BLE entirely to save ~15-20mA
           ble.setBLEActive(false);
@@ -3664,7 +3660,6 @@ void loop() {
         if (isAsleep) {
           // Short press while in badge mode -> full wake: restart BLE, restore audio
           isAsleep = false;
-          powerClickCount = 0;
           wallpaperDrawnInSleep = false;
           ble.setBLEActive(true);          // restart BLE advertising
           audio.silentMode = silentMode;   // restore user silent preference
@@ -3672,84 +3667,10 @@ void loop() {
           Serial.println("[Power Button] Short press -> Waking from Badge Mode, BLE restarted");
         } else if (gamePlaying) {
           gamePlaying = false;
-          powerClickCount = 0;
           gamesActive = true;
           audio.playSound(SOUND_POWERDOWN);
           Serial.println("[Power Button] Short press in game -> Exited to arcade");
-        } else if (currentScreen != SCREEN_FACE) {
-          // Short press while awake on non-face screens: feed Luna ONLY when hungry!
-          powerClickCount = 0;
-          if (isHungry || face.isHungry()) {
-            feedLuna();
-          }
-        } else {
-          // SCREEN_FACE: Multi-click detection
-          powerClickCount++;
-          lastPowerClickReleaseTime = now;
-          if (powerClickCount >= 2) {
-            // ── DOUBLE CLICK ACTION ──
-            powerClickCount = 0;
-            if (lunaSleepState == LUNA_AWAKE || lunaSleepState == LUNA_WAKING_UP) {
-              // Awake -> Seamlessly transition to Sick (Anim 7)
-              lunaSleepState = LUNA_GOING_TO_SICK;
-              face.setThoughtText("");
-              face.getRobotEyeAnim().setAnimationIndex(7);
-              face.getRobotEyeAnim().reset();
-              face.getRobotEyeAnim().play();
-              face.setStateLabel("Getting Sick");
-              audio.playSound(SOUND_ANIM_GETTING_SICK);
-              Serial.println(F("[Power Button] Double Click: Idle -> Getting Sick (Anim 7)"));
-              notifyScreenAndExprSync();
-            } else if (lunaSleepState == LUNA_SICK_LOOP || lunaSleepState == LUNA_GOING_TO_SICK) {
-              if (isSickLocked) {
-                // SICK LOCKOUT: Cannot recover via physical button! Must do real-world activity in mobile app!
-                audio.playSound(SOUND_POWERDOWN);
-                face.setDetailedNotification("Still Sick", "Do app activity to heal!", rtcHour, rtcMinute);
-                Serial.println(F("[Power Button] Blocked: NEXA is sick. Complete app activity to recover!"));
-              } else {
-                // Sick -> Seamlessly transition back to Idle (Anim 9 - Recovered)
-                lunaSleepState = LUNA_RECOVERING;
-                face.setThoughtText("");
-                face.getRobotEyeAnim().setAnimationIndex(9);
-                face.getRobotEyeAnim().reset();
-                face.getRobotEyeAnim().play();
-                face.setStateLabel("Recovering");
-                audio.playSound(SOUND_ANIM_RECOVERED);
-                Serial.println(F("[Power Button] Double Click: Sick -> Recovering to Idle (Anim 9)"));
-                notifyScreenAndExprSync();
-              }
-            }
-          }
         }
-      }
-    }
-  }
-
-  // Single click timeout check for SCREEN_FACE (wait 280ms for a potential second click)
-  if (powerClickCount == 1 && !powerBtnWasPressed && (now - lastPowerClickReleaseTime > 280)) {
-    powerClickCount = 0;
-    if (currentScreen == SCREEN_FACE) {
-      if (lunaSleepState == LUNA_AWAKE || lunaSleepState == LUNA_WAKING_UP) {
-        // Awake -> Seamlessly start Going to Sleep (Anim 10)
-        lunaSleepState = LUNA_GOING_TO_SLEEP;
-        face.setThoughtText("");
-        face.getRobotEyeAnim().setAnimationIndex(10);
-        face.getRobotEyeAnim().reset();
-        face.getRobotEyeAnim().play();
-        face.setStateLabel("Going to Sleep");
-        audio.playSound(SOUND_ANIM_SLEEP);
-        Serial.println(F("[Power Button] Single Click: Awake -> Going to Sleep (Anim 10)"));
-        notifyScreenAndExprSync();
-      } else if (lunaSleepState == LUNA_SLEEPING_LOOP || lunaSleepState == LUNA_GOING_TO_SLEEP) {
-        // Asleep -> Seamlessly start Waking Up (Anim 12)
-        lunaSleepState = LUNA_WAKING_UP;
-        face.getRobotEyeAnim().setAnimationIndex(12);
-        face.getRobotEyeAnim().reset();
-        face.getRobotEyeAnim().play();
-        face.setStateLabel("Waking Up");
-        audio.playSound(SOUND_ANIM_WAKEUP);
-        Serial.println(F("[Power Button] Single Click: Asleep -> Waking Up (Anim 12)"));
-        notifyScreenAndExprSync();
       }
     }
   }
