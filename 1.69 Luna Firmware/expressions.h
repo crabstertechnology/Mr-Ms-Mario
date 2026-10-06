@@ -554,6 +554,14 @@ public:
     addNotification(title, body, String(timeBuf));
   }
 
+  void setPopup(String title, String body, int hour = 12, int minute = 0) {
+    setDetailedNotification(title, body, hour, minute);
+  }
+
+  void clearPopup() {
+    popupActive = false;
+  }
+
   void setPopupDismiss() {
     popupActive = false;
   }
@@ -883,73 +891,145 @@ public:
 
   void drawPopup() {
     bool isWA = popupTitle.startsWith("WA:") || popupTitle.indexOf("WhatsApp") >= 0;
+    bool isMsg = isWA || popupTitle.indexOf("Message") >= 0 || popupTitle.indexOf("MSG") >= 0 || popupTitle.indexOf("SMS") >= 0;
+    bool isBday = popupTitle.indexOf("Birthday") >= 0 || popupTitle.indexOf("Bday") >= 0;
+    bool isReminder = popupTitle.indexOf("Reminder") >= 0 || popupTitle.indexOf("Alarm") >= 0 || popupTitle.indexOf("Meeting") >= 0;
+    bool isFullScreenNotif = isMsg || isBday || isReminder;
+
     String displayTitle = popupTitle;
     if (displayTitle.startsWith("WA:")) {
       displayTitle = displayTitle.substring(3);
       displayTitle.trim();
     }
 
-    const uint16_t accentCol = isWA ? 0x07E0 : ((robotVariant == "mr_luna") ? 0x07FF : 0xFD99);
-    const uint16_t cardBg    = 0x0841; // Dark graphite
-    const uint16_t textCol   = 0xFFFF; // White
-    const uint16_t subCol    = 0x8410; // Silver
-    const uint16_t borderCol = accentCol;
+    unsigned long elapsed = millis() - popupStartTime;
 
-    // ── Outer glow borders (double ring) ──────────────────────────────────────
-    display.drawRoundRect(2,  2,  SCREEN_WIDTH - 4,  SCREEN_HEIGHT - 4,  14, borderCol);
-    display.drawRoundRect(3,  3,  SCREEN_WIDTH - 6,  SCREEN_HEIGHT - 6,  13, 0x4A49);
-    // ── Card fill ─────────────────────────────────────────────────────────────
-    display.fillRoundRect(5,  5,  SCREEN_WIDTH - 10, SCREEN_HEIGHT - 10, 11, cardBg);
+    if (isFullScreenNotif) {
+      // ═════════════════════════════════════════════════════════════════════════
+      // 1. FULL SCREEN NOTIFICATION (Messages, Birthday, Reminders)
+      // Custom curved radius (22px) accurately matching 1.69" curved screen edges!
+      // ═════════════════════════════════════════════════════════════════════════
+      const int cardPad = 4;
+      const int cardW = SCREEN_WIDTH - cardPad * 2;
+      const int cardH = SCREEN_HEIGHT - cardPad * 2;
+      const int cardR = 22; // Matched to 1.69" curved display corners
 
-    // ── Header strip ──────────────────────────────────────────────────────────
-    display.fillRoundRect(5, 5, SCREEN_WIDTH - 10, 36, 11, isWA ? 0x0280 : 0x18C3);
-    // Notification bell icon (3 circles + base)
-    int bx = 22, by = 23;
-    display.fillCircle(bx, by - 3, 5, accentCol);
-    display.fillRect(bx - 6, by + 2, 13, 4, accentCol);
-    display.fillCircle(bx, by + 8, 2, accentCol);
-    display.fillRect(bx - 6, by + 2, 13, 2, isWA ? 0x0280 : 0x18C3);
+      uint16_t accentCol = isWA ? 0x07E0 : (isBday ? 0xFD20 : (isReminder ? 0xF800 : 0x07FF));
+      uint16_t headerBg  = isWA ? 0x0320 : (isBday ? 0x6180 : (isReminder ? 0x6000 : 0x098F));
 
-    // App / sender badge
-    display.fillRoundRect(38, 14, isWA ? 96 : 90, 17, 8, isWA ? 0x0BE4 : 0x2945);
-    display.setTextSize(1);
-    display.setTextColor(TFT_WHITE);
-    display.setCursor(44, 19);
-    display.print(isWA ? "WHATSAPP" : "NEW MESSAGE");
+      // Dark AMOLED frosted card background
+      display.fillRoundRect(cardPad, cardPad, cardW, cardH, cardR, 0x0841);
+      // Double outer border matching display curvature
+      display.drawRoundRect(cardPad, cardPad, cardW, cardH, cardR, accentCol);
+      display.drawRoundRect(cardPad + 1, cardPad + 1, cardW - 2, cardH - 2, cardR - 1, 0x2965);
 
-    // Time badge (right side)
-    display.setTextColor(subCol);
-    display.setCursor(SCREEN_WIDTH - 42, 19);
-    display.print("NOW");
+      // Header strip (curved on top)
+      display.fillRoundRect(cardPad + 2, cardPad + 2, cardW - 4, 46, cardR - 2, headerBg);
+      display.fillRect(cardPad + 2, cardPad + 26, cardW - 4, 22, headerBg); // flatten bottom of header
 
-    display.drawFastHLine(8, 41, SCREEN_WIDTH - 16, 0x2124);
+      // Category Icon & Badge
+      int iconX = cardPad + 18, iconY = cardPad + 24;
+      if (isBday) {
+        // Birthday cake / gift icon
+        display.fillRect(iconX - 6, iconY - 3, 12, 10, 0xFDA0);
+        display.drawFastHLine(iconX - 7, iconY - 4, 14, TFT_WHITE);
+        display.drawFastVLine(iconX, iconY - 3, 10, TFT_RED);
+      } else if (isReminder) {
+        // Bell / alarm icon
+        display.fillCircle(iconX, iconY - 3, 5, accentCol);
+        display.fillRect(iconX - 6, iconY + 2, 13, 3, accentCol);
+        display.fillCircle(iconX, iconY + 6, 2, accentCol);
+      } else {
+        // Chat speech bubble / WhatsApp
+        display.fillRoundRect(iconX - 8, iconY - 6, 16, 12, 3, accentCol);
+        display.fillTriangle(iconX - 4, iconY + 6, iconX + 2, iconY + 6, iconX - 6, iconY + 9, accentCol);
+      }
 
-    // ── Sender / App Title ────────────────────────────────────────────────────
-    display.setTextSize(2);
-    display.setTextColor(accentCol);
-    display.setCursor(14, 50);
-    String title = displayTitle;
-    if (title.length() > 15) title = title.substring(0, 13) + "..";
-    display.print(title);
+      // App Tag Badge
+      const char* badgeText = isWA ? "WHATSAPP" : (isBday ? "BIRTHDAY" : (isReminder ? "REMINDER" : "MESSAGE"));
+      display.fillRoundRect(cardPad + 36, cardPad + 14, strlen(badgeText) * 6 + 12, 18, 9, 0x10A2);
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(cardPad + 42, cardPad + 19);
+      display.print(badgeText);
 
-    display.drawFastHLine(8, 72, SCREEN_WIDTH - 16, 0x2124);
+      // "NOW" indicator
+      display.setTextColor(0x8410);
+      display.setCursor(cardW - 32, cardPad + 19);
+      display.print("NOW");
 
-    // ── Message body — size 2 with smart word wrapping ─────────────────────
-    drawWordWrappedText(popupBody, 14, 80, SCREEN_WIDTH - 28, 5, 22, textCol, 2);
+      // Title (Sender / Subject)
+      display.setTextSize(2);
+      display.setTextColor(accentCol);
+      display.setCursor(cardPad + 14, cardPad + 58);
+      String tStr = displayTitle;
+      if (tStr.length() > 14) tStr = tStr.substring(0, 12) + "...";
+      display.print(tStr);
 
-    // ── Dismiss progress bar (counts down over popup duration) ────────────────
-    unsigned long elapsed  = millis() - popupStartTime;
-    int barW   = SCREEN_WIDTH - 28;
-    int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
-    if (barFill < 0) barFill = 0;
-    display.drawRoundRect(14, SCREEN_HEIGHT - 22, barW, 8, 3, 0x2124);
-    display.fillRoundRect(15, SCREEN_HEIGHT - 21, barFill, 6, 2, accentCol);
+      display.drawFastHLine(cardPad + 10, cardPad + 80, cardW - 20, 0x2965);
 
-    // ── Tap-to-dismiss hint ───────────────────────────────────────────────────
-    display.setTextSize(1);
-    display.setTextColor(subCol);
-    display.setCursor((SCREEN_WIDTH - 84) / 2, SCREEN_HEIGHT - 11);
-    display.print("TAP TO DISMISS");
+      // Body text with word wrap
+      drawWordWrappedText(popupBody, cardPad + 14, cardPad + 88, cardW - 28, 5, 22, TFT_WHITE, 2);
+
+      // Progress bar (countdown)
+      int barW = cardW - 28;
+      int barFill = barW - (int)((float)elapsed / (float)popupDuration * barW);
+      if (barFill < 0) barFill = 0;
+      display.drawRoundRect(cardPad + 14, SCREEN_HEIGHT - 32, barW, 6, 2, 0x2965);
+      display.fillRoundRect(cardPad + 15, SCREEN_HEIGHT - 31, barFill, 4, 2, accentCol);
+
+      // Tap hint
+      display.setTextSize(1);
+      display.setTextColor(0x8410);
+      display.setCursor((SCREEN_WIDTH - 84) / 2, SCREEN_HEIGHT - 22);
+      display.print("TAP TO DISMISS");
+
+    } else {
+      // ═════════════════════════════════════════════════════════════════════════
+      // 2. SMALL, CUTE FLOATING TOAST NOTIFICATION (Status, Missed Meal, System)
+      // Compact floating capsule banner with cute rounded edges!
+      // ═════════════════════════════════════════════════════════════════════════
+      int tW = SCREEN_WIDTH - 24; // 216px
+      int tH = 58;
+      int tX = 12;
+      int tY = 18;
+      int tR = 16; // Cute rounded corners
+
+      bool isAngry = displayTitle.indexOf("Angry") >= 0 || displayTitle.indexOf("Meal") >= 0;
+      uint16_t toastAccent = isAngry ? 0xFD20 : ((robotVariant == "mr_luna") ? 0x07FF : 0xFD99);
+
+      // Dark AMOLED glass background with soft drop shadow
+      display.fillRoundRect(tX + 1, tY + 2, tW, tH, tR, 0x0000);
+      display.fillRoundRect(tX, tY, tW, tH, tR, 0x10A2);
+      display.drawRoundRect(tX, tY, tW, tH, tR, toastAccent);
+      display.drawRoundRect(tX + 1, tY + 1, tW - 2, tH - 2, tR - 1, 0x2186);
+
+      // Cute animated pulsing notification dot
+      bool pulse = ((elapsed / 250) % 2 == 0);
+      display.fillCircle(tX + 18, tY + 22, 5, pulse ? toastAccent : TFT_WHITE);
+      display.drawCircle(tX + 18, tY + 22, 7, toastAccent);
+
+      // Title
+      display.setTextSize(1);
+      display.setTextColor(toastAccent);
+      display.setCursor(tX + 32, tY + 14);
+      String sTitle = displayTitle;
+      if (sTitle.length() > 22) sTitle = sTitle.substring(0, 20) + "..";
+      display.print(sTitle);
+
+      // Body (neatly clipped)
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(tX + 32, tY + 29);
+      String sBody = popupBody;
+      if (sBody.length() > 26) sBody = sBody.substring(0, 24) + "..";
+      display.print(sBody);
+
+      // Mini bottom progress line
+      int minBarW = tW - 24;
+      int minFill = minBarW - (int)((float)elapsed / (float)popupDuration * minBarW);
+      if (minFill < 0) minFill = 0;
+      display.fillRoundRect(tX + 12, tY + tH - 6, minFill, 2, 1, toastAccent);
+    }
   }
 
   void drawMiniHeart(int x, int y) {
@@ -2158,6 +2238,37 @@ public:
 
   void drawRobotFaceScreen() {
     robotEyeAnim.draw(display);
+
+    // ── Curious Companion Thought Bubble Card (Thinking Anim & Thoughts) ────
+    if (thoughtText.length() > 0 && !hungryState) {
+      int cardW = SCREEN_WIDTH - 28;
+      int cardH = 46;
+      int cardX = 14;
+      int cardY = 216;
+      uint16_t borderCol = (robotVariant == "mr_luna") ? 0x07FF : 0xFD99;
+
+      // Small floating thought bubble dots rising from the card
+      display.fillCircle(cardX + 28, cardY - 5, 3, 0x0842);
+      display.drawCircle(cardX + 28, cardY - 5, 3, borderCol);
+      display.fillCircle(cardX + 22, cardY - 11, 2, 0x0842);
+      display.drawCircle(cardX + 22, cardY - 11, 2, borderCol);
+
+      // Frosted card background & luminous borders
+      display.fillRoundRect(cardX, cardY, cardW, cardH, 12, 0x0841);
+      display.drawRoundRect(cardX, cardY, cardW, cardH, 12, borderCol);
+      display.drawRoundRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2, 11, 0x218A);
+
+      // Sparkle star icon on top-left of card
+      display.fillCircle(cardX + 12, cardY + 14, 2, 0xFFE0);
+      display.drawPixel(cardX + 12, cardY + 11, 0xFFE0);
+      display.drawPixel(cardX + 12, cardY + 17, 0xFFE0);
+      display.drawPixel(cardX + 9, cardY + 14, 0xFFE0);
+      display.drawPixel(cardX + 15, cardY + 14, 0xFFE0);
+
+      // Thought text: neatly wrapped
+      drawWordWrappedText(thoughtText, cardX + 22, cardY + 10, cardW - 28, 2, 14, TFT_WHITE, 1);
+    }
+
     if (silentMode) {
       uint16_t silentColor = TFT_WHITE;
       int silentX = SCREEN_WIDTH - 20;

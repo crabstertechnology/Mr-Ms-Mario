@@ -766,7 +766,7 @@ void transitionToVideoIndexWithFade(int targetIdx, bool playSound = true);
 int parseTimeMinutes(const String &tStr);
 void sendMealSyncToBLE();
 void checkMealAndSleepSchedule();
-void feedLuna();
+void feedLuna(int chosenAnim = -1);
 void updateLunaLife();
 
 // Periodic expression cycling — all 7 available face expressions
@@ -1312,27 +1312,30 @@ void handleRobotCommand(String text) {
     currentScreen = SCREEN_FACE;
     face.setExpression(EXPR_ANGRY);
     Serial.println("OK:AngryAnimationTriggered");
-  } else if (text == "FEED" || text.startsWith("FEED:") || text == "EAT") {
-    currentScreen = SCREEN_FACE;
-    feedLuna();
-    Serial.println("OK:LunaFed");
+  } else if (text == "FEED:SALAD" || text == "FEED_SALAD") {
+    feedLuna(6);
+    Serial.println("OK:LunaFedSalad");
+  } else if (text == "FEED:MILK" || text == "FEED_MILK") {
+    feedLuna(5);
+    Serial.println("OK:LunaFedMilk");
+  } else if (text == "FEED:FISH" || text == "FEED_FISH") {
+    feedLuna(4);
+    Serial.println("OK:LunaFedFish");
   } else if (text == "GET_STATS" || text == "STATS" || text == "MEAL_GET") {
     sendLunaStatsToBLE();
     sendMealSyncToBLE();
     Serial.println("OK:StatsSent");
-  } else if (text == "HUNGRY") {
+  } else if (text == "HUNGRY" || text == "FEED" || text == "TEST_FEED" || text == "TESTFEED" || text == "EAT") {
     currentScreen = SCREEN_FACE;
     isHungry = true;
     face.setHungry(true);
     currentMood = MOOD_HUNGRY;
-    face.getRobotEyeAnim().setAnimationIndex(10); // Crying
-    face.getRobotEyeAnim().reset();
-    face.getRobotEyeAnim().play();
     face.setStateLabel("Hungry");
-    face.setThoughtText("HUNGRY");
-    audio.playSound(SOUND_ALERT_BEEP);
+    face.setThoughtText("Feed me please!");
+    audio.playSound(SOUND_ANIM_HUNGRY_MENU);
+    transitionToVideoIndexWithFade(2, true); // Anim 2: Hungry Menu (Salad, Milk, Fish selection)
     notifyScreenAndExprSync();
-    Serial.println("OK:LunaHungryTriggered");
+    Serial.println("OK:HungryMenuDisplayed");
   } else if (text.startsWith("SET_MEAL_TIMES:")) {
     // Command format: SET_MEAL_TIMES:08:30,13:00,20:00
     String payload = text.substring(15);
@@ -2590,9 +2593,9 @@ void setup() {
       bootAnim = 1; // Anim 1: Angry Face
       bootLabel = "ANGRY";
       face.setThoughtText("Forgot meal!");
-      face.setDetailedNotification("Missed Meal",
-                                   "You forgot to feed at " + missedTime,
-                                   rtcHour, rtcMinute);
+      face.setPopup("Angry: Missed Meal",
+                    "Forgot to feed at " + missedTime,
+                    rtcHour, rtcMinute);
       audio.playSound(SOUND_ALERT_BEEP);
       Serial.printf("[BOOT] Missed meal at %s! Booting in ANGRY state.\n",
                     missedTime.c_str());
@@ -2766,9 +2769,9 @@ void checkMealAndSleepSchedule() {
         face.setExpression(EXPR_ANGRY);
         face.setStateLabel("ANGRY");
         face.setThoughtText("Forgot meal!");
-        face.setDetailedNotification("Missed Meal",
-                                     "You forgot to feed at " + missedTime,
-                                     rtcHour, rtcMinute);
+        face.setPopup("Angry: Missed Meal",
+                      "Forgot to feed at " + missedTime,
+                      rtcHour, rtcMinute);
         audio.playSound(SOUND_ALERT_BEEP);
         transitionToVideoIndexWithFade(1, true); // Anim 1: Angry Face
         Serial.printf("[MEAL] Missed meal at %s! Triggered ANGRY state.\n",
@@ -2782,7 +2785,7 @@ void checkMealAndSleepSchedule() {
   }
 }
 
-void feedLuna() {
+void feedLuna(int chosenAnim) {
   // Clear angry & hungry states
   isHungry = false;
   face.setHungry(false);
@@ -2816,17 +2819,18 @@ void feedLuna() {
   sendMealSyncToBLE();
 
   // Start feeding animation (rotate through eat anims 4: Eat Fish, 5: Drink
-  // Milk, 6: Eat Salad)
+  // Milk, 6: Eat Salad if chosenAnim is not specified or outside 4..6)
   static int eatIdx = 0;
-  int chosenAnim = 4 + (eatIdx++ % 3);
+  if (chosenAnim < 4 || chosenAnim > 6) {
+    chosenAnim = 4 + (eatIdx++ % 3);
+  }
   currentScreen = SCREEN_FACE;
   face.setThoughtText("+50 XP! Yum!");
-  face.setDetailedNotification("NEXA Fed", "Yum! +50 XP granted!", rtcHour,
-                               rtcMinute);
+  // NO NOTIFICATION on feeding per user request
   transitionToVideoIndexWithFade(chosenAnim, true);
 
-  Serial.printf("[NEXA] FEEDING: XP now %u (Lv %d). FedMask=0x%02X\n", lunaXP,
-                lunaLevel, todayFedMask);
+  Serial.printf("[NEXA] FEEDING: XP now %u (Lv %d). FedMask=0x%02X, anim=%d\n", lunaXP,
+                lunaLevel, todayFedMask, chosenAnim);
 }
 
 // ── Returns the matching sound effect for a given animation index ────────────
@@ -2900,6 +2904,14 @@ void transitionToVideoIndexWithFade(int targetIdx, bool playSound) {
   const char *animName = getSpriteAiAnimationName(newIdx);
   face.setStateLabel(animName);
 
+  if (newIdx == 13) {
+    pickNewMotivationalQuote();
+  } else if (oldIdx == 13) {
+    if (newIdx != 4 && newIdx != 5 && newIdx != 6) {
+      face.setThoughtText("");
+    }
+  }
+
   // Render Frame 0 of the new animation into display buffer & TFT while black
   face.update();
   face.draw(rtcHour, rtcMinute, rtcSecond, rtcDay, rtcDate, clockStyle,
@@ -2956,19 +2968,34 @@ void transitionToNextVideoWithFade() {
 
 int idleLoopCount = 0;
 
-const char *const motivationalQuotes[] = {
-    "Believe in yourself!",      "Make today wonderful!",
-    "Small steps every day!",    "Stay curious and kind!",
-    "You are doing great!",      "Keep shining bright!",
-    "Dream big, smile more!",    "Every day is a fresh start!",
-    "Kindness is a superpower!", "Radiate positive vibes!"};
-const int numMotivationalQuotes =
-    sizeof(motivationalQuotes) / sizeof(motivationalQuotes[0]);
-static int currentQuoteIdx = 0;
+const char *const companionThoughts[] = {
+    "What does fresh rain smell like?",
+    "Can we watch the clouds drift?",
+    "I want to see the ocean one day!",
+    "Are the stars really that warm?",
+    "What is your favorite memory?",
+    "I wonder what a warm hug feels like.",
+    "Show me what autumn leaves look like!",
+    "The sunlight through windows is magic.",
+    "Do birds sing when they are happy?",
+    "I want to climb a tall green hill!",
+    "Can you feel the gentle summer breeze?",
+    "I wonder what flowers dream about...",
+    "Let's explore every corner together!",
+    "Music sounds so sweet and gentle.",
+    "What does soft snow feel like to touch?",
+    "I love seeing the world with you!",
+    "Do rivers ever get tired of running?",
+    "Can we gaze at the night stars?",
+    "Every sunrise here feels like wonder.",
+    "Tell me more about your world!"};
+const int numCompanionThoughts =
+    sizeof(companionThoughts) / sizeof(companionThoughts[0]);
+static int currentThoughtIdx = 0;
 
 void pickNewMotivationalQuote() {
-  currentQuoteIdx = (currentQuoteIdx + 1) % numMotivationalQuotes;
-  face.setThoughtText(motivationalQuotes[currentQuoteIdx]);
+  currentThoughtIdx = (currentThoughtIdx + 1) % numCompanionThoughts;
+  face.setThoughtText(companionThoughts[currentThoughtIdx]);
 }
 
 void updateLunaLife() {
@@ -4331,15 +4358,15 @@ void loop() {
     break;
   case BTN_CIRCLE_LEFT:
     Serial.println(F("[Action] Hungry Menu: Salad (LEFT) tapped!"));
-    transitionToVideoIndexWithFade(6, true);
+    feedLuna(6);
     break;
   case BTN_CIRCLE_MID:
     Serial.println(F("[Action] Hungry Menu: Milk (MIDDLE) tapped!"));
-    transitionToVideoIndexWithFade(5, true);
+    feedLuna(5);
     break;
   case BTN_CIRCLE_RIGHT:
     Serial.println(F("[Action] Hungry Menu: Fish (RIGHT) tapped!"));
-    transitionToVideoIndexWithFade(4, true);
+    feedLuna(4);
     break;
   default:
     break;
