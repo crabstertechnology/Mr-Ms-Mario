@@ -2175,11 +2175,11 @@ public:
       return;
     }
 
-    display.fillScreen(0x0000); // Pure AMOLED black background (no cluttered road grid)
+    display.fillScreen(0x0000); // Pure AMOLED black background
     display.setTextWrap(false);
 
-    // ── 1. Top Status Header ───────────────────────────────────────────────
-    // Left: Current Watch Time (Size 2, White)
+    // ── 1. Clean Top Status Header (No oval NAVIGATION pill) ───────────────
+    // Left: Current Watch Time (Size 2, White) + Date (Size 1)
     char timeBuf[12];
     snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hour, minute);
     display.setTextSize(2);
@@ -2187,15 +2187,10 @@ public:
     display.setCursor(20, 8);
     display.print(timeBuf);
 
-    // Center: [ 🧭 NAVIGATION ] Pill Badge (X=74, Y=6, W=88, H=20, R=10)
-    display.fillRoundRect(74, 6, 88, 20, 10, 0x0113); // Deep navy fill
-    display.drawRoundRect(74, 6, 88, 20, 10, 0x03FF); // Bright cyan/blue border
-    display.fillTriangle(84, 11, 80, 20, 84, 17, 0x07FF);
-    display.fillTriangle(84, 11, 88, 20, 84, 17, TFT_WHITE);
     display.setTextSize(1);
-    display.setTextColor(0x07FF);
-    display.setCursor(92, 12);
-    display.print("NAVIGATION");
+    display.setTextColor(0x8CD6);
+    display.setCursor(20, 26);
+    display.print(formatWatchDate(rtcDay, rtcDate));
 
     // Right: Bluetooth & Battery Status
     display.drawLine(166, 8, 166, 18, TFT_WHITE);
@@ -2240,7 +2235,7 @@ public:
       NAV_ARRIVE
     };
 
-    NavDirType navType = NAV_RIGHT; // Default to Turn Right (matching mockup)
+    NavDirType navType = NAV_RIGHT; // Default to Turn Right
     String turnText = "Turn Right";
 
     if (dirUpper.indexOf("UTURN") >= 0 || dirUpper.indexOf("U-TURN") >= 0 || dirUpper.indexOf("REVERSE") >= 0) {
@@ -2301,108 +2296,119 @@ public:
     display.setCursor(roadX, 86);
     display.print(roadStr);
 
-    // ── 3. Prominent Direction Arrow (Clean AMOLED Black Background) ───────
-    // Background graphics, 3D perspective road lines, and vehicle cursor removed as requested
-    const uint16_t COLOR_GLOW = 0x01D7;
-    const uint16_t COLOR_CORE = 0x04DF;
-    const uint16_t COLOR_TIP  = 0x07FF;
+    // ── 3. Mathematically Precise & Symmetrical Direction Arrow ────────────
+    const uint16_t ARROW_COLOR = 0x07FF; // Electric cyan
+    const uint16_t ARROW_GLOW  = 0x0215; // Darker cyan outline
 
     if (navType == NAV_RIGHT || navType == NAV_SHARP_RIGHT) {
-      // ── RIGHT TURN ARROW ──
-      display.fillRoundRect(106, 126, 22, 62, 6, COLOR_GLOW);
-      display.fillRoundRect(112, 120, 52, 22, 6, COLOR_GLOW);
-      display.fillRect(110, 134, 16, 52, COLOR_CORE);
-      display.fillCircle(126, 134, 16, COLOR_CORE);
-      display.fillCircle(118, 142, 8, 0x0000);
-      display.fillRect(126, 120, 30, 16, COLOR_CORE);
-      display.fillTriangle(176, 128, 148, 108, 148, 148, COLOR_TIP);
-      display.drawTriangle(177, 128, 147, 107, 147, 149, TFT_WHITE);
+      // ── RIGHT TURN ARROW (Symmetrical, clean 90° bend) ──
+      // Vertical stem (Y: 185 down to Y: 137, X: 94..110, width 16)
+      display.fillRect(94, 145, 16, 40, ARROW_COLOR);
+      display.drawRect(93, 144, 18, 42, ARROW_GLOW);
+      // Corner block (X: 94..110, Y: 137..153)
+      display.fillRect(94, 137, 16, 16, ARROW_COLOR);
+      // Horizontal arm (X: 110..138, Y: 137..153, height 16)
+      display.fillRect(110, 137, 28, 16, ARROW_COLOR);
+      display.drawRect(109, 136, 30, 18, ARROW_GLOW);
+      // Sharp symmetrical arrowhead pointing right (Tip: 172, 145)
+      display.fillTriangle(172, 145, 138, 123, 138, 167, ARROW_COLOR);
+      display.drawTriangle(174, 145, 137, 122, 137, 168, TFT_WHITE);
 
     } else if (navType == NAV_LEFT || navType == NAV_SHARP_LEFT) {
-      // ── LEFT TURN ARROW ──
-      display.fillRoundRect(112, 126, 22, 62, 6, COLOR_GLOW);
-      display.fillRoundRect(76, 120, 52, 22, 6, COLOR_GLOW);
-      display.fillRect(114, 134, 16, 52, COLOR_CORE);
-      display.fillCircle(114, 134, 16, COLOR_CORE);
-      display.fillCircle(122, 142, 8, 0x0000);
-      display.fillRect(84, 120, 30, 16, COLOR_CORE);
-      display.fillTriangle(64, 128, 92, 108, 92, 148, COLOR_TIP);
-      display.drawTriangle(63, 128, 93, 107, 93, 149, TFT_WHITE);
+      // ── LEFT TURN ARROW (Symmetrical mirror of right turn) ──
+      // Vertical stem (Y: 185 down to Y: 137, X: 130..146, width 16)
+      display.fillRect(130, 145, 16, 40, ARROW_COLOR);
+      display.drawRect(129, 144, 18, 42, ARROW_GLOW);
+      // Corner block
+      display.fillRect(130, 137, 16, 16, ARROW_COLOR);
+      // Horizontal arm (X: 102..130, Y: 137..153, height 16)
+      display.fillRect(102, 137, 28, 16, ARROW_COLOR);
+      display.drawRect(101, 136, 30, 18, ARROW_GLOW);
+      // Sharp symmetrical arrowhead pointing left (Tip: 68, 145)
+      display.fillTriangle(68, 145, 102, 123, 102, 167, ARROW_COLOR);
+      display.drawTriangle(66, 145, 103, 122, 103, 168, TFT_WHITE);
 
     } else if (navType == NAV_UTURN) {
-      // ── U-TURN 180° LOOP ARROW ──
-      display.fillRoundRect(128, 130, 18, 56, 4, COLOR_GLOW);
-      display.fillRect(129, 132, 16, 54, COLOR_CORE);
-      display.fillCircle(120, 130, 25, COLOR_CORE);
-      display.fillCircle(120, 130, 9, 0x0000);
-      display.fillRect(95, 130, 50, 25, 0x0000);
-      display.fillRoundRect(94, 130, 18, 28, 4, COLOR_GLOW);
-      display.fillRect(95, 130, 16, 28, COLOR_CORE);
-      display.fillTriangle(103, 180, 85, 154, 121, 154, COLOR_TIP);
-      display.drawTriangle(103, 181, 84, 153, 122, 153, TFT_WHITE);
+      // ── U-TURN 180° LOOP ARROW (Symmetrical arch and downward head) ──
+      // Right stem going up (X: 132..148, Y: 135..185)
+      display.fillRect(132, 135, 16, 50, ARROW_COLOR);
+      display.drawRect(131, 134, 18, 52, ARROW_GLOW);
+      // Top semicircular arch (Outer R=28, Inner R=12, Center=(120, 135))
+      display.fillCircle(120, 135, 28, ARROW_COLOR);
+      display.fillCircle(120, 135, 12, 0x0000);
+      display.fillRect(90, 135, 60, 28, 0x0000); // clear lower half of circle
+      // Left stem going down (X: 92..108, Y: 135..158)
+      display.fillRect(92, 135, 16, 24, ARROW_COLOR);
+      display.drawRect(91, 134, 18, 26, ARROW_GLOW);
+      // Downward arrowhead (Tip: 100, 190, Base: Y=158, X: 78..122)
+      display.fillTriangle(100, 190, 78, 158, 122, 158, ARROW_COLOR);
+      display.drawTriangle(100, 192, 76, 157, 124, 157, TFT_WHITE);
 
     } else if (navType == NAV_ROUNDABOUT) {
       // ── ROUNDABOUT / ROTARY ARROW ──
-      display.fillRoundRect(112, 156, 16, 32, 4, COLOR_CORE);
-      display.fillCircle(120, 130, 28, COLOR_GLOW);
-      display.fillCircle(120, 130, 25, COLOR_CORE);
-      display.fillCircle(120, 130, 13, 0x0842);
-      display.drawCircle(120, 130, 13, 0x03FF);
-      display.drawCircle(120, 130, 6, TFT_WHITE);
-      display.fillRoundRect(134, 108, 20, 20, 4, COLOR_CORE);
-      display.fillTriangle(170, 106, 146, 104, 158, 128, COLOR_TIP);
-      display.drawTriangle(171, 105, 145, 103, 159, 129, TFT_WHITE);
+      int rcX = 120;
+      int rcY = 146;
+      // Circular ring track (Outer R=28, Inner R=14, uniform 14px width)
+      display.fillCircle(rcX, rcY, 28, ARROW_COLOR);
+      display.fillCircle(rcX, rcY, 14, 0x0000);
+      display.drawCircle(rcX, rcY, 28, TFT_WHITE);
+      display.drawCircle(rcX, rcY, 14, 0x03FF);
+      // Entry stem from bottom (X: 113..127, Y: 174..188)
+      display.fillRect(113, 174, 14, 14, ARROW_COLOR);
+      // Exit diagonal branch towards upper right
+      display.fillRect(136, 118, 16, 16, ARROW_COLOR);
+      display.fillTriangle(172, 108, 146, 106, 160, 132, ARROW_COLOR);
+      display.drawTriangle(174, 107, 145, 105, 161, 133, TFT_WHITE);
 
     } else if (navType == NAV_SLIGHT_RIGHT) {
       // ── SLIGHT RIGHT / KEEP RIGHT ARROW ──
-      display.fillRect(112, 150, 16, 36, COLOR_CORE);
+      display.fillRect(112, 160, 16, 26, ARROW_COLOR);
       for (int i = 0; i < 16; i++) {
-        display.drawLine(112 + i, 152, 148 + i, 120, COLOR_CORE);
+        display.drawLine(112 + i, 162, 146 + i, 128, ARROW_COLOR);
       }
-      display.fillTriangle(168, 106, 144, 106, 158, 128, COLOR_TIP);
-      display.drawTriangle(169, 105, 143, 105, 159, 129, TFT_WHITE);
+      display.fillTriangle(170, 110, 144, 110, 160, 136, ARROW_COLOR);
+      display.drawTriangle(172, 109, 143, 109, 161, 137, TFT_WHITE);
 
     } else if (navType == NAV_SLIGHT_LEFT) {
       // ── SLIGHT LEFT / KEEP LEFT ARROW ──
-      display.fillRect(112, 150, 16, 36, COLOR_CORE);
+      display.fillRect(112, 160, 16, 26, ARROW_COLOR);
       for (int i = 0; i < 16; i++) {
-        display.drawLine(112 + i, 152, 76 + i, 120, COLOR_CORE);
+        display.drawLine(112 + i, 162, 78 + i, 128, ARROW_COLOR);
       }
-      display.fillTriangle(72, 106, 82, 128, 96, 106, COLOR_TIP);
-      display.drawTriangle(71, 105, 81, 129, 97, 105, TFT_WHITE);
+      display.fillTriangle(70, 110, 80, 136, 96, 110, ARROW_COLOR);
+      display.drawTriangle(68, 109, 79, 137, 97, 109, TFT_WHITE);
 
     } else if (navType == NAV_ARRIVE) {
       // ── ARRIVE / DESTINATION MARKER ──
-      display.fillRect(112, 145, 16, 42, COLOR_CORE);
-      display.drawCircle(120, 142, 18, 0x0215);
-      display.drawCircle(120, 142, 12, 0x03FF);
-      display.fillCircle(120, 142, 5, 0x07FF);
-      display.drawFastVLine(118, 106, 38, TFT_WHITE);
-      display.fillRect(119, 106, 20, 14, 0x07FF);
-      display.drawRect(119, 106, 20, 14, TFT_WHITE);
+      display.drawCircle(120, 146, 20, 0x0215);
+      display.drawCircle(120, 146, 12, 0x03FF);
+      display.fillCircle(120, 146, 5, ARROW_COLOR);
+      display.drawFastVLine(118, 108, 38, TFT_WHITE);
+      display.fillRect(119, 108, 22, 14, ARROW_COLOR);
+      display.drawRect(119, 108, 22, 14, TFT_WHITE);
 
     } else {
       // ── STRAIGHT / CONTINUE ARROW ──
-      display.fillRoundRect(110, 120, 20, 68, 4, COLOR_GLOW);
-      display.fillRect(112, 122, 16, 66, COLOR_CORE);
-      display.fillTriangle(120, 98, 98, 126, 142, 126, COLOR_TIP);
-      display.drawTriangle(120, 97, 97, 127, 143, 127, TFT_WHITE);
+      display.fillRect(111, 135, 18, 50, ARROW_COLOR);
+      display.drawRect(110, 134, 20, 52, ARROW_GLOW);
+      display.fillTriangle(120, 105, 96, 138, 144, 138, ARROW_COLOR);
+      display.drawTriangle(120, 103, 94, 139, 146, 139, TFT_WHITE);
     }
 
-    // ── 4. Bottom 3-Column Telemetry Card (Y: 212..274, Height = 62) ───────
-    // Generously spaced so text NEVER overlaps and NEVER spills outside the box
-    int cX = 10;
-    int cY = 212;
-    int cW = 220;
-    int cH = 62;
+    // ── 4. Bottom 3-Column Telemetry Card (Y: 210..274, Height = 64) ───────
+    // Values are rendered BIG (Size 2 bold) and spaced with zero clipping
+    int cX = 6;
+    int cY = 210;
+    int cW = 228;
+    int cH = 64;
     display.fillRoundRect(cX, cY, cW, cH, 12, 0x0842); // Dark card fill
     display.drawRoundRect(cX, cY, cW, cH, 12, 0x1928); // Subtle border
 
-    // Vertical column divider lines (Col 1: 10..82, Col 2: 82..158, Col 3: 158..230)
-    display.drawFastVLine(82,  cY + 8, cH - 16, 0x1928);
-    display.drawFastVLine(158, cY + 8, cH - 16, 0x1928);
+    // Vertical column divider lines (Col 1: 6..80, Col 2: 80..160, Col 3: 160..234)
+    display.drawFastVLine(80,  cY + 8, cH - 16, 0x1928);
+    display.drawFastVLine(160, cY + 8, cH - 16, 0x1928);
 
-    // Sanitize ETA (Strip "ETA", strip "AM/PM", keep clean HH:MM)
+    // Sanitize ETA (keep clean "HH:MM")
     String etaVal = mapEta;
     etaVal.trim();
     if (etaVal.length() == 0 || etaVal == "--") {
@@ -2452,46 +2458,70 @@ public:
       leftVal.replace("hour", "hr");
     }
 
-    // Helper for crisp, bold, double-drawn text that stays strictly centered and never overflows
-    auto drawCardVal = [&](const String& str, int cx, int y) {
-      display.setTextSize(1);
-      display.setTextColor(TFT_WHITE);
-      int w = str.length() * 6;
-      int x = cx - (w / 2);
-      display.setCursor(x, y);
-      display.print(str);
-      display.setCursor(x + 1, y);
-      display.print(str);
+    // Column Subtitles (Size 1, soft cyan)
+    display.setTextSize(1);
+    display.setTextColor(0x8CD6);
+    display.setCursor(34,  cY + 12); display.print("ETA");
+    display.setCursor(102, cY + 12); display.print("REMAIN");
+    display.setCursor(185, cY + 12); display.print("TIME");
+
+    // Helper for large, prominent values with optional unit
+    auto drawValueWithUnit = [&](const String& valStr, int cx, int yBase) {
+      String numPart = "";
+      String unitPart = "";
+      int spaceIdx = valStr.indexOf(' ');
+      if (spaceIdx > 0) {
+        numPart = valStr.substring(0, spaceIdx);
+        unitPart = valStr.substring(spaceIdx + 1);
+        unitPart.trim();
+      } else {
+        int idx = 0;
+        while (idx < (int)valStr.length() && (isDigit(valStr.charAt(idx)) || valStr.charAt(idx) == '.' || valStr.charAt(idx) == ':')) {
+          idx++;
+        }
+        if (idx > 0 && idx < (int)valStr.length()) {
+          numPart = valStr.substring(0, idx);
+          unitPart = valStr.substring(idx);
+        } else {
+          numPart = valStr;
+          unitPart = "";
+        }
+      }
+
+      int numW  = numPart.length() * 12; // Size 2 = 12px per char
+      int unitW = unitPart.length() * 6; // Size 1 = 6px per char
+      int gap   = (unitPart.length() > 0) ? 3 : 0;
+      int totalW = numW + gap + unitW;
+
+      if (totalW <= 72) {
+        // Fits comfortably in Size 2 Bold White!
+        int startX = cx - (totalW / 2);
+        display.setTextSize(2);
+        display.setTextColor(TFT_WHITE);
+        display.setCursor(startX, yBase);
+        display.print(numPart);
+
+        if (unitPart.length() > 0) {
+          display.setTextSize(1);
+          display.setTextColor(0x8CD6);
+          display.setCursor(startX + numW + gap, yBase + 7);
+          display.print(unitPart);
+        }
+      } else {
+        // Double-stroke bold Size 1 fallback for long strings
+        display.setTextSize(1);
+        display.setTextColor(TFT_WHITE);
+        int w = valStr.length() * 6;
+        int startX = cx - (w / 2);
+        display.setCursor(startX, yBase + 5);     display.print(valStr);
+        display.setCursor(startX + 1, yBase + 5); display.print(valStr);
+      }
     };
 
-    // Column 1: [ 🕒 ] ETA (Center X = 46)
-    display.drawCircle(46, cY + 11, 5, 0x07FF);
-    display.drawLine(46, cY + 11, 46, cY + 8, 0x07FF);
-    display.drawLine(46, cY + 11, 49, cY + 11, 0x07FF);
-    display.setTextSize(1);
-    display.setTextColor(0x8CD6);
-    display.setCursor(37, cY + 21);
-    display.print("ETA");
-    drawCardVal(etaVal, 46, cY + 36);
-
-    // Column 2: [ 🛣️ ] Remain (Center X = 120)
-    display.drawLine(115, cY + 15, 117, cY + 7, 0x07FF);
-    display.drawLine(125, cY + 15, 123, cY + 7, 0x07FF);
-    display.drawFastVLine(120, cY + 8, 6, 0x07FF);
-    display.setTextSize(1);
-    display.setTextColor(0x8CD6);
-    display.setCursor(102, cY + 21);
-    display.print("Remain");
-    drawCardVal(remVal, 120, cY + 36);
-
-    // Column 3: [ 🏁 ] Time Left (Center X = 194)
-    display.drawFastVLine(190, cY + 7, 9, 0x07FF);
-    display.fillRect(191, cY + 7, 6, 5, 0x07FF);
-    display.setTextSize(1);
-    display.setTextColor(0x8CD6);
-    display.setCursor(182, cY + 21);
-    display.print("Time");
-    drawCardVal(leftVal, 194, cY + 36);
+    // Render all 3 values in large, bold, visible text (YBase = cY + 28)
+    drawValueWithUnit(etaVal,  43,  cY + 28);
+    drawValueWithUnit(remVal,  120, cY + 28);
+    drawValueWithUnit(leftVal, 197, cY + 28);
   }
 
   // Optimized bold outlined text — 3 shadow passes + 1 main = 4 total (was 6)
