@@ -1477,10 +1477,9 @@ class _MainDashboardState extends State<MainDashboard> {
     final db = Provider.of<DatabaseService>(context, listen: false);
     final ble = Provider.of<BLEService>(context, listen: false);
 
-    // 4 primary hubs: Hub, Synth, Synapse, Apps/Menu
+    // Primary hubs: Hub, Synapse, Apps/Menu
     final List<Map<String, dynamic>> items = [
       {'idx': 0, 'icon': Icons.space_dashboard_rounded, 'label': 'Hub'},
-      {'idx': 2, 'icon': Icons.graphic_eq_rounded, 'label': 'Synth'},
       {'idx': 3, 'icon': Icons.hub_rounded, 'label': 'Synapse'},
       {'idx': -1, 'icon': Icons.apps_rounded, 'label': 'Apps'},
     ];
@@ -1631,9 +1630,9 @@ class _MainDashboardState extends State<MainDashboard> {
     _isMsLuna = db.primaryRobot?.variant == 'ms_luna';
     final primaryRobot = db.primaryRobot;
     final hasRelationship = primaryRobot != null && primaryRobot.companionDeviceId != null;
-    String primaryName = primaryRobot?.name ?? (_isMsLuna ? "SYNAPS Cyber" : "SYNAPS Prime");
-    if (primaryName == "SYNAPS Prime" || primaryName == "Mr. Luna" || primaryName == "SYNAPS Cyber" || primaryName == "Ms. Luna") {
-      primaryName = _isMsLuna ? "SYNAPS Cyber" : "SYNAPS Prime";
+    String primaryName = primaryRobot?.name ?? "NEXA";
+    if (primaryName.contains("Luna")) {
+      primaryName = "NEXA";
     }
 
     final activeMember = _squadMembers.firstWhere(
@@ -2551,7 +2550,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         Row(
                           children: [
                             ChoiceChip(
-                              label: Text("Ms. Luna", style: GoogleFonts.outfit(fontSize: 11)),
+                              label: Text("NEXA Rose", style: GoogleFonts.outfit(fontSize: 11)),
                               selected: selectedVariant == 'ms_luna',
                               selectedColor: const Color(0xFFEC4899).withOpacity(0.2),
                               onSelected: (val) {
@@ -2560,7 +2559,7 @@ class _MainDashboardState extends State<MainDashboard> {
                             ),
                             const SizedBox(width: 8),
                             ChoiceChip(
-                              label: Text("Mr. Luna", style: GoogleFonts.outfit(fontSize: 11)),
+                              label: Text("NEXA Cyan", style: GoogleFonts.outfit(fontSize: 11)),
                               selected: selectedVariant == 'mr_luna',
                               selectedColor: const Color(0xFF0074D9).withOpacity(0.2),
                               onSelected: (val) {
@@ -3685,30 +3684,6 @@ class _MainDashboardState extends State<MainDashboard> {
                   contentPadding: EdgeInsets.symmetric(horizontal: 10),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // Default Screen Mode Dropdown
-              _buildDefaultGifDropdown("Default Screen Mode", db.defaultGif, defaultGifOptions, (val) async {
-                await db.updateDefaultGif(val);
-                _syncSettingsToRobot(db, ble);
-              }),
-              const SizedBox(height: 16),
-              // Intro Sound Speed
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Intro Sound Speed", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
-                  Text(ble.hasSpeaker ? "${db.introSoundSpeed.toInt()}%" : "N/A", style: GoogleFonts.firaCode(color: ble.hasSpeaker ? Colors.yellow : textColor38, fontSize: 12, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              Slider(
-                value: db.introSoundSpeed,
-                min: 20,
-                max: 300,
-                activeColor: const Color(0xFFE53935),
-                onChanged: !ble.hasSpeaker ? null : (val) => db.updateIntroSoundSpeed(val),
-                onChangeEnd: !ble.hasSpeaker ? null : (val) => _syncSettingsToRobot(db, ble),
-              ),
             ],
           ),
         ),
@@ -3724,65 +3699,6 @@ class _MainDashboardState extends State<MainDashboard> {
                 style: GoogleFonts.outfit(color: const Color(0xFFFFCDD2), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
               ),
               const SizedBox(height: 16),
-
-              // Invert option
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Invert OLED Display (Negative)", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
-                  Switch(
-                    value: db.oledInvert,
-                    activeColor: const Color(0xFFE53935),
-                    onChanged: (val) async {
-                      await db.updateOledInvert(val);
-                      await db.updateNegativeEnabled(val);
-                      _syncSettingsToRobot(db, ble);
-                      if (ble.isConnected && ble.hasSpeaker) {
-                        await ble.transmitAudio(10);
-                      }
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Clock Face Style
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Clock Face Style", style: GoogleFonts.outfit(color: textColor60, fontSize: 12)),
-                  Container(
-                    width: 140,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.black.withOpacity(0.06)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        value: db.clockStyle,
-                        dropdownColor: Colors.white,
-                        style: GoogleFonts.outfit(color: textColor, fontSize: 12),
-                        icon: const Icon(Icons.arrow_drop_down, color: textColor60),
-                        isExpanded: true,
-                        items: const [
-                          DropdownMenuItem(value: 0, child: Text("Classic Border")),
-                          DropdownMenuItem(value: 1, child: Text("Minimalist")),
-                          DropdownMenuItem(value: 2, child: Text("Analog Split")),
-                          DropdownMenuItem(value: 3, child: Text("Custom Wallpaper")),
-                        ],
-                        onChanged: (val) async {
-                          if (val != null) {
-                            await db.updateClockStyle(val);
-                            _syncSettingsToRobot(db, ble);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
               // OLED Brightness level
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -4454,10 +4370,6 @@ class _MainDashboardState extends State<MainDashboard> {
         const SizedBox(height: 20),
 
         _buildSendMessageSection(ble),
-        const SizedBox(height: 20),
-
-        // Quick Actions panel
-        _buildQuickActionsPanel(ble),
       ],
     );
   }
@@ -6144,7 +6056,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     children: [
                       const SizedBox(height: 4),
                       Text(
-                        isMiss ? "Ms. Luna variant" : "Mr. Luna variant",
+                        isMiss ? "NEXA Rose" : "NEXA Cyan",
                         style: GoogleFonts.outfit(color: Colors.black54, fontSize: 11),
                       ),
                       const SizedBox(height: 2),
@@ -6221,7 +6133,7 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(height: 6),
               Text(
-                "Manage relationship status (Friends \u{1F91D} vs Couple \u{2764}\u{FE0F}) between Mr. Luna and Ms. Luna companions.",
+                "Manage relationship status (Friends \u{1F91D} vs Couple \u{2764}\u{FE0F}) between NEXA companions.",
                 style: GoogleFonts.outfit(color: textColor38, fontSize: 11),
               ),
               const SizedBox(height: 16),
@@ -6283,7 +6195,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     children: [
                       Expanded(
                         child: ChoiceChip(
-                          label: const Text("Mr. Luna"),
+                          label: const Text("NEXA Cyan"),
                           selected: selectedVariant == 'mr_luna',
                           onSelected: (val) {
                             if (val) setModalState(() => selectedVariant = 'mr_luna');
@@ -6295,7 +6207,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: ChoiceChip(
-                          label: const Text("Ms. Luna"),
+                          label: const Text("NEXA Rose"),
                           selected: selectedVariant == 'ms_luna',
                           onSelected: (val) {
                             if (val) setModalState(() => selectedVariant = 'ms_luna');
@@ -6952,7 +6864,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       Text("Robot Model:", style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 12),
                       ChoiceChip(
-                        label: Text("Mr. Luna", style: GoogleFonts.outfit(fontSize: 11)),
+                        label: Text("NEXA Cyan", style: GoogleFonts.outfit(fontSize: 11)),
                         selected: selectedVariant == 'mr_luna',
                         onSelected: (val) {
                           setModalState(() {
@@ -6962,7 +6874,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       ),
                       const SizedBox(width: 8),
                       ChoiceChip(
-                        label: Text("Ms. Luna", style: GoogleFonts.outfit(fontSize: 11)),
+                        label: Text("NEXA Rose", style: GoogleFonts.outfit(fontSize: 11)),
                         selected: selectedVariant == 'ms_luna',
                         onSelected: (val) {
                           setModalState(() {
@@ -9322,32 +9234,26 @@ class _MainDashboardState extends State<MainDashboard> {
                   Row(
                     children: [
                       ChoiceChip(
-                        label: Text("Ms. Luna", style: GoogleFonts.outfit(fontSize: 11, color: _profileSelectedVariant == 'ms_luna' ? Colors.pink.shade700 : textColor)),
+                        label: Text("NEXA Rose", style: GoogleFonts.outfit(fontSize: 11, color: _profileSelectedVariant == 'ms_luna' ? Colors.pink.shade700 : textColor)),
                         selected: _profileSelectedVariant == 'ms_luna',
                         selectedColor: const Color(0xFFEC4899).withOpacity(0.2),
                         onSelected: (val) {
                           if (val) {
                             setState(() {
                               _profileSelectedVariant = 'ms_luna';
-                              if (_profileRobotNameController.text == "SYNAPS Prime" || _profileRobotNameController.text.isEmpty) {
-                                _profileRobotNameController.text = "SYNAPS Cyber";
-                              }
                             });
                           }
                         },
                       ),
                       const SizedBox(width: 8),
                       ChoiceChip(
-                        label: Text("Mr. Luna", style: GoogleFonts.outfit(fontSize: 11, color: _profileSelectedVariant == 'mr_luna' ? Colors.blue.shade700 : textColor)),
+                        label: Text("NEXA Cyan", style: GoogleFonts.outfit(fontSize: 11, color: _profileSelectedVariant == 'mr_luna' ? Colors.blue.shade700 : textColor)),
                         selected: _profileSelectedVariant == 'mr_luna',
                         selectedColor: const Color(0xFF0074D9).withOpacity(0.2),
                         onSelected: (val) {
                           if (val) {
                             setState(() {
                               _profileSelectedVariant = 'mr_luna';
-                              if (_profileRobotNameController.text == "SYNAPS Cyber" || _profileRobotNameController.text.isEmpty) {
-                                _profileRobotNameController.text = "SYNAPS Prime";
-                              }
                             });
                           }
                         },

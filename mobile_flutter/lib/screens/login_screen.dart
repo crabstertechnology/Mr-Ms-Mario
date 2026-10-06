@@ -317,7 +317,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Row(
                           children: [
                             ChoiceChip(
-                              label: const Text("Ms. Luna (Pink)"),
+                              label: const Text("NEXA Rose"),
                               selected: _selectedRobotVariant == 'ms_luna',
                               selectedColor: const Color(0xFFEC4899).withOpacity(0.2),
                               onSelected: (val) {
@@ -326,7 +326,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(width: 8),
                             ChoiceChip(
-                              label: const Text("Mr. Luna (Blue)"),
+                              label: const Text("NEXA Cyan"),
                               selected: _selectedRobotVariant == 'mr_luna',
                               selectedColor: const Color(0xFF0074D9).withOpacity(0.2),
                               onSelected: (val) {

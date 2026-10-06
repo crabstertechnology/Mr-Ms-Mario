@@ -241,7 +241,7 @@ class _BusinessCardScreenState extends State<BusinessCardScreen> {
   @override
   Widget build(BuildContext context) {
     final ble = Provider.of<BLEService>(context);
-    final accentColor = ble.connectedDevice?.platformName.contains('Ms. Luna') == true
+    final accentColor = ble.connectedDevice?.platformName.contains('Rose') == true
         ? const Color(0xFFEC4899)
         : const Color(0xFF0074D9);
 

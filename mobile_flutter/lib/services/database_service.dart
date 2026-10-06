@@ -42,7 +42,7 @@ class DatabaseService with ChangeNotifier {
   double _reminderDuration = 10.0;
   double _birthdayDuration = 15.0;
   double _bleSleepTime = 45.0;
-  String _bleName = 'Mr. Luna Robot';
+  String _bleName = 'NEXA Robot';
   List<String> _allowedNotificationApps = [
     'whatsapp',
     'whatsapp_business',
@@ -76,11 +76,8 @@ class DatabaseService with ChangeNotifier {
   RobotProfile? get primaryRobot {
     if (_robots.isEmpty) return null;
     final p = _robots.firstWhere((r) => r.isPrimary, orElse: () => _robots.first);
-    if (p.variant == 'mr_luna' && (p.name == "Ms. Luna Robot" || p.name == "Ms. Luna")) {
-      return p.copyWith(name: "Mr. Luna Robot");
-    }
-    if (p.variant == 'ms_luna' && (p.name == "Mr. Luna Robot" || p.name == "Mr. Luna")) {
-      return p.copyWith(name: "Ms. Luna Robot");
+    if (p.name.contains("Luna")) {
+      return p.copyWith(name: "NEXA Robot");
     }
     return p;
   }
@@ -167,7 +164,7 @@ class DatabaseService with ChangeNotifier {
     _reminderDuration = _prefs!.getDouble('reminderDuration') ?? 10.0;
     _birthdayDuration = _prefs!.getDouble('birthdayDuration') ?? 15.0;
     _bleSleepTime = _prefs!.getDouble('bleSleepTime') ?? 45.0;
-    _bleName = _prefs!.getString('bleName') ?? 'Mr. Luna Robot';
+    _bleName = _prefs!.getString('bleName') ?? 'NEXA Robot';
     _allowedNotificationApps = _prefs!.getStringList('allowedNotificationApps') ?? [
       'whatsapp',
       'whatsapp_business',
@@ -521,7 +518,7 @@ class DatabaseService with ChangeNotifier {
     _reminderDuration = 10.0;
     _birthdayDuration = 15.0;
     _bleSleepTime = 45.0;
-    _bleName = 'Mr. Luna Robot';
+    _bleName = 'NEXA Robot';
     _focusGuardEnabled = true;
     _focusAppLimits = {
       'com.instagram.android': 5,
@@ -603,10 +600,8 @@ class DatabaseService with ChangeNotifier {
     final idx = _robots.indexWhere((r) => r.id == id);
     if (idx != -1) {
       String finalName = name;
-      if (variant == 'mr_luna' && (finalName == "Ms. Luna Robot" || finalName == "Ms. Luna")) {
-        finalName = "Mr. Luna Robot";
-      } else if (variant == 'ms_luna' && (finalName == "Mr. Luna Robot" || finalName == "Mr. Luna")) {
-        finalName = "Ms. Luna Robot";
+      if (finalName.contains("Luna")) {
+        finalName = "NEXA Robot";
       }
       _robots[idx] = _robots[idx].copyWith(name: finalName, variant: variant);
       await _saveRobotsToDisk();
