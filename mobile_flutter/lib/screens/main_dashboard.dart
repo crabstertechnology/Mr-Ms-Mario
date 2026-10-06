@@ -1472,26 +1472,27 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  // ================= 5-HUB FLOATING CYBER-DOCK NAVIGATION =================
+  // ================= COMMAND MATRIX CYBER-DOCK NAVIGATION =================
   Widget _buildBottomNavigationBar() {
-    final db = Provider.of<DatabaseService>(context, listen: false);
+    final db = Provider.of<DatabaseService>(context);
     final ble = Provider.of<BLEService>(context, listen: false);
 
-    // Primary hubs: Hub, Synapse, Apps/Menu
+    // List all Command Matrix items directly in nav bar
     final List<Map<String, dynamic>> items = [
-      {'idx': 0, 'icon': Icons.space_dashboard_rounded, 'label': 'Hub'},
-      {'idx': 3, 'icon': Icons.hub_rounded, 'label': 'Synapse'},
-      {'idx': -1, 'icon': Icons.apps_rounded, 'label': 'Apps'},
+      {'id': 'hub', 'idx': 0, 'icon': Icons.space_dashboard_rounded, 'label': 'Hub', 'color': _accentColor},
+      {'id': 'events', 'idx': 4, 'icon': Icons.calendar_month_rounded, 'label': 'Events', 'color': const Color(0xFF3B82F6)},
+      {'id': 'card', 'idx': 5, 'icon': Icons.badge_rounded, 'label': 'ID Card', 'color': const Color(0xFF8B5CF6)},
+      {'id': 'system', 'idx': 6, 'icon': Icons.tune_rounded, 'label': 'System', 'color': const Color(0xFF10B981)},
+      {'id': 'logs', 'idx': -2, 'icon': Icons.terminal_rounded, 'label': 'Console Logs', 'color': const Color(0xFFF59E0B)},
+      {'id': 'scanner', 'idx': -3, 'icon': Icons.bluetooth_searching_rounded, 'label': 'BLE Scanner', 'color': const Color(0xFFEC4899)},
+      {'id': 'invert', 'idx': -4, 'icon': Icons.invert_colors_rounded, 'label': 'Invert Color', 'color': const Color(0xFF06B6D4)},
     ];
 
-    // Determine if secondary tab (Calendar=4, Card=5, System=6) is active
-    final bool isSecondaryActive = _activeTabIdx >= 4;
-
     return Container(
-      margin: const EdgeInsets.only(left: 14, right: 14, bottom: 12),
+      margin: const EdgeInsets.only(left: 10, right: 10, bottom: 12),
       height: 70,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
+        color: Colors.white.withOpacity(0.95),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: _accentColor.withOpacity(0.25), width: 1.5),
         boxShadow: [
@@ -1513,73 +1514,98 @@ class _MainDashboardState extends State<MainDashboard> {
         borderRadius: BorderRadius.circular(28),
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Padding(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: items.map((item) {
                 final int targetIdx = item['idx'] as int;
-                final bool isMenu = targetIdx == -1;
-                final bool isSelected = isMenu ? isSecondaryActive : _activeTabIdx == targetIdx;
+                final Color itemColor = item['color'] as Color;
+                final bool isSelected = targetIdx >= 0
+                    ? _activeTabIdx == targetIdx
+                    : (targetIdx == -4 ? db.oledInvert : false);
 
-                return Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      if (isMenu) {
-                        _showQuickCommandMenu(context, db, ble);
-                      } else {
-                        setState(() {
-                          _activeTabIdx = targetIdx;
-                        });
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () async {
+                    if (targetIdx >= 0) {
+                      setState(() {
+                        _activeTabIdx = targetIdx;
+                        if (targetIdx == 6) {
+                          _currentSettingsSection = 'categories';
+                        }
+                      });
+                    } else if (targetIdx == -2) {
+                      _showTerminalLogsDialog(ble);
+                    } else if (targetIdx == -3) {
+                      _showBleScanner(db, ble);
+                    } else if (targetIdx == -4) {
+                      final newVal = !db.oledInvert;
+                      await db.updateOledInvert(newVal);
+                      await db.updateNegativeEnabled(newVal);
+                      _syncSettingsToRobot(db, ble);
+                      if (ble.isConnected) {
+                        ble.transmitText(newVal ? "INVERT:ON" : "INVERT:OFF");
+                        if (ble.hasSpeaker) ble.transmitAudio(10);
                       }
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                      decoration: BoxDecoration(
-                        gradient: isSelected
-                            ? LinearGradient(
-                                colors: [_accentColor, const Color(0xFF8B5CF6)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              )
-                            : null,
-                        color: isSelected ? null : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: _accentColor.withOpacity(0.35),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            item['icon'] as IconData,
-                            color: isSelected ? Colors.white : const Color(0xFF64748B),
-                            size: isSelected ? 22 : 20,
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("OLED Invert: ${newVal ? 'ON (Negative)' : 'OFF (Normal)'}"),
+                          duration: const Duration(seconds: 1),
+                          backgroundColor: const Color(0xFF06B6D4),
+                        ),
+                      );
+                    }
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: isSelected
+                          ? LinearGradient(
+                              colors: [itemColor, itemColor.withOpacity(0.8)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      color: isSelected ? null : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: itemColor.withOpacity(0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          item['icon'] as IconData,
+                          color: isSelected ? Colors.white : itemColor.withOpacity(0.8),
+                          size: isSelected ? 22 : 20,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          item['label'] as String,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(
+                            color: isSelected ? Colors.white : const Color(0xFF475569),
+                            fontSize: 10,
+                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                            letterSpacing: 0.2,
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            isMenu && isSecondaryActive
-                                ? (_activeTabIdx == 4 ? 'Events' : (_activeTabIdx == 5 ? 'ID Card' : 'System'))
-                                : item['label'] as String,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.outfit(
-                              color: isSelected ? Colors.white : const Color(0xFF64748B),
-                              fontSize: 10,
-                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 );
