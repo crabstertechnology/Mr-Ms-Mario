@@ -2240,33 +2240,42 @@ public:
     robotEyeAnim.draw(display);
 
     // ── Curious Companion Thought Bubble Card (Thinking Anim & Thoughts) ────
+    // Positioned at top of screen with large, crisp Size 2 font
     if (thoughtText.length() > 0 && !hungryState) {
-      int cardW = SCREEN_WIDTH - 28;
-      int cardH = 46;
-      int cardX = 14;
-      int cardY = 216;
+      int cardW = SCREEN_WIDTH - 20; // 220px
+      int cardH = 68;
+      int cardX = 10;
+      int cardY = 10;
+      int cardR = 16;
       uint16_t borderCol = (robotVariant == "mr_luna") ? 0x07FF : 0xFD99;
 
-      // Small floating thought bubble dots rising from the card
-      display.fillCircle(cardX + 28, cardY - 5, 3, 0x0842);
-      display.drawCircle(cardX + 28, cardY - 5, 3, borderCol);
-      display.fillCircle(cardX + 22, cardY - 11, 2, 0x0842);
-      display.drawCircle(cardX + 22, cardY - 11, 2, borderCol);
+      // Dark AMOLED frosted glass background with soft drop shadow
+      display.fillRoundRect(cardX + 1, cardY + 2, cardW, cardH, cardR, 0x0000);
+      display.fillRoundRect(cardX, cardY, cardW, cardH, cardR, 0x0841);
+      display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, borderCol);
+      display.drawRoundRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2, cardR - 1, 0x218A);
 
-      // Frosted card background & luminous borders
-      display.fillRoundRect(cardX, cardY, cardW, cardH, 12, 0x0841);
-      display.drawRoundRect(cardX, cardY, cardW, cardH, 12, borderCol);
-      display.drawRoundRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2, 11, 0x218A);
+      // Trailing thought bubble dots leading downwards from the card towards the companion face
+      display.fillCircle(cardX + 38, cardY + cardH + 5, 4, 0x0841);
+      display.drawCircle(cardX + 38, cardY + cardH + 5, 4, borderCol);
+      display.fillCircle(cardX + 32, cardY + cardH + 13, 3, 0x0841);
+      display.drawCircle(cardX + 32, cardY + cardH + 13, 3, borderCol);
+      display.fillCircle(cardX + 27, cardY + cardH + 20, 2, 0x0841);
+      display.drawCircle(cardX + 27, cardY + cardH + 20, 2, borderCol);
 
-      // Sparkle star icon on top-left of card
-      display.fillCircle(cardX + 12, cardY + 14, 2, 0xFFE0);
-      display.drawPixel(cardX + 12, cardY + 11, 0xFFE0);
-      display.drawPixel(cardX + 12, cardY + 17, 0xFFE0);
-      display.drawPixel(cardX + 9, cardY + 14, 0xFFE0);
-      display.drawPixel(cardX + 15, cardY + 14, 0xFFE0);
+      // Thought text: larger Size 2 font, cleanly wrapped with vertical centering
+      int textX = cardX + 12;
+      int maxTextW = cardW - 24; // 196px (~16 characters per line)
+      int startTextY;
+      if (thoughtText.length() <= 16) {
+        startTextY = cardY + 25; // 1 line centered
+      } else if (thoughtText.length() <= 32) {
+        startTextY = cardY + 15; // 2 lines centered
+      } else {
+        startTextY = cardY + 8;  // 3 lines
+      }
 
-      // Thought text: neatly wrapped
-      drawWordWrappedText(thoughtText, cardX + 22, cardY + 10, cardW - 28, 2, 14, TFT_WHITE, 1);
+      drawWordWrappedText(thoughtText, textX, startTextY, maxTextW, 3, 18, TFT_WHITE, 2);
     }
 
     if (silentMode) {
