@@ -16,6 +16,8 @@
 
 extern LunaQR qrCard;
 extern LunaIMU imu;
+#include "quests.h"
+extern LunaQuests quests;
 extern bool calibrateRequest;
 extern LunaImageTransfer imgTransfer;
 
@@ -63,6 +65,7 @@ extern int rtcMinute;
 extern String rtcDay;
 extern String rtcDate;
 extern bool is12HourFormat;
+extern bool isMealMissed();
 
 // Smooth inertial scroll state (defined in main sketch)
 extern float settingsScrollPx;
@@ -2239,49 +2242,57 @@ public:
   void drawRobotFaceScreen() {
     robotEyeAnim.draw(display);
 
-    // ── Curious Companion Thought Bubble Card (Thinking Anim & Thoughts) ────
-    // Positioned at top of screen with large, crisp Size 2 font
-    if (thoughtText.length() > 0 && !hungryState) {
-      int cardW = SCREEN_WIDTH - 20; // 220px
-      int cardH = 68;
-      int cardX = 10;
-      int cardY = 10;
-      int cardR = 16;
-      uint16_t borderCol = (robotVariant == "mr_luna") ? 0x07FF : 0xFD99;
+    // ── Thought Bubble Card (Disabled per user request for now) ───────────────
+    /*
+    if (thoughtText.length() > 0 && !hungryState && !popupActive) {
+      ...
+    }
+    */
 
-      // Dark AMOLED frosted glass background with soft drop shadow
-      display.fillRoundRect(cardX + 1, cardY + 2, cardW, cardH, cardR, 0x0000);
-      display.fillRoundRect(cardX, cardY, cardW, cardH, cardR, 0x0841);
-      display.drawRoundRect(cardX, cardY, cardW, cardH, cardR, borderCol);
-      display.drawRoundRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2, cardR - 1, 0x218A);
+    // ── Missed Meal Food Icon (Idle State — Left Side, Sleek Cloche Design) ─
+    if (!popupActive && !hungryState && isMealMissed()) {
+      int foodX = 12;
+      int foodY = 56;
+      int foodW = 44;
+      int foodH = 44;
+      int foodR = 12;
 
-      // Trailing thought bubble dots leading downwards from the card towards the companion face
-      display.fillCircle(cardX + 38, cardY + cardH + 5, 4, 0x0841);
-      display.drawCircle(cardX + 38, cardY + cardH + 5, 4, borderCol);
-      display.fillCircle(cardX + 32, cardY + cardH + 13, 3, 0x0841);
-      display.drawCircle(cardX + 32, cardY + cardH + 13, 3, borderCol);
-      display.fillCircle(cardX + 27, cardY + cardH + 20, 2, 0x0841);
-      display.drawCircle(cardX + 27, cardY + cardH + 20, 2, borderCol);
+      // 1. Frosted Dark AMOLED Glass Capsule with Double Outline
+      display.fillRoundRect(foodX, foodY, foodW, foodH, foodR, 0x0841);
+      display.drawRoundRect(foodX, foodY, foodW, foodH, foodR, 0xFD20);
+      display.drawRoundRect(foodX + 1, foodY + 1, foodW - 2, foodH - 2, foodR - 1, 0x2186);
 
-      // Thought text: larger Size 2 font, cleanly wrapped with vertical centering
-      int textX = cardX + 12;
-      int maxTextW = cardW - 24; // 196px (~16 characters per line)
-      int startTextY;
-      if (thoughtText.length() <= 16) {
-        startTextY = cardY + 25; // 1 line centered
-      } else if (thoughtText.length() <= 32) {
-        startTextY = cardY + 15; // 2 lines centered
-      } else {
-        startTextY = cardY + 8;  // 3 lines
-      }
+      // 2. Luxury Serving Cloche (Platter & Dome)
+      // Silver serving tray
+      display.fillRoundRect(foodX + 7, foodY + 28, 30, 4, 2, 0xD6BA);
+      display.drawFastHLine(foodX + 6, foodY + 28, 32, TFT_WHITE);
 
-      drawWordWrappedText(thoughtText, textX, startTextY, maxTextW, 3, 18, TFT_WHITE, 2);
+      // Golden serving dome
+      display.fillCircle(foodX + 22, foodY + 27, 11, 0xFFE0);
+      display.fillCircle(foodX + 20, foodY + 25, 8, 0xFFF4);
+      display.fillRect(foodX + 5, foodY + 29, 34, 14, 0x0841); // Clear lower dome
+      display.fillRoundRect(foodX + 7, foodY + 28, 30, 4, 2, 0xD6BA); // Clean tray
+      display.drawFastHLine(foodX + 6, foodY + 28, 32, TFT_WHITE);
+
+      // Cloche top knob
+      display.fillCircle(foodX + 22, foodY + 15, 2, 0xFD20);
+      display.drawPixel(foodX + 22, foodY + 14, TFT_WHITE);
+
+      // Aroma wisps
+      display.drawPixel(foodX + 18, foodY + 11, 0xFFE0);
+      display.drawPixel(foodX + 19, foodY + 10, 0xFFFF);
+      display.drawPixel(foodX + 26, foodY + 11, 0xFFE0);
+      display.drawPixel(foodX + 25, foodY + 10, 0xFFFF);
+
+      // 3. Crisp notification alert dot
+      display.fillCircle(foodX + foodW - 5, foodY + 5, 4, 0xF800);
+      display.fillCircle(foodX + foodW - 5, foodY + 5, 2, TFT_WHITE);
     }
 
     if (silentMode) {
       uint16_t silentColor = TFT_WHITE;
       int silentX = SCREEN_WIDTH - 20;
-      int silentY = 10;
+      int silentY = 12;
       display.fillRect(silentX, silentY - 2, 2, 4, silentColor);
       display.fillTriangle(silentX + 2, silentY - 4, silentX + 2, silentY + 4, silentX + 4, silentY, silentColor);
       display.drawLine(silentX + 6, silentY - 2, silentX + 8, silentY, silentColor);
@@ -3245,12 +3256,9 @@ public:
       popupActive = false;
     }
 
-    if (popupActive) {
-      drawPopup();
-    } else {
-      if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_CLOCK && currentScreen != SCREEN_NOTIFICATIONS && currentScreen != SCREEN_CALENDAR && currentScreen != SCREEN_POMODORO && currentScreen != SCREEN_MENU) {
-        drawStatusBar(hour, minute);
-      }
+    if (currentScreen != SCREEN_FACE && currentScreen != SCREEN_CARD && currentScreen != SCREEN_MAPS && currentScreen != SCREEN_CLOCK && currentScreen != SCREEN_NOTIFICATIONS && currentScreen != SCREEN_CALENDAR && currentScreen != SCREEN_POMODORO && currentScreen != SCREEN_MENU) {
+      drawStatusBar(hour, minute);
+    }
       
       switch (currentScreen) {
         case SCREEN_MENU:
@@ -3370,9 +3378,14 @@ public:
           extern int pomoRemainingSec, pomoTotalSec, pomoState, pomoMode, pomoCompletedSessions;
           drawPomodoroScreen(pomoRemainingSec, pomoTotalSec, pomoState, pomoMode, pomoCompletedSessions, hour, minute, day, date);
           break;
+        case SCREEN_QUEST:
+          quests.draw(display, hour, minute);
+          break;
       }
-
-    }
+      
+      if (popupActive) {
+        drawPopup();
+      }
 
     if (!popupActive && currentScreen == SCREEN_FACE && headerText.length() > 0) {
       uint16_t headerBg = negativeDisplay ? TFT_WHITE : TFT_BLUE; // matches screen bgColor

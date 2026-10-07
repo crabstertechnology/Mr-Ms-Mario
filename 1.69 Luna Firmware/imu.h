@@ -12,6 +12,15 @@ private:
   uint8_t i2cAddr;
   bool initialized;
 
+  // Shake detection tracking
+  float prevAx;
+  float prevAy;
+  float prevAz;
+  unsigned long lastSampleMs;
+  unsigned long lastShakeTriggerMs;
+  unsigned long lastShakeSwingMs;
+  int shakeCount;
+
   // Direct I2C helper write
   void writeReg(uint8_t reg, uint8_t val) {
     Wire.beginTransmission(i2cAddr);
@@ -45,7 +54,8 @@ private:
   }
 
 public:
-  LunaIMU() : i2cAddr(0x6B), initialized(false) {}
+  LunaIMU() : i2cAddr(0x6B), initialized(false), prevAx(0), prevAy(0), prevAz(0),
+              lastSampleMs(0), lastShakeTriggerMs(0), lastShakeSwingMs(0), shakeCount(0) {}
 
   bool begin() {
     // Check WHO_AM_I on both possible I2C addresses (0x6B and 0x6A)
@@ -124,6 +134,53 @@ public:
     gz = (float)raw_gz / 64.0f;
 
     return true;
+  }
+
+  // ── Physical Shake Gesture Detector ─────────────────────────────────────────
+  bool detectShake() {
+    if (!initialized) return false;
+    unsigned long now = millis();
+
+    // Enforce 1.5s cooldown after trigger
+    if (now - lastShakeTriggerMs < 1500) return false;
+
+    // Sample every 25ms
+    if (now - lastSampleMs < 25) return false;
+    lastSampleMs = now;
+
+    float ax, ay, az, gx, gy, gz;
+    if (!readMotion(ax, ay, az, gx, gy, gz)) return false;
+
+    // Acceleration delta (jerk)
+    float dax = ax - prevAx;
+    float day = ay - prevAy;
+    float daz = az - prevAz;
+    float deltaMag = sqrtf(dax * dax + day * day + daz * daz);
+    prevAx = ax;
+    prevAy = ay;
+    prevAz = az;
+
+    float totalMag = sqrtf(ax * ax + ay * ay + az * az);
+    float gyroSum = fabsf(gx) + fabsf(gy) + fabsf(gz);
+
+    // Intentional shake signature: dynamic jerk > 1.6g or extreme accel with gyro rotation > 140 dps
+    if ((deltaMag > 1.6f || totalMag > 2.0f || totalMag < 0.35f) && gyroSum > 140.0f) {
+      shakeCount++;
+      lastShakeSwingMs = now;
+    }
+
+    // 2 or more sharp swings within 550ms confirms a deliberate physical shake
+    if (shakeCount >= 2 && (now - lastShakeSwingMs < 550)) {
+      shakeCount = 0;
+      lastShakeTriggerMs = now;
+      return true;
+    }
+
+    if (now - lastShakeSwingMs >= 550) {
+      shakeCount = 0;
+    }
+
+    return false;
   }
 };
 

@@ -109,6 +109,7 @@ enum SmartwatchScreen {
   SCREEN_POMODORO,// Pomodoro Focus Timer
   SCREEN_WALLPAPER, // Custom JPEG wallpaper (sent from phone)
   SCREEN_MENU,     // App Launcher Grid Menu (6 Apps)
+  SCREEN_QUEST,    // Luna Activity & Quest Library (Shake triggered & casino roulette)
   SCREEN_MAX
 };
 #endif // CONFIG_H

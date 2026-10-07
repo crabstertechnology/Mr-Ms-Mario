@@ -7,6 +7,7 @@
 #include "audio.h"
 #include "bluetooth.h"
 #include "config.h"
+#include "quests.h"
 #include "expressions.h"
 #include "games.h"
 #include "image_logo.h"
@@ -31,6 +32,7 @@ LunaIMU imu;                   // QMI8658 Accelerometer & Gyroscope
 LunaImageTransfer imgTransfer; // BLE wallpaper image transfer state machine
 LunaRTC rtcDevice;             // PCF85063 Hardware RTC
 LunaSmartHome smartHome;       // Home Automation Relay Controller
+LunaQuests quests;             // Real-World Quests & Casino Roulette Activity Engine
 
 float readBatteryVolts() {
   uint32_t totalMv = 0;
@@ -768,6 +770,8 @@ void sendMealSyncToBLE();
 void checkMealAndSleepSchedule();
 void feedLuna(int chosenAnim = -1);
 void updateLunaLife();
+bool isMealMissed();
+int getMissedMealIndex();
 
 // Periodic expression cycling — all 7 available face expressions
 const Expression cycleExpressions[] = {
@@ -2587,17 +2591,10 @@ void setup() {
     }
 
     if (missedTime.length() > 0) {
-      isAngryAtMissedMeal = true;
-      currentMood = MOOD_ANGRY;
-      face.setExpression(EXPR_ANGRY);
-      bootAnim = 1; // Anim 1: Angry Face
-      bootLabel = "ANGRY";
-      face.setThoughtText("Forgot meal!");
-      face.setPopup("Angry: Missed Meal",
-                    "Forgot to feed at " + missedTime,
-                    rtcHour, rtcMinute);
-      audio.playSound(SOUND_ALERT_BEEP);
-      Serial.printf("[BOOT] Missed meal at %s! Booting in ANGRY state.\n",
+      // ANGRY state disabled per user request! Luna stays in peaceful Idle.
+      // The missed meal icon will simply appear in the top-right corner for feeding.
+      isAngryAtMissedMeal = false;
+      Serial.printf("[BOOT] Missed meal at %s detected. Staying in Idle with food icon.\n",
                     missedTime.c_str());
     }
     // Check 3: Morning Wake-Up Boot Animation
@@ -2750,39 +2747,36 @@ void checkMealAndSleepSchedule() {
     }
   }
 
-  // 4. Missed Meal Check -> Angry State & Toast Notification
+  // 4. Missed Meal Check — ANGRY state disabled per user request!
+  // Luna stays in peaceful Idle, and the food bowl icon appears at top-right.
   if (!isSickLocked && lunaSleepState == LUNA_AWAKE) {
-    String missedTime = "";
-    if (curM >= m1 && curM < m1 + 240 && !(todayFedMask & 1)) {
-      missedTime = mealTime1;
-    } else if (curM >= m2 && curM < m2 + 240 && !(todayFedMask & 2)) {
-      missedTime = mealTime2;
-    } else if (curM >= m3 && !(todayFedMask & 4)) {
-      missedTime = mealTime3;
-    }
-
-    if (missedTime.length() > 0) {
-      if (!isAngryAtMissedMeal) {
-        isAngryAtMissedMeal = true;
-        currentMood = MOOD_ANGRY;
-        currentScreen = SCREEN_FACE;
-        face.setExpression(EXPR_ANGRY);
-        face.setStateLabel("ANGRY");
-        face.setThoughtText("Forgot meal!");
-        face.setPopup("Angry: Missed Meal",
-                      "Forgot to feed at " + missedTime,
-                      rtcHour, rtcMinute);
-        audio.playSound(SOUND_ALERT_BEEP);
-        transitionToVideoIndexWithFade(1, true); // Anim 1: Angry Face
-        Serial.printf("[MEAL] Missed meal at %s! Triggered ANGRY state.\n",
-                      missedTime.c_str());
-      }
-    } else {
-      if (isAngryAtMissedMeal) {
-        isAngryAtMissedMeal = false;
-      }
-    }
+    isAngryAtMissedMeal = false;
   }
+}
+
+// ── Missed / Forgotten Meal Helpers ──────────────────────────────────────────
+bool isMealMissed() {
+  if (isSickLocked || lunaSleepState != LUNA_AWAKE) return false;
+  int curM = rtcHour * 60 + rtcMinute;
+  int m1 = parseTimeMinutes(mealTime1);
+  int m2 = parseTimeMinutes(mealTime2);
+  int m3 = parseTimeMinutes(mealTime3);
+  if (curM >= m1 && !(todayFedMask & 1)) return true;
+  if (curM >= m2 && !(todayFedMask & 2)) return true;
+  if (curM >= m3 && !(todayFedMask & 4)) return true;
+  return false;
+}
+
+int getMissedMealIndex() {
+  int curM = rtcHour * 60 + rtcMinute;
+  int m1 = parseTimeMinutes(mealTime1);
+  int m2 = parseTimeMinutes(mealTime2);
+  int m3 = parseTimeMinutes(mealTime3);
+  // Returns earliest un-fed meal that has passed its scheduled time (1=Breakfast, 2=Lunch, 3=Dinner)
+  if (curM >= m1 && !(todayFedMask & 1)) return 1;
+  if (curM >= m2 && !(todayFedMask & 2)) return 2;
+  if (curM >= m3 && !(todayFedMask & 4)) return 3;
+  return 0;
 }
 
 void feedLuna(int chosenAnim) {
@@ -2797,12 +2791,26 @@ void feedLuna(int chosenAnim) {
   int m2M = parseTimeMinutes(mealTime2);
   int m3M = parseTimeMinutes(mealTime3);
 
-  if (curM >= m3M - 30) {
-    todayFedMask |= 4; // Dinner fed
-  } else if (curM >= m2M - 30) {
-    todayFedMask |= 2; // Lunch fed
+  // If there was a missed/forgotten meal, mark that specific meal as completed!
+  int missedIdx = getMissedMealIndex();
+  if (missedIdx == 1) {
+    todayFedMask |= 1; // Mark missed breakfast completed
+    Serial.println(F("[FEED] Completed missed Breakfast!"));
+  } else if (missedIdx == 2) {
+    todayFedMask |= 2; // Mark missed Lunch completed
+    Serial.println(F("[FEED] Completed missed Lunch!"));
+  } else if (missedIdx == 3) {
+    todayFedMask |= 4; // Mark missed Dinner completed
+    Serial.println(F("[FEED] Completed missed Dinner!"));
   } else {
-    todayFedMask |= 1; // Breakfast fed
+    // Normal timely feeding based on time of day
+    if (curM >= m3M - 30) {
+      todayFedMask |= 4; // Dinner fed
+    } else if (curM >= m2M - 30) {
+      todayFedMask |= 2; // Lunch fed
+    } else {
+      todayFedMask |= 1; // Breakfast fed
+    }
   }
 
   // Save fed mask in NVS
@@ -2825,8 +2833,7 @@ void feedLuna(int chosenAnim) {
     chosenAnim = 4 + (eatIdx++ % 3);
   }
   currentScreen = SCREEN_FACE;
-  face.setThoughtText("+50 XP! Yum!");
-  // NO NOTIFICATION on feeding per user request
+  face.setThoughtText("");
   transitionToVideoIndexWithFade(chosenAnim, true);
 
   Serial.printf("[NEXA] FEEDING: XP now %u (Lv %d). FedMask=0x%02X, anim=%d\n", lunaXP,
@@ -3010,44 +3017,16 @@ void updateLunaLife() {
     face.getRobotEyeAnim().clearCycleCompleted();
     int curIdx = face.getRobotEyeAnim().getAnimationIndex();
 
-    // ── 1. If in Awake state: circulate IDLE (0) <-> THINKING (13) <-> ANGRY
-    // (1) ──
+    // ── 1. If in Awake state: Stay peacefully in IDLE (0) ──
+    // Thinking (13) and Angry (1) auto-circulation disabled per user request!
     if (lunaSleepState == LUNA_AWAKE) {
       if (curIdx == 0) {
-        // Completed 1 cycle of IDLE (anim 0)
-        idleLoopCount++;
-        // After 2 complete cycles of Idle (~15s), circulate to Thinking (13) or
-        // Angry (1)!
-        if (idleLoopCount >= 2) {
-          idleLoopCount = 0;
-          static int awakeCycleCounter = 0;
-          awakeCycleCounter++;
-          // Alternate/circulate between Thinking (Anim 13) and Angry (Anim 1)
-          if (awakeCycleCounter % 2 == 1) {
-            pickNewMotivationalQuote();
-            Serial.println(F("[LUNA] Idle complete -> Transitioning to Luna "
-                             "Thinking (Anim 13)"));
-            transitionToVideoIndexWithFade(13, true);
-          } else {
-            face.setThoughtText("");
-            Serial.println(F("[LUNA] Idle complete -> Transitioning to Angry "
-                             "Face (Anim 1)"));
-            transitionToVideoIndexWithFade(1, true);
-          }
-        }
-      } else if (curIdx == 13) {
-        // Completed 1 cycle of THINKING (anim 13) (~7.5s)
+        // Continue looping IDLE (anim 0) smoothly
+        idleLoopCount = 0;
+      } else if (curIdx == 13 || curIdx == 1) {
+        // If returning from Thinking or Angry, return cleanly to Luna Idle
         idleLoopCount = 0;
         face.setThoughtText("");
-        Serial.println(F(
-            "[LUNA] Thinking complete -> Transitioning to Luna Idle (Anim 0)"));
-        transitionToVideoIndexWithFade(0, true);
-      } else if (curIdx == 1) {
-        // Completed 1 cycle of ANGRY (anim 1) (~7.5s)
-        idleLoopCount = 0;
-        face.setThoughtText("");
-        Serial.println(F("[LUNA] Angry Face complete -> Transitioning to Luna "
-                         "Idle (Anim 0)"));
         transitionToVideoIndexWithFade(0, true);
       } else if (curIdx == 4 || curIdx == 5 || curIdx == 6) {
         // Completed eating animation -> return to Idle
@@ -3374,6 +3353,15 @@ void handleBtn1Single() {
     return;
   }
 
+  // Tapping on Quests & Activity Screen
+  if (currentScreen == SCREEN_QUEST) {
+    int curX = interaction.getLastX();
+    int curY = interaction.getMappedY();
+    quests.handleTouch(curX, curY, BTN1_SINGLE);
+    notifyScreenAndExprSync();
+    return;
+  }
+
   if (currentScreen == SCREEN_SETTINGS) {
     // Guard: Never select or adjust options if finger moved (scrolled) or
     // inertia is still active
@@ -3525,8 +3513,34 @@ void handleBtn1Single() {
   }
 
   if (currentScreen == SCREEN_FACE) {
-    // Touch screen tap disabled on SCREEN_FACE — screen transitions only via
-    // physical middle button
+    int canvasX = interaction.getLastX();
+    int canvasY = interaction.getMappedY();
+
+    // 1. Tapping Missed Meal Food Icon on Left Side -> Opens Hungry Menu!
+    if (isMealMissed() && canvasX <= 90 && canvasY >= 25 && canvasY <= 135) {
+      isHungry = true;
+      face.setHungry(true);
+      currentMood = MOOD_HUNGRY;
+      face.setStateLabel("Hungry");
+      face.setThoughtText("");
+      audio.playSound(SOUND_ANIM_HUNGRY_MENU);
+      transitionToVideoIndexWithFade(2, true); // Anim 2: Hungry Menu (Salad, Milk, Fish)
+      notifyScreenAndExprSync();
+      Serial.println(F("[BTN1] Missed Meal Food Icon on Left tapped -> Opened Hungry Menu (Anim 2)"));
+      return;
+    }
+
+    // 2. If Hungry Menu (Anim 2) is open and user taps upper screen, dismiss back to Idle
+    if (face.getRobotEyeAnim().getAnimationIndex() == 2 && canvasY < 160) {
+      isHungry = false;
+      face.setHungry(false);
+      face.setThoughtText("");
+      audio.playSound(SOUND_CHIRP);
+      transitionToVideoIndexWithFade(0, true);
+      notifyScreenAndExprSync();
+      Serial.println(F("[BTN1] Dismissed Hungry Menu -> Returned to Idle"));
+      return;
+    }
     return;
   } else if (currentScreen == SCREEN_CLOCK) {
     // Single watchface locked - tap on right side opens App Launcher Menu
@@ -3763,6 +3777,13 @@ void handleBtn1Long() {
     return;
   }
 
+  if (currentScreen == SCREEN_QUEST) {
+    currentScreen = SCREEN_FACE;
+    audio.playSound(SOUND_STARTUP);
+    Serial.println("[BTN1 LONG] Return to FACE from Quests");
+    return;
+  }
+
   if (currentScreen != SCREEN_CLOCK) {
     // Return to Clock Home screen
     settingsActive = false;
@@ -3876,6 +3897,13 @@ void handleBtn2Double() {
     gamePlaying = false;
     notificationsActive = false;
     notificationSelected = false;
+    if (currentScreen == SCREEN_QUEST) {
+      currentScreen = SCREEN_FACE;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println("[BTN2 DBL] Exited Quests -> SCREEN_FACE");
+      notifyScreenAndExprSync();
+      return;
+    }
     currentScreen = SCREEN_MENU;
     audio.playSound(SOUND_CHIRP);
     Serial.printf("[BTN2 DBL] Exited screen %d -> SCREEN_MENU\n",
@@ -4332,6 +4360,24 @@ void loop() {
       audio.playSound(SOUND_CHIRP);
     }
   }
+
+  // ── IMU Physical Shake Detection -> Launch Real-World Quests & Activities ───
+  if (imu.detectShake()) {
+    if (!(currentScreen == SCREEN_GAMES && gamePlaying)) {
+      if (currentScreen != SCREEN_QUEST) {
+        Serial.println(F("[SHAKE] Physical shake detected! Launching Quest Library"));
+        currentScreen = SCREEN_QUEST;
+        quests.openCategoryBrowser();
+        audio.playSound(SOUND_POWERUP);
+        notifyScreenAndExprSync();
+      } else {
+        // Shake acts like shaking dice on quest screen: reroll roulette!
+        Serial.println(F("[SHAKE] Shake on quest screen -> Rerolling roulette!"));
+        quests.triggerReroll();
+      }
+    }
+  }
+
   switch (btnEvt) {
   case BTN1_SINGLE:
     handleBtn1Single();
@@ -4382,6 +4428,23 @@ void loop() {
     GestureState gState = interaction.getGestureState();
     bool inScroll = (gState == STATE_SCROLL_VERTICAL);
     int curY = interaction.getMappedY(); // 0..279 (Y offset corrected)
+
+    // — Quests category vertical scroll —
+    static bool questWasScroll = false;
+    static int questPrevY = 0;
+    if (currentScreen == SCREEN_QUEST && quests.getState() == QUEST_STATE_CATEGORIES) {
+      if (inScroll) {
+        if (questWasScroll) {
+          float dy = (float)(curY - questPrevY);
+          quests.handleScroll(dy);
+        }
+        questPrevY = curY;
+        questWasScroll = true;
+      } else {
+        questWasScroll = false;
+        questPrevY = curY;
+      }
+    }
 
     // — Settings scroll —
     if (currentScreen == SCREEN_SETTINGS && settingsActive) {

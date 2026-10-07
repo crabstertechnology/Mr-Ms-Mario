@@ -8,6 +8,8 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+extern bool isMealMissed();
+
 
 // ── Button events emitted by update() ────────────────────────────────────────
 enum ButtonEvent {
@@ -190,16 +192,25 @@ public:
             unsigned long held = now - startMs;
             int dx = lastX - startX;
             int dy = lastY - startY;
-            // Clean stationary tap ONLY while displaying Hungry Menu (Anim 2)
-            // While playing eating animations (Milk, Fish, Salad), touch is
-            // completely ignored
-            if (face.getRobotEyeAnim().getAnimationIndex() == 2 &&
-                !_hasScrolled && abs(dx) < 16 && abs(dy) < 16 && held >= 20 &&
-                held < 600) {
+
+            // 1. UNLOCK SPECIFICALLY THE FOOD ICON AREA ON SCREEN_FACE WHEN MEAL IS MISSED!
+            // Food Icon is located at Left: X = 12, Y = 56, W = 44, H = 44
+            if (isMealMissed() && !_hasScrolled && abs(dx) < 25 && abs(dy) < 25 && held >= 15 && held < 800) {
               int touchY = getMappedY(); // 0..279 canvas coordinate
-              // Circles are centered at Y = 242, radius = 24 -> target Y range
-              // 195..275
-              if (touchY >= 195 && touchY <= 275) {
+              if (lastX <= 90 && touchY >= 25 && touchY <= 135) {
+                ev = BTN1_SINGLE;
+                Serial.printf("[Touch] UNLOCKED Food Icon on Left tapped! (X=%d, Y=%d)\n", lastX, touchY);
+              }
+            }
+
+            // 2. Clean stationary tap ONLY while displaying Hungry Menu (Anim 2)
+            // While playing eating animations (Milk, Fish, Salad), touch is completely ignored
+            if (face.getRobotEyeAnim().getAnimationIndex() == 2 &&
+                !_hasScrolled && abs(dx) < 25 && abs(dy) < 25 && held >= 15 &&
+                held < 800) {
+              int touchY = getMappedY(); // 0..279 canvas coordinate
+              // Circles are centered at Y = 242, radius = 24 -> target Y range 185..280
+              if (touchY >= 185 && touchY <= 280) {
                 if (lastX >= 5 && lastX <= 72) {
                   ev = BTN_CIRCLE_LEFT;
                   Serial.printf("[Touch] Hungry Menu: Circle LEFT (Salad) "
@@ -216,6 +227,9 @@ public:
                                 "tapped (X=%d, Y=%d)\n",
                                 lastX, touchY);
                 }
+              } else if (touchY < 160) {
+                // Tapping upper screen while Hungry Menu is active -> dismiss back to Idle
+                ev = BTN1_SINGLE;
               }
             }
           }
@@ -353,10 +367,14 @@ public:
             Serial.println("[Touch] Long press (>=500ms) -> Home Screen");
           } else if (held >= 20) {
             if (currentScreen == SCREEN_FACE) {
-              // On animation screen: Left and Right side touches are DISABLED!
-              // Only Center tap (X between 40 and 200) is recognized to
-              // navigate to Clock.
-              if (lastX >= 40 && lastX < 200) {
+              int touchY = getMappedY();
+              // Allow tapping the Missed Meal Food Icon on Left Side (X <= 80, Y 30..125)!
+              if (isMealMissed() && lastX <= 80 && touchY >= 30 && touchY <= 125) {
+                ev = BTN1_SINGLE;
+                Serial.printf(
+                    "[Touch] Left Food Icon tapped on ANIMATION (X=%d, Y=%d)\n",
+                    lastX, touchY);
+              } else if (lastX >= 40 && lastX < 200) {
                 ev = BTN1_SINGLE;
                 Serial.printf(
                     "[Touch] CENTER tap on ANIMATION (X=%d) -> Go to Clock\n",
