@@ -13,6 +13,7 @@ const MochyJump = lazy(() => import("../games/MochyJump"));
 const Stacker = lazy(() => import("../games/Stacker"));
 const MemoryMatrix = lazy(() => import("../games/MemoryMatrix"));
 const TiltMaze = lazy(() => import("../games/TiltMaze"));
+const HideSeek = lazy(() => import("../games/HideSeek"));
 
 interface Props { state: LunaState; dispatch: React.Dispatch<LunaAction> }
 
@@ -63,7 +64,7 @@ function GamePlay({ state, dispatch }: Props) {
     dispatch({ type: "SAVE_HIGH_SCORE", gameKey: game.key, score });
   }, [dispatch, game.key]);
 
-  const GameComponent = [LunaRacer, LunaSpace, FlappyMochy, CoinCatcher, MochyJump, Stacker, MemoryMatrix, TiltMaze][state.activeGame ?? 0];
+  const GameComponent = [LunaRacer, LunaSpace, FlappyMochy, CoinCatcher, MochyJump, Stacker, MemoryMatrix, TiltMaze, HideSeek][state.activeGame ?? 0];
 
   return (
     <div className="flex-1 flex flex-col">

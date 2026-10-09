@@ -10,6 +10,9 @@
 #include "wallpaper_image.h"
 #include "clock_wallpaper.h"
 #include "clock_font.h"
+#include "clock_lavender_bg.h"
+#include "menu_lavender_bg.h"
+#include "luna_clock_font.h"
 #include "imu.h"
 #include "robot_eye_animation.h"
 #include "image_transfer.h"
@@ -52,6 +55,7 @@ extern bool notificationsActive;
 extern bool notificationSelected;
 extern unsigned int touchCount;
 extern SmartwatchScreen currentScreen;
+extern int appLauncherPage;
 
 extern bool gamesActive;
 extern bool gamePlaying;
@@ -2009,137 +2013,127 @@ public:
   }
 
   void drawAppLauncherMenu(int hour, int minute, String dayStr, String dateStr) {
-    display.fillScreen(0x0000);
+    if (appLauncherPage == 0) {
+      // ════════════════════════════════════════════════════════════
+      // PAGE 1: 100% EXACT PORCELAIN 3D TILES & LAVENDER THEME
+      // ════════════════════════════════════════════════════════════
+      memcpy_P(display.getBuffer(), menu_lavender_bg, 240 * 280 * sizeof(uint16_t));
+    } else {
+      // ════════════════════════════════════════════════════════════
+      // PAGE 2: EXCLUSIVE FEATURED GAME — HIDE & SEEK ONLY!
+      // ════════════════════════════════════════════════════════════
+      const int cX = 14, cY = 54, cW = 212, cH = 176, cR = 16;
+      unsigned long t = millis();
 
-    // 1. Subtle mountain wallpaper silhouette at bottom
-    display.fillTriangle(0, 250, 80, 215, 170, 265, 0x0826);
-    display.fillTriangle(80, 265, 160, 225, 240, 255, 0x0948);
-    display.fillTriangle(0, 265, 120, 238, 240, 280, 0x11AB);
-    display.fillRect(0, 272, 240, 8, 0x0926);
+      // Card Background & Glowing Neon Borders
+      display.fillRoundRect(cX, cY, cW, cH, cR, 0x1800);            // Deep obsidian crimson
+      display.drawRoundRect(cX, cY, cW, cH, cR, 0xF800);            // Outer red neon border
+      display.drawRoundRect(cX + 1, cY + 1, cW - 2, cH - 2, cR - 1, 0xFD20); // Amber highlight ring
+      display.drawFastHLine(cX + 14, cY + 3, cW - 28, 0xFDE0);      // Top specular glow
 
-    // 2. Unified Top Header (Consistent across all screens)
-    drawUnifiedTopHeader(hour, minute, dayStr, dateStr);
+      // ── Top Badge Pill: "★ FEATURED GAME ★" ──
+      const int bgX = cX + 38, bgY = cY + 8, bgW = 136, bgH = 16;
+      display.fillRoundRect(bgX, bgY, bgW, bgH, 8, 0x3800);
+      display.drawRoundRect(bgX, bgY, bgW, bgH, 8, 0xFD20);
+      display.setTextSize(1);
+      display.setTextColor(0xFFE0); // Bright gold
+      display.setCursor(bgX + 10, bgY + 4);
+      display.print("★ FEATURED GAME ★");
 
-    // 3. 6 App Launcher Tiles (2 Rows x 3 Columns) — Vertically centered on screen!
-    // Row 0: Y = 58, H = 58, r = 16
-    // Col 0: Notifications (X = 14, W = 62)
-    display.fillRoundRect(14, 58, 62, 58, 16, 0x1A5D);
-    display.drawRoundRect(14, 58, 62, 58, 16, 0x4DDF);
-    display.drawRoundRect(15, 59, 60, 56, 15, 0x4DDF);
-    display.drawRoundRect(16, 60, 58, 54, 14, 0x4DDF);
-    int bcx = 45, bcy = 84;
-    display.fillCircle(bcx, bcy - 5, 7, TFT_WHITE);
-    display.fillRect(bcx - 9, bcy - 5, 19, 10, TFT_WHITE);
-    display.fillRoundRect(bcx - 11, bcy + 4, 23, 4, 2, TFT_WHITE);
-    display.fillCircle(bcx, bcy + 8, 3, TFT_WHITE);
-    display.fillCircle(65, 63, 9, 0xF800);
-    display.drawCircle(65, 63, 9, TFT_WHITE);
-    display.drawCircle(65, 63, 8, TFT_WHITE);
-    display.setTextSize(1);
-    display.setTextColor(TFT_WHITE);
-    display.setCursor(63, 60);
-    display.print("3");
-    display.setCursor(10, 120);
-    display.print("Notifications");
+      // ── Bomb Character / Time Bomb Visual ──
+      const int bx = cX + 44, by = cY + 70;
 
-    // Col 1: Calendar (X = 89, W = 62)
-    display.fillRoundRect(89, 58, 62, 58, 16, 0x0A28);
-    display.drawRoundRect(89, 58, 62, 58, 16, 0x2DBF);
-    display.drawRoundRect(90, 59, 60, 56, 15, 0x2DBF);
-    display.drawRoundRect(91, 60, 58, 54, 14, 0x2DBF);
-    int ccx = 120, ccy = 84;
-    display.fillRoundRect(ccx - 14, ccy - 12, 28, 25, 4, TFT_WHITE);
-    display.fillRoundRect(ccx - 14, ccy - 12, 28, 9, 4, 0xF968);
-    display.fillRect(ccx - 14, ccy - 7, 28, 4, 0xF968);
-    display.fillRect(ccx - 8, ccy - 15, 3, 5, 0x2124);
-    display.fillRect(ccx + 5, ccy - 15, 3, 5, 0x2124);
-    display.setTextSize(1);
-    display.setTextColor(0x0000);
-    display.setCursor(ccx - 6, ccy - 1);
-    display.print("31");
-    display.setTextColor(TFT_WHITE);
-    display.setCursor(98, 120);
-    display.print("Calendar");
+      // Pulsing soundwave radar ripple
+      int ripple = (t / 25) % 28;
+      if (ripple > 10) {
+        display.drawCircle(bx, by, ripple, 0xFD20);
+      }
 
-    // Col 2: Focus (X = 164, W = 62)
-    display.fillRoundRect(164, 58, 62, 58, 16, 0x3866);
-    display.drawRoundRect(164, 58, 62, 58, 16, 0xFA60);
-    display.drawRoundRect(165, 59, 60, 56, 15, 0xFA60);
-    display.drawRoundRect(166, 60, 58, 54, 14, 0xFA60);
-    int fcx = 195, fcy = 84;
-    display.fillCircle(fcx - 1, fcy + 1, 12, 0xF9A4);
-    display.fillRoundRect(fcx - 3, fcy - 13, 6, 5, 2, 0x2E68);
-    display.drawPixel(fcx - 6, fcy - 11, 0x2E68);
-    display.drawPixel(fcx + 4, fcy - 11, 0x2E68);
-    display.fillCircle(fcx + 7, fcy + 6, 7, 0x0BE4);
-    display.drawCircle(fcx + 7, fcy + 6, 7, TFT_WHITE);
-    display.drawCircle(fcx + 7, fcy + 6, 6, TFT_WHITE);
-    display.drawLine(fcx + 7, fcy + 6, fcx + 7, fcy + 2, 0x0000);
-    display.drawLine(fcx + 7, fcy + 6, fcx + 9, fcy + 6, 0x0000);
-    display.setTextColor(TFT_WHITE);
-    display.setCursor(179, 120);
-    display.print("Focus");
-    display.setTextColor(0x7CDF);
-    display.setCursor(171, 130);
-    display.print("Pomodoro");
+      // Bomb sphere body
+      display.fillCircle(bx, by, 18, 0x2104);
+      display.drawCircle(bx, by, 18, TFT_WHITE);
+      // Bomb specular shine
+      display.fillCircle(bx - 6, by - 6, 4, TFT_WHITE);
+      // Brass collar
+      display.fillRect(bx - 4, by - 22, 8, 4, 0x632C);
+      // Curved fuse rope
+      display.drawLine(bx, by - 22, bx + 6, by - 28, 0xBDF7);
+      display.drawLine(bx + 6, by - 28, bx + 12, by - 26, 0xBDF7);
+      // Animated flickering fuse spark
+      uint8_t spk = (t / 70) % 3;
+      display.fillCircle(bx + 13, by - 26, 3, 0xFFE0);
+      if (spk == 0) {
+        display.drawLine(bx + 13, by - 30, bx + 13, by - 33, 0xFD20);
+        display.drawLine(bx + 16, by - 24, bx + 19, by - 23, 0xFD20);
+      } else if (spk == 1) {
+        display.drawLine(bx + 17, by - 29, bx + 20, by - 32, 0xF800);
+        display.drawLine(bx + 10, by - 29, bx + 8, by - 32, 0xF800);
+      }
+      // Glowing digital clock display on bomb face
+      display.setTextSize(1);
+      display.setTextColor(0xF800);
+      display.setCursor(bx - 9, by - 4);
+      display.print(":60");
 
-    // Row 1: Y = 152, H = 58, r = 16
-    // Col 0: Games (X = 14, W = 62)
-    display.fillRoundRect(14, 152, 62, 58, 16, 0x288C);
-    display.drawRoundRect(14, 152, 62, 58, 16, 0x89DF);
-    display.drawRoundRect(15, 153, 60, 56, 15, 0x89DF);
-    display.drawRoundRect(16, 154, 58, 54, 14, 0x89DF);
-    int gcx = 45, gcy = 178;
-    display.fillRoundRect(gcx - 16, gcy - 9, 32, 19, 7, 0xDF7E);
-    display.drawRoundRect(gcx - 16, gcy - 9, 32, 19, 7, 0x0000);
-    display.fillRect(gcx - 12, gcy - 3, 8, 4, 0x288C);
-    display.fillRect(gcx - 10, gcy - 5, 4, 8, 0x288C);
-    display.fillCircle(gcx + 6, gcy - 3, 2, 0xF800);
-    display.fillCircle(gcx + 11, gcy, 2, 0x07E0);
-    display.fillCircle(gcx + 6, gcy + 3, 2, 0x001F);
-    display.fillCircle(gcx + 1, gcy, 2, 0xFFE0);
-    display.setTextColor(TFT_WHITE);
-    display.setCursor(30, 214);
-    display.print("Games");
+      // ── Game Titles on Right of Bomb ──
+      display.setTextSize(2);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(cX + 78, cY + 44);
+      display.print("HIDE &");
+      display.setTextColor(0xFFE0); // Bright gold
+      display.setCursor(cX + 78, cY + 62);
+      display.print("SEEK");
 
-    // Col 1: QR (X = 89, W = 62)
-    display.fillRoundRect(89, 152, 62, 58, 16, 0x0287);
-    display.drawRoundRect(89, 152, 62, 58, 16, 0x0E1E);
-    display.drawRoundRect(90, 153, 60, 56, 15, 0x0E1E);
-    display.drawRoundRect(91, 154, 58, 54, 14, 0x0E1E);
-    int qcx = 120, qcy = 178;
-    display.drawRect(qcx - 13, qcy - 13, 9, 9, 0x07F3);
-    display.drawRect(qcx - 12, qcy - 12, 7, 7, 0x07F3);
-    display.fillRect(qcx - 11, qcy - 11, 5, 5, TFT_WHITE);
-    display.drawRect(qcx + 4, qcy - 13, 9, 9, 0x07F3);
-    display.drawRect(qcx + 5, qcy - 12, 7, 7, 0x07F3);
-    display.fillRect(qcx + 6, qcy - 11, 5, 5, TFT_WHITE);
-    display.drawRect(qcx - 13, qcy + 4, 9, 9, 0x07F3);
-    display.drawRect(qcx - 12, qcy + 5, 7, 7, 0x07F3);
-    display.fillRect(qcx - 11, qcy + 6, 5, 5, TFT_WHITE);
-    display.fillRect(qcx - 1, qcy - 1, 4, 4, 0x07F3);
-    display.fillRect(qcx + 5, qcy + 5, 5, 5, TFT_WHITE);
-    display.setTextColor(TFT_WHITE);
-    display.setCursor(114, 214);
-    display.print("QR");
-    display.setTextColor(0x7CDF);
-    display.setCursor(99, 224);
-    display.print("My Card");
+      display.setTextSize(1);
+      display.setTextColor(0xFD20); // Amber subtitle
+      display.setCursor(cX + 78, cY + 84);
+      display.print("TIME BOMB ESCAPE");
 
-    // Col 2: Settings (X = 164, W = 62)
-    display.fillRoundRect(164, 152, 62, 58, 16, 0x11AB);
-    display.drawRoundRect(164, 152, 62, 58, 16, 0x44DF);
-    display.drawRoundRect(165, 153, 60, 56, 15, 0x44DF);
-    display.drawRoundRect(166, 154, 58, 54, 14, 0x44DF);
-    int scx = 195, scy = 178;
-    display.fillCircle(scx, scy, 11, 0xDF7E);
-    display.fillRect(scx - 4, scy - 14, 8, 28, 0xDF7E);
-    display.fillRect(scx - 14, scy - 4, 28, 8, 0xDF7E);
-    display.fillCircle(scx, scy, 5, 0x11AB);
-    display.fillCircle(scx, scy, 2, 0xDF7E);
-    display.setTextColor(TFT_WHITE);
-    display.setCursor(171, 214);
-    display.print("Settings");
+      // ── How-To-Play Description Box ──
+      display.fillRoundRect(cX + 10, cY + 100, cW - 20, 28, 6, 0x0841);
+      display.drawRoundRect(cX + 10, cY + 100, cW - 20, 28, 6, 0x2945);
+      display.setTextSize(1);
+      display.setTextColor(0xCE79);
+      display.setCursor(cX + 16, cY + 105);
+      display.print("Hider hides watch. Seeker");
+      display.setCursor(cX + 16, cY + 116);
+      display.print("finds & defuses before :00!");
+
+      // ── Big Vibrant "TAP TO PLAY" Button ──
+      const int playBtnX = cX + 16, playBtnY = cY + 136, playBtnW = cW - 32, playBtnH = 30;
+      display.fillRoundRect(playBtnX, playBtnY, playBtnW, playBtnH, 8, 0xF800);       // Rich crimson
+      display.drawRoundRect(playBtnX, playBtnY, playBtnW, playBtnH, 8, 0xFFE0);       // Gold border
+      display.drawFastHLine(playBtnX + 6, playBtnY + 2, playBtnW - 12, 0xFDE0);    // Specular highlight
+
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(playBtnX + 36, playBtnY + 11);
+      display.print("TAP TO PLAY  >");
+
+      // ── BOTTOM NAVIGATION (Page 2) ──
+      // Left side: Page Indicator dots (○ ●)
+      display.fillCircle(18, 255, 3, 0x31A6);           // Inactive Page 1 Dot
+      display.fillRoundRect(26, 252, 14, 6, 3, 0xFD20); // Active Page 2 Amber Pill
+      display.setTextSize(1);
+      display.setTextColor(0xFD20);
+      display.setCursor(48, 252);
+      display.print("2/2");
+
+      // Right side: Polished "PREV PAGE" Button (Symmetrical to Page 1)
+      const int prBtnX = 118, prBtnY = 240, prBtnW = 108, prBtnH = 32;
+      display.fillRoundRect(prBtnX, prBtnY, prBtnW, prBtnH, 8, 0x2864); // Sleek amber-tinted dark fill
+      display.drawRoundRect(prBtnX, prBtnY, prBtnW, prBtnH, 8, 0xFD20); // Crisp amber outer border
+      display.drawFastHLine(prBtnX + 6, prBtnY + 2, prBtnW - 12, 0xFFA0); // Specular highlight
+
+      // Bright neon backward arrow ◀
+      display.fillTriangle(prBtnX + 26, prBtnY + 8, prBtnX + 26, prBtnY + 24, prBtnX + 16, prBtnY + 16, 0xFD20);
+      display.fillTriangle(prBtnX + 25, prBtnY + 10, prBtnX + 25, prBtnY + 22, prBtnX + 18, prBtnY + 16, TFT_WHITE);
+
+      display.setTextSize(1);
+      display.setTextColor(TFT_WHITE);
+      display.setCursor(prBtnX + 38, prBtnY + 12);
+      display.print("PREV");
+    }
   }
 
 
@@ -2896,34 +2890,160 @@ public:
     display.fillRoundRect(126, 264, 8, 3, 1, 0x218A);
   }
 
-  void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour, int steps) {
-    int dispHour = hour;
-    if (is12Hour) {
-      dispHour = hour % 12;
-      if (dispHour == 0) dispHour = 12;
+  static inline uint16_t blend565Alpha(uint16_t fg, uint16_t bg, uint8_t alpha) {
+    if (alpha == 0) return bg;
+    if (alpha == 255) return fg;
+    uint32_t fg_r = (fg >> 11) & 0x1F;
+    uint32_t fg_g = (fg >> 5) & 0x3F;
+    uint32_t fg_b = fg & 0x1F;
+    uint32_t bg_r = (bg >> 11) & 0x1F;
+    uint32_t bg_g = (bg >> 5) & 0x3F;
+    uint32_t bg_b = bg & 0x1F;
+    uint32_t inv = 255 - alpha;
+    uint32_t r = (fg_r * alpha + bg_r * inv) / 255;
+    uint32_t g = (fg_g * alpha + bg_g * inv) / 255;
+    uint32_t b = (fg_b * alpha + bg_b * inv) / 255;
+    return (r << 11) | (g << 5) | b;
+  }
+
+  void drawAAGlyph(int x, int y, const uint8_t *data, int w, int h, uint16_t color) {
+    uint16_t *buf = display.getBuffer();
+    for (int row = 0; row < h; row++) {
+      int cy = y + row;
+      if (cy < 0 || cy >= 280) continue;
+      for (int col = 0; col < w; col++) {
+        int cx = x + col;
+        if (cx < 0 || cx >= 240) continue;
+        uint8_t a = pgm_read_byte(&data[row * w + col]);
+        if (a == 0) continue;
+        int idx = cy * 240 + cx;
+        buf[idx] = blend565Alpha(color, buf[idx], a);
+      }
+    }
+  }
+
+  int drawAADigit(int x, int y, char ch, uint16_t color) {
+    const uint8_t *data = nullptr;
+    int w = 0, h = 44;
+    switch (ch) {
+      case '0': data = glyph_digit_0_data; w = glyph_digit_0_w; break;
+      case '1': data = glyph_digit_1_data; w = glyph_digit_1_w; break;
+      case '2': data = glyph_digit_2_data; w = glyph_digit_2_w; break;
+      case '3': data = glyph_digit_3_data; w = glyph_digit_3_w; break;
+      case '4': data = glyph_digit_4_data; w = glyph_digit_4_w; break;
+      case '5': data = glyph_digit_5_data; w = glyph_digit_5_w; break;
+      case '6': data = glyph_digit_6_data; w = glyph_digit_6_w; break;
+      case '7': data = glyph_digit_7_data; w = glyph_digit_7_w; break;
+      case '8': data = glyph_digit_8_data; w = glyph_digit_8_w; break;
+      case '9': data = glyph_digit_9_data; w = glyph_digit_9_w; break;
+      case ':': data = glyph_colon_data;   w = glyph_colon_w;   break;
+      default: return 0;
+    }
+    drawAAGlyph(x, y, data, w, h, color);
+    return w;
+  }
+
+  void drawAAAmPm(int x, int y, bool isPm, uint16_t color) {
+    if (isPm) {
+      drawAAGlyph(x, y, glyph_pm_data, glyph_pm_w, glyph_pm_h, color);
+    } else {
+      drawAAGlyph(x, y, glyph_am_data, glyph_am_w, glyph_am_h, color);
+    }
+  }
+
+  String formatWatchFullDate(const String &dStr, const String &dtStr) {
+    String shortDay = dStr.substring(0, 3);
+    if (shortDay.length() > 0) {
+      shortDay.setCharAt(0, toupper(shortDay.charAt(0)));
+      for (int i = 1; i < (int)shortDay.length(); i++) shortDay.setCharAt(i, tolower(shortDay.charAt(i)));
+    } else {
+      shortDay = "Tue";
     }
 
-    // ── SINGLE MODERN NIGHT MOUNTAIN LAKE WATCHFACE ─────────────────────
-    // 1. Copy 240x280 wallpaper from PROGMEM directly to PSRAM canvas
-    memcpy_P(display.getBuffer(), clock_night_bg, 240 * 280 * sizeof(uint16_t));
+    String dayNum = "24";
+    String monName = "Sep";
+    int space = dtStr.indexOf(' ');
+    int dash = dtStr.indexOf('-');
+    int sep = (space > 0) ? space : dash;
+    if (sep > 0) {
+      String p1 = dtStr.substring(0, sep);
+      String p2 = dtStr.substring(sep + 1);
+      p1.trim(); p2.trim();
+      if (isDigit(p1.charAt(0))) {
+        dayNum = p1;
+        monName = p2.substring(0, 3);
+      } else {
+        monName = p1.substring(0, 3);
+        dayNum = p2;
+      }
+    } else if (dtStr.length() > 0) {
+      dayNum = dtStr;
+    }
+    return shortDay + ", " + dayNum + " " + monName + " 2026";
+  }
 
-    // 2. Unified Top Header (Consistent across Clock, Menu, and Apps)
-    drawUnifiedTopHeader(hour, minute, day, date);
+  void drawClockScreen(int hour, int minute, int second, String day, String date, int style, bool is12Hour, int steps) {
+    int dispHour = hour % 12;
+    if (dispHour == 0) dispHour = 12;
+    bool isPm = (hour >= 12);
 
-    // 3. Two-line big stacked digits (White hours, Sky-Blue minutes) - nicely centered
-    drawTwoDigits(32, 60, dispHour, TFT_WHITE);
-    drawTwoDigits(32, 114, minute, 0x44DF);
+    // 1. Copy 240x280 pastel lavender sunset wallpaper directly to PSRAM canvas
+    memcpy_P(display.getBuffer(), clock_lavender_bg, 240 * 280 * sizeof(uint16_t));
 
-    // 4. Clean date text (e.g. "Tue, Oct 1")
-    String formattedDate = formatWatchDate(day, date);
-    int dX = 34, dY = 175;
-    display.setTextSize(2);
-    display.setTextColor(0x0000);
-    display.setCursor(dX + 1, dY + 1);
-    display.print(formattedDate);
-    display.setTextColor(TFT_WHITE);
-    display.setCursor(dX, dY);
-    display.print(formattedDate);
+    // 2. Bluetooth Circle (Top Right: X=166, Y=14, r=8, #9B7EF7 -> 0x9BFE)
+    int bx = 166, by = 14;
+    display.fillCircle(bx, by, 8, 0x9BFE);
+    display.drawFastVLine(bx, by - 5, 11, TFT_WHITE);
+    display.drawLine(bx, by - 5, bx + 3, by - 2, TFT_WHITE);
+    display.drawLine(bx + 3, by - 2, bx - 3, by + 2, TFT_WHITE);
+    display.drawLine(bx - 3, by - 2, bx + 3, by + 2, TFT_WHITE);
+    display.drawLine(bx + 3, by + 2, bx, by + 5, TFT_WHITE);
+
+    // 3. Battery Pill (Top Right: X=182, Y=5, W=48, H=18, r=9, Frosted white 0xF7DE)
+    display.fillRoundRect(182, 5, 48, 18, 9, 0xF7DE);
+    display.drawRoundRect(187, 9, 15, 10, 2, 0x296B);
+    display.drawFastVLine(202, 12, 4, 0x296B);
+    int batPct = getBatteryPercentage(batteryVolts);
+    if (batPct <= 0 || batPct > 100) batPct = 78;
+    int bFill = constrain((batPct * 11) / 100, 1, 11);
+    display.fillRect(189, 11, bFill, 6, 0x296B);
+    display.setTextSize(1);
+    display.setTextColor(0x296B);
+    display.setCursor(206, 10);
+    display.printf("%d%%", batPct);
+
+    // 4. Time Display: Big modern typography
+    const uint16_t COLOR_HOURS = 0x0842; // Midnight dark indigo (#0D1127)
+    const uint16_t COLOR_COLON = 0x695F; // Vivid purple (#6C2BD9)
+    const uint16_t COLOR_MINS  = 0x695F; // Electric purple (#6C2BD9)
+    const uint16_t COLOR_AMPM  = 0x0842; // Midnight dark indigo (#0D1127)
+
+    int curX = 20, curY = 66;
+    char hBuf[3];
+    snprintf(hBuf, sizeof(hBuf), "%02d", dispHour);
+    curX += drawAADigit(curX, curY, hBuf[0], COLOR_HOURS);
+    curX += drawAADigit(curX, curY, hBuf[1], COLOR_HOURS);
+    curX += 2;
+    curX += drawAADigit(curX, curY, ':', COLOR_COLON);
+    curX += 2;
+    char mBuf[3];
+    snprintf(mBuf, sizeof(mBuf), "%02d", minute);
+    curX += drawAADigit(curX, curY, mBuf[0], COLOR_MINS);
+    curX += drawAADigit(curX, curY, mBuf[1], COLOR_MINS);
+    curX += 6;
+    drawAAAmPm(curX, curY + 22, isPm, COLOR_AMPM);
+
+    // 5. Date Pill: [ Thu, 08 Oct 2026 ]
+    int pillX = 20, pillY = 104, pillH = 18;
+    String fullDateStr = formatWatchFullDate(day, date);
+    int textW = fullDateStr.length() * 6;
+    int pillW = textW + 16;
+    if (pillW < 100) pillW = 100;
+    display.fillRoundRect(pillX, pillY, pillW, pillH, 9, 0xF7DE);
+    display.setTextSize(1);
+    display.setTextColor(0x296B);
+    display.setCursor(pillX + 8, pillY + 5);
+    display.print(fullDateStr);
   }
 
   void drawTextScreen() {
@@ -3361,6 +3481,8 @@ public:
                 games.updateAndDrawCatcher(display, audio);
               } else if (gameSelected == 5) {
                 games.updateAndDrawJump(display, audio);
+              } else if (gameSelected == 6) {
+                games.updateAndDrawHideSeek(display, audio);
               }
             }
           }

@@ -96,6 +96,7 @@ const initialState: LunaState = {
     stacker: 18,
     memoryMatrix: 42,
     tiltMaze: 87,
+    hideSeek: 120,
   },
   pomStatus: "idle",
   pomMode: "focus",

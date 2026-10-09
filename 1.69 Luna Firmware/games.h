@@ -9,6 +9,11 @@
 #include <Arduino.h>
 #include <Preferences.h>
 
+// Forward declarations for touch coordinates provided by main sketch
+int getTouchX();
+int getTouchY();
+bool isTouchActive();
+
 // External references (declared once)
 extern bool gamesActive;
 extern bool gamePlaying;
@@ -40,6 +45,33 @@ private:
   int jumpHighScore;
   int stkHighScore;
   int memHighScore;
+  int hsHighScore;
+
+  // ── Game 6: Hide & Seek ────────────────────────────────────────────────────
+  enum HideSeekState {
+    HS_STATE_SETUP = 0,
+    HS_STATE_HIDING,
+    HS_STATE_ACTIVE,
+    HS_STATE_EXPLODED,
+    HS_STATE_DEFUSED
+  };
+  HideSeekState hsState;
+  int hsTimerSeconds;
+  unsigned long hsPhaseStartTime;
+  unsigned long hsBombDurationMs;
+  unsigned long hsHidingDurationMs;
+  unsigned long hsLastTickMs;
+  long hsDefusedRemainingMs;
+  bool hsGameOver;
+  bool hsLastTouchDown;
+  int hsSoundWaveRadius;
+  uint8_t hsSparkFrame;
+  int hsExplosionFrame;
+  float hsExplosionPartX[24];
+  float hsExplosionPartY[24];
+  float hsExplosionPartVX[24];
+  float hsExplosionPartVY[24];
+  uint16_t hsExplosionPartCol[24];
 
   // ── Game 1: Luna Racer ─────────────────────────────────────────────────────
   float racPlayerX;
@@ -175,6 +207,19 @@ public:
     jumpHighScore = 0;
     stkHighScore = 0;
     memHighScore = 0;
+    hsHighScore = 0;
+    hsState = HS_STATE_SETUP;
+    hsTimerSeconds = 60;
+    hsPhaseStartTime = 0;
+    hsBombDurationMs = 0;
+    hsHidingDurationMs = 10000;
+    hsLastTickMs = 0;
+    hsDefusedRemainingMs = 0;
+    hsGameOver = false;
+    hsLastTouchDown = false;
+    hsSoundWaveRadius = 0;
+    hsSparkFrame = 0;
+    hsExplosionFrame = 0;
     lastBtn1 = false;
     lastBtn2 = false;
     spcStarsInit = false;
@@ -208,6 +253,7 @@ public:
     jumpHighScore = prefs.getInt("jump", 0);
     stkHighScore = prefs.getInt("stk", 0);
     memHighScore = prefs.getInt("mem", 0);
+    hsHighScore = prefs.getInt("hs", 0);
     prefs.end();
   }
 
@@ -374,6 +420,22 @@ public:
     memGameOver = false;
   }
 
+  void resetHideSeek() {
+    hsState = HS_STATE_SETUP;
+    if (hsTimerSeconds < 15 || hsTimerSeconds > 300) hsTimerSeconds = 60;
+    hsPhaseStartTime = 0;
+    hsBombDurationMs = 0;
+    hsHidingDurationMs = 10000;
+    hsLastTickMs = 0;
+    hsDefusedRemainingMs = 0;
+    hsGameOver = false;
+    gameOverActive = false;
+    hsLastTouchDown = false;
+    hsSoundWaveRadius = 0;
+    hsSparkFrame = 0;
+    hsExplosionFrame = 0;
+  }
+
   // ── Game Over eligibility ──────────────────────────────────────────────────
   bool canExitActiveGame() {
     bool go = false;
@@ -387,6 +449,8 @@ public:
       go = catGameOver;
     else if (gameSelected == 5)
       go = jumpGameOver;
+    else if (gameSelected == 6)
+      go = hsGameOver || (hsState == HS_STATE_SETUP);
     gameOverActive = go;
     return go;
   }
@@ -580,7 +644,7 @@ public:
       // Wing
       display.drawLine(cx - 8, cy + wave, cx - 18, cy - 10 + wave, themeText);
       display.drawLine(cx - 18, cy - 10 + wave, cx - 4, cy - 4 + wave,
-                       themeText);
+                           themeText);
     } break;
 
     case 3: { // COIN CATCHER
@@ -644,7 +708,7 @@ public:
     for (int d = 0; d < 6; d++) {
       int dx = dotStartX + d * 14;
       if (d == opt) {
-        display.fillRoundRect(dx - 4, 238, 12, 4, 2, btnColor);
+        display.fillRoundRect(dx - 3, 238, 10, 4, 2, btnColor);
       } else {
         display.fillCircle(dx, 240, 2, themeBorder);
       }
@@ -2067,6 +2131,752 @@ public:
 
     if (memGameOver)
       drawGameOverScreen(display, memScore, memHighScore);
+  }
+
+  // ============================================================
+  //  GAME 6: HIDE & SEEK (TIME BOMB DETONATION GAME)
+  // ============================================================
+  void updateAndDrawHideSeek(GFXcanvas16 &display, LunaAudio &audio) {
+    const uint16_t themeAccent = (robotVariant == "mr_luna") ? 0x07FF : 0xF8B8;
+    const unsigned long now = millis();
+
+    // Touch input state
+    bool isDown = isTouchActive();
+    int touchX = getTouchX();
+    int touchY = getTouchY();
+    bool justTapped = isDown && !hsLastTouchDown;
+    hsLastTouchDown = isDown;
+
+    const bool btn1 = virtualBtn1;
+    const bool justBtn1 = btn1 && !lastBtn1;
+    lastBtn1 = btn1;
+
+    // ──────────────────────────────────────────────────────────
+    // STATE 1: SETUP (TIMER SELECTION)
+    // ──────────────────────────────────────────────────────────
+    if (hsState == HS_STATE_SETUP) {
+      gameOverActive = false;
+      hsGameOver = false;
+
+      // Handle Preset Buttons: [30s], [60s], [90s], [2m]
+      if (justTapped && touchY >= 142 && touchY <= 174) {
+        if (touchX >= 12 && touchX <= 64) {
+          hsTimerSeconds = 30;
+          audio.playSound(SOUND_COIN);
+        } else if (touchX >= 66 && touchX <= 118) {
+          hsTimerSeconds = 60;
+          audio.playSound(SOUND_COIN);
+        } else if (touchX >= 120 && touchX <= 172) {
+          hsTimerSeconds = 90;
+          audio.playSound(SOUND_COIN);
+        } else if (touchX >= 174 && touchX <= 226) {
+          hsTimerSeconds = 120;
+          audio.playSound(SOUND_COIN);
+        }
+      }
+
+      // Handle Stepper Buttons: [- 15s] and [+ 15s]
+      if (justTapped && touchY >= 176 && touchY <= 214) {
+        if (touchX >= 20 && touchX <= 60) {
+          hsTimerSeconds = max(15, hsTimerSeconds - 15);
+          audio.playSound(SOUND_JUMP);
+        } else if (touchX >= 180 && touchX <= 220) {
+          hsTimerSeconds = min(300, hsTimerSeconds + 15);
+          audio.playSound(SOUND_JUMP);
+        }
+      }
+
+      // Handle Dial Touch / Drag Scrubber (CX=120, CY=95, R=42)
+      if (justTapped && touchY >= 50 && touchY <= 140 && touchX >= 75 && touchX <= 165) {
+        float dx = touchX - 120;
+        float dy = touchY - 95;
+        float ang = atan2f(dy, dx) + 1.5708f; // relative to top (12 o'clock)
+        if (ang < 0.0f) ang += 6.28318f;
+        int dialed = (int)((ang / 6.28318f) * 120.0f);
+        dialed = ((dialed + 7) / 15) * 15;
+        if (dialed < 15) dialed = 15;
+        if (dialed > 120) dialed = 120;
+        hsTimerSeconds = dialed;
+        audio.playSound(SOUND_COIN);
+      }
+
+      // Handle "ARM & HIDE" Bottom Card
+      if (justTapped && touchY >= 216 && touchY <= 276) {
+        hsState = HS_STATE_HIDING;
+        hsPhaseStartTime = now;
+        hsHidingDurationMs = 10000; // 10-second hiding countdown
+        audio.playSound(SOUND_POWERUP);
+      }
+
+      // ──────────────────────────────────────────────────────────
+      // RENDER EXACT LUNA HIDE & SEEK UI (LAVENDER / PURPLE)
+      // ──────────────────────────────────────────────────────────
+      // Deep magical violet/purple background
+      display.fillScreen(0x18C8);
+
+      // Star sparkles in background
+      display.drawPixel(22, 34, 0xFFE0);
+      display.drawPixel(214, 28, 0xFFE0);
+      display.drawPixel(45, 120, 0xD65F);
+      display.drawPixel(198, 126, 0xD65F);
+
+      // ── TOP HEADER: HIDE & SEEK LOGO WITH CAT EARS ──
+      // Cat ears over "H" & "I"
+      display.fillTriangle(68, 20, 64, 13, 73, 16, 0x4170);
+      display.fillTriangle(67, 19, 65, 15, 71, 17, 0xFBAE); // Pink inner ear
+      display.fillTriangle(79, 16, 85, 13, 83, 20, 0x4170);
+      display.fillTriangle(80, 17, 84, 15, 82, 19, 0xFBAE); // Pink inner ear
+
+      // Excitement comic rays around logo
+      display.drawLine(58, 14, 54, 11, 0xFFE0);
+      display.drawLine(182, 14, 186, 11, 0xFFE0);
+
+      // Logo container pill
+      display.fillRoundRect(56, 17, 128, 22, 11, 0x28AE);
+      display.drawRoundRect(56, 17, 128, 22, 11, 0x51D5);
+
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(62, 21);
+      display.print("HIDE");
+      display.setTextColor(0xD65F);
+      display.setCursor(110, 21);
+      display.print("&");
+      display.setTextColor(0xFFE0);
+      display.setCursor(124, 21);
+      display.print("SEEK");
+
+      // ── CHARACTERS ──
+      // Left White Kitten Peeking behind drape
+      display.fillRoundRect(0, 48, 12, 54, 5, 0x4994);
+      display.fillCircle(18, 76, 10, 0xFFFF);
+      display.fillTriangle(14, 69, 12, 62, 18, 67, 0xFBAE);
+      display.fillCircle(14, 80, 3, 0xFBAE); // Pink cheek
+      display.drawPixel(17, 75, 0x18C6);     // Eye
+      display.drawPixel(18, 76, 0x18C6);
+      display.fillCircle(24, 82, 3, 0xFFFF); // Paw
+      display.drawCircle(24, 82, 3, 0xD65F);
+      display.drawLine(16, 56, 14, 50, 0xFFE0); // Whiskers/rays
+      display.drawLine(22, 58, 24, 52, 0xFFE0);
+
+      // Right Black Kitten Peeking behind chair
+      display.fillRoundRect(228, 64, 12, 44, 5, 0x4994);
+      display.fillCircle(222, 76, 10, 0x18A4);
+      display.fillTriangle(226, 69, 228, 62, 222, 67, 0x18A4);
+      display.fillCircle(218, 75, 3, 0xFFFF); // Shiny eye
+      display.fillCircle(218, 75, 1, 0x18A4);
+      display.drawCircle(212, 82, 5, 0x07FF); // Magnifying glass
+      display.drawLine(216, 86, 220, 90, 0xCE79);
+      display.drawLine(224, 56, 226, 50, 0xFFE0);
+      display.drawLine(218, 58, 216, 52, 0xFFE0);
+
+      // ── CENTER CIRCULAR TIMER DIAL (CX=120, CY=95, R=42) ──
+      // Glowing purple outer ring
+      display.drawCircle(120, 95, 43, 0x5194);
+      display.drawCircle(120, 95, 42, 0x915C);
+      display.drawCircle(120, 95, 41, 0xC1BF);
+
+      // Dreamy lavender inner face
+      display.fillCircle(120, 95, 39, 0xF7BE);
+
+      // Clouds at bottom of dial
+      display.fillRoundRect(88, 110, 64, 20, 8, 0xC55E);
+      display.fillRoundRect(96, 116, 48, 14, 6, 0x915C);
+
+      // Sparkles in dial
+      display.drawPixel(102, 78, 0x915C);
+      display.drawPixel(138, 80, 0xC1BF);
+
+      // Digital time readout: MM:SS
+      int m = hsTimerSeconds / 60;
+      int s = hsTimerSeconds % 60;
+
+      // Minutes in dark indigo
+      display.setTextSize(3);
+      display.setTextColor(0x18C6);
+      display.setCursor(78, 85);
+      display.printf("%02d", m);
+
+      // Colon in vibrant purple
+      display.setTextColor(0x915C);
+      display.setCursor(114, 85);
+      display.print(":");
+
+      // Seconds in vibrant magenta
+      display.setTextColor(0xC1BF);
+      display.setCursor(128, 85);
+      display.printf("%02d", s);
+
+      // Draggable scrubber knob on circular track
+      float knobAngle = ((float)hsTimerSeconds / 60.0f) * 6.28318f - 1.5708f;
+      int kx = 120 + (int)(cosf(knobAngle) * 42.0f);
+      int ky = 95 + (int)(sinf(knobAngle) * 42.0f);
+      display.fillCircle(kx, ky, 6, 0xFFFF);
+      display.drawCircle(kx, ky, 6, 0xC1BF);
+      display.drawPixel(kx, ky, 0x915C);
+
+      // ── QUICK PRESET PILLS: 30s | 60s | 90s | 2m (Y=146..170) ──
+      const int presets[] = {30, 60, 90, 120};
+      const char *pLabels[] = {"30s", "60s", "90s", "2m"};
+      for (int i = 0; i < 4; i++) {
+        int px = 14 + i * 54;
+        bool isSel = (hsTimerSeconds == presets[i]);
+        if (isSel) {
+          display.fillRoundRect(px, 146, 48, 24, 12, 0x915C);
+          display.drawRoundRect(px, 146, 48, 24, 12, 0xD65F);
+          display.setTextSize(1);
+          display.setTextColor(0xFFFF);
+        } else {
+          display.fillRoundRect(px, 146, 48, 24, 12, 0xEF7D);
+          display.drawRoundRect(px, 146, 48, 24, 12, 0xC57C);
+          display.setTextSize(1);
+          display.setTextColor(0x28AE);
+        }
+        int plW = strlen(pLabels[i]) * 6;
+        display.setCursor(px + (48 - plW) / 2, 154);
+        display.print(pLabels[i]);
+      }
+
+      // ── FINE ADJUSTER CAPSULE: [-] ··· clock ··· [+] (Y=178..210) ──
+      display.fillRoundRect(22, 178, 196, 32, 16, 0x3914);
+      display.drawRoundRect(22, 178, 196, 32, 16, 0x6A38);
+
+      // Minus Button (Left)
+      display.fillCircle(40, 194, 12, 0xEF7D);
+      display.drawCircle(40, 194, 12, 0xC57C);
+      display.setTextSize(2);
+      display.setTextColor(0x28AE);
+      display.setCursor(35, 187);
+      display.print("-");
+
+      // Center Clock Arc of Dots
+      for (int d = 0; d < 7; d++) {
+        int dotX = 85 + d * 10;
+        int dotY = 186 + abs(d - 3);
+        display.drawPixel(dotX, dotY, 0xFFFF);
+      }
+      display.drawCircle(120, 197, 6, 0xD65F);
+      display.drawLine(120, 197, 120, 193, 0xFFFF);
+      display.drawLine(120, 197, 123, 197, 0xFFFF);
+
+      // Plus Button (Right)
+      display.fillCircle(200, 194, 12, 0x915C);
+      display.drawCircle(200, 194, 12, 0xD65F);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(194, 187);
+      display.print("+");
+
+      // ── BOTTOM WAVY CARD: "ARM & HIDE" (Y=218..274) ──
+      display.fillRoundRect(14, 218, SCREEN_WIDTH - 28, 54, 16, 0x28AE);
+      display.drawRoundRect(14, 218, SCREEN_WIDTH - 28, 54, 16, 0x6A38);
+      display.drawFastHLine(24, 220, SCREEN_WIDTH - 48, 0x915C);
+
+      // Animated upward chevron ^
+      int chevY = 224 + ((now / 220) % 3);
+      display.drawLine(120, chevY, 115, chevY + 4, 0xD65F);
+      display.drawLine(120, chevY, 125, chevY + 4, 0xD65F);
+
+      // ARM & HIDE text
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      const char *armTxt = "ARM & HIDE";
+      int atW = strlen(armTxt) * 12;
+      display.setCursor((SCREEN_WIDTH - atW) / 2, 233);
+      display.print(armTxt);
+
+      // Bottom illuminated pill handle
+      display.fillRoundRect(95, 258, 50, 4, 2, 0xFFFF);
+      display.drawRoundRect(93, 257, 54, 6, 3, 0xD65F);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // STATE 2: HIDING (10-SECOND STEALTH PHASE)
+    // ──────────────────────────────────────────────────────────
+    else if (hsState == HS_STATE_HIDING) {
+      long hideElapsed = (long)(now - hsPhaseStartTime);
+      long hideLeft = (long)hsHidingDurationMs - hideElapsed;
+
+      // Tap to skip hiding phase and start ticking right away
+      if ((justTapped && touchY >= 210) || hideLeft <= 0) {
+        hsState = HS_STATE_ACTIVE;
+        hsPhaseStartTime = now;
+        hsBombDurationMs = hsTimerSeconds * 1000UL;
+        hsLastTickMs = 0;
+        hsSoundWaveRadius = 0;
+        audio.playSound(SOUND_ALERT_BEEP);
+        return;
+      }
+
+      display.fillScreen(0x0000); // Pitch stealth black
+
+      // Top Hazard Stripes Banner
+      for (int x = 0; x < SCREEN_WIDTH; x += 20) {
+        display.fillTriangle(x, 22, x + 10, 22, x, 34, 0xFD20);
+        display.fillTriangle(x + 10, 22, x + 20, 22, x + 10, 34, 0x0000);
+      }
+
+      // Status Title
+      display.setTextSize(2);
+      display.setTextColor(0xFFE0);
+      const char *hdTitle = "GO HIDE WATCH!";
+      int hw = strlen(hdTitle) * 12;
+      display.setCursor((SCREEN_WIDTH - hw) / 2, 44);
+      display.print(hdTitle);
+
+      // Running figure animation (Y=72..102)
+      int runnerX = 120 + (int)(sinf(now / 200.0f) * 16);
+      int legFrame = (now / 150) % 2;
+      // Head
+      display.fillCircle(runnerX, 76, 6, 0x07FF);
+      // Torso
+      display.drawLine(runnerX, 82, runnerX, 94, 0x07FF);
+      // Arms
+      display.drawLine(runnerX, 85, runnerX - 8, 88, 0x07FF);
+      display.drawLine(runnerX, 85, runnerX + 8, 83, 0x07FF);
+      // Legs (running cycle)
+      if (legFrame == 0) {
+        display.drawLine(runnerX, 94, runnerX - 7, 103, 0x07FF);
+        display.drawLine(runnerX, 94, runnerX + 7, 98, 0x07FF);
+        display.drawLine(runnerX + 7, 98, runnerX + 10, 103, 0x07FF);
+      } else {
+        display.drawLine(runnerX, 94, runnerX + 7, 103, 0x07FF);
+        display.drawLine(runnerX, 94, runnerX - 7, 98, 0x07FF);
+        display.drawLine(runnerX - 7, 98, runnerX - 10, 103, 0x07FF);
+      }
+
+      // Giant Glowing Countdown Number (Y=114..160)
+      int secLeft = (int)(hideLeft / 1000) + 1;
+      char cntBuf[8];
+      snprintf(cntBuf, sizeof(cntBuf), "%d", secLeft);
+      display.setTextSize(6);
+      uint16_t numColor = ((now / 250) % 2 == 0) ? 0xFFFF : 0xFFE0;
+      display.setTextColor(numColor);
+      int nw = strlen(cntBuf) * 36;
+      display.setCursor((SCREEN_WIDTH - nw) / 2, 114);
+      display.print(cntBuf);
+
+      // Instructive Text
+      display.setTextSize(1);
+      display.setTextColor(0xCE79);
+      const char *hSub1 = "TICKING STARTS AUTOMATICALLY";
+      int hs1W = strlen(hSub1) * 6;
+      display.setCursor((SCREEN_WIDTH - hs1W) / 2, 172);
+      display.print(hSub1);
+
+      const char *hSub2 = "SEEKER MUST LISTEN CAREFULLY";
+      int hs2W = strlen(hSub2) * 6;
+      display.setCursor((SCREEN_WIDTH - hs2W) / 2, 188);
+      display.print(hSub2);
+
+      // Skip Button: [ READY! START NOW > ]
+      const int rX = 24, rY = 220, rW = SCREEN_WIDTH - 48, rH = 38;
+      display.fillRoundRect(rX, rY, rW, rH, 8, 0x001F);
+      display.drawRoundRect(rX, rY, rW, rH, 8, 0x07FF);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      const char *rTxt = "START NOW >";
+      int rtW = strlen(rTxt) * 12;
+      display.setCursor(rX + (rW - rtW) / 2, rY + 11);
+      display.print(rTxt);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // STATE 3: ACTIVE (TIME BOMB TICKING & SEEKING PHASE)
+    // ──────────────────────────────────────────────────────────
+    else if (hsState == HS_STATE_ACTIVE) {
+      long activeElapsed = (long)(now - hsPhaseStartTime);
+      long remainingMs = (long)hsBombDurationMs - activeElapsed;
+
+      // ── TIME RUN OUT -> DETONATION! ──
+      if (remainingMs <= 0) {
+        hsState = HS_STATE_EXPLODED;
+        hsGameOver = true;
+        gameOverActive = true;
+        hsExplosionFrame = 0;
+        audio.stopBuzzer();
+        audio.playSound(SOUND_EXPLOSION);
+
+        // Spawn 24 explosion particles
+        for (int i = 0; i < 24; i++) {
+          hsExplosionPartX[i] = 120.0f;
+          hsExplosionPartY[i] = 100.0f;
+          float angle = (i * 15.0f) * 3.14159f / 180.0f;
+          float spd = 2.0f + (random(10, 40) / 10.0f);
+          hsExplosionPartVX[i] = cosf(angle) * spd;
+          hsExplosionPartVY[i] = sinf(angle) * spd;
+          hsExplosionPartCol[i] = (i % 3 == 0) ? 0xFFFF : ((i % 3 == 1) ? 0xFFE0 : 0xF800);
+        }
+        return;
+      }
+
+      // ── SEEKER DEFUSED THE BOMB! ──
+      // Tapping the screen or defuse button during active seeking disarms it!
+      if (justTapped) {
+        hsState = HS_STATE_DEFUSED;
+        hsDefusedRemainingMs = remainingMs;
+        hsGameOver = true;
+        gameOverActive = true;
+        audio.stopBuzzer();
+        audio.playSound(SOUND_DEFUSED);
+        saveHighScore("hs", hsHighScore, (int)(remainingMs / 1000));
+        return;
+      }
+
+      // Calculate progress ratio (0.0f to 1.0f)
+      float ratio = (float)activeElapsed / (float)hsBombDurationMs;
+      ratio = constrain(ratio, 0.0f, 1.0f);
+
+      // ── BUZZER TICKING SYSTEM (GRADUALLY INCREASING VOLUME & PITCH) ──
+      // Interval: starts at 2600ms, decreases to 140ms
+      int interval;
+      if (remainingMs <= 5000) {
+        interval = 140; // Final 5 seconds: frantic urgent pulsing!
+      } else if (remainingMs <= 12000) {
+        interval = 280; // Final 12 seconds: fast warning ticks
+      } else {
+        interval = (int)(2600.0f - (ratio * 2100.0f));
+        if (interval < 350) interval = 350;
+      }
+
+      // Volume percent: 4% (faint whisper tick) -> 100% (max square wave power!)
+      int vol = (int)(4.0f + ratio * 96.0f);
+      vol = constrain(vol, 4, 100);
+
+      // Frequency: starts at 650Hz (deep subtle click), rises to 3100Hz (sharp piercing alarm)
+      int freq = (int)(650.0f + (ratio * ratio) * 2450.0f);
+      if (remainingMs <= 5000) freq = 3100;
+
+      // Beep duration: 18ms up to 75ms
+      int dur = (int)(18.0f + ratio * 55.0f);
+
+      // Play tick beep if interval elapsed
+      if (now - hsLastTickMs >= (unsigned long)interval) {
+        hsLastTickMs = now;
+        hsSoundWaveRadius = 10; // Trigger visual sound wave ring
+        audio.playVolumeBeep(freq, dur, vol);
+      }
+
+      // ── RENDER ACTIVE BOMB DISPLAY ──
+      // Shake effect during last 5 seconds
+      int shakeX = (remainingMs <= 5000) ? random(-2, 3) : 0;
+      int shakeY = (remainingMs <= 5000) ? random(-2, 3) : 0;
+
+      // Background: dark tactical grid (or flashing red in final 5 seconds)
+      if (remainingMs <= 5000 && ((now / 140) % 2 == 0)) {
+        display.fillScreen(0x4000); // Alert red flash
+      } else {
+        display.fillScreen(0x0841); // Dark slate
+      }
+
+      // Top Status Text
+      display.setTextSize(1);
+      const char *stTxt;
+      uint16_t stCol;
+      if (ratio < 0.30f) {
+        stTxt = "STEALTH // FAINT TICKS";
+        stCol = 0x07E0; // Green
+      } else if (ratio < 0.70f) {
+        stTxt = "SEEKING // AUDIBLE BEEPS";
+        stCol = 0xFFE0; // Yellow
+      } else if (ratio < 0.90f) {
+        stTxt = "DANGER // HIGH VOLUME";
+        stCol = 0xFD20; // Orange
+      } else {
+        stTxt = "CRITICAL // DETONATION IMMINENT!";
+        stCol = 0xF800; // Red
+      }
+      display.setTextColor(stCol);
+      int stW = strlen(stTxt) * 6;
+      display.setCursor((SCREEN_WIDTH - stW) / 2, 26);
+      display.print(stTxt);
+      display.drawFastHLine(20, 36, SCREEN_WIDTH - 40, 0x4208);
+
+      // Bomb Graphic (Center X=120, Y=86)
+      const int bx = 120 + shakeX;
+      const int by = 86 + shakeY;
+
+      // Concentric Sound Wave Ripple
+      if (hsSoundWaveRadius > 0) {
+        uint16_t rippleCol = (ratio >= 0.75f) ? 0xF800 : 0x07FF;
+        display.drawCircle(bx, by, hsSoundWaveRadius, rippleCol);
+        display.drawCircle(bx, by, hsSoundWaveRadius + 3, blend565(rippleCol, 0x0000));
+        hsSoundWaveRadius += 4;
+        if (hsSoundWaveRadius > 55) hsSoundWaveRadius = 0;
+      }
+
+      // Bomb Sphere Body
+      display.fillCircle(bx, by, 22, 0x2104);
+      display.drawCircle(bx, by, 22, (ratio >= 0.75f) ? 0xF800 : 0xCE79);
+      // Specular highlight
+      display.fillCircle(bx - 7, by - 7, 4, 0x7BEF);
+      display.fillCircle(bx - 8, by - 8, 2, 0xFFFF);
+
+      // Bomb Metallic Collar
+      display.fillRect(bx - 5, by - 26, 10, 5, 0x632C);
+
+      // Curved Rope Fuse
+      display.drawLine(bx, by - 26, bx + 8, by - 34, 0xBDF7);
+      display.drawLine(bx + 8, by - 34, bx + 16, by - 30, 0xBDF7);
+
+      // Lit Spark at Fuse Tip
+      int fx = bx + 17, fy = by - 29;
+      display.fillCircle(fx, fy, 3, 0xFFE0);
+      int spk = (now / 60) % 4;
+      if (spk == 0) {
+        display.drawPixel(fx + 3, fy - 4, 0xFD20);
+        display.drawPixel(fx + 5, fy + 1, 0xF800);
+      } else if (spk == 1) {
+        display.drawPixel(fx - 3, fy - 4, 0xFFFF);
+        display.drawPixel(fx + 4, fy - 3, 0xFD20);
+      } else if (spk == 2) {
+        display.drawPixel(fx + 2, fy - 5, 0xFFE0);
+        display.drawPixel(fx + 6, fy - 1, 0xFFFF);
+      }
+
+      // Skull or alert badge in bomb center
+      if (remainingMs <= 5000 && ((now / 150) % 2 == 0)) {
+        display.fillCircle(bx, by, 8, 0xF800);
+        display.fillCircle(bx - 3, by - 2, 2, 0x0000);
+        display.fillCircle(bx + 3, by - 2, 2, 0x0000);
+      } else {
+        display.drawCircle(bx, by, 8, 0x07FF);
+      }
+
+      // Digital Countdown Timer (Y=124)
+      int totalSecLeft = (int)(remainingMs / 1000);
+      int tm = totalSecLeft / 60;
+      int ts = totalSecLeft % 60;
+      int tenths = (int)((remainingMs % 1000) / 100);
+      char timeBuf[16];
+      snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d.%d", tm, ts, tenths);
+
+      display.setTextSize(3);
+      uint16_t tmColor = (remainingMs <= 5000) ? 0xF800 : ((ratio >= 0.70f) ? 0xFD20 : 0xFFFF);
+      display.setTextColor(tmColor);
+      int timW = strlen(timeBuf) * 18;
+      display.setCursor((SCREEN_WIDTH - timW) / 2, 124);
+      display.print(timeBuf);
+
+      // Volume & Danger Progress Bar (Y=162..174)
+      display.fillRoundRect(20, 162, SCREEN_WIDTH - 40, 12, 4, 0x1082);
+      display.drawRoundRect(20, 162, SCREEN_WIDTH - 40, 12, 4, 0x4208);
+      int fillW = (int)((SCREEN_WIDTH - 44) * ratio);
+      if (fillW > 0) {
+        uint16_t bCol = (ratio < 0.4f) ? 0x07E0 : ((ratio < 0.75f) ? 0xFFE0 : 0xF800);
+        display.fillRoundRect(22, 164, fillW, 8, 2, bCol);
+      }
+
+      // Volume Level Readout (Y=182)
+      display.setTextSize(1);
+      display.setTextColor(0xBDF7);
+      char vBuf[32];
+      snprintf(vBuf, sizeof(vBuf), "BUZZER: %d%% LOUD // PITCH: %dHz", vol, freq);
+      int vbW = strlen(vBuf) * 6;
+      display.setCursor((SCREEN_WIDTH - vbW) / 2, 182);
+      display.print(vBuf);
+
+      // [ DEFUSE BOMB ] Big Tactile Button (Y=206..256)
+      const int dfX = 16, dfY = 206, dfW = SCREEN_WIDTH - 32, dfH = 48;
+      uint16_t dfBorder = ((now / 200) % 2 == 0) ? 0xFFFF : 0x07E0;
+      display.fillRoundRect(dfX, dfY, dfW, dfH, 10, 0x05E0);
+      display.drawRoundRect(dfX, dfY, dfW, dfH, 10, dfBorder);
+      display.drawFastHLine(dfX + 8, dfY + 4, dfW - 16, 0x07E0);
+
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      const char *dfTxt = "DEFUSE BOMB!";
+      int dfW2 = strlen(dfTxt) * 12;
+      display.setCursor(dfX + (dfW - dfW2) / 2, dfY + 16);
+      display.print(dfTxt);
+
+      display.setTextSize(1);
+      display.setTextColor(0x632C);
+      const char *fndHint = "TAP WHEN FOUND TO DISARM";
+      int fhW = strlen(fndHint) * 6;
+      display.setCursor((SCREEN_WIDTH - fhW) / 2, 264);
+      display.print(fndHint);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // STATE 4: EXPLODED (DETONATION! PLAYER IS OUT!)
+    // ──────────────────────────────────────────────────────────
+    else if (hsState == HS_STATE_EXPLODED) {
+      gameOverActive = true;
+      hsGameOver = true;
+
+      // Tap to replay
+      if (justTapped || justBtn1) {
+        resetHideSeek();
+        audio.playSound(SOUND_POWERUP);
+        return;
+      }
+
+      // Screen shake in initial frames
+      int sx = (hsExplosionFrame < 15) ? random(-4, 5) : 0;
+      int sy = (hsExplosionFrame < 15) ? random(-4, 5) : 0;
+      hsExplosionFrame++;
+
+      display.fillScreen(0x1082); // Charcoal smoke background
+
+      // Animate shockwaves and explosion particles
+      for (int i = 0; i < 24; i++) {
+        hsExplosionPartX[i] += hsExplosionPartVX[i];
+        hsExplosionPartY[i] += hsExplosionPartVY[i];
+        display.fillCircle((int)hsExplosionPartX[i] + sx, (int)hsExplosionPartY[i] + sy,
+                           random(2, 4), hsExplosionPartCol[i]);
+      }
+
+      // Expanding shockwave circles
+      if (hsExplosionFrame < 25) {
+        display.drawCircle(120 + sx, 100 + sy, hsExplosionFrame * 4, 0xF800);
+        display.drawCircle(120 + sx, 100 + sy, hsExplosionFrame * 3, 0xFFE0);
+      }
+
+      // Giant Comic-Style "BOOM!" Banner
+      display.setTextSize(3);
+      display.setTextColor(0x0000); // Drop shadow
+      display.setCursor(62 + sx, 34 + sy);
+      display.print("BOOM!");
+      display.setTextColor(0xFFE0); // Bright yellow
+      display.setCursor(60 + sx, 32 + sy);
+      display.print("BOOM!");
+
+      // "BOMB DETONATED!"
+      display.setTextSize(2);
+      display.setTextColor(0xF800);
+      const char *expSub = "DETONATED!";
+      int ew = strlen(expSub) * 12;
+      display.setCursor((SCREEN_WIDTH - ew) / 2 + sx, 64 + sy);
+      display.print(expSub);
+
+      // Outcome Box (Y=96..178)
+      display.fillRoundRect(16, 96, SCREEN_WIDTH - 32, 82, 8, 0x0841);
+      display.drawRoundRect(16, 96, SCREEN_WIDTH - 32, 82, 8, 0xF800);
+
+      display.setTextSize(2);
+      display.setTextColor(0xFFE0);
+      const char *out1 = "SEEKER OUT!";
+      int o1w = strlen(out1) * 12;
+      display.setCursor((SCREEN_WIDTH - o1w) / 2, 106);
+      display.print(out1);
+
+      display.setTextColor(0x07FF);
+      const char *out2 = "HIDER WINS!";
+      int o2w = strlen(out2) * 12;
+      display.setCursor((SCREEN_WIDTH - o2w) / 2, 128);
+      display.print(out2);
+
+      display.setTextSize(1);
+      display.setTextColor(0xCE79);
+      char durBuf[36];
+      snprintf(durBuf, sizeof(durBuf), "HIDDEN FOR %d SECONDS", hsTimerSeconds);
+      int dw = strlen(durBuf) * 6;
+      display.setCursor((SCREEN_WIDTH - dw) / 2, 158);
+      display.print(durBuf);
+
+      // [ PLAY AGAIN > ] Button (Y=192..232)
+      const int paX = 24, paY = 192, paW = SCREEN_WIDTH - 48, paH = 38;
+      display.fillRoundRect(paX, paY, paW, paH, 8, 0x05E0);
+      display.drawRoundRect(paX, paY, paW, paH, 8, 0x07E0);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      const char *paTxt = "PLAY AGAIN >";
+      int patW = strlen(paTxt) * 12;
+      display.setCursor(paX + (paW - patW) / 2, paY + 11);
+      display.print(paTxt);
+
+      display.setTextSize(1);
+      display.setTextColor(0x8410);
+      const char *exTxt = "SWIPE TO EXIT ARCADE";
+      int extW = strlen(exTxt) * 6;
+      display.setCursor((SCREEN_WIDTH - extW) / 2, 248);
+      display.print(exTxt);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // STATE 5: DEFUSED (SEEKER WINS! FOUND IN TIME!)
+    // ──────────────────────────────────────────────────────────
+    else if (hsState == HS_STATE_DEFUSED) {
+      gameOverActive = true;
+      hsGameOver = true;
+
+      // Tap to replay
+      if (justTapped || justBtn1) {
+        resetHideSeek();
+        audio.playSound(SOUND_POWERUP);
+        return;
+      }
+
+      display.fillScreen(0x0020); // Matrix dark emerald background
+
+      // Celebration sparkle confetti
+      for (int i = 0; i < 14; i++) {
+        int cx = (i * 18 + (now / 20)) % (SCREEN_WIDTH - 20) + 10;
+        int cy = (i * 24 + (now / 15)) % 150 + 40;
+        display.fillCircle(cx, cy, 2, (i % 2 == 0) ? 0x07E0 : 0x07FF);
+      }
+
+      // Banner
+      display.setTextSize(3);
+      display.setTextColor(0x07E0); // Bright emerald
+      const char *dfTitle = "DEFUSED!";
+      int dfw = strlen(dfTitle) * 18;
+      display.setCursor((SCREEN_WIDTH - dfw) / 2, 34);
+      display.print(dfTitle);
+
+      display.setTextSize(2);
+      display.setTextColor(0x07FF); // Cyan
+      const char *dfSub = "SEEKER WINS!";
+      int dsw = strlen(dfSub) * 12;
+      display.setCursor((SCREEN_WIDTH - dsw) / 2, 64);
+      display.print(dfSub);
+
+      // Victory Stats Card (Y=96..178)
+      display.fillRoundRect(16, 96, SCREEN_WIDTH - 32, 82, 8, 0x0841);
+      display.drawRoundRect(16, 96, SCREEN_WIDTH - 32, 82, 8, 0x07E0);
+
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      const char *fndTxt = "FOUND IN TIME!";
+      int fw = strlen(fndTxt) * 12;
+      display.setCursor((SCREEN_WIDTH - fw) / 2, 106);
+      display.print(fndTxt);
+
+      display.setTextColor(0x07E0);
+      int remS = (int)(hsDefusedRemainingMs / 1000);
+      int remT = (int)((hsDefusedRemainingMs % 1000) / 100);
+      char remStr[32];
+      snprintf(remStr, sizeof(remStr), "%d.%ds LEFT!", remS, remT);
+      int rsw = strlen(remStr) * 12;
+      display.setCursor((SCREEN_WIDTH - rsw) / 2, 128);
+      display.print(remStr);
+
+      display.setTextSize(1);
+      display.setTextColor(0xCE79);
+      const char *vSub = "GREAT DETECTIVE WORK!";
+      int vsw = strlen(vSub) * 6;
+      display.setCursor((SCREEN_WIDTH - vsw) / 2, 158);
+      display.print(vSub);
+
+      // [ PLAY AGAIN > ] Button (Y=192..232)
+      const int paX = 24, paY = 192, paW = SCREEN_WIDTH - 48, paH = 38;
+      display.fillRoundRect(paX, paY, paW, paH, 8, 0x001F);
+      display.drawRoundRect(paX, paY, paW, paH, 8, 0x07FF);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      const char *paTxt = "PLAY AGAIN >";
+      int patW = strlen(paTxt) * 12;
+      display.setCursor(paX + (paW - patW) / 2, paY + 11);
+      display.print(paTxt);
+
+      display.setTextSize(1);
+      display.setTextColor(0x8410);
+      const char *exTxt = "SWIPE TO EXIT ARCADE";
+      int extW = strlen(exTxt) * 6;
+      display.setCursor((SCREEN_WIDTH - extW) / 2, 248);
+      display.print(exTxt);
+    }
   }
 };
 

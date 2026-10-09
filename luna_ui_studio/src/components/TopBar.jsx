@@ -16,7 +16,8 @@ export default function TopBar({
   onExport,
   onOpenCompile,
   onOpenFlowMap,
-  onOpenFigma
+  onOpenFigma,
+  onOpenHideSeek
 }) {
   const [serialConnected, setSerialConnected] = useState(false)
 
@@ -92,6 +93,9 @@ export default function TopBar({
       </ToolbarCenter>
 
       <RightActions>
+        <HideSeekBtn onClick={onOpenHideSeek} title="Play Hide & Seek Exact Smartwatch Game UI">
+          🐱 Hide &amp; Seek
+        </HideSeekBtn>
         <FigmaBtn onClick={onOpenFigma} title="Launch Figma Luna OS Interactive Device Simulator">
           ✨ Figma Luna Flow
         </FigmaBtn>
@@ -364,5 +368,28 @@ const FigmaBtn = styled.button`
     color: #fff;
     transform: translateY(-1px);
     box-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
+  }
+`
+
+const HideSeekBtn = styled.button`
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(168, 85, 247, 0.5);
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.2));
+  color: #C084FC;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.25);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  &:hover {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.35), rgba(236, 72, 153, 0.35));
+    border-color: #E9D5FF;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
   }
 `

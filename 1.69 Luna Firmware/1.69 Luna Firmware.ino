@@ -34,6 +34,10 @@ LunaRTC rtcDevice;             // PCF85063 Hardware RTC
 LunaSmartHome smartHome;       // Home Automation Relay Controller
 LunaQuests quests;             // Real-World Quests & Casino Roulette Activity Engine
 
+int getTouchX() { return interaction.getLastX(); }
+int getTouchY() { return interaction.getMappedY(); }
+bool isTouchActive() { return interaction.isTouchDown(); }
+
 float readBatteryVolts() {
   uint32_t totalMv = 0;
   for (int i = 0; i < 10; i++) {
@@ -95,6 +99,7 @@ int gameMenuOption = 0;
 int gameSelected = 0;
 LunaGames games;
 LunaQR qrCard; // Digital Business Card QR manager
+int appLauncherPage = 0;
 
 // Real-Time Clock variables
 extern int rtcHour;
@@ -3210,6 +3215,7 @@ void adjustOption(int option, int direction) {
     optionSelected = false;
     settingsActive = false;
     currentScreen = SCREEN_MENU;
+    appLauncherPage = 0;
     notifyScreenAndExprSync();
   } break;
   }
@@ -3233,6 +3239,7 @@ void handleBtn1Single() {
         currentScreen == SCREEN_GAMES || currentScreen == SCREEN_CARD ||
         currentScreen == SCREEN_MAPS || mapsActive) {
       currentScreen = SCREEN_MENU;
+      appLauncherPage = 0;
       mapsActive = false;
       settingsActive = false;
       gamesActive = false;
@@ -3244,6 +3251,13 @@ void handleBtn1Single() {
       notifyScreenAndExprSync();
       return;
     } else if (currentScreen == SCREEN_MENU) {
+      if (appLauncherPage > 0) {
+        appLauncherPage = 0;
+        audio.playSound(SOUND_CHIRP);
+        Serial.println(F("[CORNER BACK] SCREEN_MENU Page 2 -> Page 1"));
+        notifyScreenAndExprSync();
+        return;
+      }
       currentScreen = SCREEN_CLOCK;
       audio.playSound(SOUND_CHIRP);
       Serial.println(F("[CORNER BACK] SCREEN_MENU -> SCREEN_CLOCK"));
@@ -3292,52 +3306,79 @@ void handleBtn1Single() {
   if (currentScreen == SCREEN_MENU) {
     int curX = interaction.getLastX();
     int curY = interaction.getMappedY();
-    Serial.printf("[MENU TAP] X=%d, Y=%d\n", curX, curY);
+    Serial.printf("[MENU TAP] Page=%d, X=%d, Y=%d\n", appLauncherPage, curX, curY);
 
-    if (curY >= 48 && curY <= 140) {
-      if (curX < 76) {
-        // App 0: Notifications
-        currentScreen = SCREEN_NOTIFICATIONS;
-        notificationsActive = false;
-        notificationSelected = false;
-        notifScrollPx = 0.0f;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[MENU] -> NOTIFICATIONS");
-      } else if (curX >= 76 && curX < 155) {
-        // App 1: Calendar
-        currentScreen = SCREEN_CALENDAR;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[MENU] -> CALENDAR");
-      } else {
-        // App 2: Focus / Pomodoro
-        currentScreen = SCREEN_POMODORO;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[MENU] -> POMODORO");
+    if (appLauncherPage == 0) {
+      if (curY >= 30 && curY < 108) {
+        if (curX < 120) {
+          // Top-Left: Notifications (3D Violet Bell with pink burst)
+          currentScreen = SCREEN_NOTIFICATIONS;
+          notificationsActive = false;
+          notificationSelected = false;
+          notifScrollPx = 0.0f;
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU] -> NOTIFICATIONS"));
+        } else {
+          // Top-Right: Calendar (3D Purple Calendar with date grid)
+          currentScreen = SCREEN_CALENDAR;
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU] -> CALENDAR"));
+        }
+      } else if (curY >= 108 && curY < 182) {
+        if (curX < 120) {
+          // Mid-Left: Focus / Pomodoro (3D Tomato Clock with speed bursts)
+          currentScreen = SCREEN_POMODORO;
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU] -> POMODORO"));
+        } else {
+          // Mid-Right: Games / Arcade (3D Violet Gamepad with pink buttons)
+          currentScreen = SCREEN_GAMES;
+          gamesActive = false;
+          gamePlaying = false;
+          gamesScrollPx = 0.0f;
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU] -> GAMES"));
+        }
+      } else if (curY >= 182 && curY < 256) {
+        if (curX < 120) {
+          // Bottom-Left: QR / My Card (3D Purple QR brackets with pink laser)
+          currentScreen = SCREEN_CARD;
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU] -> QR CARD"));
+        } else {
+          // Bottom-Right: Settings (3D Violet Gear / Mechanical cog)
+          currentScreen = SCREEN_SETTINGS;
+          settingsActive = true;
+          menuOption = 0;
+          optionSelected = false;
+          settingsScrollPx = 0.0f;
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU] -> SETTINGS"));
+        }
+      } else if (curY >= 256) {
+        // Bottom Area -> Switch to Page 2 (Hide & Seek Hero Card)
+        appLauncherPage = 1;
+        audio.playSound(SOUND_CHIRP);
+        Serial.println(F("[MENU P1] -> NEXT PAGE (Page 2)"));
       }
-    } else if (curY > 140 && curY <= 235) {
-      if (curX < 76) {
-        // App 3: Games
+    } else {
+      // ════════════════════════════════════════════════════════════
+      // PAGE 2: DEDICATED HIDE & SEEK ONLY!
+      // ════════════════════════════════════════════════════════════
+      if (curY >= 50 && curY < 232) {
+        // Tapped anywhere on the Hide & Seek Hero Card -> Direct Launch!
         currentScreen = SCREEN_GAMES;
-        gamesActive = false;
-        gamePlaying = false;
-        gamesScrollPx = 0.0f;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[MENU] -> GAMES");
-      } else if (curX >= 76 && curX < 155) {
-        // App 4: QR / My Card
-        currentScreen = SCREEN_CARD;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[MENU] -> QR CARD");
-      } else {
-        // App 5: Settings (Activate immediately so it is scrollable right
-        // away!)
-        currentScreen = SCREEN_SETTINGS;
-        settingsActive = true;
-        menuOption = 0;
-        optionSelected = false;
-        settingsScrollPx = 0.0f;
-        audio.playSound(SOUND_POWERUP);
-        Serial.println("[MENU] -> SETTINGS (active)");
+        gamesActive = true;
+        gamePlaying = true;
+        gameSelected = 6;
+        games.resetHideSeek();
+        audio.playSound(SOUND_STARTUP);
+        Serial.println("[MENU P2] -> HIDE & SEEK (Launched from Hero Card!)");
+      } else if (curY >= 232) {
+        // Highlighted Right Bottom Corner PREV PAGE button tapped -> return to Page 1
+        appLauncherPage = 0;
+        audio.playSound(SOUND_CHIRP);
+        Serial.println("[MENU P2] -> PREV PAGE (Return to Page 1)");
       }
     }
     notifyScreenAndExprSync();
@@ -3347,6 +3388,7 @@ void handleBtn1Single() {
   // Tapping on QR Card returns to Menu
   if (currentScreen == SCREEN_CARD) {
     currentScreen = SCREEN_MENU;
+    appLauncherPage = 0;
     audio.playSound(SOUND_CHIRP);
     Serial.println("[BTN1] Exited QR Card -> SCREEN_MENU");
     notifyScreenAndExprSync();
@@ -3547,6 +3589,7 @@ void handleBtn1Single() {
     int canvasX = interaction.getLastX();
     if (canvasX > 150) {
       currentScreen = SCREEN_MENU;
+      appLauncherPage = 0;
       audio.playSound(SOUND_CHIRP);
       Serial.println(F("[BTN1] Tap right on Clock -> SCREEN_MENU"));
       notifyScreenAndExprSync();
@@ -3805,8 +3848,10 @@ void handleBtn1Long() {
 void handleBtn2Single() {
   lastInteractionTime = millis();
   if (currentScreen == SCREEN_FACE) {
-    Serial.println(
-        F("[BTN2] Ignored on SCREEN_FACE (animation locked until Clock)"));
+    currentScreen = SCREEN_CLOCK;
+    audio.playSound(SOUND_CHIRP);
+    Serial.println(F("[BTN2/SwipeLeft] SCREEN_FACE -> SCREEN_CLOCK"));
+    notifyScreenAndExprSync();
     return;
   }
   if (currentScreen == SCREEN_MAPS || mapsActive) {
@@ -3826,7 +3871,7 @@ void handleBtn2Single() {
   }
 
   unsigned long transitionNow = millis();
-  if (transitionNow - lastScreenTransitionTime < 250) {
+  if (transitionNow - lastScreenTransitionTime < 200) {
     return;
   }
   lastScreenTransitionTime = transitionNow;
@@ -3836,6 +3881,7 @@ void handleBtn2Single() {
   // On Clock: Right tap or Swipe Left opens the App Launcher Menu
   if (currentScreen == SCREEN_CLOCK) {
     currentScreen = SCREEN_MENU;
+    appLauncherPage = 0;
     settingsScrollPx = 0.0f;
     settingsVelPx = 0.0f;
     gamesScrollPx = 0.0f;
@@ -3847,13 +3893,26 @@ void handleBtn2Single() {
     notifyScreenAndExprSync();
     return;
   }
+
+  // On App Launcher Menu: Swipe Left (Btn2 Single) advances to Page 2!
+  if (currentScreen == SCREEN_MENU) {
+    if (appLauncherPage == 0) {
+      appLauncherPage = 1;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[BTN2/SwipeLeft] SCREEN_MENU -> Page 2"));
+      notifyScreenAndExprSync();
+    }
+    return;
+  }
 }
 
 void handleBtn2Double() {
   lastInteractionTime = millis();
   if (currentScreen == SCREEN_FACE) {
-    Serial.println(
-        F("[BTN2 DBL] Ignored on SCREEN_FACE (animation locked until Clock)"));
+    currentScreen = SCREEN_CLOCK;
+    audio.playSound(SOUND_CHIRP);
+    Serial.println(F("[BTN2 DBL/SwipeRight] SCREEN_FACE -> SCREEN_CLOCK"));
+    notifyScreenAndExprSync();
     return;
   }
   if (currentScreen == SCREEN_MAPS || mapsActive) {
@@ -3861,7 +3920,7 @@ void handleBtn2Double() {
   }
 
   unsigned long transitionNow = millis();
-  if (transitionNow - lastScreenTransitionTime < 250) {
+  if (transitionNow - lastScreenTransitionTime < 200) {
     return;
   }
   lastScreenTransitionTime = transitionNow;
@@ -3869,8 +3928,15 @@ void handleBtn2Double() {
     inIntroPhase = false;
 
   // Back action:
-  // From Menu -> Go back to Clock Home
+  // From Menu -> If on Page 2, go back to Page 1; If on Page 1, go back to Clock Home
   if (currentScreen == SCREEN_MENU) {
+    if (appLauncherPage > 0) {
+      appLauncherPage = 0;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[BTN2 DBL/SwipeRight] SCREEN_MENU -> Page 1"));
+      notifyScreenAndExprSync();
+      return;
+    }
     currentScreen = SCREEN_CLOCK;
     audio.playSound(SOUND_CHIRP);
     Serial.println("[BTN2 DBL] SCREEN_MENU -> SCREEN_CLOCK");
@@ -3905,6 +3971,7 @@ void handleBtn2Double() {
       return;
     }
     currentScreen = SCREEN_MENU;
+    appLauncherPage = 0;
     audio.playSound(SOUND_CHIRP);
     Serial.printf("[BTN2 DBL] Exited screen %d -> SCREEN_MENU\n",
                   currentScreen);
@@ -3932,6 +3999,15 @@ void handleSwipeUp() {
   if (currentScreen == SCREEN_SETTINGS ||
       currentScreen == SCREEN_NOTIFICATIONS) {
     return;
+  }
+  // Menu: Swipe Up switches to Page 2
+  else if (currentScreen == SCREEN_MENU) {
+    if (appLauncherPage == 0) {
+      appLauncherPage = 1;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[MENU] Swipe UP -> Page 2"));
+      notifyScreenAndExprSync();
+    }
   }
   // Calendar: swipe up → cycle calendar events
   else if (currentScreen == SCREEN_CALENDAR) {
@@ -3965,6 +4041,20 @@ void handleSwipeDown() {
   if (currentScreen == SCREEN_SETTINGS ||
       currentScreen == SCREEN_NOTIFICATIONS) {
     return;
+  }
+  // Menu: Swipe Down switches back to Page 1 (or Clock if already on Page 1)
+  else if (currentScreen == SCREEN_MENU) {
+    if (appLauncherPage > 0) {
+      appLauncherPage = 0;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[MENU] Swipe DOWN -> Page 1"));
+      notifyScreenAndExprSync();
+    } else {
+      currentScreen = SCREEN_CLOCK;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[MENU] Swipe DOWN on Page 1 -> SCREEN_CLOCK"));
+      notifyScreenAndExprSync();
+    }
   }
   // Calendar: swipe down → toggle grid/events view
   else if (currentScreen == SCREEN_CALENDAR) {
@@ -4017,8 +4107,8 @@ void updateStateLabel() {
   } else if (currentScreen == SCREEN_GAMES) {
     if (gamePlaying) {
       const char *gameNames[] = {"LUNA RACER", "LUNA SPACE", "FLAPPY MOCHY",
-                                 "COIN CATCHER", "MOCHY JUMP"};
-      if (gameSelected >= 1 && gameSelected <= 5) {
+                                 "COIN CATCHER", "MOCHY JUMP", "HIDE & SEEK"};
+      if (gameSelected >= 1 && gameSelected <= 6) {
         face.setStateLabel(gameNames[gameSelected - 1]);
       } else {
         face.setStateLabel("ARCADE");

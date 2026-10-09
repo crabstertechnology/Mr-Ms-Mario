@@ -58,6 +58,7 @@ export interface GameHighScores {
   stacker: number;
   memoryMatrix: number;
   tiltMaze: number;
+  hideSeek: number;
 }
 
 export interface GameInfo {
@@ -78,6 +79,7 @@ export const GAMES: GameInfo[] = [
   { id: 5, key: "stacker", name: "Stacker", desc: "Stack blocks perfectly", icon: "🧱", color: "#EF4444" },
   { id: 6, key: "memoryMatrix", name: "Memory Matrix", desc: "Match all the pairs", icon: "🧠", color: "#EC4899" },
   { id: 7, key: "tiltMaze", name: "Tilt Maze", desc: "Navigate to the exit", icon: "🌀", color: "#06B6D4" },
+  { id: 8, key: "hideSeek", name: "Hide & Seek", desc: "Find the sneaky cat!", icon: "🕵️", color: "#A855F7" },
 ];
 
 export interface LunaState {

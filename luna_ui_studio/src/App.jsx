@@ -8,6 +8,7 @@ import ExportModal from './components/ExportModal'
 import LoadElementModal from './components/LoadElementModal'
 import FlowMapModal from './components/FlowMapModal'
 import FigmaLunaModal from './components/FigmaLunaModal'
+import HideSeekModal from './components/HideSeekModal'
 import { useCanvas } from './hooks/useCanvas'
 
 function App() {
@@ -51,6 +52,9 @@ function App() {
   const [compileOpen, setCompileOpen] = useState(false)
   const [flowMapOpen, setFlowMapOpen] = useState(false)
   const [figmaOpen, setFigmaOpen] = useState(false)
+  const [hideSeekOpen, setHideSeekOpen] = useState(() => {
+    return window.location.search.includes('hideseek')
+  })
   const [toast, setToast] = useState(null)
   const initializedRef = useRef(false)
 
@@ -142,6 +146,7 @@ function App() {
         onOpenCompile={() => setCompileOpen(true)}
         onOpenFlowMap={() => setFlowMapOpen(true)}
         onOpenFigma={() => setFigmaOpen(true)}
+        onOpenHideSeek={() => setHideSeekOpen(true)}
       />
 
       <Workspace>
@@ -251,6 +256,12 @@ function App() {
       <FigmaLunaModal
         open={figmaOpen}
         onClose={() => setFigmaOpen(false)}
+      />
+
+      {/* Hide & Seek Exact Smartwatch Game Modal */}
+      <HideSeekModal
+        open={hideSeekOpen}
+        onClose={() => setHideSeekOpen(false)}
       />
 
       {toast && <Toast>{toast}</Toast>}

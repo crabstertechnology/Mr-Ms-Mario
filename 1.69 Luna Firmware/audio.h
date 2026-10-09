@@ -2,6 +2,7 @@
 #define AUDIO_H
 
 #include <Arduino.h>
+#include <esp32-hal-ledc.h>
 #include "config.h"
 
 struct Note {
@@ -29,6 +30,7 @@ private:
     isPlaying = false;
     inGap = false;
     noTone(buzzerPin);
+    ledcWrite(buzzerPin, 0);
     digitalWrite(buzzerPin, LOW);
   }
 
@@ -80,6 +82,7 @@ public:
     if (now >= currentNoteEndTime) {
       if (!inGap) {
         noTone(buzzerPin);
+        ledcWrite(buzzerPin, 0);
         digitalWrite(buzzerPin, LOW);
         currentNoteEndTime = now + interNoteGapDuration;
         inGap = true;
@@ -353,6 +356,30 @@ public:
         enqueueNote(0, 50);
         enqueueNote(2349, 200);
         break;
+
+      case SOUND_EXPLOSION: {
+        // Multi-frequency descending explosion roar
+        enqueueNote(1800, 25);
+        enqueueNote(1100, 30);
+        enqueueNote(650, 45);
+        enqueueNote(380, 60);
+        enqueueNote(220, 80);
+        enqueueNote(140, 100);
+        enqueueNote(90, 130);
+        enqueueNote(60, 180);
+        break;
+      }
+
+      case SOUND_DEFUSED: {
+        // Triumphant cyber disarm fanfare
+        enqueueNote(523, 50);  enqueueNote(0, 10);
+        enqueueNote(659, 50);  enqueueNote(0, 10);
+        enqueueNote(784, 50);  enqueueNote(0, 10);
+        enqueueNote(1047, 60); enqueueNote(0, 15);
+        enqueueNote(1319, 70); enqueueNote(0, 15);
+        enqueueNote(2093, 200);
+        break;
+      }
         
       default:
         break;
@@ -368,6 +395,7 @@ public:
     if (queueCount == 0) {
       isPlaying = false;
       noTone(buzzerPin);
+      ledcWrite(buzzerPin, 0);
       digitalWrite(buzzerPin, LOW);
       return;
     }
@@ -380,10 +408,36 @@ public:
       tone(buzzerPin, note.frequency, note.duration);
     } else {
       noTone(buzzerPin);
+      ledcWrite(buzzerPin, 0);
+      digitalWrite(buzzerPin, LOW);
     }
     
     currentNoteEndTime = millis() + note.duration;
     inGap = false;
+  }
+
+  // Non-blocking volume-modulated beep (duty cycle modulation via hardware LEDC)
+  // volumePercent: 1 to 100%
+  void playVolumeBeep(uint16_t freq, uint16_t durationMs, uint8_t volumePercent) {
+    if (silentMode) return;
+    clearQueue();
+    if (freq == 0 || volumePercent == 0) {
+      stopBuzzer();
+      return;
+    }
+    uint32_t duty = (uint32_t)map(constrain((int)volumePercent, 1, 100), 1, 100, 3, 128);
+    ledcAttach(buzzerPin, freq, 8);
+    ledcWrite(buzzerPin, duty);
+    currentNoteEndTime = millis() + durationMs;
+    isPlaying = true;
+    inGap = false;
+  }
+
+  void stopBuzzer() {
+    clearQueue();
+    noTone(buzzerPin);
+    ledcWrite(buzzerPin, 0);
+    digitalWrite(buzzerPin, LOW);
   }
 
   void setVolume(int vol) {}

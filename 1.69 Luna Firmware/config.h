@@ -94,6 +94,8 @@ enum SoundEffect {
   SOUND_ANIM_SLEEPING,    // 11: Sleeping
   SOUND_ANIM_WAKEUP,      // 12: Waking Up
   SOUND_ANIM_THINKING,    // 13: Luna Thinking
+  SOUND_EXPLOSION,        // Dramatic detonation roar/rumble
+  SOUND_DEFUSED           // Cyber bomb disarm fanfare
 };
 
 // Smartwatch UI Screen Modes

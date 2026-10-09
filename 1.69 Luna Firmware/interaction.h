@@ -78,6 +78,7 @@ private:
   // Gesture State Machine & Debounce
   GestureState gestureState;
   bool _hasScrolled;
+  bool gestureEmittedThisTouch;
   unsigned long lastSwipeTransitionMs;
 
 public:
@@ -99,6 +100,7 @@ public:
     lastTouchMs = 0;
     gestureState = STATE_IDLE;
     _hasScrolled = false;
+    gestureEmittedThisTouch = false;
     lastSwipeTransitionMs = 0;
 
     // Hard-reset the CST816T (active-low reset pin)
@@ -166,6 +168,31 @@ public:
     bool fresh = readTouch(gesture, fingerNum, x, y, allowPoll);
     ButtonEvent ev = BTN_NONE;
 
+    // ── Check Hardware Gesture from CST816T ──────────────────────────────
+    if (fresh && gesture >= 0x01 && gesture <= 0x04 && !gestureEmittedThisTouch) {
+      if (!(gamePlaying && currentScreen == SCREEN_GAMES && !gameOverActive)) {
+        if (now - lastSwipeTransitionMs >= 200) {
+          lastSwipeTransitionMs = now;
+          gestureEmittedThisTouch = true;
+          _hasScrolled = true;
+          gestureState = STATE_IDLE;
+          if (gesture == 0x03) {
+            Serial.println(F("[Touch HW] CST816T 0x03 -> BTN_SWIPE_LEFT"));
+            return BTN_SWIPE_LEFT;
+          } else if (gesture == 0x04) {
+            Serial.println(F("[Touch HW] CST816T 0x04 -> BTN_SWIPE_RIGHT"));
+            return BTN_SWIPE_RIGHT;
+          } else if (gesture == 0x01) {
+            Serial.println(F("[Touch HW] CST816T 0x01 -> BTN_SWIPE_DOWN"));
+            return BTN_SWIPE_DOWN;
+          } else if (gesture == 0x02) {
+            Serial.println(F("[Touch HW] CST816T 0x02 -> BTN_SWIPE_UP"));
+            return BTN_SWIPE_UP;
+          }
+        }
+      }
+    }
+
     // ── On Character Animation Screen: only the 3 action circles are
     // interactive ──
     if (currentScreen == SCREEN_FACE) {
@@ -180,6 +207,7 @@ public:
             startY = y;
             startMs = now;
             _hasScrolled = false;
+            gestureEmittedThisTouch = false;
           } else {
             if (abs(x - startX) >= 10 || abs(y - startY) >= 10) {
               _hasScrolled = true;
@@ -193,9 +221,12 @@ public:
             int dx = lastX - startX;
             int dy = lastY - startY;
 
-            // 1. UNLOCK SPECIFICALLY THE FOOD ICON AREA ON SCREEN_FACE WHEN MEAL IS MISSED!
-            // Food Icon is located at Left: X = 12, Y = 56, W = 44, H = 44
-            if (isMealMissed() && !_hasScrolled && abs(dx) < 25 && abs(dy) < 25 && held >= 15 && held < 800) {
+            // Allow swipe on robot face to go to Clock!
+            if (!gestureEmittedThisTouch && abs(dx) >= 20 && abs(dx) > abs(dy)) {
+              gestureEmittedThisTouch = true;
+              ev = (dx < 0) ? BTN_SWIPE_LEFT : BTN_SWIPE_RIGHT;
+              Serial.println(F("[Touch] Swipe on FACE -> Clock"));
+            } else if (isMealMissed() && !_hasScrolled && abs(dx) < 25 && abs(dy) < 25 && held >= 15 && held < 800) {
               int touchY = getMappedY(); // 0..279 canvas coordinate
               if (lastX <= 90 && touchY >= 25 && touchY <= 135) {
                 ev = BTN1_SINGLE;
@@ -253,6 +284,7 @@ public:
         startMs = now;
         gestureState = STATE_TOUCH_DOWN;
         _hasScrolled = false;
+        gestureEmittedThisTouch = false;
       } else {
         int dX = x - startX;
         int dY = y - startY;
@@ -264,13 +296,20 @@ public:
           _hasScrolled = true;
         }
 
-        // Active tracking classification with immediate vertical lock
+        bool hasVerticalScrollList = (currentScreen == SCREEN_SETTINGS ||
+                                      currentScreen == SCREEN_NOTIFICATIONS ||
+                                      currentScreen == SCREEN_QUEST ||
+                                      (currentScreen == SCREEN_GAMES && !gamePlaying));
+
+        // Active tracking classification with immediate vertical lock ONLY for scrollable lists
         if (gestureState == STATE_TOUCH_DOWN ||
             gestureState == STATE_TRACKING) {
-          if (absY >= 10 && absY > absX) {
+          if (hasVerticalScrollList && absY >= 12 && absY > absX) {
             gestureState = STATE_SCROLL_VERTICAL;
-          } else if (absX >= 35 && absX > (absY * 3 / 2)) {
+          } else if (absX >= 18 && absX >= absY) {
             gestureState = STATE_SWIPE_HORIZONTAL;
+          } else if (absY >= 18 && absY > absX) {
+            gestureState = STATE_SCROLL_VERTICAL;
           } else if (absX >= 10 || absY >= 10) {
             gestureState = STATE_TRACKING;
           }
@@ -297,6 +336,13 @@ public:
         isDown = false;
         virtualBtn1 = false;
         virtualBtn2 = false;
+
+        if (gestureEmittedThisTouch) {
+          gestureEmittedThisTouch = false;
+          gestureState = STATE_IDLE;
+          _hasScrolled = false;
+          return BTN_NONE;
+        }
 
         if (gamePlaying && currentScreen == SCREEN_GAMES) {
           if (!gameOverActive) {
@@ -335,33 +381,38 @@ public:
         int absY = abs(deltaY);
 
         // ── CASE 1: SCROLL OR DRAG OCCURRED ──
-        // Once scrolling has engaged, strictly suppress all tap / selection
-        // events!
-        if (_hasScrolled || gestureState == STATE_SCROLL_VERTICAL ||
+        if (_hasScrolled || absX >= 18 || absY >= 18 ||
+            gestureState == STATE_SCROLL_VERTICAL ||
             gestureState == STATE_SWIPE_HORIZONTAL) {
-          // Horizontal screen swipe
-          if (gestureState == STATE_SWIPE_HORIZONTAL ||
-              (absX >= 35 && absX > (absY * 3 / 2))) {
-            if (currentScreen == SCREEN_FACE) {
-              // Strictly suppress screen transition swipes while playing
-              // character animation
-              ev = BTN_NONE;
-              Serial.println(
-                  "[Touch] Horizontal swipe suppressed on animation screen");
-            } else if (now - lastSwipeTransitionMs >= 300) {
-              lastSwipeTransitionMs = now;
-              ev = (deltaX < 0) ? BTN_SWIPE_LEFT : BTN_SWIPE_RIGHT;
-            }
-            // Vertical scroll completion
-          } else if (gestureState == STATE_SCROLL_VERTICAL ||
-                     (absY >= 16 && absY > absX)) {
-            ev = (deltaY < 0) ? BTN_SWIPE_UP : BTN_SWIPE_DOWN;
-          } else {
+          if (currentScreen == SCREEN_FACE) {
+            // Strictly suppress screen transition swipes while playing
+            // character animation
             ev = BTN_NONE;
+            Serial.println(
+                "[Touch] Horizontal swipe suppressed on animation screen");
+          } else {
+            // Dominant axis swipe detection:
+            if (absX >= absY && absX >= 18) {
+              if (now - lastSwipeTransitionMs >= 200) {
+                lastSwipeTransitionMs = now;
+                ev = (deltaX < 0) ? BTN_SWIPE_LEFT : BTN_SWIPE_RIGHT;
+                Serial.printf("[Touch SW] Horizontal Swipe: deltaX=%d -> %s\n",
+                              deltaX, (deltaX < 0) ? "LEFT" : "RIGHT");
+              }
+            } else if (absY > absX && absY >= 18) {
+              if (now - lastSwipeTransitionMs >= 200) {
+                lastSwipeTransitionMs = now;
+                ev = (deltaY < 0) ? BTN_SWIPE_UP : BTN_SWIPE_DOWN;
+                Serial.printf("[Touch SW] Vertical Swipe: deltaY=%d -> %s\n",
+                              deltaY, (deltaY < 0) ? "UP" : "DOWN");
+              }
+            } else {
+              ev = BTN_NONE;
+            }
           }
 
-          // ── CASE 2: CLEAN STATIONARY TAP / LONG PRESS (NO SCROLLING) ──
-        } else if (!_hasScrolled && absX < 12 && absY < 12) {
+        // ── CASE 2: CLEAN STATIONARY TAP / LONG PRESS (NO SCROLLING) ──
+        } else if (!_hasScrolled && absX < 15 && absY < 15) {
           if (held >= 500) {
             ev = BTN1_LONG;
             Serial.println("[Touch] Long press (>=500ms) -> Home Screen");
