@@ -4,6 +4,7 @@
 #include "audio.h"
 #include "config.h"
 #include "imu.h"
+#include "hideseek_timer_bg.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
 #include <Arduino.h>
@@ -57,6 +58,7 @@ private:
   };
   HideSeekState hsState;
   int hsTimerSeconds;
+  unsigned long hsLastCountdownTickMs;
   unsigned long hsPhaseStartTime;
   unsigned long hsBombDurationMs;
   unsigned long hsHidingDurationMs;
@@ -423,6 +425,7 @@ public:
   void resetHideSeek() {
     hsState = HS_STATE_SETUP;
     if (hsTimerSeconds < 15 || hsTimerSeconds > 300) hsTimerSeconds = 60;
+    hsLastCountdownTickMs = millis();
     hsPhaseStartTime = 0;
     hsBombDurationMs = 0;
     hsHidingDurationMs = 10000;
@@ -2152,44 +2155,50 @@ public:
     lastBtn1 = btn1;
 
     // ──────────────────────────────────────────────────────────
-    // STATE 1: SETUP (TIMER SELECTION)
+    // STATE 1: SETUP (TIMER SELECTION & COUNTDOWN)
     // ──────────────────────────────────────────────────────────
     if (hsState == HS_STATE_SETUP) {
       gameOverActive = false;
       hsGameOver = false;
 
       // Handle Preset Buttons: [30s], [60s], [90s], [2m]
-      if (justTapped && touchY >= 142 && touchY <= 174) {
-        if (touchX >= 12 && touchX <= 64) {
+      if (justTapped && touchY >= 150 && touchY <= 195) {
+        if (touchX >= 15 && touchX <= 66) {
           hsTimerSeconds = 30;
+          hsLastCountdownTickMs = now;
           audio.playSound(SOUND_COIN);
-        } else if (touchX >= 66 && touchX <= 118) {
+        } else if (touchX >= 67 && touchX <= 118) {
           hsTimerSeconds = 60;
+          hsLastCountdownTickMs = now;
           audio.playSound(SOUND_COIN);
-        } else if (touchX >= 120 && touchX <= 172) {
+        } else if (touchX >= 119 && touchX <= 170) {
           hsTimerSeconds = 90;
+          hsLastCountdownTickMs = now;
           audio.playSound(SOUND_COIN);
-        } else if (touchX >= 174 && touchX <= 226) {
+        } else if (touchX >= 171 && touchX <= 228) {
           hsTimerSeconds = 120;
+          hsLastCountdownTickMs = now;
           audio.playSound(SOUND_COIN);
         }
       }
 
-      // Handle Stepper Buttons: [- 15s] and [+ 15s]
-      if (justTapped && touchY >= 176 && touchY <= 214) {
-        if (touchX >= 20 && touchX <= 60) {
-          hsTimerSeconds = max(15, hsTimerSeconds - 15);
+      // Handle Stepper Buttons: [-] and [+]
+      if (justTapped && touchY >= 195 && touchY <= 248) {
+        if (touchX >= 20 && touchX <= 80) {
+          hsTimerSeconds = max(5, hsTimerSeconds - 15);
+          hsLastCountdownTickMs = now;
           audio.playSound(SOUND_JUMP);
-        } else if (touchX >= 180 && touchX <= 220) {
+        } else if (touchX >= 160 && touchX <= 220) {
           hsTimerSeconds = min(300, hsTimerSeconds + 15);
+          hsLastCountdownTickMs = now;
           audio.playSound(SOUND_JUMP);
         }
       }
 
-      // Handle Dial Touch / Drag Scrubber (CX=120, CY=95, R=42)
-      if (justTapped && touchY >= 50 && touchY <= 140 && touchX >= 75 && touchX <= 165) {
+      // Handle Dial Touch / Drag Scrubber (CX=120, CY=106, R=42)
+      if (justTapped && touchY >= 60 && touchY <= 152 && touchX >= 75 && touchX <= 165) {
         float dx = touchX - 120;
-        float dy = touchY - 95;
+        float dy = touchY - 106;
         float ang = atan2f(dy, dx) + 1.5708f; // relative to top (12 o'clock)
         if (ang < 0.0f) ang += 6.28318f;
         int dialed = (int)((ang / 6.28318f) * 120.0f);
@@ -2197,197 +2206,73 @@ public:
         if (dialed < 15) dialed = 15;
         if (dialed > 120) dialed = 120;
         hsTimerSeconds = dialed;
+        hsLastCountdownTickMs = now;
         audio.playSound(SOUND_COIN);
       }
 
-      // Handle "ARM & HIDE" Bottom Card
-      if (justTapped && touchY >= 216 && touchY <= 276) {
+      // Handle "ARM & HIDE" / Bottom Button (touchY >= 250)
+      if (justTapped && touchY >= 250) {
         hsState = HS_STATE_HIDING;
         hsPhaseStartTime = now;
         hsHidingDurationMs = 10000; // 10-second hiding countdown
         audio.playSound(SOUND_POWERUP);
       }
 
-      // ──────────────────────────────────────────────────────────
-      // RENDER EXACT LUNA HIDE & SEEK UI (LAVENDER / PURPLE)
-      // ──────────────────────────────────────────────────────────
-      // Deep magical violet/purple background
-      display.fillScreen(0x18C8);
+      // Countdown reduction loop (ticks down 1 sec every 1000ms)
+      if (now - hsLastCountdownTickMs >= 1000) {
+        hsLastCountdownTickMs = now;
+        if (hsTimerSeconds > 0) {
+          hsTimerSeconds--;
+          if (hsTimerSeconds == 0) {
+            audio.playSound(SOUND_ALERT_BEEP);
+          }
+        }
+      }
 
-      // Star sparkles in background
-      display.drawPixel(22, 34, 0xFFE0);
-      display.drawPixel(214, 28, 0xFFE0);
-      display.drawPixel(45, 120, 0xD65F);
-      display.drawPixel(198, 126, 0xD65F);
+      // 1. Render pristine wallpaper image
+      memcpy_P(display.getBuffer(), hideseek_timer_bg, 240 * 280 * sizeof(uint16_t));
 
-      // ── TOP HEADER: HIDE & SEEK LOGO WITH CAT EARS ──
-      // Cat ears over "H" & "I"
-      display.fillTriangle(68, 20, 64, 13, 73, 16, 0x4170);
-      display.fillTriangle(67, 19, 65, 15, 71, 17, 0xFBAE); // Pink inner ear
-      display.fillTriangle(79, 16, 85, 13, 83, 20, 0x4170);
-      display.fillTriangle(80, 17, 84, 15, 82, 19, 0xFBAE); // Pink inner ear
+      // 2. Draw active glowing preset indicator
+      const int presets[] = {30, 60, 90, 120};
+      for (int i = 0; i < 4; i++) {
+        if (hsTimerSeconds == presets[i]) {
+          int px = 20 + i * 50;
+          display.drawRoundRect(px, 162, 46, 26, 12, 0x915C);
+          display.drawRoundRect(px + 1, 163, 44, 24, 11, 0xD65F);
+        }
+      }
 
-      // Excitement comic rays around logo
-      display.drawLine(58, 14, 54, 11, 0xFFE0);
-      display.drawLine(182, 14, 186, 11, 0xFFE0);
-
-      // Logo container pill
-      display.fillRoundRect(56, 17, 128, 22, 11, 0x28AE);
-      display.drawRoundRect(56, 17, 128, 22, 11, 0x51D5);
-
-      display.setTextSize(2);
-      display.setTextColor(0xFFFF);
-      display.setCursor(62, 21);
-      display.print("HIDE");
-      display.setTextColor(0xD65F);
-      display.setCursor(110, 21);
-      display.print("&");
-      display.setTextColor(0xFFE0);
-      display.setCursor(124, 21);
-      display.print("SEEK");
-
-      // ── CHARACTERS ──
-      // Left White Kitten Peeking behind drape
-      display.fillRoundRect(0, 48, 12, 54, 5, 0x4994);
-      display.fillCircle(18, 76, 10, 0xFFFF);
-      display.fillTriangle(14, 69, 12, 62, 18, 67, 0xFBAE);
-      display.fillCircle(14, 80, 3, 0xFBAE); // Pink cheek
-      display.drawPixel(17, 75, 0x18C6);     // Eye
-      display.drawPixel(18, 76, 0x18C6);
-      display.fillCircle(24, 82, 3, 0xFFFF); // Paw
-      display.drawCircle(24, 82, 3, 0xD65F);
-      display.drawLine(16, 56, 14, 50, 0xFFE0); // Whiskers/rays
-      display.drawLine(22, 58, 24, 52, 0xFFE0);
-
-      // Right Black Kitten Peeking behind chair
-      display.fillRoundRect(228, 64, 12, 44, 5, 0x4994);
-      display.fillCircle(222, 76, 10, 0x18A4);
-      display.fillTriangle(226, 69, 228, 62, 222, 67, 0x18A4);
-      display.fillCircle(218, 75, 3, 0xFFFF); // Shiny eye
-      display.fillCircle(218, 75, 1, 0x18A4);
-      display.drawCircle(212, 82, 5, 0x07FF); // Magnifying glass
-      display.drawLine(216, 86, 220, 90, 0xCE79);
-      display.drawLine(224, 56, 226, 50, 0xFFE0);
-      display.drawLine(218, 58, 216, 52, 0xFFE0);
-
-      // ── CENTER CIRCULAR TIMER DIAL (CX=120, CY=95, R=42) ──
-      // Glowing purple outer ring
-      display.drawCircle(120, 95, 43, 0x5194);
-      display.drawCircle(120, 95, 42, 0x915C);
-      display.drawCircle(120, 95, 41, 0xC1BF);
-
-      // Dreamy lavender inner face
-      display.fillCircle(120, 95, 39, 0xF7BE);
-
-      // Clouds at bottom of dial
-      display.fillRoundRect(88, 110, 64, 20, 8, 0xC55E);
-      display.fillRoundRect(96, 116, 48, 14, 6, 0x915C);
-
-      // Sparkles in dial
-      display.drawPixel(102, 78, 0x915C);
-      display.drawPixel(138, 80, 0xC1BF);
-
-      // Digital time readout: MM:SS
+      // 3. Digital time readout: MM:SS in center dial
       int m = hsTimerSeconds / 60;
       int s = hsTimerSeconds % 60;
 
-      // Minutes in dark indigo
+      // Render crisp MM:SS text inside circular dial (CX=120, CY=106)
       display.setTextSize(3);
+      // Minutes in deep indigo/navy
       display.setTextColor(0x18C6);
-      display.setCursor(78, 85);
+      display.setCursor(76, 96);
       display.printf("%02d", m);
 
       // Colon in vibrant purple
       display.setTextColor(0x915C);
-      display.setCursor(114, 85);
+      display.setCursor(112, 96);
       display.print(":");
 
-      // Seconds in vibrant magenta
+      // Seconds in bright magenta/purple
       display.setTextColor(0xC1BF);
-      display.setCursor(128, 85);
+      display.setCursor(126, 96);
       display.printf("%02d", s);
 
-      // Draggable scrubber knob on circular track
-      float knobAngle = ((float)hsTimerSeconds / 60.0f) * 6.28318f - 1.5708f;
+      // 4. Dynamic glowing circular gauge knob
+      float maxTime = 120.0f;
+      float fraction = constrain((float)hsTimerSeconds / maxTime, 0.0f, 1.0f);
+      float knobAngle = fraction * 6.28318f - 1.5708f;
       int kx = 120 + (int)(cosf(knobAngle) * 42.0f);
-      int ky = 95 + (int)(sinf(knobAngle) * 42.0f);
-      display.fillCircle(kx, ky, 6, 0xFFFF);
-      display.drawCircle(kx, ky, 6, 0xC1BF);
+      int ky = 106 + (int)(sinf(knobAngle) * 42.0f);
+
+      display.fillCircle(kx, ky, 5, 0xFFFF);
+      display.drawCircle(kx, ky, 5, 0xC1BF);
       display.drawPixel(kx, ky, 0x915C);
-
-      // ── QUICK PRESET PILLS: 30s | 60s | 90s | 2m (Y=146..170) ──
-      const int presets[] = {30, 60, 90, 120};
-      const char *pLabels[] = {"30s", "60s", "90s", "2m"};
-      for (int i = 0; i < 4; i++) {
-        int px = 14 + i * 54;
-        bool isSel = (hsTimerSeconds == presets[i]);
-        if (isSel) {
-          display.fillRoundRect(px, 146, 48, 24, 12, 0x915C);
-          display.drawRoundRect(px, 146, 48, 24, 12, 0xD65F);
-          display.setTextSize(1);
-          display.setTextColor(0xFFFF);
-        } else {
-          display.fillRoundRect(px, 146, 48, 24, 12, 0xEF7D);
-          display.drawRoundRect(px, 146, 48, 24, 12, 0xC57C);
-          display.setTextSize(1);
-          display.setTextColor(0x28AE);
-        }
-        int plW = strlen(pLabels[i]) * 6;
-        display.setCursor(px + (48 - plW) / 2, 154);
-        display.print(pLabels[i]);
-      }
-
-      // ── FINE ADJUSTER CAPSULE: [-] ··· clock ··· [+] (Y=178..210) ──
-      display.fillRoundRect(22, 178, 196, 32, 16, 0x3914);
-      display.drawRoundRect(22, 178, 196, 32, 16, 0x6A38);
-
-      // Minus Button (Left)
-      display.fillCircle(40, 194, 12, 0xEF7D);
-      display.drawCircle(40, 194, 12, 0xC57C);
-      display.setTextSize(2);
-      display.setTextColor(0x28AE);
-      display.setCursor(35, 187);
-      display.print("-");
-
-      // Center Clock Arc of Dots
-      for (int d = 0; d < 7; d++) {
-        int dotX = 85 + d * 10;
-        int dotY = 186 + abs(d - 3);
-        display.drawPixel(dotX, dotY, 0xFFFF);
-      }
-      display.drawCircle(120, 197, 6, 0xD65F);
-      display.drawLine(120, 197, 120, 193, 0xFFFF);
-      display.drawLine(120, 197, 123, 197, 0xFFFF);
-
-      // Plus Button (Right)
-      display.fillCircle(200, 194, 12, 0x915C);
-      display.drawCircle(200, 194, 12, 0xD65F);
-      display.setTextSize(2);
-      display.setTextColor(0xFFFF);
-      display.setCursor(194, 187);
-      display.print("+");
-
-      // ── BOTTOM WAVY CARD: "ARM & HIDE" (Y=218..274) ──
-      display.fillRoundRect(14, 218, SCREEN_WIDTH - 28, 54, 16, 0x28AE);
-      display.drawRoundRect(14, 218, SCREEN_WIDTH - 28, 54, 16, 0x6A38);
-      display.drawFastHLine(24, 220, SCREEN_WIDTH - 48, 0x915C);
-
-      // Animated upward chevron ^
-      int chevY = 224 + ((now / 220) % 3);
-      display.drawLine(120, chevY, 115, chevY + 4, 0xD65F);
-      display.drawLine(120, chevY, 125, chevY + 4, 0xD65F);
-
-      // ARM & HIDE text
-      display.setTextSize(2);
-      display.setTextColor(0xFFFF);
-      const char *armTxt = "ARM & HIDE";
-      int atW = strlen(armTxt) * 12;
-      display.setCursor((SCREEN_WIDTH - atW) / 2, 233);
-      display.print(armTxt);
-
-      // Bottom illuminated pill handle
-      display.fillRoundRect(95, 258, 50, 4, 2, 0xFFFF);
-      display.drawRoundRect(93, 257, 54, 6, 3, 0xD65F);
     }
 
     // ──────────────────────────────────────────────────────────

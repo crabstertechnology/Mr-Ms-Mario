@@ -12,6 +12,8 @@
 #include "clock_font.h"
 #include "clock_lavender_bg.h"
 #include "menu_lavender_bg.h"
+#include "menu2_lavender_bg.h"
+#include "hideseek_title_bg.h"
 #include "luna_clock_font.h"
 #include "imu.h"
 #include "robot_eye_animation.h"
@@ -2020,119 +2022,9 @@ public:
       memcpy_P(display.getBuffer(), menu_lavender_bg, 240 * 280 * sizeof(uint16_t));
     } else {
       // ════════════════════════════════════════════════════════════
-      // PAGE 2: EXCLUSIVE FEATURED GAME — HIDE & SEEK ONLY!
+      // PAGE 2: 2ND APP LAUNCHER MENU (5 PORCELAIN 3D TILES)
       // ════════════════════════════════════════════════════════════
-      const int cX = 14, cY = 54, cW = 212, cH = 176, cR = 16;
-      unsigned long t = millis();
-
-      // Card Background & Glowing Neon Borders
-      display.fillRoundRect(cX, cY, cW, cH, cR, 0x1800);            // Deep obsidian crimson
-      display.drawRoundRect(cX, cY, cW, cH, cR, 0xF800);            // Outer red neon border
-      display.drawRoundRect(cX + 1, cY + 1, cW - 2, cH - 2, cR - 1, 0xFD20); // Amber highlight ring
-      display.drawFastHLine(cX + 14, cY + 3, cW - 28, 0xFDE0);      // Top specular glow
-
-      // ── Top Badge Pill: "★ FEATURED GAME ★" ──
-      const int bgX = cX + 38, bgY = cY + 8, bgW = 136, bgH = 16;
-      display.fillRoundRect(bgX, bgY, bgW, bgH, 8, 0x3800);
-      display.drawRoundRect(bgX, bgY, bgW, bgH, 8, 0xFD20);
-      display.setTextSize(1);
-      display.setTextColor(0xFFE0); // Bright gold
-      display.setCursor(bgX + 10, bgY + 4);
-      display.print("★ FEATURED GAME ★");
-
-      // ── Bomb Character / Time Bomb Visual ──
-      const int bx = cX + 44, by = cY + 70;
-
-      // Pulsing soundwave radar ripple
-      int ripple = (t / 25) % 28;
-      if (ripple > 10) {
-        display.drawCircle(bx, by, ripple, 0xFD20);
-      }
-
-      // Bomb sphere body
-      display.fillCircle(bx, by, 18, 0x2104);
-      display.drawCircle(bx, by, 18, TFT_WHITE);
-      // Bomb specular shine
-      display.fillCircle(bx - 6, by - 6, 4, TFT_WHITE);
-      // Brass collar
-      display.fillRect(bx - 4, by - 22, 8, 4, 0x632C);
-      // Curved fuse rope
-      display.drawLine(bx, by - 22, bx + 6, by - 28, 0xBDF7);
-      display.drawLine(bx + 6, by - 28, bx + 12, by - 26, 0xBDF7);
-      // Animated flickering fuse spark
-      uint8_t spk = (t / 70) % 3;
-      display.fillCircle(bx + 13, by - 26, 3, 0xFFE0);
-      if (spk == 0) {
-        display.drawLine(bx + 13, by - 30, bx + 13, by - 33, 0xFD20);
-        display.drawLine(bx + 16, by - 24, bx + 19, by - 23, 0xFD20);
-      } else if (spk == 1) {
-        display.drawLine(bx + 17, by - 29, bx + 20, by - 32, 0xF800);
-        display.drawLine(bx + 10, by - 29, bx + 8, by - 32, 0xF800);
-      }
-      // Glowing digital clock display on bomb face
-      display.setTextSize(1);
-      display.setTextColor(0xF800);
-      display.setCursor(bx - 9, by - 4);
-      display.print(":60");
-
-      // ── Game Titles on Right of Bomb ──
-      display.setTextSize(2);
-      display.setTextColor(TFT_WHITE);
-      display.setCursor(cX + 78, cY + 44);
-      display.print("HIDE &");
-      display.setTextColor(0xFFE0); // Bright gold
-      display.setCursor(cX + 78, cY + 62);
-      display.print("SEEK");
-
-      display.setTextSize(1);
-      display.setTextColor(0xFD20); // Amber subtitle
-      display.setCursor(cX + 78, cY + 84);
-      display.print("TIME BOMB ESCAPE");
-
-      // ── How-To-Play Description Box ──
-      display.fillRoundRect(cX + 10, cY + 100, cW - 20, 28, 6, 0x0841);
-      display.drawRoundRect(cX + 10, cY + 100, cW - 20, 28, 6, 0x2945);
-      display.setTextSize(1);
-      display.setTextColor(0xCE79);
-      display.setCursor(cX + 16, cY + 105);
-      display.print("Hider hides watch. Seeker");
-      display.setCursor(cX + 16, cY + 116);
-      display.print("finds & defuses before :00!");
-
-      // ── Big Vibrant "TAP TO PLAY" Button ──
-      const int playBtnX = cX + 16, playBtnY = cY + 136, playBtnW = cW - 32, playBtnH = 30;
-      display.fillRoundRect(playBtnX, playBtnY, playBtnW, playBtnH, 8, 0xF800);       // Rich crimson
-      display.drawRoundRect(playBtnX, playBtnY, playBtnW, playBtnH, 8, 0xFFE0);       // Gold border
-      display.drawFastHLine(playBtnX + 6, playBtnY + 2, playBtnW - 12, 0xFDE0);    // Specular highlight
-
-      display.setTextSize(1);
-      display.setTextColor(TFT_WHITE);
-      display.setCursor(playBtnX + 36, playBtnY + 11);
-      display.print("TAP TO PLAY  >");
-
-      // ── BOTTOM NAVIGATION (Page 2) ──
-      // Left side: Page Indicator dots (○ ●)
-      display.fillCircle(18, 255, 3, 0x31A6);           // Inactive Page 1 Dot
-      display.fillRoundRect(26, 252, 14, 6, 3, 0xFD20); // Active Page 2 Amber Pill
-      display.setTextSize(1);
-      display.setTextColor(0xFD20);
-      display.setCursor(48, 252);
-      display.print("2/2");
-
-      // Right side: Polished "PREV PAGE" Button (Symmetrical to Page 1)
-      const int prBtnX = 118, prBtnY = 240, prBtnW = 108, prBtnH = 32;
-      display.fillRoundRect(prBtnX, prBtnY, prBtnW, prBtnH, 8, 0x2864); // Sleek amber-tinted dark fill
-      display.drawRoundRect(prBtnX, prBtnY, prBtnW, prBtnH, 8, 0xFD20); // Crisp amber outer border
-      display.drawFastHLine(prBtnX + 6, prBtnY + 2, prBtnW - 12, 0xFFA0); // Specular highlight
-
-      // Bright neon backward arrow ◀
-      display.fillTriangle(prBtnX + 26, prBtnY + 8, prBtnX + 26, prBtnY + 24, prBtnX + 16, prBtnY + 16, 0xFD20);
-      display.fillTriangle(prBtnX + 25, prBtnY + 10, prBtnX + 25, prBtnY + 22, prBtnX + 18, prBtnY + 16, TFT_WHITE);
-
-      display.setTextSize(1);
-      display.setTextColor(TFT_WHITE);
-      display.setCursor(prBtnX + 38, prBtnY + 12);
-      display.print("PREV");
+      memcpy_P(display.getBuffer(), menu2_lavender_bg, 240 * 280 * sizeof(uint16_t));
     }
   }
 

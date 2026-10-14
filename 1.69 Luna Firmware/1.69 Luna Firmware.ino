@@ -3363,22 +3363,45 @@ void handleBtn1Single() {
       }
     } else {
       // ════════════════════════════════════════════════════════════
-      // PAGE 2: DEDICATED HIDE & SEEK ONLY!
+      // PAGE 2: 2ND APP LAUNCHER MENU (5 3D TILES)
       // ════════════════════════════════════════════════════════════
-      if (curY >= 50 && curY < 232) {
-        // Tapped anywhere on the Hide & Seek Hero Card -> Direct Launch!
-        currentScreen = SCREEN_GAMES;
-        gamesActive = true;
-        gamePlaying = true;
-        gameSelected = 6;
-        games.resetHideSeek();
-        audio.playSound(SOUND_STARTUP);
-        Serial.println("[MENU P2] -> HIDE & SEEK (Launched from Hero Card!)");
-      } else if (curY >= 232) {
-        // Highlighted Right Bottom Corner PREV PAGE button tapped -> return to Page 1
-        appLauncherPage = 0;
+      if (curY < 100) {
+        if (curX < 120) {
+          // Top-Left: Flashcards / Memory Matching Game
+          currentScreen = SCREEN_GAMES;
+          gamesActive = true;
+          gamePlaying = true;
+          gameSelected = 5;
+          games.resetMemory();
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU P2] -> MEMORY GAME"));
+        } else {
+          // Top-Right: Hide & Seek (Cats in a box) -> Direct Launch!
+          currentScreen = SCREEN_GAMES;
+          gamesActive = true;
+          gamePlaying = true;
+          gameSelected = 6;
+          games.resetHideSeek();
+          audio.playSound(SOUND_STARTUP);
+          Serial.println(F("[MENU P2] -> HIDE & SEEK"));
+        }
+      } else if (curY < 180) {
+        if (curX < 120) {
+          // Mid-Left: Cute Movie / Expressions
+          currentScreen = SCREEN_FACE;
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU P2] -> EXPRESSIONS"));
+        } else {
+          // Mid-Right: Dice / Casino / Quests
+          currentScreen = SCREEN_QUEST;
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU P2] -> QUESTS & CASINO"));
+        }
+      } else {
+        // Bottom-Center: Sentient Thought / Companion Chat
+        face.setDetailedNotification("LUNA", "I love playing with you! 🐱✨", rtcHour, rtcMinute);
         audio.playSound(SOUND_CHIRP);
-        Serial.println("[MENU P2] -> PREV PAGE (Return to Page 1)");
+        Serial.println(F("[MENU P2] -> SENTIENT THOUGHT"));
       }
     }
     notifyScreenAndExprSync();
