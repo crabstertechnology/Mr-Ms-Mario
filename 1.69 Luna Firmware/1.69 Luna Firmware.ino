@@ -3363,20 +3363,31 @@ void handleBtn1Single() {
       }
     } else {
       // ════════════════════════════════════════════════════════════
-      // PAGE 2: 2ND APP LAUNCHER MENU (5 3D TILES)
+      // PAGE 2: 2X2 GRID (4 GAMES: TRUTH/DARE, IMPOSTER, HIDE&SEEK, CHARADES)
       // ════════════════════════════════════════════════════════════
-      if (curY < 100) {
+      if (curY < 130) {
         if (curX < 120) {
-          // Top-Left: Flashcards / Memory Matching Game
+          // Top-Left: Truth or Dare (Cards with ? and Star)
           currentScreen = SCREEN_GAMES;
           gamesActive = true;
           gamePlaying = true;
-          gameSelected = 5;
-          games.resetMemory();
+          gameSelected = 7;
+          games.resetTruthOrDare();
           audio.playSound(SOUND_POWERUP);
-          Serial.println(F("[MENU P2] -> MEMORY GAME"));
+          Serial.println(F("[MENU P2] -> TRUTH OR DARE"));
         } else {
-          // Top-Right: Hide & Seek (Cats in a box) -> Direct Launch!
+          // Top-Right: Imposter / Secret Agent (Detective Cat)
+          currentScreen = SCREEN_GAMES;
+          gamesActive = true;
+          gamePlaying = true;
+          gameSelected = 8;
+          games.resetImposter();
+          audio.playSound(SOUND_POWERUP);
+          Serial.println(F("[MENU P2] -> IMPOSTER"));
+        }
+      } else if (curY < 255) {
+        if (curX < 120) {
+          // Bottom-Left: Hide & Seek (Cats in Bush)
           currentScreen = SCREEN_GAMES;
           gamesActive = true;
           gamePlaying = true;
@@ -3384,24 +3395,21 @@ void handleBtn1Single() {
           games.resetHideSeek();
           audio.playSound(SOUND_STARTUP);
           Serial.println(F("[MENU P2] -> HIDE & SEEK"));
-        }
-      } else if (curY < 180) {
-        if (curX < 120) {
-          // Mid-Left: Cute Movie / Expressions
-          currentScreen = SCREEN_FACE;
-          audio.playSound(SOUND_POWERUP);
-          Serial.println(F("[MENU P2] -> EXPRESSIONS"));
         } else {
-          // Mid-Right: Dice / Casino / Quests
-          currentScreen = SCREEN_QUEST;
+          // Bottom-Right: Charades / Heads Up (Cat Performing on Stage)
+          currentScreen = SCREEN_GAMES;
+          gamesActive = true;
+          gamePlaying = true;
+          gameSelected = 9;
+          games.resetCharades();
           audio.playSound(SOUND_POWERUP);
-          Serial.println(F("[MENU P2] -> QUESTS & CASINO"));
+          Serial.println(F("[MENU P2] -> CHARADES"));
         }
       } else {
-        // Bottom-Center: Sentient Thought / Companion Chat
-        face.setDetailedNotification("LUNA", "I love playing with you! 🐱✨", rtcHour, rtcMinute);
+        // Bottom Margin -> Return to Page 1
+        appLauncherPage = 0;
         audio.playSound(SOUND_CHIRP);
-        Serial.println(F("[MENU P2] -> SENTIENT THOUGHT"));
+        Serial.println(F("[MENU P2] -> PREV PAGE (Return to Page 1)"));
       }
     }
     notifyScreenAndExprSync();
@@ -4130,8 +4138,9 @@ void updateStateLabel() {
   } else if (currentScreen == SCREEN_GAMES) {
     if (gamePlaying) {
       const char *gameNames[] = {"LUNA RACER", "LUNA SPACE", "FLAPPY MOCHY",
-                                 "COIN CATCHER", "MOCHY JUMP", "HIDE & SEEK"};
-      if (gameSelected >= 1 && gameSelected <= 6) {
+                                 "COIN CATCHER", "MOCHY JUMP", "HIDE & SEEK",
+                                 "TRUTH OR DARE", "IMPOSTER", "CHARADES"};
+      if (gameSelected >= 1 && gameSelected <= 9) {
         face.setStateLabel(gameNames[gameSelected - 1]);
       } else {
         face.setStateLabel("ARCADE");

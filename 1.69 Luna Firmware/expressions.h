@@ -2022,7 +2022,7 @@ public:
       memcpy_P(display.getBuffer(), menu_lavender_bg, 240 * 280 * sizeof(uint16_t));
     } else {
       // ════════════════════════════════════════════════════════════
-      // PAGE 2: 2ND APP LAUNCHER MENU (5 PORCELAIN 3D TILES)
+      // PAGE 2: 2X2 GRID (4 PORCELAIN 3D TILES)
       // ════════════════════════════════════════════════════════════
       memcpy_P(display.getBuffer(), menu2_lavender_bg, 240 * 280 * sizeof(uint16_t));
     }
@@ -3375,6 +3375,12 @@ public:
                 games.updateAndDrawJump(display, audio);
               } else if (gameSelected == 6) {
                 games.updateAndDrawHideSeek(display, audio);
+              } else if (gameSelected == 7) {
+                games.updateAndDrawTruthOrDare(display, audio);
+              } else if (gameSelected == 8) {
+                games.updateAndDrawImposter(display, audio);
+              } else if (gameSelected == 9) {
+                games.updateAndDrawCharades(display, audio);
               }
             }
           }

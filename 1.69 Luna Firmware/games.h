@@ -5,6 +5,9 @@
 #include "config.h"
 #include "imu.h"
 #include "hideseek_timer_bg.h"
+#include "tod_bg.h"
+#include "imposter_bg.h"
+#include "charades_bg.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
 #include <Arduino.h>
@@ -454,6 +457,8 @@ public:
       go = jumpGameOver;
     else if (gameSelected == 6)
       go = hsGameOver || (hsState == HS_STATE_SETUP);
+    else if (gameSelected == 7 || gameSelected == 8 || gameSelected == 9)
+      go = true;
     gameOverActive = go;
     return go;
   }
@@ -2761,6 +2766,883 @@ public:
       int extW = strlen(exTxt) * 6;
       display.setCursor((SCREEN_WIDTH - extW) / 2, 248);
       display.print(exTxt);
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────
+  //  WORD-WRAPPING HELPER FOR GAME CARDS
+  // ──────────────────────────────────────────────────────────
+  void drawCenteredWrappedText(GFXcanvas16 &display, const char *text, int boxX, int boxY, int boxW, int lineH, uint8_t textSize, uint16_t color) {
+    display.setTextSize(textSize);
+    display.setTextColor(color);
+    int charW = (textSize == 1) ? 6 : (textSize == 2 ? 12 : 18);
+    int maxCharsPerLine = boxW / charW;
+    if (maxCharsPerLine < 1) maxCharsPerLine = 1;
+
+    int len = strlen(text);
+    int start = 0;
+    int curY = boxY;
+
+    while (start < len) {
+      int end = start + maxCharsPerLine;
+      if (end >= len) {
+        end = len;
+      } else {
+        int space = end;
+        while (space > start && text[space] != ' ') {
+          space--;
+        }
+        if (space > start) {
+          end = space;
+        }
+      }
+
+      int lineChars = end - start;
+      char lineBuf[64];
+      if (lineChars >= (int)sizeof(lineBuf)) lineChars = sizeof(lineBuf) - 1;
+      strncpy(lineBuf, text + start, lineChars);
+      lineBuf[lineChars] = '\0';
+
+      int lineW = lineChars * charW;
+      int lineX = boxX + (boxW - lineW) / 2;
+      display.setCursor(lineX, curY);
+      display.print(lineBuf);
+
+      curY += lineH;
+      start = end;
+      while (start < len && text[start] == ' ') {
+        start++;
+      }
+    }
+  }
+
+  // ============================================================
+  //  GAME 7: TRUTH OR DARE (UNIVERSAL / TEEN FRIENDLY)
+  // ============================================================
+  int todState = 0; // 0 = SELECT, 1 = PROMPT
+  int todChoice = 0; // 0 = TRUTH, 1 = DARE
+  int todPromptIdx = 0;
+  bool todLastTouchDown = false;
+
+  void resetTruthOrDare() {
+    todState = 0;
+    todChoice = 0;
+    todPromptIdx = random(0, 25);
+    todLastTouchDown = false;
+  }
+
+  void updateAndDrawTruthOrDare(GFXcanvas16 &display, LunaAudio &audio) {
+    const unsigned long now = millis();
+    bool isDown = isTouchActive();
+    int touchX = getTouchX();
+    int touchY = getTouchY();
+    bool justTapped = isDown && !todLastTouchDown;
+    todLastTouchDown = isDown;
+
+    static const char *const todTruths[25] = {
+      "What is your weirdest habit when alone?",
+      "If you could trade lives with anyone here for a day, who?",
+      "What is the funniest thing you believed as a child?",
+      "What is the most useless thing you spent money on?",
+      "What is your biggest fear that makes no sense?",
+      "What is your most played guilty pleasure song?",
+      "Who was your first cartoon character crush?",
+      "What is one rule you secretly love breaking?",
+      "What food do you pretend to like to be polite?",
+      "Have you ever blamed a pet for something you broke?",
+      "If you had a superpower for 1 hour, what would it be?",
+      "What is the most embarrassing haircut you ever had?",
+      "What is the weirdest dream you remember having?",
+      "What's something silly you thought was true until recently?",
+      "If you found $1,000 right now, what do you buy first?",
+      "What movie can you watch 100 times without getting bored?",
+      "What is the weirdest food combo you secretly enjoy?",
+      "If your pet could talk for 1 minute, what would it say?",
+      "What is the worst fashion disaster you ever wore?",
+      "If you were stranded on an island, who here do you take?",
+      "What is a secret talent you haven't told anyone?",
+      "What is the longest you stayed awake and why?",
+      "What is one song that always gets stuck in your head?",
+      "If you could rename yourself right now, what name?",
+      "What is your favorite comfort food when sad?"
+    };
+
+    static const char *const todDares[25] = {
+      "Do your best impression of a cat begging for treats!",
+      "Speak only in movie quotes for your next 2 turns!",
+      "Do 10 squats while singing Happy Birthday dramatically!",
+      "Talk without showing your teeth until the next round!",
+      "Do a slow-motion catwalk across the room like a model!",
+      "Pretend you are a robot running out of battery!",
+      "Hold a staring contest with the person across from you!",
+      "Speak in an opera singing voice for the next 1 minute!",
+      "Balance a pen or spoon on your nose for 10 seconds!",
+      "Act like you are swimming across the room with drama!",
+      "Do your silliest dance move with a deadpan serious face!",
+      "Say the alphabet backwards from Z to P without stopping!",
+      "Pretend you are an alien visiting Earth for the first time!",
+      "Give a dramatic 30-second speech about why cheese is great!",
+      "Laugh hysterically for 15 seconds without stopping!",
+      "Walk backwards every time you move for the next 2 minutes!",
+      "Pretend your hands are dinosaur claws for 1 minute!",
+      "Strike 3 different superhero poses and hold each for 5s!",
+      "Try to juggle 3 small imaginary objects convincingly!",
+      "Narrate everything another player does for the next 1 min!",
+      "Pretend you are a secret agent on a stealth mission!",
+      "Do your best impression of a grumpy grandpa!",
+      "Talk like you are under water until your next turn!",
+      "Recite a nursery rhyme with pure villain drama!",
+      "Pretend the floor is hot lava for 30 seconds!"
+    };
+
+    // 1. Base Layer: AI Generated 3D Dreamscape Porcelain Wallpaper
+    memcpy_P(display.getBuffer(), tod_bg, 240 * 280 * sizeof(uint16_t));
+
+    if (todState == 0) {
+      // ── STATE 0: CHOOSE TRUTH OR DARE ─────────────────────────
+      // Header pill
+      display.fillRoundRect(36, 12, SCREEN_WIDTH - 72, 24, 12, 0x2004);
+      display.drawRoundRect(36, 12, SCREEN_WIDTH - 72, 24, 12, 0xF814);
+      display.setTextSize(1);
+      display.setTextColor(0xFFE0);
+      display.setCursor(54, 20);
+      display.print("TRUTH OR DARE ✦");
+
+      // TRUTH Card (Y=52..112, X=36..204)
+      const int tX = 36, tY = 52, tW = SCREEN_WIDTH - 72, tH = 60;
+      display.fillRoundRect(tX, tY, tW, tH, 12, 0x2805);
+      display.drawRoundRect(tX, tY, tW, tH, 12, 0xF814);
+      display.drawRoundRect(tX + 1, tY + 1, tW - 2, tH - 2, 11, 0xFA9A);
+      display.fillCircle(tX + 24, tY + 30, 14, 0xF814);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(tX + 20, tY + 23);
+      display.print("?");
+      display.setCursor(tX + 46, tY + 15);
+      display.print("TRUTH");
+      display.setTextSize(1);
+      display.setTextColor(0xFDA0);
+      display.setCursor(tX + 46, tY + 37);
+      display.print("Honest answers!");
+
+      // DARE Card (Y=120..180, X=36..204)
+      const int dX = 36, dY = 120, dW = SCREEN_WIDTH - 72, dH = 60;
+      display.fillRoundRect(dX, dY, dW, dH, 12, 0x2940);
+      display.drawRoundRect(dX, dY, dW, dH, 12, 0xFD20);
+      display.drawRoundRect(dX + 1, dY + 1, dW - 2, dH - 2, 11, 0xFFE0);
+      display.fillCircle(dX + 24, dY + 30, 14, 0xFD20);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(dX + 19, dY + 23);
+      display.print("*");
+      display.setCursor(dX + 46, dY + 15);
+      display.print("DARE");
+      display.setTextSize(1);
+      display.setTextColor(0xFFE0);
+      display.setCursor(dX + 46, dY + 37);
+      display.print("Wild challenges!");
+
+      // SURPRISE ME Button (Y=188..228, X=44..196)
+      const int rX = 44, rY = 188, rW = SCREEN_WIDTH - 88, rH = 40;
+      display.fillRoundRect(rX, rY, rW, rH, 10, 0x18A3);
+      display.drawRoundRect(rX, rY, rW, rH, 10, 0x933F);
+      display.setTextSize(1);
+      display.setTextColor(0xFFFF);
+      display.setCursor(rX + 22, rY + 16);
+      display.print("🎲 SURPRISE ME!");
+
+      // Touch handlers
+      if (justTapped) {
+        if (touchY >= tY && touchY <= tY + tH) {
+          todChoice = 0; // TRUTH
+          todPromptIdx = random(0, 25);
+          todState = 1;
+          audio.playSound(SOUND_COIN);
+        } else if (touchY >= dY && touchY <= dY + dH) {
+          todChoice = 1; // DARE
+          todPromptIdx = random(0, 25);
+          todState = 1;
+          audio.playSound(SOUND_POWERUP);
+        } else if (touchY >= rY && touchY <= rY + rH) {
+          todChoice = random(0, 2);
+          todPromptIdx = random(0, 25);
+          todState = 1;
+          audio.playSound(SOUND_STARTUP);
+        }
+      }
+    } else {
+      // ── STATE 1: DISPLAY PROMPT ───────────────────────────────
+      uint16_t themeCol = (todChoice == 0) ? 0xF814 : 0xFD20;
+      const char *titleTxt = (todChoice == 0) ? "★ TRUTH TIME ★" : "🔥 DARE TIME 🔥";
+
+      display.setTextSize(2);
+      display.setTextColor(themeCol);
+      int tw = strlen(titleTxt) * 12;
+      display.setCursor((SCREEN_WIDTH - tw) / 2, 20);
+      display.print(titleTxt);
+
+      // Category Pill
+      display.fillRoundRect(48, 48, SCREEN_WIDTH - 96, 18, 9, 0x2104);
+      display.setTextSize(1);
+      display.setTextColor(0xFFFF);
+      display.setCursor(68, 53);
+      display.print("TEEN / ALL AGES");
+
+      // Prompt Content inside glossy porcelain center
+      const char *prompt = (todChoice == 0) ? todTruths[todPromptIdx] : todDares[todPromptIdx];
+      uint8_t tSize = (strlen(prompt) > 65) ? 1 : 2;
+      int lineH = (tSize == 1) ? 15 : 22;
+      drawCenteredWrappedText(display, prompt, 36, 82, SCREEN_WIDTH - 72, lineH, tSize, 0x2104);
+
+      // Bottom Button 1: [ 🎲 REROLL ]
+      const int btn1X = 32, btn1Y = 196, btn1W = 84, btn1H = 38;
+      display.fillRoundRect(btn1X, btn1Y, btn1W, btn1H, 8, 0x2940);
+      display.drawRoundRect(btn1X, btn1Y, btn1W, btn1H, 8, 0xFD20);
+      display.setTextSize(1);
+      display.setTextColor(0xFFFF);
+      display.setCursor(btn1X + 10, btn1Y + 15);
+      display.print("🎲 REROLL");
+
+      // Bottom Button 2: [ ✔ DONE ]
+      const int btn2X = SCREEN_WIDTH - 116, btn2Y = 196, btn2W = 84, btn2H = 38;
+      display.fillRoundRect(btn2X, btn2Y, btn2W, btn2H, 8, 0x0280);
+      display.drawRoundRect(btn2X, btn2Y, btn2W, btn2H, 8, 0x07E0);
+      display.setCursor(btn2X + 16, btn2Y + 15);
+      display.print("✔ DONE");
+
+      if (justTapped && touchY >= 190) {
+        if (touchX < 120) {
+          todPromptIdx = (todPromptIdx + 1 + random(1, 4)) % 25;
+          audio.playSound(SOUND_JUMP);
+        } else {
+          todState = 0;
+          audio.playSound(SOUND_CHIRP);
+        }
+      }
+    }
+  }
+
+  // ============================================================
+  //  GAME 8: IMPOSTER (SECRET AGENT DEDUCTION)
+  // ============================================================
+  int impState = 0; // 0=PLAYERS, 1=PASS, 2=REVEAL, 3=DISCUSS, 4=VOTE, 5=RESULT
+  int impPlayerCount = 3; // 3..6
+  int impCurrentPlayer = 0;
+  int impImposterIdx = 0;
+  int impWordIdx = 0;
+  unsigned long impTimerStartMs = 0;
+  bool impLastTouchDown = false;
+
+  void resetImposter() {
+    impState = 0;
+    impCurrentPlayer = 0;
+    impImposterIdx = random(0, impPlayerCount);
+    impWordIdx = random(0, 30);
+    impTimerStartMs = 0;
+    impLastTouchDown = false;
+  }
+
+  void updateAndDrawImposter(GFXcanvas16 &display, LunaAudio &audio) {
+    const unsigned long now = millis();
+    bool isDown = isTouchActive();
+    int touchX = getTouchX();
+    int touchY = getTouchY();
+    bool justTapped = isDown && !impLastTouchDown;
+    impLastTouchDown = isDown;
+
+    static const char *const impWords[30] = {
+      "AIRPLANE", "HOSPITAL", "PIZZA", "CINEMA", "BEACH",
+      "FOOTBALL", "SUBMARINE", "CASTLE", "CIRCUS", "BAKERY",
+      "CAMPING", "LIBRARY", "ZOO", "PIRATE", "SPACE STATION",
+      "VOLCANO", "CHOCOLATE", "AMUSEMENT PARK", "FIRE TRUCK", "MAGICIAN",
+      "MUSEUM", "HOTEL", "RESTAURANT", "TRAIN", "GUITAR",
+      "DOCTOR", "HELICOPTER", "DETECTIVE", "SWIMMING POOL", "SUPERMARKET"
+    };
+
+    static const char *const impCategories[30] = {
+      "Travel", "Places", "Food", "Entertainment", "Vacation",
+      "Sports", "Ocean", "Fantasy", "Entertainment", "Food",
+      "Outdoors", "Places", "Animals", "Characters", "Sci-Fi",
+      "Nature", "Food", "Places", "Vehicles", "Characters",
+      "Places", "Travel", "Food", "Vehicles", "Music",
+      "Jobs", "Vehicles", "Jobs", "Sports", "Places"
+    };
+
+    // 1. Base Layer: AI Generated 3D Detective Cyber-Lavender Wallpaper
+    memcpy_P(display.getBuffer(), imposter_bg, 240 * 280 * sizeof(uint16_t));
+
+    if (impState == 0) {
+      // ── STATE 0: SELECT PLAYER COUNT (3..6) ───────────────────
+      display.setTextSize(2);
+      display.setTextColor(0x07FF);
+      display.setCursor(24, 20);
+      display.print("IMPOSTER 🕵️");
+
+      display.setTextSize(1);
+      display.setTextColor(0xCE79);
+      display.setCursor(34, 46);
+      display.print("CHOOSE PLAYERS (3-6):");
+
+      // 4 Player Count Chips: [ 3 ] [ 4 ] [ 5 ] [ 6 ] (Y=66..110)
+      for (int i = 0; i < 4; i++) {
+        int count = 3 + i;
+        int cx = 28 + i * 48;
+        int cy = 66;
+        int cw = 40;
+        int ch = 44;
+        bool isSel = (impPlayerCount == count);
+        display.fillRoundRect(cx, cy, cw, ch, 8, isSel ? 0xFD20 : 0x10A2);
+        display.drawRoundRect(cx, cy, cw, ch, 8, isSel ? 0xFFFF : 0x3186);
+
+        display.setTextSize(2);
+        display.setTextColor(isSel ? 0x0000 : 0xFFFF);
+        display.setCursor(cx + 14, cy + 14);
+        display.print(count);
+
+        if (justTapped && touchX >= cx && touchX <= cx + cw && touchY >= cy && touchY <= cy + ch) {
+          impPlayerCount = count;
+          audio.playSound(SOUND_COIN);
+        }
+      }
+
+      // Mission Info inside card
+      display.setTextSize(1);
+      display.setTextColor(0xFDA0);
+      display.setCursor(28, 124);
+      display.print("* 1 player is secretly IMPOSTER!");
+      display.setTextColor(0xCE79);
+      display.setCursor(28, 140);
+      display.print("* Teammates get same word.");
+      display.setCursor(28, 156);
+      display.print("* Imposter must blend in!");
+      display.setTextColor(0x07FF);
+      display.setCursor(28, 172);
+      display.print("* Discuss & vote out the spy!");
+
+      // [ START MISSION ▶ ] Button (Y=192..234)
+      const int sX = 32, sY = 192, sW = SCREEN_WIDTH - 64, sH = 42;
+      display.fillRoundRect(sX, sY, sW, sH, 10, 0x001F);
+      display.drawRoundRect(sX, sY, sW, sH, 10, 0x07FF);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(sX + 22, sY + 13);
+      display.print("START GAME ▶");
+
+      if (justTapped && touchY >= sY) {
+        impCurrentPlayer = 0;
+        impImposterIdx = random(0, impPlayerCount);
+        impWordIdx = random(0, 30);
+        impState = 1;
+        audio.playSound(SOUND_POWERUP);
+      }
+    } else if (impState == 1) {
+      // ── STATE 1: PASS WATCH TO PLAYER X ───────────────────────
+      display.setTextSize(2);
+      display.setTextColor(0x07FF);
+      display.setCursor(24, 20);
+      display.print("SECRET HANDOFF");
+
+      display.setTextSize(1);
+      display.setTextColor(0xCE79);
+      display.setCursor(48, 52);
+      display.print("PASS WATCH TO:");
+
+      display.setTextSize(3);
+      display.setTextColor(0xFFE0);
+      char pStr[24];
+      snprintf(pStr, sizeof(pStr), "PLAYER %d", impCurrentPlayer + 1);
+      int pw = strlen(pStr) * 18;
+      display.setCursor((SCREEN_WIDTH - pw) / 2, 78);
+      display.print(pStr);
+
+      display.setTextSize(1);
+      display.setTextColor(0xF814);
+      display.setCursor(34, 126);
+      display.print("Keep screen hidden from others!");
+
+      // [ TAP TO REVEAL ] Button (Y=188..234)
+      const int rvX = 32, rvY = 188, rvW = SCREEN_WIDTH - 64, rvH = 46;
+      display.fillRoundRect(rvX, rvY, rvW, rvH, 10, 0x2940);
+      display.drawRoundRect(rvX, rvY, rvW, rvH, 10, 0xFD20);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(rvX + 16, rvY + 15);
+      display.print("TAP TO REVEAL 👁");
+
+      if (justTapped && touchY >= rvY) {
+        impState = 2;
+        audio.playSound(SOUND_CHIRP);
+      }
+    } else if (impState == 2) {
+      // ── STATE 2: REVEAL ROLE TO PLAYER ────────────────────────
+      bool isImposter = (impCurrentPlayer == impImposterIdx);
+
+      if (isImposter) {
+        // Red alert Imposter screen
+        display.setTextSize(2);
+        display.setTextColor(0xF800);
+        display.setCursor(38, 20);
+        display.print("TOP SECRET!");
+
+        display.setTextSize(1);
+        display.setTextColor(0xFFFF);
+        display.setCursor(48, 48);
+        display.print("YOU ARE THE...");
+
+        display.setTextSize(3);
+        display.setTextColor(0xFFE0);
+        display.setCursor(42, 68);
+        display.print("IMPOSTER");
+
+        display.setTextSize(1);
+        display.setTextColor(0xFDA0);
+        char cBuf[48];
+        snprintf(cBuf, sizeof(cBuf), "Category hint: %s", impCategories[impWordIdx]);
+        display.setCursor(34, 108);
+        display.print(cBuf);
+
+        display.setTextColor(0xFFFF);
+        display.setCursor(30, 130);
+        display.print("You don't know the word!");
+        display.setCursor(30, 144);
+        display.print("Listen to clues & blend in!");
+      } else {
+        // Teammate screen
+        display.setTextSize(1);
+        display.setTextColor(0x07E0);
+        display.setCursor(44, 20);
+        display.print("YOU ARE A TEAMMATE 🛡");
+
+        display.setTextColor(0xCE79);
+        display.setCursor(56, 44);
+        display.print("THE SECRET WORD:");
+
+        display.setTextSize(2);
+        display.setTextColor(0xFFFF);
+        const char *wrd = impWords[impWordIdx];
+        int ww = strlen(wrd) * 12;
+        display.setCursor((SCREEN_WIDTH - ww) / 2, 66);
+        display.print(wrd);
+
+        display.setTextSize(1);
+        display.setTextColor(0x07FF);
+        char catStr[36];
+        snprintf(catStr, sizeof(catStr), "[ Category: %s ]", impCategories[impWordIdx]);
+        int cw = strlen(catStr) * 6;
+        display.setCursor((SCREEN_WIDTH - cw) / 2, 98);
+        display.print(catStr);
+
+        display.setTextColor(0xCE79);
+        display.setCursor(30, 126);
+        display.print("Say 1 related word in round.");
+        display.setCursor(30, 140);
+        display.print("Don't make it too obvious!");
+      }
+
+      // [ HIDE & NEXT ▶ ] Button
+      const int nX = 32, nY = 192, nW = SCREEN_WIDTH - 64, nH = 44;
+      display.fillRoundRect(nX, nY, nW, nH, 10, 0x10A2);
+      display.drawRoundRect(nX, nY, nW, nH, 10, 0xFFFF);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(nX + 18, nY + 14);
+      display.print("HIDE & NEXT ▶");
+
+      if (justTapped && touchY >= nY) {
+        impCurrentPlayer++;
+        if (impCurrentPlayer >= impPlayerCount) {
+          impState = 3; // All players checked in, start discussion!
+          impTimerStartMs = now;
+          audio.playSound(SOUND_ALERT_BEEP);
+        } else {
+          impState = 1; // Pass to next player
+          audio.playSound(SOUND_CHIRP);
+        }
+      }
+    } else if (impState == 3) {
+      // ── STATE 3: DISCUSSION & COUNTDOWN TIMER ─────────────────
+      int elapsedSec = (now - impTimerStartMs) / 1000;
+      int remSec = max(0, 90 - elapsedSec);
+
+      display.setTextSize(2);
+      display.setTextColor(0x07FF);
+      display.setCursor(24, 18);
+      display.print("DISCUSS CLUES ⏳");
+
+      // Circular Sweep Progress Ring (CX=120, CY=95, R=38)
+      const int cx = 120, cy = 95, r = 38;
+      display.fillCircle(cx, cy, r, 0x1082);
+      uint16_t ringCol = (remSec > 30) ? 0x07E0 : ((remSec > 10) ? 0xFD20 : 0xF800);
+      display.drawCircle(cx, cy, r, ringCol);
+      display.drawCircle(cx, cy, r - 1, ringCol);
+
+      // Radar ripple sweep
+      int rip = (now / 40) % (r - 4);
+      display.drawCircle(cx, cy, rip, 0x3186);
+
+      // MM:SS readout
+      int m = remSec / 60;
+      int s = remSec % 60;
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(cx - 30, cy - 7);
+      display.printf("%02d:%02d", m, s);
+
+      display.setTextSize(1);
+      display.setTextColor(0xCE79);
+      display.setCursor(34, 146);
+      display.print("Each player says 1 clue word!");
+      display.setCursor(44, 160);
+      display.print("Listen for suspicious words!");
+
+      // [ VOTE NOW! 🗳 ] Button
+      const int vX = 32, vY = 192, vW = SCREEN_WIDTH - 64, vH = 44;
+      display.fillRoundRect(vX, vY, vW, vH, 10, 0x2000);
+      display.drawRoundRect(vX, vY, vW, vH, 10, 0xF800);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(vX + 22, vY + 14);
+      display.print("VOTE NOW! 🗳");
+
+      if ((justTapped && touchY >= vY) || remSec == 0) {
+        impState = 4;
+        audio.playSound(SOUND_ALERT_BEEP);
+      }
+    } else if (impState == 4) {
+      // ── STATE 4: VOTING ACCUSATION ────────────────────────────
+      display.setTextSize(2);
+      display.setTextColor(0xFFE0);
+      display.setCursor(34, 20);
+      display.print("VOTING TIME! 🕵️");
+
+      display.setTextSize(1);
+      display.setTextColor(0xFFFF);
+      display.setCursor(40, 56);
+      display.print("All players count down:");
+      display.setTextSize(2);
+      display.setTextColor(0xFFE0);
+      display.setCursor(62, 78);
+      display.print("3... 2... 1!");
+      display.setTextSize(1);
+      display.setTextColor(0xCE79);
+      display.setCursor(46, 110);
+      display.print("Point at your suspect!");
+      display.setTextColor(0xFDA0);
+      display.setCursor(38, 128);
+      display.print("Did you catch the imposter?");
+
+      // [ REVEAL IMPOSTER 🔍 ] Button
+      const int rvX = 30, rvY = 188, rvW = SCREEN_WIDTH - 60, rvH = 48;
+      display.fillRoundRect(rvX, rvY, rvW, rvH, 10, 0x001F);
+      display.drawRoundRect(rvX, rvY, rvW, rvH, 10, 0x07FF);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(rvX + 14, rvY + 16);
+      display.print("REVEAL RESULT 🔍");
+
+      if (justTapped && touchY >= rvY) {
+        impState = 5;
+        audio.playSound(SOUND_POWERUP);
+      }
+    } else if (impState == 5) {
+      // ── STATE 5: REVEAL RESULT ────────────────────────────────
+      display.setTextSize(2);
+      display.setTextColor(0x07E0);
+      display.setCursor(42, 20);
+      display.print("MISSION OVER!");
+
+      display.setTextSize(1);
+      display.setTextColor(0xFDA0);
+      display.setCursor(54, 52);
+      display.print("THE IMPOSTER WAS:");
+
+      display.setTextSize(3);
+      display.setTextColor(0xFFE0);
+      char pStr[24];
+      snprintf(pStr, sizeof(pStr), "PLAYER %d", impImposterIdx + 1);
+      int pw = strlen(pStr) * 18;
+      display.setCursor((SCREEN_WIDTH - pw) / 2, 74);
+      display.print(pStr);
+
+      display.setTextSize(1);
+      display.setTextColor(0xCE79);
+      display.setCursor(56, 114);
+      display.print("SECRET WORD WAS:");
+
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      const char *wrd = impWords[impWordIdx];
+      int ww = strlen(wrd) * 12;
+      display.setCursor((SCREEN_WIDTH - ww) / 2, 134);
+      display.print(wrd);
+
+      // [ PLAY AGAIN ▶ ] Button
+      const int paX = 32, paY = 192, paW = SCREEN_WIDTH - 64, paH = 44;
+      display.fillRoundRect(paX, paY, paW, paH, 10, 0x0280);
+      display.drawRoundRect(paX, paY, paW, paH, 10, 0x07E0);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(paX + 26, paY + 13);
+      display.print("PLAY AGAIN ▶");
+
+      if (justTapped && touchY >= paY) {
+        impState = 0;
+        audio.playSound(SOUND_STARTUP);
+      }
+    }
+  }
+
+  // ============================================================
+  //  GAME 9: CHARADES (HEADS UP ACTING PARTY GAME)
+  // ============================================================
+  int chaState = 0; // 0=SETUP, 1=PLAYING, 2=SUMMARY
+  int chaScore = 0;
+  int chaPasses = 0;
+  int chaWordIdx = 0;
+  unsigned long chaRoundStartMs = 0;
+  unsigned long chaFeedbackTimer = 0;
+  int chaFeedbackType = 0; // 0=none, 1=correct, 2=pass
+  bool chaLastTouchDown = false;
+
+  void resetCharades() {
+    chaState = 0;
+    chaScore = 0;
+    chaPasses = 0;
+    chaWordIdx = random(0, 40);
+    chaRoundStartMs = 0;
+    chaFeedbackTimer = 0;
+    chaFeedbackType = 0;
+    chaLastTouchDown = false;
+  }
+
+  void updateAndDrawCharades(GFXcanvas16 &display, LunaAudio &audio) {
+    const unsigned long now = millis();
+    bool isDown = isTouchActive();
+    int touchX = getTouchX();
+    int touchY = getTouchY();
+    bool justTapped = isDown && !chaLastTouchDown;
+    chaLastTouchDown = isDown;
+
+    static const char *const chaWords[40] = {
+      "MONKEY", "GUITAR", "PIZZA", "SUPERMAN", "SWIMMING",
+      "DENTIST", "POPCORN", "ASTRONAUT", "SURFING", "PENGUIN",
+      "BABY", "BRUSH TEETH", "BALLERINA", "ICE CREAM", "ZOMBIE",
+      "MICHAEL JACKSON", "AIRPLANE", "SNEEZING", "KANGAROO", "CHEF",
+      "DRIVING A CAR", "FISHING", "SPIDER-MAN", "PUPPY", "DRUMMER",
+      "WEIGHTLIFTER", "ROBOT", "SLEEPWALKER", "PHOTOGRAPHER", "MAGICIAN",
+      "PIRATE", "SPAGHETTI", "SINGING", "ELEPHANT", "NURSE",
+      "TENNIS", "COWBOY", "FIREFIGHTER", "ROLLER COASTER", "LION"
+    };
+
+    static const char *const chaCategories[40] = {
+      "Animals", "Objects", "Food", "Characters", "Actions",
+      "Jobs", "Food", "Jobs", "Actions", "Animals",
+      "Characters", "Actions", "Jobs", "Food", "Characters",
+      "Celebrities", "Objects", "Actions", "Animals", "Jobs",
+      "Actions", "Actions", "Characters", "Animals", "Jobs",
+      "Actions", "Characters", "Actions", "Jobs", "Jobs",
+      "Characters", "Food", "Actions", "Animals", "Jobs",
+      "Actions", "Characters", "Jobs", "Actions", "Animals"
+    };
+
+    // 1. Base Layer: AI Generated 3D Broadway Theater Stage Wallpaper
+    memcpy_P(display.getBuffer(), charades_bg, 240 * 280 * sizeof(uint16_t));
+
+    if (chaState == 0) {
+      // ── STATE 0: SETUP & INSTRUCTIONS ─────────────────────────
+      display.setTextSize(1);
+      display.setTextColor(0x2104);
+      display.setCursor(44, 66);
+      display.print("1. Hold watch on forehead");
+      display.setCursor(60, 78);
+      display.print("facing your partner!");
+
+      display.setCursor(44, 98);
+      display.print("2. Partner acts out word");
+      display.setCursor(60, 110);
+      display.print("WITHOUT speaking!");
+
+      display.setTextColor(0x0380);
+      display.setCursor(44, 134);
+      display.print("Right Button = CORRECT (+1)");
+      display.setTextColor(0x9200);
+      display.setCursor(44, 148);
+      display.print("Left Button  = PASS (⏭)");
+
+      // [ START 60s ROUND ▶ ] Button (Y=188..228, X=40..200)
+      const int sX = 40, sY = 188, sW = 160, sH = 40;
+      display.fillRoundRect(sX, sY, sW, sH, 10, 0x0280);
+      display.drawRoundRect(sX, sY, sW, sH, 10, 0x07E0);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(sX + 14, sY + 12);
+      display.print("START ROUND ▶");
+
+      if (justTapped && touchY >= sY) {
+        chaState = 1;
+        chaScore = 0;
+        chaPasses = 0;
+        chaWordIdx = random(0, 40);
+        chaRoundStartMs = now;
+        chaFeedbackType = 0;
+        audio.playSound(SOUND_STARTUP);
+      }
+    } else if (chaState == 1) {
+      // ── STATE 1: ACTIVE 60s ROUND ─────────────────────────────
+      int elapsedSec = (now - chaRoundStartMs) / 1000;
+      int remSec = max(0, 60 - elapsedSec);
+
+      if (remSec == 0) {
+        chaState = 2; // Time up!
+        audio.playSound(SOUND_ALERT_BEEP);
+      }
+
+      // Top Status inside marquee area (Y=12..28)
+      display.setTextSize(1);
+      display.setTextColor((remSec <= 10) ? 0xF800 : 0xFFFF);
+      char tmStr[16];
+      snprintf(tmStr, sizeof(tmStr), "⏳ %ds", remSec);
+      display.setCursor(20, 14);
+      display.print(tmStr);
+
+      display.setTextColor(0xFFE0);
+      char scStr[16];
+      snprintf(scStr, sizeof(scStr), "★ %d", chaScore);
+      int scw = strlen(scStr) * 6;
+      display.setCursor(SCREEN_WIDTH - scw - 20, 14);
+      display.print(scStr);
+
+      // Category Pill inside porcelain placard (Y=56..72)
+      display.fillRoundRect(60, 56, SCREEN_WIDTH - 120, 16, 8, 0x2104);
+      display.setTextSize(1);
+      display.setTextColor(0xFFFF);
+      const char *cat = chaCategories[chaWordIdx];
+      int cw = strlen(cat) * 6;
+      display.setCursor((SCREEN_WIDTH - cw) / 2, 60);
+      display.print(cat);
+
+      // Huge Guessing Word Display (Y=82..140)
+      const char *wrd = chaWords[chaWordIdx];
+      uint8_t wSize = (strlen(wrd) > 10) ? 2 : 3;
+      int wCharW = (wSize == 2) ? 12 : 18;
+      int ww = strlen(wrd) * wCharW;
+
+      if (ww > 170) {
+        // Multi-line word wrap if long
+        drawCenteredWrappedText(display, wrd, 36, 84, 168, 20, 2, 0x2004);
+      } else {
+        display.setTextSize(wSize);
+        display.setTextColor(0x2004);
+        display.setCursor((SCREEN_WIDTH - ww) / 2, 94);
+        display.print(wrd);
+      }
+
+      // Visual Feedback Flash Overlay
+      if (now - chaFeedbackTimer < 350) {
+        if (chaFeedbackType == 1) {
+          display.fillRoundRect(40, 138, SCREEN_WIDTH - 80, 22, 6, 0x07E0);
+          display.setTextSize(2);
+          display.setTextColor(0x0000);
+          display.setCursor(54, 142);
+          display.print("+1 CORRECT!");
+        } else if (chaFeedbackType == 2) {
+          display.fillRoundRect(40, 138, SCREEN_WIDTH - 80, 22, 6, 0xFD20);
+          display.setTextSize(2);
+          display.setTextColor(0x0000);
+          display.setCursor(76, 142);
+          display.print("PASS ⏭");
+        }
+      }
+
+      // ── TOUCH CONTROLS (Green Right = Correct, Orange Left = Pass) ──
+      // Aligned with the two 3D button capsules on the porcelain placard
+      const int btnY = 188, btnH = 36;
+
+      // PASS Button (Left: X=36..114)
+      const int pX = 36, pW = 78;
+      display.fillRoundRect(pX, btnY, pW, btnH, 10, 0x9200);
+      display.drawRoundRect(pX, btnY, pW, btnH, 10, 0xFD20);
+      display.setTextSize(1);
+      display.setTextColor(0xFFFF);
+      display.setCursor(pX + 16, btnY + 14);
+      display.print("PASS ⏭");
+
+      // CORRECT Button (Right: X=126..204)
+      const int cX = 126, cW = 78;
+      display.fillRoundRect(cX, btnY, cW, btnH, 10, 0x0380);
+      display.drawRoundRect(cX, btnY, cW, btnH, 10, 0x07E0);
+      display.setTextSize(1);
+      display.setTextColor(0xFFFF);
+      display.setCursor(cX + 12, btnY + 14);
+      display.print("✔ CORRECT");
+
+      // Handle Taps
+      if (justTapped && touchY >= btnY - 10 && touchY <= btnY + btnH + 10) {
+        if (touchX < 120) {
+          // PASS
+          chaPasses++;
+          chaWordIdx = (chaWordIdx + 1 + random(1, 4)) % 40;
+          chaFeedbackType = 2;
+          chaFeedbackTimer = now;
+          audio.playSound(SOUND_CHIRP);
+        } else {
+          // CORRECT
+          chaScore++;
+          chaWordIdx = (chaWordIdx + 1 + random(1, 4)) % 40;
+          chaFeedbackType = 1;
+          chaFeedbackTimer = now;
+          audio.playSound(SOUND_COIN);
+        }
+      }
+    } else if (chaState == 2) {
+      // ── STATE 2: ROUND OVER & FINAL SCORE ─────────────────────
+      display.setTextSize(2);
+      display.setTextColor(0x2004);
+      display.setCursor(48, 64);
+      display.print("TIME'S UP! 🎭");
+
+      display.setTextSize(1);
+      display.setTextColor(0x5208);
+      display.setCursor(76, 92);
+      display.print("FINAL SCORE:");
+
+      display.setTextSize(3);
+      display.setTextColor(0x9200);
+      char scBuf[16];
+      snprintf(scBuf, sizeof(scBuf), "%d", chaScore);
+      int scW = strlen(scBuf) * 18;
+      display.setCursor((SCREEN_WIDTH - scW) / 2, 108);
+      display.print(scBuf);
+
+      display.setTextSize(1);
+      display.setTextColor(0x2104);
+      char pBuf[32];
+      snprintf(pBuf, sizeof(pBuf), "Passed: %d words", chaPasses);
+      int pbw = strlen(pBuf) * 6;
+      display.setCursor((SCREEN_WIDTH - pbw) / 2, 138);
+      display.print(pBuf);
+
+      // Rank title
+      const char *rank = (chaScore >= 8) ? "🌟 BROADWAY STAR!" : ((chaScore >= 5) ? "🎭 MASTER ACTOR!" : "👏 GOOD EFFORT!");
+      display.setTextSize(1);
+      display.setTextColor(0x0380);
+      int rw = strlen(rank) * 6;
+      display.setCursor((SCREEN_WIDTH - rw) / 2, 154);
+      display.print(rank);
+
+      // [ PLAY AGAIN ▶ ] Button (Y=188..228)
+      const int paX = 40, paY = 188, paW = 160, paH = 40;
+      display.fillRoundRect(paX, paY, paW, paH, 10, 0x0280);
+      display.drawRoundRect(paX, paY, paW, paH, 10, 0x07E0);
+      display.setTextSize(2);
+      display.setTextColor(0xFFFF);
+      display.setCursor(paX + 14, paY + 12);
+      display.print("PLAY AGAIN ▶");
+
+      if (justTapped && touchY >= paY) {
+        chaState = 0;
+        audio.playSound(SOUND_STARTUP);
+      }
     }
   }
 };
