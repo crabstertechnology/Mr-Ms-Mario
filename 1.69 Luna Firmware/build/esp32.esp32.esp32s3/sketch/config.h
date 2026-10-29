@@ -1,4 +1,4 @@
-#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\config.h"
+#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\config.h"
 #ifndef CONFIG_H
 #define CONFIG_H
 

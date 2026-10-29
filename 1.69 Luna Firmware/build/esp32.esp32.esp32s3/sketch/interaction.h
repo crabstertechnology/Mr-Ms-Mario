@@ -1,4 +1,4 @@
-#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\interaction.h"
+#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\interaction.h"
 // =============================================================================
 // interaction.h  —  Luna Firmware CST816T Touch Input (Left / Center / Right)
 // =============================================================================

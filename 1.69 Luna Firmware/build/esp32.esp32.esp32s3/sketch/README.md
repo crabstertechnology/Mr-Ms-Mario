@@ -1,4 +1,4 @@
-#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\README.md"
+#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\README.md"
 # 🌙 Waveshare 1.69" Luna Smartwatch & Companion Firmware
 
 A comprehensive embedded firmware, UI engine, and companion OS engineered for the **Waveshare ESP32-S3 Touch LCD 1.69"** smartwatch and desktop companion hardware.

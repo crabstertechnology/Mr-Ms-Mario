@@ -1,4 +1,4 @@
-#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\smart_home.h"
+#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\smart_home.h"
 // =============================================================================
 // smart_home.h — Luna Smart Home Relay Controller (ESP32-S3 Touch LCD 1.69")
 // High-performance background TCP client & interactive 2x2 touch screen

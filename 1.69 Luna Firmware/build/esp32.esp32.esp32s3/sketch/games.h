@@ -1,4 +1,4 @@
-#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\games.h"
+#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\games.h"
 #ifndef GAMES_H
 #define GAMES_H
 
@@ -511,7 +511,7 @@ public:
     else if (gameSelected == 5)
       go = jumpGameOver;
     else if (gameSelected == 6)
-      go = hsGameOver || (hsState == HS_STATE_SETUP);
+      go = hsGameOver || (hsState == HS_STATE_TITLE) || (hsState == HS_STATE_SETUP);
     else if (gameSelected == 7 || gameSelected == 8 || gameSelected == 9)
       go = true;
     gameOverActive = go;
@@ -2561,7 +2561,7 @@ public:
   // ============================================================
   //  GAME 7: TRUTH OR DARE (UNIVERSAL / TEEN FRIENDLY)
   // ============================================================
-  int todState = 0; // 0 = TITLE, 1 = CHOICE, 2 = TRUTH, 3 = DARE
+  int todState = 0; // 0 = SELECT, 1 = PROMPT
   int todChoice = 0; // 0 = TRUTH, 1 = DARE
   int todPromptIdx = 0;
   bool todLastTouchDown = false;
@@ -2827,15 +2827,6 @@ public:
 
     if (impState == 0) {
       // ── STATE 0: SELECT PLAYER COUNT (3..6) ───────────────────
-      if (justTapped && touchX <= 45 && touchY <= 45) {
-        gamePlaying = false;
-        gamesActive = false;
-        currentScreen = SCREEN_MENU;
-        appLauncherPage = 1;
-        audio.playSound(SOUND_CHIRP);
-        return;
-      }
-
       display.setTextSize(2);
       display.setTextColor(0x07FF);
       display.setCursor(24, 20);
@@ -3192,20 +3183,20 @@ public:
       "BABY", "BRUSH TEETH", "BALLERINA", "ICE CREAM", "ZOMBIE",
       "MICHAEL JACKSON", "AIRPLANE", "SNEEZING", "KANGAROO", "CHEF",
       "DRIVING A CAR", "FISHING", "SPIDER-MAN", "PUPPY", "DRUMMER",
-      "WEIGHT LIFTER", "ROBOT", "SLEEP WALKER", "PHOTO GRAPHER", "MAGICIAN",
+      "WEIGHTLIFTER", "ROBOT", "SLEEPWALKER", "PHOTOGRAPHER", "MAGICIAN",
       "PIRATE", "SPAGHETTI", "SINGING", "ELEPHANT", "NURSE",
-      "TENNIS", "COWBOY", "FIRE FIGHTER", "ROLLER COASTER", "LION"
+      "TENNIS", "COWBOY", "FIREFIGHTER", "ROLLER COASTER", "LION"
     };
 
     static const char *const chaCategories[40] = {
-      "ANIMALS", "OBJECTS", "FOOD", "CHARACTERS", "ACTIONS",
-      "JOBS", "FOOD", "JOBS", "ACTIONS", "ANIMALS",
-      "CHARACTERS", "ACTIONS", "JOBS", "FOOD", "CHARACTERS",
-      "CELEBRITIES", "OBJECTS", "ACTIONS", "ANIMALS", "JOBS",
-      "ACTIONS", "ACTIONS", "CHARACTERS", "ANIMALS", "JOBS",
-      "ACTIONS", "CHARACTERS", "ACTIONS", "JOBS", "JOBS",
-      "CHARACTERS", "FOOD", "ACTIONS", "ANIMALS", "JOBS",
-      "ACTIONS", "CHARACTERS", "JOBS", "ACTIONS", "ANIMALS"
+      "Animals", "Objects", "Food", "Characters", "Actions",
+      "Jobs", "Food", "Jobs", "Actions", "Animals",
+      "Characters", "Actions", "Jobs", "Food", "Characters",
+      "Celebrities", "Objects", "Actions", "Animals", "Jobs",
+      "Actions", "Actions", "Characters", "Animals", "Jobs",
+      "Actions", "Characters", "Actions", "Jobs", "Jobs",
+      "Characters", "Food", "Actions", "Animals", "Jobs",
+      "Actions", "Characters", "Jobs", "Actions", "Animals"
     };
 
     // 1. Base Layer: AI Generated 3D Broadway Theater Stage Wallpaper
@@ -3213,64 +3204,35 @@ public:
 
     if (chaState == 0) {
       // ── STATE 0: SETUP & INSTRUCTIONS ─────────────────────────
-      if (justTapped && touchX <= 45 && touchY <= 45) {
-        gamePlaying = false;
-        gamesActive = false;
-        currentScreen = SCREEN_MENU;
-        appLauncherPage = 1;
-        audio.playSound(SOUND_CHIRP);
-        return;
-      }
-
-      // Decorative Header Badge in upper placard crest (Y=48..66)
-      display.fillRoundRect(58, 48, 124, 18, 9, 0x6802); // Rich Theater Maroon
-      display.drawRoundRect(58, 48, 124, 18, 9, 0xFDE0); // Gold Trim
       display.setTextSize(1);
+      display.setTextColor(0x2104);
+      display.setCursor(44, 66);
+      display.print("1. Hold watch on forehead");
+      display.setCursor(60, 78);
+      display.print("facing your partner!");
+
+      display.setCursor(44, 98);
+      display.print("2. Partner acts out word");
+      display.setCursor(60, 110);
+      display.print("WITHOUT speaking!");
+
+      display.setTextColor(0x0380);
+      display.setCursor(44, 134);
+      display.print("Right Button = CORRECT (+1)");
+      display.setTextColor(0x9200);
+      display.setCursor(44, 148);
+      display.print("Left Button  = PASS (⏭)");
+
+      // [ START 60s ROUND ▶ ] Button (Y=188..228, X=40..200)
+      const int sX = 40, sY = 188, sW = 160, sH = 40;
+      display.fillRoundRect(sX, sY, sW, sH, 10, 0x0280);
+      display.drawRoundRect(sX, sY, sW, sH, 10, 0x07E0);
+      display.setTextSize(2);
       display.setTextColor(0xFFFF);
-      display.setCursor(84, 53);
-      display.print("- CHARADES -");
+      display.setCursor(sX + 14, sY + 12);
+      display.print("START ROUND ▶");
 
-      // Rule 1: Cleanly centered inside white placard (X=52..188)
-      display.setTextColor(0x0842); // Deep Onyx/Navy for maximum contrast
-      display.setCursor(63, 75);
-      display.print("1. Hold on forehead");
-      display.setCursor(78, 88);
-      display.print("facing partner");
-
-      // Rule 2
-      display.setCursor(63, 106);
-      display.print("2. Partner acts out");
-      display.setCursor(66, 119);
-      display.print("word WITHOUT sound");
-
-      // Interactive button guides: color-coded matching capsules
-      display.fillRoundRect(58, 136, 124, 16, 5, 0x0400); // Forest green
-      display.drawRoundRect(58, 136, 124, 16, 5, 0x07E0);
-      display.setTextColor(0xFFFF);
-      display.setCursor(63, 140);
-      display.print("RIGHT: CORRECT (+1)");
-
-      display.fillRoundRect(58, 158, 124, 16, 5, 0x9200); // Warm amber
-      display.drawRoundRect(58, 158, 124, 16, 5, 0xFD20);
-      display.setTextColor(0xFFFF);
-      display.setCursor(69, 162);
-      display.print("LEFT: PASS (SKIP)");
-
-      // Round info
-      display.setTextColor(0x8002);
-      display.setCursor(75, 184);
-      display.print("ROUND TIME: 60s");
-
-      // [ START ROUND > ] Button in background button dock (Y=233..258, X=56..184)
-      const int sX = 56, sY = 233, sW = 128, sH = 25;
-      display.fillRoundRect(sX, sY, sW, sH, 7, 0x04A4); // Rich Emerald
-      display.drawRoundRect(sX, sY, sW, sH, 7, 0x2FE6); // Vivid Green border
-      display.setTextSize(1);
-      display.setTextColor(0xFFFF);
-      display.setCursor(sX + 25, sY + 9);
-      display.print("START ROUND >");
-
-      if (justTapped && touchY >= 215) {
+      if (justTapped && touchY >= sY) {
         chaState = 1;
         chaScore = 0;
         chaPasses = 0;
@@ -3289,106 +3251,87 @@ public:
         audio.playSound(SOUND_ALERT_BEEP);
       }
 
-      // Top Status inside marquee canopy (Y=10..28)
-      // Left: Timer Badge
-      uint16_t timeBorder = (remSec <= 10) ? 0xF800 : 0xFFE0;
-      display.fillRoundRect(12, 10, 72, 18, 6, 0x2802);
-      display.drawRoundRect(12, 10, 72, 18, 6, timeBorder);
+      // Top Status inside marquee area (Y=12..28)
       display.setTextSize(1);
       display.setTextColor((remSec <= 10) ? 0xF800 : 0xFFFF);
       char tmStr[16];
-      snprintf(tmStr, sizeof(tmStr), "TIME %ds", remSec);
-      int tmW = strlen(tmStr) * 6;
-      display.setCursor(12 + (72 - tmW) / 2, 15);
+      snprintf(tmStr, sizeof(tmStr), "⏳ %ds", remSec);
+      display.setCursor(20, 14);
       display.print(tmStr);
 
-      // Right: Score Badge
-      display.fillRoundRect(156, 10, 72, 18, 6, 0x2802);
-      display.drawRoundRect(156, 10, 72, 18, 6, 0xFFE0);
       display.setTextColor(0xFFE0);
       char scStr[16];
-      snprintf(scStr, sizeof(scStr), "SCORE %d", chaScore);
-      int scW = strlen(scStr) * 6;
-      display.setCursor(156 + (72 - scW) / 2, 15);
+      snprintf(scStr, sizeof(scStr), "★ %d", chaScore);
+      int scw = strlen(scStr) * 6;
+      display.setCursor(SCREEN_WIDTH - scw - 20, 14);
       display.print(scStr);
 
-      // Category Pill in placard arch (Y=50..68, X=60..180)
-      display.fillRoundRect(60, 50, 120, 18, 8, 0x6004); // Theatrical Crimson
-      display.drawRoundRect(60, 50, 120, 18, 8, 0xFDE0); // Gold border
+      // Category Pill inside porcelain placard (Y=56..72)
+      display.fillRoundRect(60, 56, SCREEN_WIDTH - 120, 16, 8, 0x2104);
       display.setTextSize(1);
       display.setTextColor(0xFFFF);
       const char *cat = chaCategories[chaWordIdx];
       int cw = strlen(cat) * 6;
-      display.setCursor((SCREEN_WIDTH - cw) / 2, 55);
+      display.setCursor((SCREEN_WIDTH - cw) / 2, 60);
       display.print(cat);
 
-      // Word Display inside allotted card space (X=52..188, Y=70..220)
+      // Huge Guessing Word Display (Y=82..140)
       const char *wrd = chaWords[chaWordIdx];
-      int wLen = strlen(wrd);
-      bool hasSpace = (strchr(wrd, ' ') != NULL);
+      uint8_t wSize = (strlen(wrd) > 10) ? 2 : 3;
+      int wCharW = (wSize == 2) ? 12 : 18;
+      int ww = strlen(wrd) * wCharW;
 
-      if (hasSpace || wLen >= 12) {
-        // Multi-line wrap in Size 2, line height 22
-        drawCenteredWrappedText(display, wrd, 52, 114, 136, 22, 2, 0x0842);
-      } else if (wLen <= 7) {
-        // Huge single word in Size 3
-        int ww = wLen * 18;
-        display.setTextSize(3);
-        display.setTextColor(0x0842);
-        display.setCursor((SCREEN_WIDTH - ww) / 2, 120);
-        display.print(wrd);
+      if (ww > 170) {
+        // Multi-line word wrap if long
+        drawCenteredWrappedText(display, wrd, 36, 84, 168, 20, 2, 0x2004);
       } else {
-        // Medium single word in Size 2
-        int ww = wLen * 12;
-        display.setTextSize(2);
-        display.setTextColor(0x0842);
-        display.setCursor((SCREEN_WIDTH - ww) / 2, 124);
+        display.setTextSize(wSize);
+        display.setTextColor(0x2004);
+        display.setCursor((SCREEN_WIDTH - ww) / 2, 94);
         display.print(wrd);
       }
 
-      // Visual Feedback Flash Overlay (Y=182..204, below word, above buttons)
+      // Visual Feedback Flash Overlay
       if (now - chaFeedbackTimer < 350) {
         if (chaFeedbackType == 1) {
-          display.fillRoundRect(56, 182, 128, 22, 6, 0x07E0);
-          display.drawRoundRect(56, 182, 128, 22, 6, 0x0400);
+          display.fillRoundRect(40, 138, SCREEN_WIDTH - 80, 22, 6, 0x07E0);
           display.setTextSize(2);
           display.setTextColor(0x0000);
-          display.setCursor(68, 185);
-          display.print("+1 POINT!");
+          display.setCursor(54, 142);
+          display.print("+1 CORRECT!");
         } else if (chaFeedbackType == 2) {
-          display.fillRoundRect(56, 182, 128, 22, 6, 0xFD20);
-          display.drawRoundRect(56, 182, 128, 22, 6, 0x9200);
+          display.fillRoundRect(40, 138, SCREEN_WIDTH - 80, 22, 6, 0xFD20);
           display.setTextSize(2);
           display.setTextColor(0x0000);
-          display.setCursor(78, 185);
-          display.print("PASSED >>");
+          display.setCursor(76, 142);
+          display.print("PASS ⏭");
         }
       }
 
       // ── TOUCH CONTROLS (Green Right = Correct, Orange Left = Pass) ──
       // Aligned with the two 3D button capsules on the porcelain placard
-      const int btnY = 233, btnH = 25;
+      const int btnY = 188, btnH = 36;
 
-      // PASS Button (Left: X=58..118)
-      const int pX = 58, pW = 60;
-      display.fillRoundRect(pX, btnY, pW, btnH, 7, 0xD100); // Warm Coral / Amber fill
-      display.drawRoundRect(pX, btnY, pW, btnH, 7, 0xFCA0); // Bright border
+      // PASS Button (Left: X=36..114)
+      const int pX = 36, pW = 78;
+      display.fillRoundRect(pX, btnY, pW, btnH, 10, 0x9200);
+      display.drawRoundRect(pX, btnY, pW, btnH, 10, 0xFD20);
       display.setTextSize(1);
       display.setTextColor(0xFFFF);
-      display.setCursor(pX + 12, btnY + 9);
-      display.print("PASS >");
+      display.setCursor(pX + 16, btnY + 14);
+      display.print("PASS ⏭");
 
-      // CORRECT Button (Right: X=122..182)
-      const int cX = 122, cW = 60;
-      display.fillRoundRect(cX, btnY, cW, btnH, 7, 0x0480); // Emerald Green fill
-      display.drawRoundRect(cX, btnY, cW, btnH, 7, 0x2FE6); // Bright Green border
+      // CORRECT Button (Right: X=126..204)
+      const int cX = 126, cW = 78;
+      display.fillRoundRect(cX, btnY, cW, btnH, 10, 0x0380);
+      display.drawRoundRect(cX, btnY, cW, btnH, 10, 0x07E0);
       display.setTextSize(1);
       display.setTextColor(0xFFFF);
-      display.setCursor(cX + 9, btnY + 9);
-      display.print("CORRECT");
+      display.setCursor(cX + 12, btnY + 14);
+      display.print("✔ CORRECT");
 
-      // Handle Taps across the lower interactive zone
-      if (justTapped && touchY >= 215) {
+      // Handle Taps
+      if (justTapped && touchY >= btnY - 10 && touchY <= btnY + btnH + 10) {
         if (touchX < 120) {
           // PASS
           chaPasses++;
@@ -3407,63 +3350,50 @@ public:
       }
     } else if (chaState == 2) {
       // ── STATE 2: ROUND OVER & FINAL SCORE ─────────────────────
-      // Header Badge in upper placard crest (Y=48..66)
-      display.fillRoundRect(58, 48, 124, 18, 9, 0x6802);
-      display.drawRoundRect(58, 48, 124, 18, 9, 0xFDE0);
+      display.setTextSize(2);
+      display.setTextColor(0x2004);
+      display.setCursor(48, 64);
+      display.print("TIME'S UP! 🎭");
+
       display.setTextSize(1);
-      display.setTextColor(0xFFFF);
-      display.setCursor(90, 53);
-      display.print("TIME'S UP!");
+      display.setTextColor(0x5208);
+      display.setCursor(76, 92);
+      display.print("FINAL SCORE:");
 
-      // "FINAL SCORE" Subtitle
-      display.setTextColor(0x3186); // Slate/Charcoal
-      display.setCursor(87, 78);
-      display.print("FINAL SCORE");
-
-      // Huge Score Value
       display.setTextSize(3);
-      display.setTextColor(0x0480); // Emerald Green
+      display.setTextColor(0x9200);
       char scBuf[16];
       snprintf(scBuf, sizeof(scBuf), "%d", chaScore);
-      int scLen = strlen(scBuf) * 18;
-      display.setCursor((SCREEN_WIDTH - scLen) / 2, 94);
+      int scW = strlen(scBuf) * 18;
+      display.setCursor((SCREEN_WIDTH - scW) / 2, 108);
       display.print(scBuf);
 
-      // Passed count
       display.setTextSize(1);
-      display.setTextColor(0x6328);
+      display.setTextColor(0x2104);
       char pBuf[32];
       snprintf(pBuf, sizeof(pBuf), "Passed: %d words", chaPasses);
       int pbw = strlen(pBuf) * 6;
-      display.setCursor((SCREEN_WIDTH - pbw) / 2, 128);
+      display.setCursor((SCREEN_WIDTH - pbw) / 2, 138);
       display.print(pBuf);
 
-      // Rank title pill
-      const char *rank = (chaScore >= 8) ? "BROADWAY STAR!" : ((chaScore >= 5) ? "MASTER ACTOR!" : "GOOD EFFORT!");
-      uint16_t rkFill = (chaScore >= 8) ? 0x0380 : ((chaScore >= 5) ? 0x2104 : 0x5102);
-      uint16_t rkBorder = (chaScore >= 8) ? 0x2FE6 : ((chaScore >= 5) ? 0xFDA0 : 0x9B46);
-      display.fillRoundRect(56, 146, 128, 20, 6, rkFill);
-      display.drawRoundRect(56, 146, 128, 20, 6, rkBorder);
-      display.setTextColor(0xFFE0); // Gold text
+      // Rank title
+      const char *rank = (chaScore >= 8) ? "🌟 BROADWAY STAR!" : ((chaScore >= 5) ? "🎭 MASTER ACTOR!" : "👏 GOOD EFFORT!");
+      display.setTextSize(1);
+      display.setTextColor(0x0380);
       int rw = strlen(rank) * 6;
-      display.setCursor((SCREEN_WIDTH - rw) / 2, 152);
+      display.setCursor((SCREEN_WIDTH - rw) / 2, 154);
       display.print(rank);
 
-      // Replay hint
-      display.setTextColor(0x3186);
-      display.setCursor(63, 178);
-      display.print("Tap below to replay");
-
-      // [ PLAY AGAIN > ] Button in background button dock (Y=233..258, X=56..184)
-      const int paX = 56, paY = 233, paW = 128, paH = 25;
-      display.fillRoundRect(paX, paY, paW, paH, 7, 0x04A4);
-      display.drawRoundRect(paX, paY, paW, paH, 7, 0x2FE6);
-      display.setTextSize(1);
+      // [ PLAY AGAIN ▶ ] Button (Y=188..228)
+      const int paX = 40, paY = 188, paW = 160, paH = 40;
+      display.fillRoundRect(paX, paY, paW, paH, 10, 0x0280);
+      display.drawRoundRect(paX, paY, paW, paH, 10, 0x07E0);
+      display.setTextSize(2);
       display.setTextColor(0xFFFF);
-      display.setCursor(paX + 28, paY + 9);
-      display.print("PLAY AGAIN >");
+      display.setCursor(paX + 14, paY + 12);
+      display.print("PLAY AGAIN ▶");
 
-      if (justTapped && touchY >= 215) {
+      if (justTapped && touchY >= paY) {
         chaState = 0;
         audio.playSound(SOUND_STARTUP);
       }

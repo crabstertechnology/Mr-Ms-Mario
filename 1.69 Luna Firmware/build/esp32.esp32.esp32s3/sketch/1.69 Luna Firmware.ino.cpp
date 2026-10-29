@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include <Preferences.h>
@@ -36,119 +36,119 @@ LunaRTC rtcDevice;             // PCF85063 Hardware RTC
 LunaSmartHome smartHome;       // Home Automation Relay Controller
 LunaQuests quests;             // Real-World Quests & Casino Roulette Activity Engine
 
-#line 37 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 37 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 int getTouchX();
-#line 38 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 38 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 int getTouchY();
-#line 39 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 39 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 bool isTouchActive();
-#line 41 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 41 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 float readBatteryVolts();
-#line 116 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 116 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void resetPomodoroTimer();
-#line 127 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 127 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void updatePomodoroTimer();
-#line 197 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 196 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void saveAllEventsToNVS();
-#line 219 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 218 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void loadCalendarEventsFromNVS();
-#line 298 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 297 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void addOrUpdateHardwareEvent(const String &id, const String &type, const String &date, const String &time, const String &title);
-#line 355 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 354 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void saveCalendarEventToNVS(const String &type, const String &time, const String &title);
-#line 360 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 359 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 bool deleteHardwareEvent(const String &id);
-#line 386 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 385 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void clearAllHardwareEvents();
-#line 393 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 392 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void sendAllEventsToBLE();
-#line 411 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 410 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void dismissAlarmRinging();
-#line 436 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 435 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void checkHardwareScheduledAlarms();
-#line 517 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 516 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 bool isCompanionPaired();
-#line 522 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 521 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 bool isRelationshipActive();
-#line 536 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 535 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void saveTimeToNVS(int h, int m, int s, const String &day, const String &date);
-#line 547 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 546 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void parseAndSyncTime(String timeStr);
-#line 628 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 627 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 String getLunaEvolutionStage(int lvl);
-#line 638 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 637 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 int calculateLunaLevel(uint32_t xp);
-#line 645 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 644 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void loadLunaPetStats();
-#line 662 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 661 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void saveLunaPetStats();
-#line 674 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 673 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void sendLunaStatsToBLE();
-#line 684 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 683 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void playAnimationSound(int animIndex);
-#line 796 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 795 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void notifyScreenAndExprSync();
-#line 856 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 855 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 const char * getSpriteAiAnimationName(int idx);
-#line 891 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 890 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 const char * getAnimationThought(int idx);
-#line 897 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 896 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEExpressionWithLabel(Expression expr, String label);
-#line 997 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 997 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEExpression(Expression expr);
-#line 1001 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1001 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEAudio(SoundEffect sound);
-#line 1008 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1008 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEText(String text);
-#line 1011 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1011 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBLEImageChunk(uint8_t *data, size_t len);
-#line 1032 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1032 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void drawWallpaperLoadingScreen();
-#line 1271 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 1271 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleRobotCommand(String text);
-#line 2079 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2080 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void applyDisplayBrightness(int level);
-#line 2098 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2099 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void configureST7789HardwareEnhanced();
-#line 2184 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2185 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void applySettings(String payload);
-#line 2288 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2289 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void setup();
-#line 2789 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2787 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void feedLuna(int chosenAnim);
-#line 2851 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2849 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 SoundEffect getAnimationSound(int idx);
-#line 2887 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2885 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void transitionToVideoIndexWithFade(int targetIdx, bool playSound);
-#line 2977 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 2975 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void transitionToNextVideoWithFade();
-#line 3010 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3008 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void pickNewMotivationalQuote();
-#line 3128 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3126 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void cycleExpression();
-#line 3130 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3128 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 String getExpressionName(int expr);
-#line 3167 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3165 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void adjustOption(int option, int direction);
-#line 3229 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3227 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn1Single();
-#line 3783 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3781 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn1Double();
-#line 3821 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3819 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn1Long();
-#line 3881 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3879 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn2Single();
-#line 3951 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3940 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn2Double();
-#line 4036 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 4014 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleSwipeUp();
-#line 4088 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 4056 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleSwipeDown();
-#line 4145 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 4103 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void updateStateLabel();
-#line 4212 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 4170 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void loop();
-#line 37 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 37 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 int getTouchX() { return interaction.getLastX(); }
 int getTouchY() { return interaction.getMappedY(); }
 bool isTouchActive() { return interaction.isTouchDown(); }
@@ -273,7 +273,6 @@ unsigned long lastInteractionTime = 0;
 unsigned long lastScreenTransitionTime = 0;
 const unsigned long SLEEP_TIMEOUT = 45000; // 45 seconds of inactivity -> sleep
 bool isAsleep = false;
-bool isBadgeMode = false;
 bool wallpaperDrawnInSleep = false;
 bool inIntroPhase = true;
 unsigned long introAnimationStartTime = 0;
@@ -1101,6 +1100,7 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
     audio.playSound(SOUND_CHIRP);
     break;
   case EXPR_SLEEPING:
+    isAsleep = true;
     audio.playSound(SOUND_POWERDOWN);
     break;
   default:
@@ -1413,6 +1413,7 @@ void handleRobotCommand(String text) {
     audio.playSound(SOUND_CHIRP);
     Serial.println("Robot woke up from remote command!");
   } else if (text == "SLEEP") {
+    isAsleep = true;
     face.setExpression(EXPR_SLEEPING);
     audio.playSound(SOUND_POWERDOWN);
     Serial.println("Robot went to sleep from remote command!");
@@ -2766,9 +2767,6 @@ void setup() {
   }
   applyDisplayBrightness(oledBrightness);
 
-  // Play power-on startup jingle as boot completes
-  audio.playSound(SOUND_STARTUP);
-
   // Synchronize animation playback timer immediately after fade-in so video
   // starts with zero delay
   face.getRobotEyeAnim().reset();
@@ -4006,23 +4004,14 @@ void handleBtn2Single() {
     mapsActive = false;
   }
 
-  if (currentScreen == SCREEN_GAMES && gamePlaying) {
-    if (gameOverActive || games.canExitActiveGame()) {
-      gamePlaying = false;
-      gameOverActive = false;
-      if (gameSelected >= 1 && gameSelected <= 5) {
-        gamesActive = true;
-        currentScreen = SCREEN_GAMES;
+  if (currentScreen == SCREEN_GAMES && gamesActive) {
+    if (gamePlaying) {
+      if (gameOverActive || games.canExitActiveGame()) {
+        gamePlaying = false;
+        gameOverActive = false;
         audio.playSound(SOUND_POWERDOWN);
-        Serial.println("[BTN2/SwipeLeft] Exited active game to Luna Games");
-      } else {
-        gamesActive = false;
-        currentScreen = SCREEN_MENU;
-        appLauncherPage = 1;
-        audio.playSound(SOUND_POWERDOWN);
-        Serial.println("[BTN2/SwipeLeft] Exited active game to App Menu Games Page");
+        Serial.println("[BTN2/SwipeLeft] Exited active game back to Arcade menu");
       }
-      notifyScreenAndExprSync();
       return;
     }
   }
@@ -4101,24 +4090,13 @@ void handleBtn2Double() {
     return;
   }
 
-  // If in active game: exit back to respective menu
-  if (currentScreen == SCREEN_GAMES && gamePlaying) {
+  // If in active game: exit back to Arcade Menu if Game Over is active
+  if (currentScreen == SCREEN_GAMES && gamesActive && gamePlaying) {
     if (gameOverActive || games.canExitActiveGame()) {
       gamePlaying = false;
       gameOverActive = false;
-      if (gameSelected >= 1 && gameSelected <= 5) {
-        gamesActive = true;
-        currentScreen = SCREEN_GAMES;
-        audio.playSound(SOUND_POWERDOWN);
-        Serial.println("[BTN2 DBL/SwipeRight] Exited active game to Luna Games");
-      } else {
-        gamesActive = false;
-        currentScreen = SCREEN_MENU;
-        appLauncherPage = 1;
-        audio.playSound(SOUND_POWERDOWN);
-        Serial.println("[BTN2 DBL/SwipeRight] Exited active game to App Menu Games Page");
-      }
-      notifyScreenAndExprSync();
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println("[BTN2 DBL/SwipeRight] Exited active game back to Arcade menu");
       return;
     }
   }
@@ -4153,20 +4131,10 @@ void handleSwipeUp() {
   if (currentScreen == SCREEN_GAMES && gamePlaying) {
     if (gameOverActive || games.canExitActiveGame()) {
       gamePlaying = false;
+      gamesActive = true;
       gameOverActive = false;
-      if (gameSelected >= 1 && gameSelected <= 5) {
-        gamesActive = true;
-        currentScreen = SCREEN_GAMES;
-        audio.playSound(SOUND_POWERDOWN);
-        Serial.println(F("[Arcade] Swipe UP exited game to Luna Games"));
-      } else {
-        gamesActive = false;
-        currentScreen = SCREEN_MENU;
-        appLauncherPage = 1;
-        audio.playSound(SOUND_POWERDOWN);
-        Serial.println(F("[Arcade] Swipe UP exited game to App Menu Games Page"));
-      }
-      notifyScreenAndExprSync();
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println(F("[Arcade] Swipe UP exited game over to menu"));
     }
     return;
   }
@@ -4205,20 +4173,10 @@ void handleSwipeDown() {
   if (currentScreen == SCREEN_GAMES && gamePlaying) {
     if (gameOverActive || games.canExitActiveGame()) {
       gamePlaying = false;
+      gamesActive = true;
       gameOverActive = false;
-      if (gameSelected >= 1 && gameSelected <= 5) {
-        gamesActive = true;
-        currentScreen = SCREEN_GAMES;
-        audio.playSound(SOUND_POWERDOWN);
-        Serial.println(F("[Arcade] Swipe DOWN exited game to Luna Games"));
-      } else {
-        gamesActive = false;
-        currentScreen = SCREEN_MENU;
-        appLauncherPage = 1;
-        audio.playSound(SOUND_POWERDOWN);
-        Serial.println(F("[Arcade] Swipe DOWN exited game to App Menu Games Page"));
-      }
-      notifyScreenAndExprSync();
+      audio.playSound(SOUND_POWERDOWN);
+      Serial.println(F("[Arcade] Swipe DOWN exited game over to menu"));
     }
     return;
   }
@@ -4348,49 +4306,23 @@ void loop() {
     if (!powerBtnWasPressed) {
       powerBtnWasPressed = true;
       powerBtnPressStart = now;
-      audio.playSound(SOUND_CHIRP); // Instant tactile button press click!
     } else {
-      if (now - powerBtnPressStart >= 3000) {
-        if (isBadgeMode || isAsleep) {
-          // Long press while in badge mode exits badge mode!
-          isAsleep = false;
-          isBadgeMode = false;
-          wallpaperDrawnInSleep = false;
-          ble.setBLEActive(true);        // restart BLE advertising
-          audio.silentMode = silentMode; // restore user silent preference
-          audio.playSound(SOUND_STARTUP); // Power ON sound!
-#ifdef TFT_BLK
-          uint8_t d = (oledBrightness == 1) ? 90 : ((oledBrightness == 3) ? 255 : 230);
-          analogWrite(TFT_BLK, d);
-#endif
-          face.requestRedraw();
-          while (digitalRead(40) == LOW) {
-            delay(10);
-          }
-          Serial.println("[Power Button] Long press (>3s) -> Exited Badge Mode, normal UI restored");
-          powerBtnWasPressed = false;
-          powerBtnPressStart = 0;
-        } else {
-          // Long press (> 3 seconds) -> Enter Badge / Wallpaper Mode ONLY
+      if (now - powerBtnPressStart >= 1500) {
+        // Long press -> Enter Badge Mode: cut all battery-heavy subsystems
+        if (!isAsleep) {
           isAsleep = true;
-          isBadgeMode = true;
           wallpaperDrawnInSleep = false;
-          // Play POWER DOWN sound BEFORE disabling audio!
-          audio.playSound(SOUND_POWERDOWN);
-          unsigned long pdWait = millis();
-          while (millis() - pdWait < 280) {
-            audio.update();
-            delay(5);
-          }
           // Stop BLE entirely to save ~15-20mA
           ble.setBLEActive(false);
           // Silence audio synthesizer tasks
           audio.silentMode = true;
+          audio.playSound(SOUND_POWERDOWN);
           // Wait for button release before entering badge loop
           while (digitalRead(40) == LOW) {
             delay(10);
           }
-          Serial.println("[Power Button] Long press (>3s) -> Badge / Wallpaper Mode");
+          Serial.println("[Power Button] Long press -> Badge Mode: BLE off, "
+                         "display frozen");
           powerBtnWasPressed = false;
           powerBtnPressStart = 0;
         }
@@ -4402,24 +4334,24 @@ void loop() {
       powerBtnWasPressed = false;
       powerBtnPressStart = 0;
 
-      if (pressDuration >= 40 && pressDuration < 3000) {
-        if (isBadgeMode || isAsleep) {
-          // If in badge mode -> exit badge mode and restore normal UI!
+      if (pressDuration >= 40 && pressDuration < 1200) {
+        if (isAsleep) {
+          // Short press while in badge mode -> full wake: restart BLE, restore
+          // audio
           isAsleep = false;
-          isBadgeMode = false;
           wallpaperDrawnInSleep = false;
           ble.setBLEActive(true);        // restart BLE advertising
           audio.silentMode = silentMode; // restore user silent preference
-          audio.playSound(SOUND_STARTUP); // Power ON sound!
-#ifdef TFT_BLK
-          uint8_t d = (oledBrightness == 1) ? 90 : ((oledBrightness == 3) ? 255 : 230);
-          analogWrite(TFT_BLK, d);
-#endif
-          face.requestRedraw();
-          Serial.println("[Power Button] Short press -> Exited Badge Mode, normal UI restored");
+          audio.playSound(SOUND_CHIRP);
+          Serial.println("[Power Button] Short press -> Waking from Badge "
+                         "Mode, BLE restarted");
+        } else if (gamePlaying) {
+          gamePlaying = false;
+          gamesActive = true;
+          audio.playSound(SOUND_POWERDOWN);
+          Serial.println(
+              "[Power Button] Short press in game -> Exited to arcade");
         }
-        // Black screen and wake up feature removed!
-        // No action on short press while awake.
       }
     }
   }
@@ -4430,7 +4362,6 @@ void loop() {
     if (!bootBtnWasPressed) {
       bootBtnWasPressed = true;
       bootBtnPressStart = now;
-      audio.playSound(SOUND_CHIRP); // Instant tactile button press click!
     } else {
       if (now - bootBtnPressStart >= 1500) {
         // Long press -> Toggle silent mode
@@ -4471,19 +4402,7 @@ void loop() {
     if (bootBtnWasPressed) {
       lastInteractionTime = now;
       lastScreenTransitionTime = now;
-      if (isAsleep) {
-        isAsleep = false;
-        isBadgeMode = false;
-        wallpaperDrawnInSleep = false;
-        ble.setBLEActive(true);
-        audio.silentMode = silentMode;
-        audio.playSound(SOUND_STARTUP);
-#ifdef TFT_BLK
-        uint8_t d = (oledBrightness == 1) ? 90 : ((oledBrightness == 3) ? 255 : 230);
-        analogWrite(TFT_BLK, d);
-#endif
-        face.requestRedraw();
-      }
+      isAsleep = false;
       unsigned long pressDuration = now - bootBtnPressStart;
       bootBtnWasPressed = false;
       bootBtnPressStart = 0;
@@ -4515,67 +4434,17 @@ void loop() {
                            "-> Navigating back to SCREEN_FACE"));
           notifyScreenAndExprSync();
         } else if (gamePlaying && !isAsleep) {
-          if (gameSelected >= 1 && gameSelected <= 5) {
-            // Inside Luna Arcade Games (1: Racer, 2: Space, 3: Flappy, 4: Catcher, 5: Jump)
-            // -> Directs back to Luna Games (SCREEN_GAMES arcade carousel menu)!
-            gamePlaying = false;
-            gamesActive = true;
-            gameOverActive = false;
-            currentScreen = SCREEN_GAMES;
-            audio.playSound(SOUND_POWERDOWN);
-            Serial.println(
-                F("[Middle Button (GPIO 0)] Exited Luna Arcade game -> directed to Luna Games (SCREEN_GAMES)"));
-            notifyScreenAndExprSync();
-          } else {
-            // Inside other games (6: Hide & Seek, 7: Truth or Dare, 8: Imposter, 9: Charades)
-            // -> Directs to the game menu where game app icons are kept (SCREEN_MENU, Page 2)!
-            gamePlaying = false;
-            gamesActive = false;
-            gameOverActive = false;
-            currentScreen = SCREEN_MENU;
-            appLauncherPage = 1;
-            audio.playSound(SOUND_POWERDOWN);
-            Serial.println(
-                F("[Middle Button (GPIO 0)] Exited other game -> directed to Game App Icons Menu (SCREEN_MENU P2)"));
-            notifyScreenAndExprSync();
-          }
-        } else if (currentScreen == SCREEN_GAMES) {
-          // If on Luna Games (arcade carousel) -> direct to App Menu (Page 1) where arcade icon is kept
-          gamesActive = false;
           gamePlaying = false;
-          gameOverActive = false;
-          currentScreen = SCREEN_MENU;
-          appLauncherPage = 0;
+          gamesActive = true;
           audio.playSound(SOUND_POWERDOWN);
           Serial.println(
-              F("[Middle Button (GPIO 0)] Exited Luna Games menu -> directed to App Menu (Page 1)"));
-          notifyScreenAndExprSync();
-        } else if (currentScreen == SCREEN_MENU) {
-          if (appLauncherPage == 1) {
-            // From Game App Icons Menu (Page 2) -> App Menu Page 1
-            appLauncherPage = 0;
-            audio.playSound(SOUND_CHIRP);
-            Serial.println(F("[Middle Button (GPIO 0)] Game App Icons Menu -> App Menu Page 1"));
-            notifyScreenAndExprSync();
-          } else {
-            // From App Menu Page 1 -> Return to Clock
-            currentScreen = SCREEN_CLOCK;
-            audio.playSound(SOUND_CHIRP);
-            Serial.println(F("[Middle Button (GPIO 0)] App Menu Page 1 -> Clock"));
-            notifyScreenAndExprSync();
-          }
+              "[Boot Button] Short press in game -> Exited to arcade");
         } else {
-          // In other features (Settings, Pomodoro, Calendar, Notifications, QR Card, Quests, Maps)
-          // -> Directs to App Menu (Page 1)
-          settingsActive = false;
-          optionSelected = false;
-          notificationsActive = false;
-          notificationSelected = false;
-          mapsActive = false;
-          currentScreen = SCREEN_MENU;
-          appLauncherPage = 0;
+          // In Menu, Pomodoro, Calendar, etc. -> Return to Clock
+          currentScreen = SCREEN_CLOCK;
           audio.playSound(SOUND_CHIRP);
-          Serial.println(F("[Middle Button (GPIO 0)] Exited feature -> directed to App Menu"));
+          Serial.println(F("[Middle Button (GPIO 0)] Short press in app -> "
+                           "Returning to SCREEN_CLOCK"));
           notifyScreenAndExprSync();
         }
       }
@@ -4606,28 +4475,22 @@ void loop() {
       }
     }
 
-    // Draw the wallpaper badge on entry — then freeze
+    // Draw the wallpaper badge exactly once on entry — then freeze
     if (!wallpaperDrawnInSleep) {
       wallpaperDrawnInSleep = true;
-      if (isBadgeMode) {
-#ifdef TFT_BLK
-        uint8_t targetDuty = (oledBrightness == 1) ? 90 : ((oledBrightness == 3) ? 255 : 230);
-        analogWrite(TFT_BLK, targetDuty);
-#endif
-        if (imgTransfer.hasWallpaper()) {
-          imgTransfer.drawWallpaper();
-        } else {
-          // No wallpaper set — show minimal dark badge screen
-          tft.fillScreen(ST77XX_BLACK);
-          tft.setTextColor(0x07FF, ST77XX_BLACK);
-          tft.setTextSize(2);
-          int tx = (SCREEN_WIDTH - 9 * 12) / 2;
-          tft.setCursor(tx, 130 + 20);
-          tft.print("LUNA BADGE");
-          tft.setTextSize(1);
-          tft.setCursor(20, 165 + 20);
-          tft.print("Press power to exit");
-        }
+      if (imgTransfer.hasWallpaper()) {
+        imgTransfer.drawWallpaper();
+      } else {
+        // No wallpaper set — show minimal dark badge screen
+        tft.fillScreen(ST77XX_BLACK);
+        tft.setTextColor(0x07FF, ST77XX_BLACK);
+        tft.setTextSize(2);
+        int tx = (SCREEN_WIDTH - 9 * 12) / 2;
+        tft.setCursor(tx, 130 + 20);
+        tft.print("LUNA BADGE");
+        tft.setTextSize(1);
+        tft.setCursor(20, 165 + 20);
+        tft.print("Press power to wake");
       }
     }
 

@@ -1,4 +1,4 @@
-#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\wallpaper_image.h"
+#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\wallpaper_image.h"
 // Generated custom UI header file. Do not edit.
 #ifndef CUSTOM_UI_H
 #define CUSTOM_UI_H
