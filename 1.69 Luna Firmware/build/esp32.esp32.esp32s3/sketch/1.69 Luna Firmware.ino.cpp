@@ -132,21 +132,21 @@ String getExpressionName(int expr);
 void adjustOption(int option, int direction);
 #line 3227 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn1Single();
-#line 3781 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3805 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn1Double();
-#line 3819 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3843 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn1Long();
-#line 3879 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3903 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn2Single();
-#line 3940 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 3978 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleBtn2Double();
-#line 4014 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 4063 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleSwipeUp();
-#line 4056 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 4115 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void handleSwipeDown();
-#line 4103 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 4172 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void updateStateLabel();
-#line 4170 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
+#line 4239 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 void loop();
 #line 37 "W:\\Mr.mario\\1.69 Luna Firmware\\1.69 Luna Firmware.ino"
 int getTouchX() { return interaction.getLastX(); }
@@ -3424,6 +3424,14 @@ void handleBtn1Single() {
     Serial.printf("[MENU TAP] Page=%d, X=%d, Y=%d\n", appLauncherPage, curX, curY);
 
     if (appLauncherPage == 0) {
+      if (curX >= 205 || curY >= 256) {
+        // Right edge tap or bottom area -> Switch to Page 2
+        appLauncherPage = 1;
+        audio.playSound(SOUND_CHIRP);
+        Serial.println(F("[MENU P1] Right tap / Bottom tap -> Page 2"));
+        notifyScreenAndExprSync();
+        return;
+      }
       if (curY >= 30 && curY < 108) {
         if (curX < 120) {
           // Top-Left: Notifications (3D Violet Bell with pink burst)
@@ -3480,6 +3488,22 @@ void handleBtn1Single() {
       // ════════════════════════════════════════════════════════════
       // PAGE 2: 2X2 GRID (4 GAMES: TRUTH/DARE, IMPOSTER, HIDE&SEEK, CHARADES)
       // ════════════════════════════════════════════════════════════
+      if (curX <= 30 || curY >= 255) {
+        // Left margin or bottom margin -> Return to Page 1
+        appLauncherPage = 0;
+        audio.playSound(SOUND_CHIRP);
+        Serial.println(F("[MENU P2] Left tap / Bottom tap -> Return to Page 1"));
+        notifyScreenAndExprSync();
+        return;
+      }
+      if (curX >= 205) {
+        // Right edge tap -> Return to Page 1
+        appLauncherPage = 0;
+        audio.playSound(SOUND_CHIRP);
+        Serial.println(F("[MENU P2] Right tap -> Return to Page 1"));
+        notifyScreenAndExprSync();
+        return;
+      }
       if (curY < 130) {
         if (curX < 120) {
           // Top-Left: Truth or Dare (Cards with ? and Star)
@@ -4004,14 +4028,23 @@ void handleBtn2Single() {
     mapsActive = false;
   }
 
-  if (currentScreen == SCREEN_GAMES && gamesActive) {
-    if (gamePlaying) {
-      if (gameOverActive || games.canExitActiveGame()) {
-        gamePlaying = false;
-        gameOverActive = false;
+  if (currentScreen == SCREEN_GAMES && gamePlaying) {
+    if (gameOverActive || games.canExitActiveGame()) {
+      gamePlaying = false;
+      gameOverActive = false;
+      if (gameSelected >= 6) {
+        gamesActive = false;
+        currentScreen = SCREEN_MENU;
+        appLauncherPage = 1;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[BTN2/SwipeLeft] Exited active game to 2nd Menu Page");
+      } else {
+        gamesActive = true;
+        currentScreen = SCREEN_GAMES;
         audio.playSound(SOUND_POWERDOWN);
         Serial.println("[BTN2/SwipeLeft] Exited active game back to Arcade menu");
       }
+      notifyScreenAndExprSync();
       return;
     }
   }
@@ -4040,12 +4073,17 @@ void handleBtn2Single() {
     return;
   }
 
-  // On App Launcher Menu: Swipe Left (Btn2 Single) advances to Page 2!
+  // On App Launcher Menu: Swipe Left (Btn2 Single) or Right Tap advances/toggles pages!
   if (currentScreen == SCREEN_MENU) {
     if (appLauncherPage == 0) {
       appLauncherPage = 1;
       audio.playSound(SOUND_CHIRP);
-      Serial.println(F("[BTN2/SwipeLeft] SCREEN_MENU -> Page 2"));
+      Serial.println(F("[BTN2/SwipeLeft/RightTap] SCREEN_MENU -> Page 2"));
+      notifyScreenAndExprSync();
+    } else {
+      appLauncherPage = 0;
+      audio.playSound(SOUND_CHIRP);
+      Serial.println(F("[BTN2/SwipeLeft/RightTap] SCREEN_MENU Page 2 -> Page 1"));
       notifyScreenAndExprSync();
     }
     return;
@@ -4090,13 +4128,24 @@ void handleBtn2Double() {
     return;
   }
 
-  // If in active game: exit back to Arcade Menu if Game Over is active
-  if (currentScreen == SCREEN_GAMES && gamesActive && gamePlaying) {
+  // If in active game: exit back to respective menu
+  if (currentScreen == SCREEN_GAMES && gamePlaying) {
     if (gameOverActive || games.canExitActiveGame()) {
       gamePlaying = false;
       gameOverActive = false;
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println("[BTN2 DBL/SwipeRight] Exited active game back to Arcade menu");
+      if (gameSelected >= 6) {
+        gamesActive = false;
+        currentScreen = SCREEN_MENU;
+        appLauncherPage = 1;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[BTN2 DBL/SwipeRight] Exited active game to 2nd Menu Page");
+      } else {
+        gamesActive = true;
+        currentScreen = SCREEN_GAMES;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[BTN2 DBL/SwipeRight] Exited active game back to Arcade menu");
+      }
+      notifyScreenAndExprSync();
       return;
     }
   }
@@ -4131,10 +4180,20 @@ void handleSwipeUp() {
   if (currentScreen == SCREEN_GAMES && gamePlaying) {
     if (gameOverActive || games.canExitActiveGame()) {
       gamePlaying = false;
-      gamesActive = true;
       gameOverActive = false;
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println(F("[Arcade] Swipe UP exited game over to menu"));
+      if (gameSelected >= 6) {
+        gamesActive = false;
+        currentScreen = SCREEN_MENU;
+        appLauncherPage = 1;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println(F("[Arcade] Swipe UP exited game to 2nd Menu Page"));
+      } else {
+        gamesActive = true;
+        currentScreen = SCREEN_GAMES;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println(F("[Arcade] Swipe UP exited game over to menu"));
+      }
+      notifyScreenAndExprSync();
     }
     return;
   }
@@ -4173,10 +4232,20 @@ void handleSwipeDown() {
   if (currentScreen == SCREEN_GAMES && gamePlaying) {
     if (gameOverActive || games.canExitActiveGame()) {
       gamePlaying = false;
-      gamesActive = true;
       gameOverActive = false;
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println(F("[Arcade] Swipe DOWN exited game over to menu"));
+      if (gameSelected >= 6) {
+        gamesActive = false;
+        currentScreen = SCREEN_MENU;
+        appLauncherPage = 1;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println(F("[Arcade] Swipe DOWN exited game to 2nd Menu Page"));
+      } else {
+        gamesActive = true;
+        currentScreen = SCREEN_GAMES;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println(F("[Arcade] Swipe DOWN exited game over to menu"));
+      }
+      notifyScreenAndExprSync();
     }
     return;
   }
@@ -4347,10 +4416,45 @@ void loop() {
                          "Mode, BLE restarted");
         } else if (gamePlaying) {
           gamePlaying = false;
-          gamesActive = true;
+          gameOverActive = false;
+          if (gameSelected >= 6) {
+            // Apps launched from 2nd menu page (Hide & Seek, Truth/Dare, Imposter, Charades)
+            // -> Directs back to 2nd menu page!
+            gamesActive = false;
+            currentScreen = SCREEN_MENU;
+            appLauncherPage = 1;
+            audio.playSound(SOUND_POWERDOWN);
+            Serial.println(
+                F("[Power Button] Short press in 2nd menu game -> Exited to 2nd Menu Page"));
+          } else {
+            // Inside Luna Arcade Games (1: Racer, 2: Space, 3: Flappy, 4: Catcher, 5: Jump)
+            // -> Directs back to Luna Games arcade menu!
+            gamesActive = true;
+            currentScreen = SCREEN_GAMES;
+            audio.playSound(SOUND_POWERDOWN);
+            Serial.println(
+                F("[Power Button] Short press in arcade game -> Exited to Luna Games"));
+          }
+          notifyScreenAndExprSync();
+        } else if (currentScreen == SCREEN_GAMES) {
+          gamesActive = false;
+          currentScreen = SCREEN_MENU;
+          appLauncherPage = 0;
           audio.playSound(SOUND_POWERDOWN);
-          Serial.println(
-              "[Power Button] Short press in game -> Exited to arcade");
+          Serial.println(F("[Power Button] Exited Luna Games -> App Menu Page 1"));
+          notifyScreenAndExprSync();
+        } else if (currentScreen == SCREEN_MENU) {
+          if (appLauncherPage == 1) {
+            appLauncherPage = 0;
+            audio.playSound(SOUND_CHIRP);
+            Serial.println(F("[Power Button] 2nd Menu Page -> 1st Menu Page"));
+            notifyScreenAndExprSync();
+          } else {
+            currentScreen = SCREEN_CLOCK;
+            audio.playSound(SOUND_CHIRP);
+            Serial.println(F("[Power Button] 1st Menu Page -> Clock"));
+            notifyScreenAndExprSync();
+          }
         }
       }
     }
@@ -4435,16 +4539,58 @@ void loop() {
           notifyScreenAndExprSync();
         } else if (gamePlaying && !isAsleep) {
           gamePlaying = false;
-          gamesActive = true;
+          gameOverActive = false;
+          if (gameSelected >= 6) {
+            // Apps launched from 2nd menu page (Hide & Seek, Truth/Dare, Imposter, Charades)
+            // -> Directs back to 2nd menu page!
+            gamesActive = false;
+            currentScreen = SCREEN_MENU;
+            appLauncherPage = 1;
+            audio.playSound(SOUND_POWERDOWN);
+            Serial.println(
+                F("[Boot Button] Short press in 2nd menu game -> Exited to 2nd Menu Page"));
+          } else {
+            // Inside Luna Arcade Games (1: Racer, 2: Space, 3: Flappy, 4: Catcher, 5: Jump)
+            // -> Directs back to Luna Games arcade menu!
+            gamesActive = true;
+            currentScreen = SCREEN_GAMES;
+            audio.playSound(SOUND_POWERDOWN);
+            Serial.println(
+                F("[Boot Button] Short press in arcade game -> Exited to Luna Games"));
+          }
+          notifyScreenAndExprSync();
+        } else if (currentScreen == SCREEN_GAMES) {
+          gamesActive = false;
+          currentScreen = SCREEN_MENU;
+          appLauncherPage = 0;
           audio.playSound(SOUND_POWERDOWN);
           Serial.println(
-              "[Boot Button] Short press in game -> Exited to arcade");
+              F("[Middle Button (GPIO 0)] Exited Luna Games -> App Menu Page 1"));
+          notifyScreenAndExprSync();
+        } else if (currentScreen == SCREEN_MENU) {
+          if (appLauncherPage == 1) {
+            appLauncherPage = 0;
+            audio.playSound(SOUND_CHIRP);
+            Serial.println(F("[Middle Button (GPIO 0)] 2nd Menu Page -> 1st Menu Page"));
+            notifyScreenAndExprSync();
+          } else {
+            currentScreen = SCREEN_CLOCK;
+            audio.playSound(SOUND_CHIRP);
+            Serial.println(F("[Middle Button (GPIO 0)] 1st Menu Page -> Clock"));
+            notifyScreenAndExprSync();
+          }
         } else {
-          // In Menu, Pomodoro, Calendar, etc. -> Return to Clock
-          currentScreen = SCREEN_CLOCK;
+          // In other features (Settings, Pomodoro, Calendar, Notifications, QR Card, Quests, Maps)
+          // -> Return to App Menu Page 1
+          settingsActive = false;
+          optionSelected = false;
+          notificationsActive = false;
+          notificationSelected = false;
+          mapsActive = false;
+          currentScreen = SCREEN_MENU;
+          appLauncherPage = 0;
           audio.playSound(SOUND_CHIRP);
-          Serial.println(F("[Middle Button (GPIO 0)] Short press in app -> "
-                           "Returning to SCREEN_CLOCK"));
+          Serial.println(F("[Middle Button (GPIO 0)] Exited feature -> directed to App Menu"));
           notifyScreenAndExprSync();
         }
       }

@@ -450,6 +450,10 @@ public:
                 ev = BTN2_DOUBLE;
                 Serial.printf(
                     "[Touch] Menu LEFT tap (X=%d) -> Return to Clock\n", lastX);
+              } else if (lastX >= 205) {
+                ev = BTN2_SINGLE;
+                Serial.printf(
+                    "[Touch] Menu RIGHT tap (X=%d) -> Toggle Menu Page\n", lastX);
               } else {
                 ev = BTN1_SINGLE;
                 Serial.printf("[Touch] Menu tile tap (X=%d, Y=%d)\n", lastX,
