@@ -1,4 +1,4 @@
-#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\image_logo.h"
+#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\image_logo.h"
 // Auto-generated Startup Logo Header from logo.png
 #ifndef IMAGE_LOGO_H
 #define IMAGE_LOGO_H

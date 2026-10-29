@@ -1,4 +1,4 @@
-#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\sprite_ai_data.h"
+#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\sprite_ai_data.h"
 // ============================================================================
 // Generated from sprite-animation-250x250-8f-atlas.zip
 // ============================================================================

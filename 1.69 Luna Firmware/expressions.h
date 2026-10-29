@@ -13,7 +13,6 @@
 #include "clock_lavender_bg.h"
 #include "menu_lavender_bg.h"
 #include "menu2_lavender_bg.h"
-#include "hideseek_title_bg.h"
 #include "luna_clock_font.h"
 #include "imu.h"
 #include "robot_eye_animation.h"
@@ -3262,7 +3261,9 @@ public:
     }
 
     ThemeColors theme = getTheme();
-    display.fillScreen(theme.bg);
+    if (!(currentScreen == SCREEN_GAMES && gamePlaying)) {
+      display.fillScreen(theme.bg);
+    }
     
     if (popupActive && (millis() - popupStartTime > popupDuration)) {
       popupActive = false;
@@ -3381,6 +3382,9 @@ public:
                 games.updateAndDrawImposter(display, audio);
               } else if (gameSelected == 9) {
                 games.updateAndDrawCharades(display, audio);
+              }
+              if (currentScreen == SCREEN_MENU) {
+                drawAppLauncherMenu(hour, minute, day, date);
               }
             }
           }

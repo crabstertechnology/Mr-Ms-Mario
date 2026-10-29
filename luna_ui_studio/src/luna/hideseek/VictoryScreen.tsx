@@ -21,7 +21,7 @@ export default function VictoryScreen({
     <div className="relative w-full h-full overflow-hidden select-none bg-[#1A0B2E] flex flex-col justify-between items-center py-3 px-3">
       {/* 3D Celebration Stage Background */}
       <img
-        src="/hide_seek/win_bg.jpg"
+        src="/hide_seek/win_bg.png"
         alt="Victory Celebration"
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         style={{

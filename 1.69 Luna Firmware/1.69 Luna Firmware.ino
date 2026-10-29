@@ -158,6 +158,7 @@ unsigned long lastInteractionTime = 0;
 unsigned long lastScreenTransitionTime = 0;
 const unsigned long SLEEP_TIMEOUT = 45000; // 45 seconds of inactivity -> sleep
 bool isAsleep = false;
+bool isBadgeMode = false;
 bool wallpaperDrawnInSleep = false;
 bool inIntroPhase = true;
 unsigned long introAnimationStartTime = 0;
@@ -985,7 +986,6 @@ void handleBLEExpressionWithLabel(Expression expr, String label) {
     audio.playSound(SOUND_CHIRP);
     break;
   case EXPR_SLEEPING:
-    isAsleep = true;
     audio.playSound(SOUND_POWERDOWN);
     break;
   default:
@@ -1298,7 +1298,6 @@ void handleRobotCommand(String text) {
     audio.playSound(SOUND_CHIRP);
     Serial.println("Robot woke up from remote command!");
   } else if (text == "SLEEP") {
-    isAsleep = true;
     face.setExpression(EXPR_SLEEPING);
     audio.playSound(SOUND_POWERDOWN);
     Serial.println("Robot went to sleep from remote command!");
@@ -2652,6 +2651,9 @@ void setup() {
   }
   applyDisplayBrightness(oledBrightness);
 
+  // Play power-on startup jingle as boot completes
+  audio.playSound(SOUND_STARTUP);
+
   // Synchronize animation playback timer immediately after fade-in so video
   // starts with zero delay
   face.getRobotEyeAnim().reset();
@@ -3889,14 +3891,23 @@ void handleBtn2Single() {
     mapsActive = false;
   }
 
-  if (currentScreen == SCREEN_GAMES && gamesActive) {
-    if (gamePlaying) {
-      if (gameOverActive || games.canExitActiveGame()) {
-        gamePlaying = false;
-        gameOverActive = false;
+  if (currentScreen == SCREEN_GAMES && gamePlaying) {
+    if (gameOverActive || games.canExitActiveGame()) {
+      gamePlaying = false;
+      gameOverActive = false;
+      if (gameSelected >= 1 && gameSelected <= 5) {
+        gamesActive = true;
+        currentScreen = SCREEN_GAMES;
         audio.playSound(SOUND_POWERDOWN);
-        Serial.println("[BTN2/SwipeLeft] Exited active game back to Arcade menu");
+        Serial.println("[BTN2/SwipeLeft] Exited active game to Luna Games");
+      } else {
+        gamesActive = false;
+        currentScreen = SCREEN_MENU;
+        appLauncherPage = 1;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[BTN2/SwipeLeft] Exited active game to App Menu Games Page");
       }
+      notifyScreenAndExprSync();
       return;
     }
   }
@@ -3975,13 +3986,24 @@ void handleBtn2Double() {
     return;
   }
 
-  // If in active game: exit back to Arcade Menu if Game Over is active
-  if (currentScreen == SCREEN_GAMES && gamesActive && gamePlaying) {
+  // If in active game: exit back to respective menu
+  if (currentScreen == SCREEN_GAMES && gamePlaying) {
     if (gameOverActive || games.canExitActiveGame()) {
       gamePlaying = false;
       gameOverActive = false;
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println("[BTN2 DBL/SwipeRight] Exited active game back to Arcade menu");
+      if (gameSelected >= 1 && gameSelected <= 5) {
+        gamesActive = true;
+        currentScreen = SCREEN_GAMES;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[BTN2 DBL/SwipeRight] Exited active game to Luna Games");
+      } else {
+        gamesActive = false;
+        currentScreen = SCREEN_MENU;
+        appLauncherPage = 1;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println("[BTN2 DBL/SwipeRight] Exited active game to App Menu Games Page");
+      }
+      notifyScreenAndExprSync();
       return;
     }
   }
@@ -4016,10 +4038,20 @@ void handleSwipeUp() {
   if (currentScreen == SCREEN_GAMES && gamePlaying) {
     if (gameOverActive || games.canExitActiveGame()) {
       gamePlaying = false;
-      gamesActive = true;
       gameOverActive = false;
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println(F("[Arcade] Swipe UP exited game over to menu"));
+      if (gameSelected >= 1 && gameSelected <= 5) {
+        gamesActive = true;
+        currentScreen = SCREEN_GAMES;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println(F("[Arcade] Swipe UP exited game to Luna Games"));
+      } else {
+        gamesActive = false;
+        currentScreen = SCREEN_MENU;
+        appLauncherPage = 1;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println(F("[Arcade] Swipe UP exited game to App Menu Games Page"));
+      }
+      notifyScreenAndExprSync();
     }
     return;
   }
@@ -4058,10 +4090,20 @@ void handleSwipeDown() {
   if (currentScreen == SCREEN_GAMES && gamePlaying) {
     if (gameOverActive || games.canExitActiveGame()) {
       gamePlaying = false;
-      gamesActive = true;
       gameOverActive = false;
-      audio.playSound(SOUND_POWERDOWN);
-      Serial.println(F("[Arcade] Swipe DOWN exited game over to menu"));
+      if (gameSelected >= 1 && gameSelected <= 5) {
+        gamesActive = true;
+        currentScreen = SCREEN_GAMES;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println(F("[Arcade] Swipe DOWN exited game to Luna Games"));
+      } else {
+        gamesActive = false;
+        currentScreen = SCREEN_MENU;
+        appLauncherPage = 1;
+        audio.playSound(SOUND_POWERDOWN);
+        Serial.println(F("[Arcade] Swipe DOWN exited game to App Menu Games Page"));
+      }
+      notifyScreenAndExprSync();
     }
     return;
   }
@@ -4191,23 +4233,49 @@ void loop() {
     if (!powerBtnWasPressed) {
       powerBtnWasPressed = true;
       powerBtnPressStart = now;
+      audio.playSound(SOUND_CHIRP); // Instant tactile button press click!
     } else {
-      if (now - powerBtnPressStart >= 1500) {
-        // Long press -> Enter Badge Mode: cut all battery-heavy subsystems
-        if (!isAsleep) {
-          isAsleep = true;
+      if (now - powerBtnPressStart >= 3000) {
+        if (isBadgeMode || isAsleep) {
+          // Long press while in badge mode exits badge mode!
+          isAsleep = false;
+          isBadgeMode = false;
           wallpaperDrawnInSleep = false;
+          ble.setBLEActive(true);        // restart BLE advertising
+          audio.silentMode = silentMode; // restore user silent preference
+          audio.playSound(SOUND_STARTUP); // Power ON sound!
+#ifdef TFT_BLK
+          uint8_t d = (oledBrightness == 1) ? 90 : ((oledBrightness == 3) ? 255 : 230);
+          analogWrite(TFT_BLK, d);
+#endif
+          face.requestRedraw();
+          while (digitalRead(40) == LOW) {
+            delay(10);
+          }
+          Serial.println("[Power Button] Long press (>3s) -> Exited Badge Mode, normal UI restored");
+          powerBtnWasPressed = false;
+          powerBtnPressStart = 0;
+        } else {
+          // Long press (> 3 seconds) -> Enter Badge / Wallpaper Mode ONLY
+          isAsleep = true;
+          isBadgeMode = true;
+          wallpaperDrawnInSleep = false;
+          // Play POWER DOWN sound BEFORE disabling audio!
+          audio.playSound(SOUND_POWERDOWN);
+          unsigned long pdWait = millis();
+          while (millis() - pdWait < 280) {
+            audio.update();
+            delay(5);
+          }
           // Stop BLE entirely to save ~15-20mA
           ble.setBLEActive(false);
           // Silence audio synthesizer tasks
           audio.silentMode = true;
-          audio.playSound(SOUND_POWERDOWN);
           // Wait for button release before entering badge loop
           while (digitalRead(40) == LOW) {
             delay(10);
           }
-          Serial.println("[Power Button] Long press -> Badge Mode: BLE off, "
-                         "display frozen");
+          Serial.println("[Power Button] Long press (>3s) -> Badge / Wallpaper Mode");
           powerBtnWasPressed = false;
           powerBtnPressStart = 0;
         }
@@ -4219,24 +4287,24 @@ void loop() {
       powerBtnWasPressed = false;
       powerBtnPressStart = 0;
 
-      if (pressDuration >= 40 && pressDuration < 1200) {
-        if (isAsleep) {
-          // Short press while in badge mode -> full wake: restart BLE, restore
-          // audio
+      if (pressDuration >= 40 && pressDuration < 3000) {
+        if (isBadgeMode || isAsleep) {
+          // If in badge mode -> exit badge mode and restore normal UI!
           isAsleep = false;
+          isBadgeMode = false;
           wallpaperDrawnInSleep = false;
           ble.setBLEActive(true);        // restart BLE advertising
           audio.silentMode = silentMode; // restore user silent preference
-          audio.playSound(SOUND_CHIRP);
-          Serial.println("[Power Button] Short press -> Waking from Badge "
-                         "Mode, BLE restarted");
-        } else if (gamePlaying) {
-          gamePlaying = false;
-          gamesActive = true;
-          audio.playSound(SOUND_POWERDOWN);
-          Serial.println(
-              "[Power Button] Short press in game -> Exited to arcade");
+          audio.playSound(SOUND_STARTUP); // Power ON sound!
+#ifdef TFT_BLK
+          uint8_t d = (oledBrightness == 1) ? 90 : ((oledBrightness == 3) ? 255 : 230);
+          analogWrite(TFT_BLK, d);
+#endif
+          face.requestRedraw();
+          Serial.println("[Power Button] Short press -> Exited Badge Mode, normal UI restored");
         }
+        // Black screen and wake up feature removed!
+        // No action on short press while awake.
       }
     }
   }
@@ -4247,6 +4315,7 @@ void loop() {
     if (!bootBtnWasPressed) {
       bootBtnWasPressed = true;
       bootBtnPressStart = now;
+      audio.playSound(SOUND_CHIRP); // Instant tactile button press click!
     } else {
       if (now - bootBtnPressStart >= 1500) {
         // Long press -> Toggle silent mode
@@ -4287,7 +4356,19 @@ void loop() {
     if (bootBtnWasPressed) {
       lastInteractionTime = now;
       lastScreenTransitionTime = now;
-      isAsleep = false;
+      if (isAsleep) {
+        isAsleep = false;
+        isBadgeMode = false;
+        wallpaperDrawnInSleep = false;
+        ble.setBLEActive(true);
+        audio.silentMode = silentMode;
+        audio.playSound(SOUND_STARTUP);
+#ifdef TFT_BLK
+        uint8_t d = (oledBrightness == 1) ? 90 : ((oledBrightness == 3) ? 255 : 230);
+        analogWrite(TFT_BLK, d);
+#endif
+        face.requestRedraw();
+      }
       unsigned long pressDuration = now - bootBtnPressStart;
       bootBtnWasPressed = false;
       bootBtnPressStart = 0;
@@ -4319,17 +4400,67 @@ void loop() {
                            "-> Navigating back to SCREEN_FACE"));
           notifyScreenAndExprSync();
         } else if (gamePlaying && !isAsleep) {
+          if (gameSelected >= 1 && gameSelected <= 5) {
+            // Inside Luna Arcade Games (1: Racer, 2: Space, 3: Flappy, 4: Catcher, 5: Jump)
+            // -> Directs back to Luna Games (SCREEN_GAMES arcade carousel menu)!
+            gamePlaying = false;
+            gamesActive = true;
+            gameOverActive = false;
+            currentScreen = SCREEN_GAMES;
+            audio.playSound(SOUND_POWERDOWN);
+            Serial.println(
+                F("[Middle Button (GPIO 0)] Exited Luna Arcade game -> directed to Luna Games (SCREEN_GAMES)"));
+            notifyScreenAndExprSync();
+          } else {
+            // Inside other games (6: Hide & Seek, 7: Truth or Dare, 8: Imposter, 9: Charades)
+            // -> Directs to the game menu where game app icons are kept (SCREEN_MENU, Page 2)!
+            gamePlaying = false;
+            gamesActive = false;
+            gameOverActive = false;
+            currentScreen = SCREEN_MENU;
+            appLauncherPage = 1;
+            audio.playSound(SOUND_POWERDOWN);
+            Serial.println(
+                F("[Middle Button (GPIO 0)] Exited other game -> directed to Game App Icons Menu (SCREEN_MENU P2)"));
+            notifyScreenAndExprSync();
+          }
+        } else if (currentScreen == SCREEN_GAMES) {
+          // If on Luna Games (arcade carousel) -> direct to App Menu (Page 1) where arcade icon is kept
+          gamesActive = false;
           gamePlaying = false;
-          gamesActive = true;
+          gameOverActive = false;
+          currentScreen = SCREEN_MENU;
+          appLauncherPage = 0;
           audio.playSound(SOUND_POWERDOWN);
           Serial.println(
-              "[Boot Button] Short press in game -> Exited to arcade");
+              F("[Middle Button (GPIO 0)] Exited Luna Games menu -> directed to App Menu (Page 1)"));
+          notifyScreenAndExprSync();
+        } else if (currentScreen == SCREEN_MENU) {
+          if (appLauncherPage == 1) {
+            // From Game App Icons Menu (Page 2) -> App Menu Page 1
+            appLauncherPage = 0;
+            audio.playSound(SOUND_CHIRP);
+            Serial.println(F("[Middle Button (GPIO 0)] Game App Icons Menu -> App Menu Page 1"));
+            notifyScreenAndExprSync();
+          } else {
+            // From App Menu Page 1 -> Return to Clock
+            currentScreen = SCREEN_CLOCK;
+            audio.playSound(SOUND_CHIRP);
+            Serial.println(F("[Middle Button (GPIO 0)] App Menu Page 1 -> Clock"));
+            notifyScreenAndExprSync();
+          }
         } else {
-          // In Menu, Pomodoro, Calendar, etc. -> Return to Clock
-          currentScreen = SCREEN_CLOCK;
+          // In other features (Settings, Pomodoro, Calendar, Notifications, QR Card, Quests, Maps)
+          // -> Directs to App Menu (Page 1)
+          settingsActive = false;
+          optionSelected = false;
+          notificationsActive = false;
+          notificationSelected = false;
+          mapsActive = false;
+          currentScreen = SCREEN_MENU;
+          appLauncherPage = 0;
           audio.playSound(SOUND_CHIRP);
-          Serial.println(F("[Middle Button (GPIO 0)] Short press in app -> "
-                           "Returning to SCREEN_CLOCK"));
+          Serial.println(F("[Middle Button (GPIO 0)] Exited feature -> directed to App Menu"));
           notifyScreenAndExprSync();
         }
       }
@@ -4360,22 +4491,28 @@ void loop() {
       }
     }
 
-    // Draw the wallpaper badge exactly once on entry — then freeze
+    // Draw the wallpaper badge on entry — then freeze
     if (!wallpaperDrawnInSleep) {
       wallpaperDrawnInSleep = true;
-      if (imgTransfer.hasWallpaper()) {
-        imgTransfer.drawWallpaper();
-      } else {
-        // No wallpaper set — show minimal dark badge screen
-        tft.fillScreen(ST77XX_BLACK);
-        tft.setTextColor(0x07FF, ST77XX_BLACK);
-        tft.setTextSize(2);
-        int tx = (SCREEN_WIDTH - 9 * 12) / 2;
-        tft.setCursor(tx, 130 + 20);
-        tft.print("LUNA BADGE");
-        tft.setTextSize(1);
-        tft.setCursor(20, 165 + 20);
-        tft.print("Press power to wake");
+      if (isBadgeMode) {
+#ifdef TFT_BLK
+        uint8_t targetDuty = (oledBrightness == 1) ? 90 : ((oledBrightness == 3) ? 255 : 230);
+        analogWrite(TFT_BLK, targetDuty);
+#endif
+        if (imgTransfer.hasWallpaper()) {
+          imgTransfer.drawWallpaper();
+        } else {
+          // No wallpaper set — show minimal dark badge screen
+          tft.fillScreen(ST77XX_BLACK);
+          tft.setTextColor(0x07FF, ST77XX_BLACK);
+          tft.setTextSize(2);
+          int tx = (SCREEN_WIDTH - 9 * 12) / 2;
+          tft.setCursor(tx, 130 + 20);
+          tft.print("LUNA BADGE");
+          tft.setTextSize(1);
+          tft.setCursor(20, 165 + 20);
+          tft.print("Press power to exit");
+        }
       }
     }
 

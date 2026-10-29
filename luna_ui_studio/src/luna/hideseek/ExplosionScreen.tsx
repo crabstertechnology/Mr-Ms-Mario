@@ -10,11 +10,10 @@ export default function ExplosionScreen({ onRetry, onSetup }: ExplosionScreenPro
   return (
     <div className="relative w-full h-full overflow-hidden select-none bg-[#1A0520] flex flex-col justify-between items-center py-5 px-3">
       {/* Cartoon Explosion Flash Backdrop */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'radial-gradient(circle at 50% 45%, rgba(239,68,68,0.4) 0%, rgba(147,51,234,0.3) 50%, rgba(20,5,30,0.95) 100%)',
-        }}
+      <img
+        src="/hide_seek/exploded_bg.png"
+        alt="Explosion Detonation"
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
       />
 
       {/* Floating Sparkles & Dust Puffs */}

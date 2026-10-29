@@ -1,8 +1,9 @@
-#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\audio.h"
+#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\audio.h"
 #ifndef AUDIO_H
 #define AUDIO_H
 
 #include <Arduino.h>
+#include <esp32-hal-ledc.h>
 #include "config.h"
 
 struct Note {
@@ -30,6 +31,7 @@ private:
     isPlaying = false;
     inGap = false;
     noTone(buzzerPin);
+    ledcWrite(buzzerPin, 0);
     digitalWrite(buzzerPin, LOW);
   }
 
@@ -81,6 +83,7 @@ public:
     if (now >= currentNoteEndTime) {
       if (!inGap) {
         noTone(buzzerPin);
+        ledcWrite(buzzerPin, 0);
         digitalWrite(buzzerPin, LOW);
         currentNoteEndTime = now + interNoteGapDuration;
         inGap = true;
@@ -148,32 +151,163 @@ public:
         break;
 
       case SOUND_STARTUP: {
+        // Legacy startup — same as boot chime for backwards compatibility
         auto eq = [this, speedPercent](uint16_t freq, uint16_t dur) {
           enqueueNote(freq, (dur * 100) / speedPercent);
         };
-        eq(659, 50); eq(0, 10);
-        eq(659, 50); eq(0, 10);
-        eq(659, 50); eq(0, 30);
-        eq(523, 50); eq(0, 10);
-        eq(659, 50); eq(0, 30);
-        eq(784, 50); eq(0, 50);
-        eq(392, 50); eq(0, 50);
-        eq(523, 50); eq(0, 10);
-        eq(392, 50); eq(0, 30);
-        eq(330, 50); eq(0, 10);
-        eq(440, 50); eq(0, 10);
-        eq(494, 50); eq(0, 10);
-        eq(466, 50); eq(0, 10);
-        eq(440, 50); eq(0, 30);
-        eq(392, 50); eq(0, 20);
-        eq(659, 50); eq(0, 10);
-        eq(784, 50); eq(0, 10);
-        eq(880, 50); eq(0, 10);
-        eq(698, 50); eq(0, 10);
-        eq(784, 50); eq(0, 10);
-        eq(659, 50); eq(0, 10);
-        eq(523, 50); eq(0, 10);
-        eq(494, 50); eq(0, 50);
+        eq(523, 80); eq(0, 20);
+        eq(659, 80); eq(0, 20);
+        eq(784, 80); eq(0, 20);
+        eq(1047, 200);
+        break;
+      }
+
+      case SOUND_BOOT_CHIME: {
+        // Clean, cinematic power-on chime — soft ascending tri-tone with a sparkle
+        auto eq = [this, speedPercent](uint16_t freq, uint16_t dur) {
+          enqueueNote(freq, (dur * 100) / speedPercent);
+        };
+        // Low warm pad — two soft base tones
+        eq(330, 60); eq(0, 15);
+        eq(415, 60); eq(0, 15);
+        // Mid rise — smooth step up
+        eq(523, 70); eq(0, 15);
+        eq(622, 70); eq(0, 20);
+        // High sparkle — bright finishing arpeggio
+        eq(784, 55); eq(0, 10);
+        eq(988, 55); eq(0, 10);
+        eq(1175, 160);           // Long sustain on top note
+        eq(0, 30);
+        eq(988, 90);             // Gentle decay echo
+        break;
+      }
+
+      case SOUND_ANIM_IDLE: {
+        // 0: Luna Idle — cheerful, peaceful robot presence chime (C6 -> E6 -> G6 -> C7 sparkle)
+        enqueueNote(1047, 40); enqueueNote(0, 8);
+        enqueueNote(1319, 40); enqueueNote(0, 8);
+        enqueueNote(1568, 50); enqueueNote(0, 10);
+        enqueueNote(2093, 80);
+        break;
+      }
+
+      case SOUND_ANIM_ANGRY: {
+        // 1: Angry Face — fast dissonant robot growl buzz
+        enqueueNote(880, 30);
+        enqueueNote(831, 30);
+        enqueueNote(784, 35);
+        enqueueNote(698, 40);
+        enqueueNote(880, 30);
+        enqueueNote(659, 70);
+        break;
+      }
+
+      case SOUND_ANIM_HUNGRY_MENU: {
+        // 2: Hungry Menu — bright alert chirp
+        enqueueNote(1047, 45); enqueueNote(0, 10);
+        enqueueNote(1319, 45); enqueueNote(0, 10);
+        enqueueNote(1760, 80);
+        break;
+      }
+
+      case SOUND_ANIM_GETTING_HUNGRY: {
+        // 3: Getting Hungry — whining tummy descent
+        enqueueNote(1319, 35); enqueueNote(0, 8);
+        enqueueNote(1175, 35); enqueueNote(0, 8);
+        enqueueNote(988, 45);  enqueueNote(0, 8);
+        enqueueNote(880, 70);
+        break;
+      }
+
+      case SOUND_ANIM_EAT_FISH: {
+        // 4: Eat Fish — happy staccato munching chirps
+        enqueueNote(1319, 35); enqueueNote(0, 10);
+        enqueueNote(1568, 35); enqueueNote(0, 10);
+        enqueueNote(1760, 40); enqueueNote(0, 10);
+        enqueueNote(2093, 80);
+        break;
+      }
+
+      case SOUND_ANIM_DRINK_MILK: {
+        // 5: Drink Milk — sweet smooth sipping glide
+        enqueueNote(1047, 35); enqueueNote(0, 8);
+        enqueueNote(1319, 35); enqueueNote(0, 8);
+        enqueueNote(1568, 40); enqueueNote(0, 8);
+        enqueueNote(1976, 50); enqueueNote(0, 8);
+        enqueueNote(2349, 90);
+        break;
+      }
+
+      case SOUND_ANIM_EAT_SALAD: {
+        // 6: Eat Salad — crisp crunch crunch ascending
+        enqueueNote(1568, 35); enqueueNote(0, 10);
+        enqueueNote(1976, 40); enqueueNote(0, 10);
+        enqueueNote(2349, 80);
+        break;
+      }
+
+      case SOUND_ANIM_GETTING_SICK: {
+        // 7: Getting Sick — dramatic uneasy warbling descent
+        enqueueNote(1760, 45); enqueueNote(0, 8);
+        enqueueNote(1568, 45); enqueueNote(0, 8);
+        enqueueNote(1397, 50); enqueueNote(0, 8);
+        enqueueNote(1175, 50); enqueueNote(0, 8);
+        enqueueNote(988, 70);  enqueueNote(0, 10);
+        enqueueNote(880, 100);
+        break;
+      }
+
+      case SOUND_ANIM_SICK: {
+        // 8: Luna Sick — pitiful sigh in audible resonance range
+        enqueueNote(1047, 50); enqueueNote(0, 15);
+        enqueueNote(988, 60);  enqueueNote(0, 15);
+        enqueueNote(880, 110);
+        break;
+      }
+
+      case SOUND_ANIM_RECOVERED: {
+        // 9: Recovered — triumphant revival fanfare
+        enqueueNote(880, 40);  enqueueNote(0, 8);
+        enqueueNote(1047, 40); enqueueNote(0, 8);
+        enqueueNote(1319, 40); enqueueNote(0, 8);
+        enqueueNote(1760, 50); enqueueNote(0, 8);
+        enqueueNote(2093, 60); enqueueNote(0, 10);
+        enqueueNote(2637, 120);
+        break;
+      }
+
+      case SOUND_ANIM_SLEEP: {
+        // 10: Going to Sleep — gentle descending lullaby
+        enqueueNote(1568, 50); enqueueNote(0, 12);
+        enqueueNote(1319, 50); enqueueNote(0, 12);
+        enqueueNote(1047, 60); enqueueNote(0, 12);
+        enqueueNote(880, 100);
+        break;
+      }
+
+      case SOUND_ANIM_SLEEPING: {
+        // 11: Sleeping — gentle rhythmic slumber breath blip
+        enqueueNote(988, 40); enqueueNote(0, 15);
+        enqueueNote(1175, 60);
+        break;
+      }
+
+      case SOUND_ANIM_WAKEUP: {
+        // 12: Waking Up — bright ascending wake chime
+        enqueueNote(1047, 40); enqueueNote(0, 8);
+        enqueueNote(1319, 40); enqueueNote(0, 8);
+        enqueueNote(1568, 40); enqueueNote(0, 8);
+        enqueueNote(2093, 60); enqueueNote(0, 10);
+        enqueueNote(2637, 100);
+        break;
+      }
+
+      case SOUND_ANIM_THINKING: {
+        // 13: Luna Thinking — sparkling inspirational "Aha!" arpeggio
+        enqueueNote(1319, 40); enqueueNote(0, 8);
+        enqueueNote(1568, 40); enqueueNote(0, 8);
+        enqueueNote(1976, 45); enqueueNote(0, 10);
+        enqueueNote(2349, 85);
         break;
       }
 
@@ -223,6 +357,30 @@ public:
         enqueueNote(0, 50);
         enqueueNote(2349, 200);
         break;
+
+      case SOUND_EXPLOSION: {
+        // Multi-frequency descending explosion roar
+        enqueueNote(1800, 25);
+        enqueueNote(1100, 30);
+        enqueueNote(650, 45);
+        enqueueNote(380, 60);
+        enqueueNote(220, 80);
+        enqueueNote(140, 100);
+        enqueueNote(90, 130);
+        enqueueNote(60, 180);
+        break;
+      }
+
+      case SOUND_DEFUSED: {
+        // Triumphant cyber disarm fanfare
+        enqueueNote(523, 50);  enqueueNote(0, 10);
+        enqueueNote(659, 50);  enqueueNote(0, 10);
+        enqueueNote(784, 50);  enqueueNote(0, 10);
+        enqueueNote(1047, 60); enqueueNote(0, 15);
+        enqueueNote(1319, 70); enqueueNote(0, 15);
+        enqueueNote(2093, 200);
+        break;
+      }
         
       default:
         break;
@@ -238,6 +396,7 @@ public:
     if (queueCount == 0) {
       isPlaying = false;
       noTone(buzzerPin);
+      ledcWrite(buzzerPin, 0);
       digitalWrite(buzzerPin, LOW);
       return;
     }
@@ -250,10 +409,36 @@ public:
       tone(buzzerPin, note.frequency, note.duration);
     } else {
       noTone(buzzerPin);
+      ledcWrite(buzzerPin, 0);
+      digitalWrite(buzzerPin, LOW);
     }
     
     currentNoteEndTime = millis() + note.duration;
     inGap = false;
+  }
+
+  // Non-blocking volume-modulated beep (duty cycle modulation via hardware LEDC)
+  // volumePercent: 1 to 100%
+  void playVolumeBeep(uint16_t freq, uint16_t durationMs, uint8_t volumePercent) {
+    if (silentMode) return;
+    clearQueue();
+    if (freq == 0 || volumePercent == 0) {
+      stopBuzzer();
+      return;
+    }
+    uint32_t duty = (uint32_t)map(constrain((int)volumePercent, 1, 100), 1, 100, 3, 128);
+    ledcAttach(buzzerPin, freq, 8);
+    ledcWrite(buzzerPin, duty);
+    currentNoteEndTime = millis() + durationMs;
+    isPlaying = true;
+    inGap = false;
+  }
+
+  void stopBuzzer() {
+    clearQueue();
+    noTone(buzzerPin);
+    ledcWrite(buzzerPin, 0);
+    digitalWrite(buzzerPin, LOW);
   }
 
   void setVolume(int vol) {}

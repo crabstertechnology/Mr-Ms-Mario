@@ -1,4 +1,4 @@
-#line 1 "W:\\Mr.mario\\1.69 Luna Firmware\\config.h"
+#line 1 "D:\\FounderOS\\Mr-Ms-Mario\\1.69 Luna Firmware\\config.h"
 #ifndef CONFIG_H
 #define CONFIG_H
 
@@ -23,8 +23,8 @@
 #define BATTERY_PIN 1       // GPIO 1 for battery monitoring
 
 // Battery monitoring voltage divider calibration
-// Waveshare schematic indicates: VBAT = VADC * 3 (so multiplier is 3.0f)
-#define BATTERY_CALIBRATION_MULTIPLIER 3.0f
+// Calibrated to 3.10f to compensate for ADC input impedance & ensure 4.20V full charge reads 100%
+#define BATTERY_CALIBRATION_MULTIPLIER 3.10f
 
 // ST7789 1.69" TFT Display Settings (Resolution: 240x280)
 #define SCREEN_WIDTH 240
@@ -74,11 +74,29 @@ enum SoundEffect {
   SOUND_POWERDOWN,
   SOUND_GAMEOVER,
   SOUND_CHIRP,
-  SOUND_STARTUP,
+  SOUND_STARTUP,      // Legacy (kept for compatibility)
   SOUND_CASTLE,
   SOUND_UNDERWORLD,
   SOUND_THEMECHANGE,
-  SOUND_ALERT_BEEP
+  SOUND_ALERT_BEEP,
+  SOUND_BOOT_CHIME,   // Clean cinematic power-on chime
+  // Per-animation transition sounds (non-annoying, subtle)
+  SOUND_ANIM_IDLE,        // 0: Luna Idle
+  SOUND_ANIM_ANGRY,       // 1: Angry Face
+  SOUND_ANIM_HUNGRY_MENU, // 2: Hungry Menu
+  SOUND_ANIM_GETTING_HUNGRY, // 3: Getting Hungry
+  SOUND_ANIM_EAT_FISH,    // 4: Eat Fish
+  SOUND_ANIM_DRINK_MILK,  // 5: Drink Milk
+  SOUND_ANIM_EAT_SALAD,   // 6: Eat Salad
+  SOUND_ANIM_GETTING_SICK,// 7: Getting Sick
+  SOUND_ANIM_SICK,        // 8: Luna Sick
+  SOUND_ANIM_RECOVERED,   // 9: Recovered
+  SOUND_ANIM_SLEEP,       // 10: Going to Sleep
+  SOUND_ANIM_SLEEPING,    // 11: Sleeping
+  SOUND_ANIM_WAKEUP,      // 12: Waking Up
+  SOUND_ANIM_THINKING,    // 13: Luna Thinking
+  SOUND_EXPLOSION,        // Dramatic detonation roar/rumble
+  SOUND_DEFUSED           // Cyber bomb disarm fanfare
 };
 
 // Smartwatch UI Screen Modes
@@ -91,9 +109,10 @@ enum SmartwatchScreen {
   SCREEN_MAPS,
   SCREEN_CARD,   // Digital Business Card / QR Code screen
   SCREEN_SETTINGS,
-  SCREEN_LEVEL,  // Accelerometer & Gyroscope Level Analyzer
   SCREEN_POMODORO,// Pomodoro Focus Timer
   SCREEN_WALLPAPER, // Custom JPEG wallpaper (sent from phone)
+  SCREEN_MENU,     // App Launcher Grid Menu (6 Apps)
+  SCREEN_QUEST,    // Luna Activity & Quest Library (Shake triggered & casino roulette)
   SCREEN_MAX
 };
 #endif // CONFIG_H
