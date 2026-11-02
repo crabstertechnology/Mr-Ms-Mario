@@ -1,140 +1,109 @@
-# 🌙 Mr.&Ms Luna: Interactive Desktop Companion Robots
-
-Welcome to the official repository for **Mr. Luna** and **Ms. Luna**, a pair of smart, expressive, and connected desktop companion robots designed to bridge communication, display notifications, and bring dynamic animations to your workspace.
+# 1.69" ESP32-S3 Modular Touch Device: Hardware Specifications
 
 ---
 
-## 🚀 System Architecture & Interaction Flow
+## 1. Modular Detach Architecture
 
-Mr.&Ms Luna utilizes a hybrid communication network comprising **Bluetooth Low Energy (BLE)** for local phone-to-robot communication and **Google Firebase Realtime Database** for internet-wide matchmaking and remote synchronization.
+The hardware platform utilizes a **Modular Detach Design** dividing the system into a **Docked Desktop Base** and a **Detachable Portable Core**:
 
-### 🌐 End-to-End Remote Gesture Playback Flow
-
-The diagram below details the entire data journey when a user interacts with their local robot (Sender) and triggers a synced expression on their partner's robot (Receiver).
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Sender as Sender User
-    participant SR as Sender Robot (V1/V2)
-    participant SA as Sender App (Flutter)
-    participant FB as Firebase Realtime DB
-    participant RA as Receiver App (Flutter)
-    participant RR as Receiver Robot (V1/V2)
-
-    Sender->>SR: Tap Capacitive Touch Sensor
-    Note over SR: Detects TOUCH_TAP<br/>Looks up relTapExpr (e.g. 105 / ADORE)
-    SR->>SR: Play local expression (ADORE)
-    SR-->>SA: Send BLE Log "TOUCH_REL:TAP|105|2" (Expr|Sound)
-    Note over SA: onPrimaryTouchTriggered catches log<br/>Resolves label "ADORE" from animMapping
-    SA-->>FB: Write trigger {eventType: "TAP", exprLabel: "ADORE", soundId: 2}
-    Note over FB: Live Stream trigger updates
-    FB-->>RA: Push remoteTrigger event
-    Note over RA: Resolves "ADORE" to expression ID 105<br/>Calls handleRemoteCloudTrigger
-    RA-->>RR: Send BLE Command "NOTIF_EXPR:Sender - TAP Action|105"
-    Note over RR: setExpression(105) decodes index >= 100<br/>Loads ADORE GIF (index 5) from ALL_GIFS_TABLE
-    RR->>RR: Play ADORE GIF & sound (Coin)
+```
+ ┌─────────────────────────────────────────────────────────────┐
+ │                    ATTACHED / DOCKED STATE                  │
+ │                     Stationary Desk Base                    │
+ │  • Continuously powered via multi-pin pogo dock contacts    │
+ │  • Internal LiPo battery maintained under constant charge   │
+ │  • Upright desktop viewing angle                            │
+ └──────────────────────────────┬──────────────────────────────┘
+                                │
+                        [ DETACH ACTION ]
+                (Quick-release magnetic / pogo dock)
+                                │
+                                ▼
+ ┌─────────────────────────────────────────────────────────────┐
+ │                    DETACHED / PORTABLE STATE                │
+ │               Standalone Wearable / Pocket Unit             │
+ │  • Powered autonomously by onboard LiPo battery             │
+ │  • Power-hold latch (GPIO 41) prevents accidental shutdown  │
+ │  • Calibrated ADC voltage divider (GPIO 1) battery sensing  │
+ │  • 10 kHz PWM backlight dimming (GPIO 15) for power saving  │
+ │  • Full capacitive touch, 6-axis IMU, and RTC operational   │
+ └─────────────────────────────────────────────────────────────┘
 ```
 
----
+### 1.1 Attached Mode (Docked Desktop Base)
+* **Interface**: High-durability spring-loaded gold pogo pins and alignment magnets.
+* **Power Delivery**: Directly supplied via external USB-C (5V VBUS converted to system 3.3V rail).
+* **Battery Charging**: Constant-current / constant-voltage charging path charges the internal LiPo cell while powering the main board.
 
-## 🌟 Core Features & Functional Logic
-
-### 1. Google Firebase Authentication & Live Matchmaking
-*   **Startup Login Screen:** Secure login/registration screen on app startup utilizing Google Firebase Auth.
-*   **Live User Discovery:** Real-time online user directory allowing users to search by email, send/accept/decline invites, and pair their desktop companions.
-
-### 2. Snapchat-Style Daily Streaks (`🔥`)
-*   **Streak Tracker:** Interacting with your paired companion daily increments your streak.
-*   **Streak Reset Protection:** The streak value is synchronized directly in the Firebase Database under the `friends` nodes and renders dynamically with a `🔥` badge in the dashboard.
-
-### 3. Master GIF Library (63 Custom Animations)
-*   **Bitmap Arrays:** Inside `mochi_bitmaps.h`, 63 high-fidelity bitmap sequences are stored in `PROGMEM` (`ALL_GIFS_TABLE`).
-*   **App Seeding:** The companion Flutter app loads this list alphabetically via `DatabaseService.animMapping` keys.
-*   **Categories & Sounds:** Custom animations (e.g., `"adore"`, `"furious"`, `"giggle"`) are mapped to default sound indexes (0 to 10).
-
-### 4. Custom Gesture Touch Mapping
-*   **Capacitive Gestures:** Supports **Single Tap**, **Double Tap**, **Triple Tap**, and **Long Press**.
-*   **Offline/Standalone Settings:** If not paired, the app configures local options (e.g. show clock, cycle animations).
-*   **Couple/Friends Settings:** When paired, the app configures relationship tap sequences that sync expression IDs to the local robot via BLE.
-
-### 5. VoIP Intercom & Local Library Audio Streaming
-*   **Voice Call (VoIP/BLE):** Establish standard VoIP calls directly between the phone and the robot over local network socket connection.
-*   **Local Library Popup:** Search, scan, and list MP3 and WAV files on your phone via a clean, glassmorphic popup dialog. Easily stream selected tracks directly to the robot over BLE.
-*   **Music Controls:** Interactive volume slider, bass adjustment slider, playback position seek bar, and play/pause/stop buttons live-update the streaming state.
-*   **Hardware Loopback Test:** Quickly diagnose audio capture and playback latency by running an echo loopback test on the robot.
+### 1.2 Detached Mode (Portable / Wearable Unit)
+* **Form Factor**: Self-contained, ultra-thin touch module (usable as a wrist wearable or portable pocket device).
+* **Power Source**: Internal 3.7V single-cell Lithium-Polymer (LiPo) battery.
+* **Power Latch (`PWR_HOLD`)**: GPIO 41 is driven continuously `HIGH` by the microcontroller to latch the power supply circuit and maintain active state.
+* **Battery Monitoring**: ADC1_CH0 (GPIO 1) reads battery level across a precision resistor divider with a calibrated multiplier of $3.10\times$.
+* **Power Optimization**: High-frequency 10 kHz PWM backlight control (GPIO 15) provides fine-grained display brightness dimming to extend battery runtime.
 
 ---
 
-## 🛠️ Hardware & Firmware Architectures
+## 2. Hardware Specifications
 
-| Feature | Version 1 (`luna_firmware/`) | Version 2 (`luna_firmware_v2/`) |
+| Component | Technical Specification | Details / Remarks |
 | :--- | :--- | :--- |
-| **Microcontroller** | ESP32-C3 (SuperMini) | ESP32-S3 (LOLIN S3 Mini) |
-| **Display Support** | SSD1306 OLED (128x64) | Premium Smartwatch UI (SH1106/SSD1306) |
-| **UI Screens** | Companion Eyes Face, Clock, Text Scroll | Face, Calendar Grid, Google Maps, Notifications, Clock Styles, settings |
-| **Buzzer Melodies** | Non-blocking Piezo Synthesizer | Non-blocking Piezo Synthesizer |
-| **Pairing Intercept** | Prevents clock screen switch on active pairing | Prevents clock screen switch on active pairing |
-| **VoIP / Audio Stream** | Local Audio playback support | PCM audio buffer streaming, volume & bass controls |
+| **Microcontroller (MCU)** | **ESP32-S3** (Xtensa® 32-bit dual-core LX7) | Clock frequency up to **240 MHz** |
+| **System Memory** | **16 MB** Quad SPI Flash, **8 MB** Octal (OPI) PSRAM | High-bandwidth PSRAM supports off-screen framebuffers |
+| **Wireless Connectivity** | 2.4 GHz Wi-Fi (802.11 b/g/n) & Bluetooth 5.0 (BLE) | Onboard ceramic antenna |
+| **Display Panel** | **1.69" IPS TFT LCD** | Resolution: **$240 \times 280\text{ pixels}$**, 16-bit RGB565 color depth |
+| **Display Driver IC** | Sitronix **ST7789** | High-speed SPI interface up to **40 MHz** (hardware offset: $Y = 20\text{ px}$) |
+| **Backlight Control** | High-efficiency LED Driver | Driven via **GPIO 15** with **10 kHz PWM** dimming |
+| **Capacitive Touch IC** | Hynitron **CST816T** Single-point Capacitive Touch | I2C address: `0x15` @ 400 kHz, interrupt-driven (`FALLING` edge) |
+| **Real-Time Clock (RTC)**| NXP **PCF85063A** Precision RTC | I2C address: `0x51` @ 400 kHz, ultra-low power timekeeping |
+| **Inertial Sensor (IMU)**| QST **QMI8658** 6-Axis Motion Sensor | I2C address: `0x6B` (fallback `0x6A`), 3-axis accelerometer + 3-axis gyroscope |
+| **Audio / Haptics** | Passive Piezoelectric Buzzer | Driven via **GPIO 42** using square-wave PWM frequencies |
+| **Battery Monitoring** | Internal Resistor Voltage Divider to ADC | Connected to **GPIO 1** (ADC1_CH0), calibrated multiplier $3.10\times$ |
+| **Power Hold Latch** | Active Power Retention Circuit | **GPIO 41** driven `HIGH` to maintain device power |
+| **Dock Interface** | Surface Pogo-Pin Contacts | $V_{BUS}$, $3.3\text{V}$, `GND`, and battery charge rails |
+| **Operating Voltage** | 3.3V Logic Level / 3.7V–4.2V LiPo Battery Input | Dual-path power routing (USB / Battery) |
 
 ---
 
-## 📂 Project Organization
+## 3. Complete Pinout & GPIO Assignment
 
-Unwanted test files and duplicates have been cleaned up to maintain a clean project root:
-
-```
-├── luna_firmware/         # C++ Arduino firmware for ESP32-C3 (V1)
-│   ├── luna_firmware.ino  # Main hardware routine (BLE, touch, buzzer)
-│   ├── expressions.h      # Procedural & master GIF rendering face classes
-│   └── mochi_bitmaps.h    # 63 custom PROGMEM bitmap tables
-│
-├── luna_firmware_v2/      # Smartwatch UI C++ Arduino firmware for ESP32-S3 (V2)
-│   ├── luna_firmware_v2.ino
-│   ├── expressions.h      # Includes notification, calendar, and map drawers
-│   └── mochi_bitmaps.h
-│
-├── mobile_flutter/        # Flutter Cross-Platform App
-│   ├── lib/screens/       # login_startup, main_dashboard, matchmaking screens
-│   ├── lib/services/      # firebase_service, bluetooth_service, database_service
-│   └── pubspec.yaml
-│
-├── analyze_gifs.py        # Extracts timing metadata from raw GIF assets
-├── convert_mochi_gifs.py  # Converts raw GIF animations into C++ PROGMEM byte arrays
-├── flash_server.py        # Web-based local flashing server (serves flash_dashboard)
-├── flash_tool.py          # Command line serial programmer utility
-└── README.md              # This documentation!
-```
+| Peripheral | Signal Label | ESP32-S3 GPIO | Bus / Protocol | Functional Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **Display (ST7789)** | `MOSI` | **GPIO 7** | SPI Master Out | Pixel data stream via SPI DMA |
+| | `SCK` | **GPIO 6** | SPI Clock | 40 MHz SPI serial clock line |
+| | `CS` | **GPIO 5** | SPI Chip Select | Active LOW panel select |
+| | `DC` | **GPIO 4** | Data / Command | Command: `LOW`, Data: `HIGH` |
+| | `RST` | **GPIO 8** | Panel Reset | Active LOW hardware reset |
+| | `BLK` | **GPIO 15** | Backlight Control | 10 kHz PWM backlight brightness control |
+| **Touch (CST816T)** | `SDA` | **GPIO 11** | I2C Data | Shared I2C data line (400 kHz) |
+| | `SCL` | **GPIO 10** | I2C Clock | Shared I2C clock line (400 kHz) |
+| | `INT` | **GPIO 14** | Touch Interrupt | Falling-edge hardware touch detection |
+| | `RST` | **GPIO 13** | Touch Reset | Hardware reset for touch controller |
+| **RTC (PCF85063A)** | `SDA` / `SCL` | **GPIO 11** / **GPIO 10** | I2C (`0x51`) | Shared I2C bus for time/date registers |
+| **IMU (QMI8658)** | `SDA` / `SCL` | **GPIO 11** / **GPIO 10** | I2C (`0x6B`) | Shared I2C bus for 6-axis acceleration/gyro |
+| **Audio Buzzer** | `BUZZER` | **GPIO 42** | PWM / Tone | Square-wave audio and haptic chime output |
+| **Battery Sensing** | `BAT_ADC` | **GPIO 1** | ADC1_CH0 | Analog voltage reading for LiPo charge level |
+| **Power Management**| `PWR_HOLD` | **GPIO 41** | Digital Output | Must be driven `HIGH` to maintain power |
 
 ---
 
-## ⚡ Quick-Start Guide (Compilation & Flashing)
+## 4. Subsystem Electrical & Interface Details
 
-Ensure you have the `arduino-cli` utility installed and configured.
+### 4.1 Display & Backlight Subsystem
+- **Bus**: 4-line Serial Peripheral Interface (SPI).
+- **Pixel Clock**: Configured for 40 MHz (operational up to 80 MHz).
+- **Physical Resolution**: $240 \times 280\text{ pixels}$ (active display area offset vertically by 20 pixels relative to the controller RAM window).
+- **Backlight Driver**: Controlled via GPIO 15 using a 10 kHz PWM carrier frequency to prevent audible coil whine and display flicker.
 
-### 1. Flash Version 1 (ESP32-C3)
-Compile and upload with the custom partition scheme `huge_app` to accommodate the 63 high-fidelity bitmap assets:
+### 4.2 Capacitive Touch Subsystem
+- **Controller**: CST816T single-point capacitive touch processor.
+- **Interface**: I2C slave at address `0x15` on GPIO 11 (SDA) and GPIO 10 (SCL).
+- **Interrupt Line**: Connected to GPIO 14, triggering on `FALLING` edge to instantly wake the CPU from sleep or trigger immediate event polling.
 
-```powershell
-# Compile sketch
-arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc luna_firmware
+### 4.3 Motion & Real-Time Clock Subsystems
+- **RTC (PCF85063A)**: Connected to the primary I2C bus at address `0x51`, providing year, month, day, weekday, hours, minutes, and seconds.
+- **IMU (QMI8658)**: 6-axis motion tracking unit on the primary I2C bus at address `0x6B`, providing 3-axis linear acceleration and 3-axis rotational angular velocity.
 
-# Upload/Flash to COM port
-arduino-cli upload -p COM6 --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app,CDCOnBoot=cdc luna_firmware
-```
-
-### 3. Flash Version 3 (Waveshare 1.69" ESP32-S3 Touch LCD)
-For the full documentation covering the 1.69-inch hardware specifications, UI component system, 9 screen modes, and gesture navigation, refer to the dedicated firmware guide:
-👉 **[Waveshare 1.69" Luna Smartwatch Firmware Guide](file:///w:/Mr.mario/1.69%20Luna%20Firmware/README.md)**
-
-```powershell
-# Compile sketch
-arduino-cli compile --fqbn esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=custom,PSRAM=opi,CDCOnBoot=cdc "1.69 Luna Firmware.ino"
-
-# Upload to Waveshare 1.69" device
-arduino-cli upload -p COM3 --fqbn esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=custom,PSRAM=opi,CDCOnBoot=cdc "1.69 Luna Firmware.ino"
-```
-
----
-
-*Enjoy interacting with Mr.&Ms Luna! 🌙✨*
+### 4.4 Power Management & Detach Circuitry
+- **Power-Hold Mechanism**: When detached from the dock, the device power latch requires GPIO 41 to remain driven `HIGH`. If driven `LOW`, the power rail cuts off to provide true zero-quiescent off-state.
+- **Battery Divider**: An internal resistive voltage divider scales the battery voltage (up to 4.20V) down into the ESP32-S3 ADC1 range ($0\text{V} - 3.1\text{V}$), read via GPIO 1 and scaled by a $3.10\times$ calibration factor.
