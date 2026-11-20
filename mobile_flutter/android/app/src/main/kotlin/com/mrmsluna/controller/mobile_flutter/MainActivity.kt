@@ -135,6 +135,37 @@ class MainActivity: FlutterActivity() {
                         result.error("ERROR", e.message, null)
                     }
                 }
+                "isAccessibilityServiceEnabled" -> {
+                    result.success(isAccessibilityServiceEnabled())
+                }
+                "openAccessibilitySettings" -> {
+                    try {
+                        openAccessibilitySettings()
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("ERROR", e.message, null)
+                    }
+                }
+                "updateDetachConfig" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: true
+                    val domains = (call.argument<List<*>>("domains") ?: listOf<Any>("youtube.com", "instagram.com")).map { it.toString() }
+                    val apps = (call.argument<List<*>>("apps") ?: listOf<Any>("com.instagram.android", "com.google.android.youtube")).map { it.toString() }
+                    val message = call.argument<String>("message") ?: "Get back to what matters."
+                    val autoHome = call.argument<Int>("autoHomeSeconds") ?: 5
+                    SynapsAccessibilityService.updateConfig(this, enabled, domains, apps, message, autoHome)
+                    result.success(true)
+                }
+                "testDetachOverlay" -> {
+                    val source = call.argument<String>("source") ?: "YouTube in Chrome (Test)"
+                    val message = call.argument<String>("message") ?: "Get back to what matters."
+                    val autoHome = call.argument<Int>("autoHomeSeconds") ?: 5
+                    DetachOverlayManager.show(this, source, message, autoHome)
+                    result.success(true)
+                }
+                "dismissDetachOverlay" -> {
+                    DetachOverlayManager.dismiss()
+                    result.success(true)
+                }
                 "getForegroundApp" -> {
                     result.success(getForegroundApp())
                 }
@@ -655,6 +686,33 @@ class MainActivity: FlutterActivity() {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(intent)
         }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        if (SynapsAccessibilityService.instance != null) return true
+        return try {
+            val expectedComponentName = ComponentName(this, SynapsAccessibilityService::class.java).flattenToString()
+            val enabledServices = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+            val colonSplitter = android.text.TextUtils.SimpleStringSplitter(':')
+            colonSplitter.setString(enabledServices)
+            while (colonSplitter.hasNext()) {
+                val componentName = colonSplitter.next()
+                if (componentName.equals(expectedComponentName, ignoreCase = true) ||
+                    componentName.contains("SynapsAccessibilityService", ignoreCase = true)) {
+                    return true
+                }
+            }
+            false
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
     }
 
     private fun getForegroundApp(): String? {

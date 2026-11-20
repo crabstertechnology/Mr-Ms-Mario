@@ -62,6 +62,20 @@ class DatabaseService with ChangeNotifier {
     'com.instagram.android': 5,
     'com.google.android.youtube': 5,
   };
+  bool _detachEnabled = true;
+  List<String> _detachBlockedDomains = [
+    'youtube.com',
+    'm.youtube.com',
+    'youtu.be',
+    'instagram.com',
+    'm.instagram.com',
+  ];
+  List<String> _detachBlockedApps = [
+    'com.instagram.android',
+    'com.google.android.youtube',
+  ];
+  String _detachMessage = "Get back to what matters.";
+  int _detachAutoHomeSeconds = 5;
 
   List<GifModel> get gifs => _gifs;
   List<RobotProfile> get robots => _robots;
@@ -72,6 +86,11 @@ class DatabaseService with ChangeNotifier {
   List<String> get allowedNotificationApps => _allowedNotificationApps;
   bool get focusGuardEnabled => _focusGuardEnabled;
   Map<String, int> get focusAppLimits => _focusAppLimits;
+  bool get detachEnabled => _detachEnabled;
+  List<String> get detachBlockedDomains => _detachBlockedDomains;
+  List<String> get detachBlockedApps => _detachBlockedApps;
+  String get detachMessage => _detachMessage;
+  int get detachAutoHomeSeconds => _detachAutoHomeSeconds;
 
   RobotProfile? get primaryRobot {
     if (_robots.isEmpty) return null;
@@ -200,6 +219,30 @@ class DatabaseService with ChangeNotifier {
         print("Failed to decode focusAppLimits: $e");
       }
     }
+
+    _detachEnabled = _prefs!.getBool('detachEnabled') ?? true;
+    _detachBlockedDomains = _prefs!.getStringList('detachBlockedDomains') ?? [
+      'youtube.com',
+      'm.youtube.com',
+      'youtu.be',
+      'instagram.com',
+      'm.instagram.com',
+    ];
+    _detachBlockedApps = _prefs!.getStringList('detachBlockedApps') ?? [
+      'com.instagram.android',
+      'com.google.android.youtube',
+    ];
+    _detachMessage = _prefs!.getString('detachMessage') ?? "Get back to what matters.";
+    _detachAutoHomeSeconds = _prefs!.getInt('detachAutoHomeSeconds') ?? 5;
+
+    // Sync DETACH habit enforcement to native service
+    PhoneNotificationService.updateDetachConfig(
+      enabled: _detachEnabled,
+      domains: _detachBlockedDomains,
+      apps: _detachBlockedApps,
+      message: _detachMessage,
+      autoHomeSeconds: _detachAutoHomeSeconds,
+    );
     notifyListeners();
   }
 
@@ -840,5 +883,85 @@ class DatabaseService with ChangeNotifier {
     final p = await _safePrefs;
     await p.setString('focusAppLimits', jsonEncode(_focusAppLimits));
     notifyListeners();
+  }
+
+  Future<void> updateDetachEnabled(bool val) async {
+    _detachEnabled = val;
+    final p = await _safePrefs;
+    await p.setBool('detachEnabled', val);
+    await syncDetachToNative();
+    notifyListeners();
+  }
+
+  Future<void> setDetachBlockedDomains(List<String> domains) async {
+    _detachBlockedDomains = List<String>.from(domains);
+    final p = await _safePrefs;
+    await p.setStringList('detachBlockedDomains', _detachBlockedDomains);
+    await syncDetachToNative();
+    notifyListeners();
+  }
+
+  Future<void> addDetachDomain(String domain) async {
+    final clean = domain.trim().toLowerCase();
+    if (clean.isNotEmpty && !_detachBlockedDomains.contains(clean)) {
+      _detachBlockedDomains.add(clean);
+      final p = await _safePrefs;
+      await p.setStringList('detachBlockedDomains', _detachBlockedDomains);
+      await syncDetachToNative();
+      notifyListeners();
+    }
+  }
+
+  Future<void> removeDetachDomain(String domain) async {
+    _detachBlockedDomains.remove(domain.trim().toLowerCase());
+    final p = await _safePrefs;
+    await p.setStringList('detachBlockedDomains', _detachBlockedDomains);
+    await syncDetachToNative();
+    notifyListeners();
+  }
+
+  Future<void> addDetachApp(String pkg) async {
+    final clean = pkg.trim().toLowerCase();
+    if (clean.isNotEmpty && !_detachBlockedApps.contains(clean)) {
+      _detachBlockedApps.add(clean);
+      final p = await _safePrefs;
+      await p.setStringList('detachBlockedApps', _detachBlockedApps);
+      await syncDetachToNative();
+      notifyListeners();
+    }
+  }
+
+  Future<void> removeDetachApp(String pkg) async {
+    _detachBlockedApps.remove(pkg.trim().toLowerCase());
+    final p = await _safePrefs;
+    await p.setStringList('detachBlockedApps', _detachBlockedApps);
+    await syncDetachToNative();
+    notifyListeners();
+  }
+
+  Future<void> updateDetachMessage(String msg) async {
+    _detachMessage = msg;
+    final p = await _safePrefs;
+    await p.setString('detachMessage', msg);
+    await syncDetachToNative();
+    notifyListeners();
+  }
+
+  Future<void> updateDetachAutoHomeSeconds(int seconds) async {
+    _detachAutoHomeSeconds = seconds;
+    final p = await _safePrefs;
+    await p.setInt('detachAutoHomeSeconds', seconds);
+    await syncDetachToNative();
+    notifyListeners();
+  }
+
+  Future<void> syncDetachToNative() async {
+    await PhoneNotificationService.updateDetachConfig(
+      enabled: _detachEnabled,
+      domains: _detachBlockedDomains,
+      apps: _detachBlockedApps,
+      message: _detachMessage,
+      autoHomeSeconds: _detachAutoHomeSeconds,
+    );
   }
 }

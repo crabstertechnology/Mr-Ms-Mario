@@ -204,6 +204,12 @@ class _MainDashboardState extends State<MainDashboard> {
         _isOverlayPermissionGranted = overlayGranted;
       });
     }
+    final accessibilityGranted = await PhoneNotificationService.isAccessibilityServiceEnabled();
+    if (mounted && _isAccessibilityGranted != accessibilityGranted) {
+      setState(() {
+        _isAccessibilityGranted = accessibilityGranted;
+      });
+    }
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -300,6 +306,7 @@ class _MainDashboardState extends State<MainDashboard> {
   bool _isPostNotificationsPermissionGranted = false;
   bool _isUsageAccessGranted = false;
   bool _isOverlayPermissionGranted = false;
+  bool _isAccessibilityGranted = false;
   final TextEditingController _appSearchController = TextEditingController();
   final TextEditingController _focusAppSearchController = TextEditingController();
   List<Map<String, String>> _installedApps = [];
@@ -7884,8 +7891,483 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
         ),
         const SizedBox(height: 24),
+        _buildDetachHabitEnforcerCard(db, ble),
+        const SizedBox(height: 24),
         _buildFocusGuardCard(db, ble),
       ],
+    );
+  }
+
+  Widget _buildDetachHabitEnforcerCard(DatabaseService db, BLEService ble) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionHeader("SYNAPS DETACH: Habit Enforcer", Icons.shield_outlined, Colors.deepOrange.shade700),
+        const SizedBox(height: 12),
+        GlassCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header & Master Switch
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              "DETACH",
+                              style: GoogleFonts.outfit(
+                                color: textColor,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: db.detachEnabled ? Colors.green.withOpacity(0.15) : Colors.grey.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                db.detachEnabled ? "ACTIVE" : "PAUSED",
+                                style: GoogleFonts.outfit(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: db.detachEnabled ? Colors.green.shade700 : Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.deepOrange.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                "⚡ FULL-SCREEN OVERLAY",
+                                style: GoogleFonts.outfit(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.deepOrange,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Detects YouTube & Instagram inside Chrome or browsers. Immediately covers screen with black interruption overlay.",
+                          style: GoogleFonts.outfit(
+                            color: textColor60,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: db.detachEnabled,
+                    activeColor: Colors.deepOrange,
+                    onChanged: (val) async {
+                      await db.updateDetachEnabled(val);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Permission Status Indicators
+              Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _isAccessibilityGranted ? Icons.check_circle : Icons.warning_amber_rounded,
+                        color: _isAccessibilityGranted ? Colors.green : Colors.amber.shade800,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _isAccessibilityGranted
+                              ? "Accessibility Service: ACTIVE (Browser URL Inspection)"
+                              : "Accessibility Service: REQUIRED (To detect Chrome URLs)",
+                          style: GoogleFonts.outfit(
+                            color: _isAccessibilityGranted ? Colors.green : Colors.amber.shade800,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (!_isAccessibilityGranted)
+                        TextButton(
+                          onPressed: () async {
+                            await PhoneNotificationService.openAccessibilitySettings();
+                          },
+                          child: Text(
+                            "ENABLE",
+                            style: GoogleFonts.outfit(
+                              color: Colors.deepOrange,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        _isOverlayPermissionGranted ? Icons.check_circle : Icons.warning_amber_rounded,
+                        color: _isOverlayPermissionGranted ? Colors.green : Colors.amber.shade800,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _isOverlayPermissionGranted
+                              ? "Display Overlay: GRANTED (Full-Screen Interruption)"
+                              : "Display Overlay: REQUIRED (To display black screen)",
+                          style: GoogleFonts.outfit(
+                            color: _isOverlayPermissionGranted ? Colors.green : Colors.amber.shade800,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (!_isOverlayPermissionGranted)
+                        TextButton(
+                          onPressed: () async {
+                            await PhoneNotificationService.openOverlaySettings();
+                          },
+                          child: Text(
+                            "ENABLE",
+                            style: GoogleFonts.outfit(
+                              color: Colors.deepOrange,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+              const Divider(color: Colors.white12, height: 24),
+
+              // Full-Screen Interruption Preview & Live Test
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.lock, color: Colors.deepOrange, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          "SYNAPS DETACH INTERRUPT",
+                          style: GoogleFonts.outfit(
+                            color: Colors.deepOrange,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "\"${db.detachMessage}\"",
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Access to youtube.com in Chrome is restricted.",
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        color: Colors.white70,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.deepOrange,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        "RETURN TO HOME SCREEN",
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Button to Test Full-Screen Overlay Live
+              ElevatedButton.icon(
+                onPressed: () async {
+                  HapticFeedback.heavyImpact();
+                  await PhoneNotificationService.testDetachOverlay(
+                    source: "YouTube in Chrome (Preview)",
+                    message: db.detachMessage,
+                    autoHomeSeconds: db.detachAutoHomeSeconds,
+                  );
+                },
+                icon: const Icon(Icons.play_circle_filled, size: 18),
+                label: Text(
+                  "TEST FULL-SCREEN INTERRUPTION OVERLAY",
+                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.deepOrange, width: 1.2),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const Divider(color: Colors.white12, height: 24),
+
+              // Blocked Domains in Browsers Header & Add Button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Blocked Websites in Browsers (${db.detachBlockedDomains.length})",
+                        style: GoogleFonts.outfit(
+                          color: textColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Monitored across Chrome, Firefox, Edge, etc.",
+                        style: GoogleFonts.outfit(
+                          color: textColor60,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _showAddDomainDialog(db),
+                    icon: const Icon(Icons.add, size: 14, color: Colors.deepOrange),
+                    label: Text(
+                      "+ Add Site",
+                      style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.deepOrange),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Wrap of blocked domains
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: db.detachBlockedDomains.map((domain) {
+                  return Chip(
+                    backgroundColor: Colors.deepOrange.withOpacity(0.1),
+                    avatar: const Icon(Icons.public, size: 16, color: Colors.deepOrange),
+                    label: Text(
+                      domain,
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                    deleteIcon: const Icon(Icons.close, size: 14, color: Colors.redAccent),
+                    onDeleted: () async {
+                      await db.removeDetachDomain(domain);
+                    },
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.deepOrange.withOpacity(0.2)),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+
+              // Customizable Message Setting
+              Row(
+                children: [
+                  Icon(Icons.format_quote, size: 18, color: textColor60),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Interruption Message:",
+                          style: GoogleFonts.outfit(color: textColor60, fontSize: 11),
+                        ),
+                        Text(
+                          "\"${db.detachMessage}\"",
+                          style: GoogleFonts.outfit(
+                            color: textColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 16, color: Colors.deepOrange),
+                    tooltip: "Edit Message",
+                    onPressed: () => _showEditDetachMessageDialog(db),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showAddDomainDialog(DatabaseService db) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Text(
+            "Add Distracting Website",
+            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: textColor),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Enter domain name to block in Chrome (e.g. reddit.com, tiktok.com, x.com):",
+                style: GoogleFonts.outfit(fontSize: 12, color: textColor70),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: "e.g. reddit.com",
+                  prefixIcon: const Icon(Icons.language, color: Colors.deepOrange),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.deepOrange),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text("Cancel", style: GoogleFonts.outfit()),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final domain = controller.text.trim();
+                if (domain.isNotEmpty) {
+                  await db.addDetachDomain(domain);
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+                foregroundColor: Colors.white,
+              ),
+              child: Text("Add", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showEditDetachMessageDialog(DatabaseService db) {
+    final controller = TextEditingController(text: db.detachMessage);
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Text(
+            "Edit Interruption Message",
+            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: textColor),
+          ),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              hintText: "Get back to what matters.",
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.deepOrange),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text("Cancel", style: GoogleFonts.outfit()),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final text = controller.text.trim();
+                if (text.isNotEmpty) {
+                  await db.updateDetachMessage(text);
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+                foregroundColor: Colors.white,
+              ),
+              child: Text("Save", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
     );
   }
 

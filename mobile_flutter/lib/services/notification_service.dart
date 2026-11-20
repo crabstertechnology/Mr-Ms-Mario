@@ -174,6 +174,15 @@ class PhoneNotificationService {
         if (!_dbService.focusGuardEnabled) return;
         await triggerFocusAlert(label, limitMinutes);
         break;
+
+      case 'onDetachBlocked':
+        final Map<dynamic, dynamic> detachData = call.arguments as Map<dynamic, dynamic>;
+        final String detachPkg = detachData['package'] ?? '';
+        final String detachSource = detachData['source'] ?? 'Restricted Content';
+        final String detachType = detachData['type'] ?? 'website';
+        _bleService.addLog("SYNAPS DETACH: Intercepted $detachType '$detachSource' ($detachPkg)", "DETACH");
+        await triggerFocusAlert(detachSource, 0);
+        break;
     }
   }
 
@@ -445,6 +454,55 @@ class PhoneNotificationService {
         'enabled': enabled,
         'limits': limits,
       });
+    } catch (_) {}
+  }
+
+  static Future<bool> isAccessibilityServiceEnabled() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('isAccessibilityServiceEnabled');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> openAccessibilitySettings() async {
+    try {
+      await _channel.invokeMethod('openAccessibilitySettings');
+    } catch (_) {}
+  }
+
+  static Future<void> updateDetachConfig({
+    required bool enabled,
+    required List<String> domains,
+    required List<String> apps,
+    String? message,
+    int? autoHomeSeconds,
+  }) async {
+    try {
+      await _channel.invokeMethod('updateDetachConfig', {
+        'enabled': enabled,
+        'domains': domains,
+        'apps': apps,
+        'message': message ?? 'Get back to what matters.',
+        'autoHomeSeconds': autoHomeSeconds ?? 5,
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> testDetachOverlay({String? source, String? message, int? autoHomeSeconds}) async {
+    try {
+      await _channel.invokeMethod('testDetachOverlay', {
+        'source': source ?? 'YouTube in Chrome (Test)',
+        'message': message ?? 'Get back to what matters.',
+        'autoHomeSeconds': autoHomeSeconds ?? 5,
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> dismissDetachOverlay() async {
+    try {
+      await _channel.invokeMethod('dismissDetachOverlay');
     } catch (_) {}
   }
 
