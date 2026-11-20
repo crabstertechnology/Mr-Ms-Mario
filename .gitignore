@@ -10,5 +10,7 @@ releases/app-release.apk
 # Ignore large media & zip archives
 *.zip
 *.mp4
+*.apk
+mobile_flutter/build/
 scratch/
 

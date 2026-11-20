@@ -7983,6 +7983,128 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(height: 12),
 
+              // DNS Guardian (GPay & UPI Safe Network Blocker)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _isAccessibilityGranted ? Colors.green.withOpacity(0.08) : Colors.amber.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _isAccessibilityGranted ? Colors.green.withOpacity(0.3) : Colors.amber.withOpacity(0.3),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _isAccessibilityGranted ? Icons.security_rounded : Icons.shield_outlined,
+                          color: _isAccessibilityGranted ? Colors.green : Colors.amber,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    "Habit Detection Engine",
+                                    style: GoogleFonts.outfit(
+                                      color: textColor,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _isAccessibilityGranted ? Colors.green : Colors.grey,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      _isAccessibilityGranted ? "ACTIVE" : "PAUSED",
+                                      style: GoogleFonts.outfit(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                _isAccessibilityGranted
+                                    ? "Active: Closes YouTube & Instagram in Chrome. Auto-pauses instantly when Google Pay opens!"
+                                    : "Accessibility is paused. Google Pay & UPI payments are completely unblocked.",
+                                style: GoogleFonts.outfit(
+                                  color: textColor60,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Action button: 1-Tap Pause for Google Pay OR Enable
+                    SizedBox(
+                      width: double.infinity,
+                      child: _isAccessibilityGranted
+                          ? ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber.shade900,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.payment, size: 16),
+                              label: Text(
+                                "1-TAP PAUSE FOR GOOGLE PAY / UPI",
+                                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: () async {
+                                await PhoneNotificationService.disableAccessibilityService();
+                                await _checkNotificationPermission();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        "Accessibility paused! Google Pay & UPI payments are now fully unblocked.",
+                                        style: GoogleFonts.outfit(),
+                                      ),
+                                      backgroundColor: Colors.green.shade700,
+                                    ),
+                                  );
+                                }
+                              },
+                            )
+                          : ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade700,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.lock_clock, size: 16),
+                              label: Text(
+                                "ENABLE HABIT ENFORCER",
+                                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: () async {
+                                await PhoneNotificationService.openAccessibilitySettings();
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
               // Permission Status Indicators
               Column(
                 children: [
@@ -7997,8 +8119,8 @@ class _MainDashboardState extends State<MainDashboard> {
                       Expanded(
                         child: Text(
                           _isAccessibilityGranted
-                              ? "Accessibility Service: ACTIVE (Browser URL Inspection)"
-                              : "Accessibility Service: REQUIRED (To detect Chrome URLs)",
+                              ? "Accessibility: ACTIVE (Monitoring Chrome URL & Social Apps)"
+                              : "Accessibility: PAUSED (Tap 1-Tap Pause above when using Google Pay)",
                           style: GoogleFonts.outfit(
                             color: _isAccessibilityGranted ? Colors.green : Colors.amber.shade800,
                             fontSize: 12,
@@ -8006,23 +8128,9 @@ class _MainDashboardState extends State<MainDashboard> {
                           ),
                         ),
                       ),
-                      if (!_isAccessibilityGranted)
-                        TextButton(
-                          onPressed: () async {
-                            await PhoneNotificationService.openAccessibilitySettings();
-                          },
-                          child: Text(
-                            "ENABLE",
-                            style: GoogleFonts.outfit(
-                              color: Colors.deepOrange,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       Icon(

@@ -124,6 +124,7 @@ class LunaBackgroundService : Service() {
             val engine = MainActivity.flutterEngine
             val connected = if (engine == null) false else isConnectedToRobot
             updateNotificationStatus(connected)
+            checkPaymentAppTransition()
             if (focusGuardEnabled && focusLimits.isNotEmpty()) {
                 checkFocusGuard()
             }
@@ -352,6 +353,68 @@ class LunaBackgroundService : Service() {
                 .build()
         }
         notificationManager.notify(99184, notif)
+    }
+
+    private var wasInPaymentApp: Boolean = false
+
+    private fun checkPaymentAppTransition() {
+        val fg = getForegroundPackage() ?: return
+        val isPayment = SynapsAccessibilityService.paymentApps.contains(fg.lowercase())
+
+        if (isPayment) {
+            if (!wasInPaymentApp) {
+                wasInPaymentApp = true
+                Log.i("LunaBackground", "Detected foreground payment app: $fg. Auto-disabling accessibility...")
+                SynapsAccessibilityService.disableService()
+            }
+        } else if (wasInPaymentApp) {
+            wasInPaymentApp = false
+            Log.i("LunaBackground", "Exited payment app. Current foreground: $fg. Attempting auto-resume...")
+
+            // Try automatic silent resume if WRITE_SECURE_SETTINGS is available
+            val resumed = SynapsAccessibilityService.setAccessibilityServiceEnabled(this, true)
+            if (!resumed) {
+                showPaymentResumeNotification()
+            } else {
+                Log.i("LunaBackground", "Accessibility automatically re-enabled silently!")
+            }
+        }
+    }
+
+    private fun showPaymentResumeNotification() {
+        val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val settingsIntent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            99185,
+            settingsIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val iconId = resources.getIdentifier("ic_launcher", "mipmap", packageName)
+        val smallIcon = if (iconId != 0) iconId else android.R.drawable.stat_notify_sync
+
+        val notif = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+                .setContentTitle("Google Pay Finished")
+                .setContentText("Tap to re-enable Habit Protection (YouTube & Chrome)")
+                .setSmallIcon(smallIcon)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build()
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+                .setContentTitle("Google Pay Finished")
+                .setContentText("Tap to re-enable Habit Protection (YouTube & Chrome)")
+                .setSmallIcon(smallIcon)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build()
+        }
+        notifManager.notify(99185, notif)
     }
 
     private var lastLoggedFgPkg: String? = "UNSET"

@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">SYNAPS</string>
     <string name="accessibility_service_label">SYNAPS DETACH Habit Enforcer</string>
-    <string name="accessibility_service_description">Monitors web browsers (Chrome, Firefox, Edge, etc.) to detect and block distracting websites like YouTube and Instagram with a full-screen interruption overlay.</string>
+    <string name="accessibility_service_description">Monitors web browsers (Chrome, Edge, etc.) to detect and block distracting websites like YouTube and Instagram with full-screen interruption.</string>
 </resources>

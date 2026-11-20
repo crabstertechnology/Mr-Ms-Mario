@@ -20,7 +20,7 @@ class SynapsAccessibilityService : AccessibilityService() {
         // Default configurations
         var detachEnabled: Boolean = true
         var customMessage: String = "Get back to what matters."
-        var autoHomeSeconds: Int = 5
+        var autoHomeSeconds: Int = 4
 
         // Blocked domain strings (substring matching on browser URL bar)
         val blockedDomains = ConcurrentHashMap.newKeySet<String>().apply {
@@ -64,6 +64,57 @@ class SynapsAccessibilityService : AccessibilityService() {
             "com.opera.browser:id/url_field"
         )
 
+        val paymentApps = setOf(
+            "com.google.android.apps.nbu.paisa.user", // Google Pay
+            "com.phonepe.app",                       // PhonePe
+            "net.one97.paytm",                       // Paytm
+            "in.org.npci.upiapp",                    // BHIM UPI
+            "com.dreamplug.androidapp"               // CRED
+        )
+
+        fun isRunning(): Boolean = instance != null
+
+        fun setAccessibilityServiceEnabled(context: Context, enable: Boolean): Boolean {
+            return try {
+                val cr = context.contentResolver
+                val expectedComponentName = android.content.ComponentName(context, SynapsAccessibilityService::class.java).flattenToString()
+                val enabledServices = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+                val set = mutableSetOf<String>()
+                for (service in enabledServices.split(':')) {
+                    if (service.isNotBlank() && service != expectedComponentName) {
+                        set.add(service)
+                    }
+                }
+                if (enable) {
+                    set.add(expectedComponentName)
+                }
+                val newSetting = set.joinToString(":")
+                android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, newSetting)
+                if (enable) {
+                    android.provider.Settings.Secure.putInt(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 1)
+                }
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        fun disableService(): Boolean {
+            return try {
+                if (instance != null) {
+                    instance?.disableSelf()
+                    instance = null
+                    Log.i(TAG, "SynapsAccessibilityService disabled via disableSelf()")
+                    true
+                } else {
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to disableSelf: ${e.message}")
+                false
+            }
+        }
+
         fun updateConfig(
             context: Context?,
             enabled: Boolean,
@@ -106,8 +157,8 @@ class SynapsAccessibilityService : AccessibilityService() {
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var lastCheckedPackage: String? = null
-    private var isCurrentlyBlocking = false
+    var isCurrentlyBlocking = false
+    private var lastInterceptTimestamp = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -119,7 +170,7 @@ class SynapsAccessibilityService : AccessibilityService() {
             val prefs = getSharedPreferences("SynapsDetachPrefs", Context.MODE_PRIVATE)
             detachEnabled = prefs.getBoolean("detach_enabled", true)
             customMessage = prefs.getString("custom_message", "Get back to what matters.") ?: "Get back to what matters."
-            autoHomeSeconds = prefs.getInt("auto_home_seconds", 5)
+            autoHomeSeconds = prefs.getInt("auto_home_seconds", 4)
 
             val savedDomains = prefs.getStringSet("blocked_domains", null)
             if (!savedDomains.isNullOrEmpty()) {
@@ -152,19 +203,27 @@ class SynapsAccessibilityService : AccessibilityService() {
 
         val pkgName = event.packageName?.toString() ?: return
 
-        // 1. Check if the foreground application is directly in the blocked apps list
+        // 0. Auto-disable if user opens Google Pay or other UPI payment apps
+        if (paymentApps.contains(pkgName.lowercase())) {
+            Log.i(TAG, "GPay / Payment app detected ($pkgName)! Auto-disabling accessibility to unblock payments...")
+            disableSelf()
+            instance = null
+            return
+        }
+
+        // 1. Check direct blocked app
         if (blockedApps.contains(pkgName.lowercase())) {
             handleBlockedApp(pkgName)
             return
         }
 
-        // 2. Check if a web browser is in the foreground
+        // 2. Check browser
         if (browserPackages.contains(pkgName)) {
-            handleBrowserInspection(pkgName, event)
+            handleBrowserInspection(browserPkg = pkgName, event = event)
             return
         }
 
-        // 3. If leaving a blocked app / browser to home screen or another safe app, dismiss overlay
+        // 3. User exited blocked context
         if (isCurrentlyBlocking && pkgName != packageName && !browserPackages.contains(pkgName) && !blockedApps.contains(pkgName.lowercase())) {
             Log.i(TAG, "User exited blocked context to: $pkgName. Dismissing overlay.")
             isCurrentlyBlocking = false
@@ -173,6 +232,10 @@ class SynapsAccessibilityService : AccessibilityService() {
     }
 
     private fun handleBlockedApp(pkgName: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastInterceptTimestamp < 1500L && isCurrentlyBlocking) return
+        lastInterceptTimestamp = now
+
         val appName = getAppLabel(pkgName)
         Log.i(TAG, "Direct blocked app opened: $appName ($pkgName)")
         isCurrentlyBlocking = true
@@ -191,7 +254,6 @@ class SynapsAccessibilityService : AccessibilityService() {
         val rootNode = rootInActiveWindow ?: return
 
         try {
-            // First check explicit URL bar IDs
             var currentUrl: String? = null
             for (viewId in urlBarViewIds) {
                 val nodes = rootNode.findAccessibilityNodeInfosByViewId(viewId)
@@ -207,7 +269,6 @@ class SynapsAccessibilityService : AccessibilityService() {
                 if (currentUrl != null) break
             }
 
-            // Fallback: search node hierarchy for address text
             if (currentUrl == null) {
                 currentUrl = searchForUrlInTree(rootNode, maxDepth = 6)
             }
@@ -224,11 +285,17 @@ class SynapsAccessibilityService : AccessibilityService() {
                 }
 
                 if (matchedDomain != null) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastInterceptTimestamp < 1500L && isCurrentlyBlocking) return
+                    lastInterceptTimestamp = now
+
                     val browserName = getAppLabel(browserPkg)
                     val sourceDesc = "$matchedDomain in $browserName"
                     Log.i(TAG, "RESTRICTED WEBSITE DETECTED: $sourceDesc (Raw: $currentUrl)")
 
                     isCurrentlyBlocking = true
+
+                    // 1. Show full-screen overlay
                     DetachOverlayManager.show(
                         context = this,
                         sourceInfo = sourceDesc,
@@ -236,14 +303,10 @@ class SynapsAccessibilityService : AccessibilityService() {
                         autoHomeSeconds = autoHomeSeconds
                     )
 
+                    // 2. Close the restricted browser tab
+                    closeRestrictedBrowserTab(browserPkg)
+
                     notifyFlutterOfBlock(browserPkg, sourceDesc, "website")
-                } else {
-                    // Safe website in browser — if overlay was previously shown for a blocked URL in this browser, dismiss it
-                    if (isCurrentlyBlocking) {
-                        Log.i(TAG, "Safe URL detected in $browserPkg ($currentUrl). Dismissing overlay.")
-                        isCurrentlyBlocking = false
-                        DetachOverlayManager.dismiss()
-                    }
                 }
             }
         } catch (e: Exception) {
@@ -251,68 +314,112 @@ class SynapsAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun searchForUrlInTree(node: AccessibilityNodeInfo?, maxDepth: Int): String? {
-        if (node == null || maxDepth <= 0) return null
+    private fun closeRestrictedBrowserTab(browserPkg: String) {
+        try {
+            val root = rootInActiveWindow ?: return
 
+            val closeButtons = root.findAccessibilityNodeInfosByViewId("$browserPkg:id/close_button")
+            if (!closeButtons.isNullOrEmpty()) {
+                for (btn in closeButtons) {
+                    if (btn.isClickable) {
+                        btn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        Log.i(TAG, "Closed tab via close_button in $browserPkg")
+                        return
+                    }
+                }
+            }
+
+            val tabSwitcherNodes = root.findAccessibilityNodeInfosByViewId("$browserPkg:id/tab_switcher_button")
+            var clickedSwitcher = false
+            if (!tabSwitcherNodes.isNullOrEmpty()) {
+                for (node in tabSwitcherNodes) {
+                    if (node.isClickable) {
+                        node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        clickedSwitcher = true
+                        Log.i(TAG, "Clicked tab_switcher_button in $browserPkg")
+                        break
+                    }
+                }
+            }
+
+            if (clickedSwitcher) {
+                mainHandler.postDelayed({
+                    closeTabInTabSwitcher(browserPkg)
+                }, 120L)
+            } else {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                Log.i(TAG, "Executed GLOBAL_ACTION_BACK to exit tab in $browserPkg")
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing tab: ${e.message}")
+        }
+    }
+
+    private fun closeTabInTabSwitcher(browserPkg: String) {
+        try {
+            val root = rootInActiveWindow ?: return
+            val actionButtons = root.findAccessibilityNodeInfosByViewId("$browserPkg:id/action_button")
+            if (!actionButtons.isNullOrEmpty()) {
+                for (btn in actionButtons) {
+                    val desc = btn.contentDescription?.toString()?.lowercase() ?: ""
+                    if (desc.contains("close") || desc.contains("dismiss")) {
+                        btn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        Log.i(TAG, "Clicked close tab button in switcher: $desc")
+                        return
+                    }
+                }
+            }
+            performGlobalAction(GLOBAL_ACTION_BACK)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing tab in switcher: ${e.message}")
+        }
+    }
+
+    private fun searchForUrlInTree(node: AccessibilityNodeInfo, maxDepth: Int): String? {
+        if (maxDepth <= 0) return null
         val text = node.text?.toString()
         if (!text.isNullOrBlank()) {
             val lower = text.lowercase()
             for (domain in blockedDomains) {
-                if (lower.contains(domain)) {
-                    return domain
-                }
+                if (lower.contains(domain)) return text
+            }
+            if (lower.startsWith("http://") || lower.startsWith("https://") || lower.contains(".com") || lower.contains(".org") || lower.contains(".net")) {
+                return text
             }
         }
-
-        val desc = node.contentDescription?.toString()
-        if (!desc.isNullOrBlank()) {
-            val lower = desc.lowercase()
-            for (domain in blockedDomains) {
-                if (lower.contains(domain)) {
-                    return domain
-                }
-            }
-        }
-
-        val count = node.childCount
-        for (i in 0 until count) {
-            val child = node.getChild(i)
-            val found = searchForUrlInTree(child, maxDepth - 1)
-            if (found != null) return found
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = searchForUrlInTree(child, maxDepth - 1)
+            if (result != null) return result
         }
         return null
     }
 
-    private fun notifyFlutterOfBlock(pkg: String, sourceDesc: String, type: String) {
-        val engine = MainActivity.flutterEngine ?: return
-        mainHandler.post {
-            try {
-                val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.mrmsluna/notifications")
-                channel.invokeMethod("onDetachBlocked", mapOf(
-                    "package" to pkg,
-                    "source" to sourceDesc,
-                    "type" to type
-                ))
-            } catch (e: Exception) {
-                Log.e(TAG, "Error notifying Flutter: ${e.message}")
-            }
+    private fun getAppLabel(packageName: String): String {
+        return try {
+            val pm = applicationContext.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(appInfo).toString()
+        } catch (_: Exception) {
+            packageName
         }
     }
 
-    private fun getAppLabel(pkg: String): String {
-        return try {
-            val pm = packageManager
-            val info = pm.getApplicationInfo(pkg, 0)
-            pm.getApplicationLabel(info).toString()
-        } catch (e: Exception) {
-            when {
-                pkg.contains("chrome") -> "Chrome"
-                pkg.contains("firefox") -> "Firefox"
-                pkg.contains("sbrowser") -> "Samsung Internet"
-                pkg.contains("emmx") -> "Edge"
-                pkg.contains("instagram") -> "Instagram"
-                pkg.contains("youtube") -> "YouTube"
-                else -> pkg
+    private fun notifyFlutterOfBlock(pkgName: String, source: String, type: String) {
+        mainHandler.post {
+            try {
+                val engine = MainActivity.flutterEngine
+                if (engine != null) {
+                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.mrmsluna/notifications")
+                    channel.invokeMethod("onDetachBlocked", mapOf(
+                        "package" to pkgName,
+                        "source" to source,
+                        "type" to type
+                    ))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error notifying Flutter: ${e.message}")
             }
         }
     }

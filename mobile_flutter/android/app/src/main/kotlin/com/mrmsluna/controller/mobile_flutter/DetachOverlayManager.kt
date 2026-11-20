@@ -1,6 +1,5 @@
 package com.mrmsluna.controller.mobile_flutter
 
-import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -135,7 +134,11 @@ object DetachOverlayManager {
         }
     }
 
-    private fun launchBlockActivity(context: Context, sourceInfo: String, customMessage: String?) {
+    private fun launchBlockActivity(
+        context: Context,
+        sourceInfo: String,
+        customMessage: String?
+    ) {
         try {
             val intent = Intent(context, DetachBlockActivity::class.java).apply {
                 putExtra("source_info", sourceInfo)
@@ -281,28 +284,27 @@ object DetachOverlayManager {
         }
         contentLayout.addView(btnHome)
 
-        // 7. Optional Auto-return countdown
-        if (autoHomeSeconds > 0) {
-            val countdownView = TextView(context).apply {
-                text = "Auto-returning in ${autoHomeSeconds}s..."
-                setTextColor(Color.parseColor("#546E7A"))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-                gravity = Gravity.CENTER
-            }
-            contentLayout.addView(countdownView)
-
-            countdownTimer?.cancel()
-            countdownTimer = object : CountDownTimer((autoHomeSeconds * 1000).toLong(), 1000L) {
-                override fun onTick(millisUntilFinished: Long) {
-                    val sec = (millisUntilFinished / 1000).toInt() + 1
-                    countdownView.text = "Auto-returning in ${sec}s..."
-                }
-
-                override fun onFinish() {
-                    goHome(context)
-                }
-            }.start()
+        // 7. Auto-return countdown (e.g. 4 seconds)
+        val effectiveAutoHome = if (autoHomeSeconds > 0) autoHomeSeconds else 4
+        val countdownView = TextView(context).apply {
+            text = "Auto-returning home in ${effectiveAutoHome}s..."
+            setTextColor(Color.parseColor("#546E7A"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            gravity = Gravity.CENTER
         }
+        contentLayout.addView(countdownView)
+
+        countdownTimer?.cancel()
+        countdownTimer = object : CountDownTimer((effectiveAutoHome * 1000).toLong(), 1000L) {
+            override fun onTick(millisUntilFinished: Long) {
+                val sec = (millisUntilFinished / 1000).toInt() + 1
+                countdownView.text = "Auto-returning home in ${sec}s..."
+            }
+
+            override fun onFinish() {
+                goHome(context)
+            }
+        }.start()
 
         val frameParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
@@ -315,26 +317,22 @@ object DetachOverlayManager {
         return root
     }
 
+    /**
+     * Dismisses the interruption overlay and navigates the device directly to the Home screen.
+     * Does NOT open any new tabs or external URLs.
+     */
     fun goHome(context: Context) {
         try {
             // Dismiss overlay view first
             dismiss()
 
-            // 1. Try global action via AccessibilityService if active
-            val service = SynapsAccessibilityService.instance
-            var handled = false
-            if (service != null) {
-                handled = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
-                Log.i(TAG, "Home action performed via AccessibilityService: $handled")
-            }
-
-            // 2. Standard Android Home Intent
+            // Dispatch standard Android Home Intent
             val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             }
             context.startActivity(homeIntent)
-            Log.i(TAG, "Sent HOME intent to exit distracted application")
+            Log.i(TAG, "Sent HOME intent to return to home screen")
 
         } catch (e: Exception) {
             Log.e(TAG, "Error returning home: ${e.message}")

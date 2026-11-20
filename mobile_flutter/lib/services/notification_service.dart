@@ -457,21 +457,6 @@ class PhoneNotificationService {
     } catch (_) {}
   }
 
-  static Future<bool> isAccessibilityServiceEnabled() async {
-    try {
-      final res = await _channel.invokeMethod<bool>('isAccessibilityServiceEnabled');
-      return res ?? false;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static Future<void> openAccessibilitySettings() async {
-    try {
-      await _channel.invokeMethod('openAccessibilitySettings');
-    } catch (_) {}
-  }
-
   static Future<void> updateDetachConfig({
     required bool enabled,
     required List<String> domains,
@@ -504,6 +489,30 @@ class PhoneNotificationService {
     try {
       await _channel.invokeMethod('dismissDetachOverlay');
     } catch (_) {}
+  }
+
+  static Future<bool> isAccessibilityServiceEnabled() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('isAccessibilityServiceEnabled');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> openAccessibilitySettings() async {
+    try {
+      await _channel.invokeMethod('openAccessibilitySettings');
+    } catch (_) {}
+  }
+
+  static Future<bool> disableAccessibilityService() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('disableAccessibilityService');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<String?> getForegroundApp() async {

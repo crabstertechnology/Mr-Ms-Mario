@@ -120,7 +120,7 @@ class DetachBlockActivity : Activity() {
         }
         contentLayout.addView(reminder)
 
-        // 6. Action Button
+        // 6. Action Button: "RETURN TO HOME SCREEN"
         val btnHome = Button(this).apply {
             text = "RETURN TO HOME SCREEN"
             setTextColor(Color.WHITE)
@@ -143,19 +143,19 @@ class DetachBlockActivity : Activity() {
         }
         contentLayout.addView(btnHome)
 
-        // 7. Auto return countdown
+        // 7. Auto-return countdown
         val countdownView = TextView(this).apply {
-            text = "Auto-returning in 5s..."
+            text = "Auto-returning home in 4s..."
             setTextColor(Color.parseColor("#546E7A"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             gravity = Gravity.CENTER
         }
         contentLayout.addView(countdownView)
 
-        countdownTimer = object : CountDownTimer(5000L, 1000L) {
+        countdownTimer = object : CountDownTimer(4000L, 1000L) {
             override fun onTick(millisUntilFinished: Long) {
                 val sec = (millisUntilFinished / 1000).toInt() + 1
-                countdownView.text = "Auto-returning in ${sec}s..."
+                countdownView.text = "Auto-returning home in ${sec}s..."
             }
             override fun onFinish() {
                 goHome()
@@ -174,7 +174,6 @@ class DetachBlockActivity : Activity() {
     }
 
     override fun onBackPressed() {
-        // Intercept back button — instead of going back to Chrome, send to Home
         goHome()
     }
 
@@ -184,6 +183,7 @@ class DetachBlockActivity : Activity() {
     }
 
     private fun goHome() {
+        countdownTimer?.cancel()
         try {
             val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
